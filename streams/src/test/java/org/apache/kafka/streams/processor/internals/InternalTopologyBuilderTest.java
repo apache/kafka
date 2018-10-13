@@ -19,22 +19,21 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
@@ -45,17 +44,17 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofSeconds;
 import static org.apache.kafka.common.utils.Utils.mkList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -64,7 +63,7 @@ public class InternalTopologyBuilderTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final InternalTopologyBuilder builder = new InternalTopologyBuilder();
-    private final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store"), Serdes.ByteArray(), Serdes.ByteArray());
+    private final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("store", false);
 
     @Test
     public void shouldAddSourceWithOffsetReset() {
@@ -164,6 +163,16 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor", new MockProcessorSupplier(), "processor");
     }
 
+    @Test(expected = TopologyException.class)
+    public void testAddProcessorWithEmptyParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddProcessorWithNullParents() {
+        builder.addProcessor("processor", new MockProcessorSupplier(), null);
+    }
+
     @Test
     public void testAddSinkWithSameName() {
         builder.addSource(null, "source", null, null, null, "topic-1");
@@ -182,6 +191,17 @@ public class InternalTopologyBuilderTest {
     @Test(expected = TopologyException.class)
     public void testAddSinkWithSelfParent() {
         builder.addSink("sink", "topic-2", null, null, null, "sink");
+    }
+
+
+    @Test(expected = TopologyException.class)
+    public void testAddSinkWithEmptyParents() {
+        builder.addSink("sink", "topic", null, null, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void testAddSinkWithNullParents() {
+        builder.addSink("sink", "topic", null, null, null, null);
     }
 
     @Test
@@ -280,7 +300,8 @@ public class InternalTopologyBuilderTest {
 
     @Test
     public void testAddStateStoreWithSink() {
-        builder.addSink("sink-1", "topic-1", null, null, null);
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSink("sink-1", "topic-1", null, null, null, "source-1");
         try {
             builder.addStateStore(storeBuilder, "sink-1");
             fail("Should throw TopologyException with store cannot be added to sink");
@@ -355,14 +376,14 @@ public class InternalTopologyBuilderTest {
 
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
-        builder.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store-1"), Serdes.ByteArray(), Serdes.ByteArray()), "processor-1", "processor-2");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-1", false), "processor-1", "processor-2");
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
         builder.addProcessor("processor-4", new MockProcessorSupplier(), "source-4");
-        builder.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store-2"), Serdes.ByteArray(), Serdes.ByteArray()), "processor-3", "processor-4");
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-2", false), "processor-3", "processor-4");
 
         builder.addProcessor("processor-5", new MockProcessorSupplier(), "source-5");
-        builder.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("store-3"), Serdes.ByteArray(), Serdes.ByteArray()));
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-3", false));
         builder.connectProcessorAndStateStores("processor-5", "store-3");
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
@@ -410,6 +431,57 @@ public class InternalTopologyBuilderTest {
         assertEquals(mkSet("source-5"), nodeNames(topology2.processors()));
     }
 
+    @Test
+    public void shouldAllowIncrementalBuilds() {
+        Map<Integer, Set<String>> oldNodeGroups, newNodeGroups;
+
+        oldNodeGroups = builder.nodeGroups();
+        builder.addSource(null, "source-1", null, null, null, "topic-1");
+        builder.addSource(null, "source-2", null, null, null, "topic-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSource(null, "source-3", null, null, null, Pattern.compile(""));
+        builder.addSource(null, "source-4", null, null, null, Pattern.compile(""));
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
+        builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2");
+        builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSink("sink-1", "sink-topic", null, null, null, "processor-1");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addSink("sink-2", (k, v, ctx) -> "sink-topic", null, null, null, "processor-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-1", false), "processor-1", "processor-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addStateStore(new MockKeyValueStoreBuilder("store-2", false));
+        builder.connectProcessorAndStateStores("processor-2", "store-2");
+        builder.connectProcessorAndStateStores("processor-3", "store-2");
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+
+        oldNodeGroups = newNodeGroups;
+        builder.addGlobalStore(new MockKeyValueStoreBuilder("global-store", false).withLoggingDisabled(), "globalSource", null, null, null, "globalTopic", "global-processor", new MockProcessorSupplier());
+        newNodeGroups = builder.nodeGroups();
+        assertNotEquals(oldNodeGroups, newNodeGroups);
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullNameWhenAddingSink() {
         builder.addSink(null, "topic", null, null, null);
@@ -417,7 +489,12 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicWhenAddingSink() {
-        builder.addSink("name", null, null, null, null);
+        builder.addSink("name", (String) null, null, null, null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldNotAllowNullTopicChooserWhenAddingSink() {
+        builder.addSink("name", (TopicNameExtractor) null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -462,7 +539,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAddNullStateStoreSupplier() {
-        builder.addStateStore((StoreBuilder) null);
+        builder.addStateStore(null);
     }
 
     private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
@@ -510,16 +587,36 @@ public class InternalTopologyBuilderTest {
         builder.setApplicationId("appId");
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
-        builder.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 30000, 3, 10000, false), Serdes.String(), Serdes.String()), "processor");
+        builder.addStateStore(
+            Stores.windowStoreBuilder(
+                Stores.persistentWindowStore("store1", ofSeconds(30L), ofSeconds(10L), false),
+                Serdes.String(),
+                Serdes.String()
+            ),
+            "processor"
+        );
+        builder.addStateStore(
+                Stores.sessionStoreBuilder(
+                        Stores.persistentSessionStore("store2", ofSeconds(30)), Serdes.String(), Serdes.String()
+                ),
+                "processor"
+        );
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = builder.topicGroups();
         final InternalTopologyBuilder.TopicsInfo topicsInfo = topicGroups.values().iterator().next();
-        final InternalTopicConfig topicConfig = topicsInfo.stateChangelogTopics.get("appId-store-changelog");
-        final Map<String, String> properties = topicConfig.getProperties(Collections.<String, String>emptyMap(), 10000);
-        assertEquals(2, properties.size());
-        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties.get(TopicConfig.CLEANUP_POLICY_CONFIG));
-        assertEquals("40000", properties.get(TopicConfig.RETENTION_MS_CONFIG));
-        assertEquals("appId-store-changelog", topicConfig.name());
-        assertTrue(topicConfig instanceof WindowedChangelogTopicConfig);
+        final InternalTopicConfig topicConfig1 = topicsInfo.stateChangelogTopics.get("appId-store1-changelog");
+        final Map<String, String> properties1 = topicConfig1.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(2, properties1.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties1.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties1.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store1-changelog", topicConfig1.name());
+        assertTrue(topicConfig1 instanceof WindowedChangelogTopicConfig);
+        final InternalTopicConfig topicConfig2 = topicsInfo.stateChangelogTopics.get("appId-store2-changelog");
+        final Map<String, String> properties2 = topicConfig2.getProperties(Collections.<String, String>emptyMap(), 10000);
+        assertEquals(2, properties2.size());
+        assertEquals(TopicConfig.CLEANUP_POLICY_COMPACT + "," + TopicConfig.CLEANUP_POLICY_DELETE, properties2.get(TopicConfig.CLEANUP_POLICY_CONFIG));
+        assertEquals("40000", properties2.get(TopicConfig.RETENTION_MS_CONFIG));
+        assertEquals("appId-store2-changelog", topicConfig2.name());
+        assertTrue(topicConfig2 instanceof WindowedChangelogTopicConfig);
     }
 
     @Test
@@ -553,56 +650,6 @@ public class InternalTopologyBuilderTest {
         assertTrue(topicConfig instanceof RepartitionTopicConfig);
     }
 
-    @Test
-    public void shouldThrowOnUnassignedStateStoreAccess() {
-        final String sourceNodeName = "source";
-        final String goodNodeName = "goodGuy";
-        final String badNodeName = "badGuy";
-
-        final Properties config = new Properties();
-        config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "host:1");
-        config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
-        config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
-
-        builder.addSource(null, sourceNodeName, null, null, null, "topic");
-        builder.addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-        builder.addStateStore(
-            Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(LocalMockProcessorSupplier.STORE_NAME), Serdes.String(), Serdes.String()),
-            goodNodeName);
-        builder.addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
-        
-        try {
-            new TopologyTestDriverWrapper(builder, config);
-            fail("Should have throw StreamsException");
-        } catch (final StreamsException e) {
-            final String error = e.toString();
-            final String expectedMessage = "org.apache.kafka.streams.errors.StreamsException: failed to initialize processor " + badNodeName;
-            
-            assertThat(error, equalTo(expectedMessage));
-        }
-    }
-
-    private static class LocalMockProcessorSupplier implements ProcessorSupplier {
-        final static String STORE_NAME = "store";
-
-        @Override
-        public Processor get() {
-            return new Processor() {
-                @Override
-                public void init(final ProcessorContext context) {
-                    context.getStateStore(STORE_NAME);
-                }
-
-                @Override
-                public void process(final Object key, final Object value) { }
-
-                @Override
-                public void close() {
-                }
-            };
-        }
-    }
-
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetCorrectSourceNodesWithRegexUpdatedTopics() throws Exception {
@@ -634,7 +681,7 @@ public class InternalTopologyBuilderTest {
     @Test
     public void shouldAddTimestampExtractorPerSource() {
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, "topic");
-        final ProcessorTopology processorTopology = builder.build(null);
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build(null);
         assertThat(processorTopology.source("topic").getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 
@@ -642,7 +689,7 @@ public class InternalTopologyBuilderTest {
     public void shouldAddTimestampExtractorWithPatternPerSource() {
         final Pattern pattern = Pattern.compile("t.*");
         builder.addSource(null, "source", new MockTimestampExtractor(), null, null, pattern);
-        final ProcessorTopology processorTopology = builder.build(null);
+        final ProcessorTopology processorTopology = builder.rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig())).build(null);
         assertThat(processorTopology.source(pattern.pattern()).getTimestampExtractor(), instanceOf(MockTimestampExtractor.class));
     }
 

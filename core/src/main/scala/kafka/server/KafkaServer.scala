@@ -43,15 +43,15 @@ import org.apache.kafka.common.metrics.{JmxReporter, Metrics, _}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ControlledShutdownRequest, ControlledShutdownResponse}
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.internal.ScramMechanism
-import org.apache.kafka.common.security.token.delegation.internal.DelegationTokenCache
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, Node}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq, mutable}
+import org.apache.kafka.common.config.ClientDnsLookup
 
 object KafkaServer {
   // Copy the subset of properties that are relevant to Logs
@@ -80,6 +80,7 @@ object KafkaServer {
     logProps.put(LogConfig.MessageFormatVersionProp, kafkaConfig.logMessageFormatVersion.version)
     logProps.put(LogConfig.MessageTimestampTypeProp, kafkaConfig.logMessageTimestampType.name)
     logProps.put(LogConfig.MessageTimestampDifferenceMaxMsProp, kafkaConfig.logMessageTimestampDifferenceMaxMs: java.lang.Long)
+    logProps.put(LogConfig.MessageDownConversionEnableProp, kafkaConfig.logMessageDownConversionEnable: java.lang.Boolean)
     logProps
   }
 
@@ -254,7 +255,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         replicaManager.startup()
 
         val brokerInfo = createBrokerInfo
-        zkClient.registerBrokerInZk(brokerInfo)
+        zkClient.registerBroker(brokerInfo)
 
         // Now that the broker id is successfully registered, checkpoint it
         checkpointBrokerId(config.brokerId)
@@ -304,7 +305,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         config.dynamicConfig.addReconfigurables(this)
 
         /* start dynamic config manager */
-        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers),
+        dynamicConfigHandlers = Map[String, ConfigHandler](ConfigType.Topic -> new TopicConfigHandler(logManager, config, quotaManagers, kafkaController),
                                                            ConfigType.Client -> new ClientIdConfigHandler(quotaManagers),
                                                            ConfigType.User -> new UserConfigHandler(quotaManagers, credentialProvider),
                                                            ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers))
@@ -378,6 +379,13 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
   }
 
   private[server] def createBrokerInfo: BrokerInfo = {
+    val endPoints = config.advertisedListeners.map(e => s"${e.host}:${e.port}")
+    zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
+      val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
+      require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
+        s" advertised listeners are already registered by broker ${broker.id}")
+    }
+
     val listeners = config.advertisedListeners.map { endpoint =>
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
@@ -436,6 +444,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           Selectable.USE_DEFAULT_BUFFER_SIZE,
           config.requestTimeoutMs,
+          ClientDnsLookup.DEFAULT,
           time,
           false,
           new ApiVersions,
@@ -569,7 +578,8 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
         if (requestHandlerPool != null)
           CoreUtils.swallow(requestHandlerPool.shutdown(), this)
 
-        CoreUtils.swallow(kafkaScheduler.shutdown(), this)
+        if (kafkaScheduler != null)
+          CoreUtils.swallow(kafkaScheduler.shutdown(), this)
 
         if (apis != null)
           CoreUtils.swallow(apis.close(), this)
@@ -608,6 +618,9 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           CoreUtils.swallow(metrics.close(), this)
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
+
+        // Clear all reconfigurable instances stored in DynamicBrokerConfig
+        config.dynamicConfig.clear()
 
         brokerState.newState(NotRunning)
 

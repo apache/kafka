@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
+import org.apache.kafka.streams.Topology;
 
 /**
  * Determine how records are distributed among the partitions in a Kafka topic. If not specified, the underlying producer's
@@ -36,26 +37,27 @@ import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
  * determine to which partition each record should be written.
  * <p>
  * To do this, create a <code>StreamPartitioner</code> implementation, and when you build your topology specify that custom partitioner
- * when {@link TopologyBuilder#addSink(String, String, org.apache.kafka.common.serialization.Serializer, org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...) adding a sink}
+ * when {@link Topology#addSink(String, String, org.apache.kafka.common.serialization.Serializer, org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...) adding a sink}
  * for that topic.
  * <p>
  * All StreamPartitioner implementations should be stateless and a pure function so they can be shared across topic and sink nodes.
  * 
  * @param <K> the type of keys
  * @param <V> the type of values
- * @see TopologyBuilder#addSink(String, String, org.apache.kafka.common.serialization.Serializer,
+ * @see Topology#addSink(String, String, org.apache.kafka.common.serialization.Serializer,
  *      org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...)
- * @see TopologyBuilder#addSink(String, String, StreamPartitioner, String...)
+ * @see Topology#addSink(String, String, StreamPartitioner, String...)
  */
 public interface StreamPartitioner<K, V> {
 
     /**
      * Determine the partition number for a record with the given key and value and the current number of partitions.
-     * 
+     *
+     * @param topic the topic name this record is sent to
      * @param key the key of the record
      * @param value the value of the record
      * @param numPartitions the total number of partitions
      * @return an integer between 0 and {@code numPartitions-1}, or {@code null} if the default partitioning logic should be used
      */
-    Integer partition(K key, V value, int numPartitions);
+    Integer partition(String topic, K key, V value, int numPartitions);
 }

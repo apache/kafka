@@ -22,7 +22,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -59,6 +59,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -75,7 +76,7 @@ public class KGroupedStreamImplTest {
     private KGroupedStream<String, String> groupedStream;
 
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Before
     public void before() {
@@ -96,7 +97,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullReducerWithWindowedReduce() {
-        groupedStream.windowedBy(TimeWindows.of(10)).reduce(null, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(10))).reduce(null, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -106,7 +107,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameWithWindowedReduce() {
-        groupedStream.windowedBy(TimeWindows.of(10)).reduce(MockReducer.STRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(10))).reduce(MockReducer.STRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
@@ -126,12 +127,12 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullInitializerOnWindowedAggregate() {
-        groupedStream.windowedBy(TimeWindows.of(10)).aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(10))).aggregate(null, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotHaveNullAdderOnWindowedAggregate() {
-        groupedStream.windowedBy(TimeWindows.of(10)).aggregate(MockInitializer.STRING_INIT, null, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(10))).aggregate(MockInitializer.STRING_INIT, null, Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -141,7 +142,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotHaveInvalidStoreNameOnWindowedAggregate() {
-        groupedStream.windowedBy(TimeWindows.of(10)).aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(10))).aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.<String, String, WindowStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
     private void doAggregateSessionWindows(final Map<Windowed<String>, Integer> results) {
@@ -161,7 +162,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateSessionWindows() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        final KTable<Windowed<String>, Integer> table = groupedStream.windowedBy(SessionWindows.with(30)).aggregate(new Initializer<Integer>() {
+        final KTable<Windowed<String>, Integer> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -191,7 +192,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Integer> results = new HashMap<>();
-        final KTable<Windowed<String>, Integer> table = groupedStream.windowedBy(SessionWindows.with(30)).aggregate(new Initializer<Integer>() {
+        final KTable<Windowed<String>, Integer> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).aggregate(new Initializer<Integer>() {
             @Override
             public Integer apply() {
                 return 0;
@@ -234,7 +235,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindows() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        final KTable<Windowed<String>, Long> table = groupedStream.windowedBy(SessionWindows.with(30))
+        final KTable<Windowed<String>, Long> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30)))
                 .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("session-store"));
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
@@ -249,7 +250,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        final KTable<Windowed<String>, Long> table = groupedStream.windowedBy(SessionWindows.with(30)).count();
+        final KTable<Windowed<String>, Long> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).count();
         table.toStream().foreach(new ForeachAction<Windowed<String>, Long>() {
             @Override
             public void apply(final Windowed<String> key, final Long value) {
@@ -277,7 +278,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceSessionWindows() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        final KTable<Windowed<String>, String> table = groupedStream.windowedBy(SessionWindows.with(30))
+        final KTable<Windowed<String>, String> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30)))
                 .reduce(new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
@@ -297,7 +298,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        final KTable<Windowed<String>, String> table = groupedStream.windowedBy(SessionWindows.with(30))
+        final KTable<Windowed<String>, String> table = groupedStream.windowedBy(SessionWindows.with(ofMillis(30)))
                 .reduce(new Reducer<String>() {
                     @Override
                     public String apply(final String value1, final String value2) {
@@ -316,7 +317,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullReducerWhenReducingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).reduce(null, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).reduce(null, Materialized.<String, String, SessionStore<Bytes, byte[]>>as("store"));
     }
 
     @Test(expected = NullPointerException.class)
@@ -326,17 +327,17 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAcceptInvalidStoreNameWhenReducingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).reduce(MockReducer.STRING_ADDER, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).reduce(MockReducer.STRING_ADDER, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).reduce(null, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).reduce(null, Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullInitializerWhenAggregatingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).aggregate(null, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).aggregate(null, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -346,7 +347,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullAggregatorWhenAggregatingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).aggregate(MockInitializer.STRING_INIT, null, new Merger<String, String>() {
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).aggregate(MockInitializer.STRING_INIT, null, new Merger<String, String>() {
             @Override
             public String apply(final String aggKey, final String aggOne, final String aggTwo) {
                 return null;
@@ -356,7 +357,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullSessionMergerWhenAggregatingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(30)).aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER,
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(30))).aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER,
                 null,
                 Materialized.<String, String, SessionStore<Bytes, byte[]>>as("storeName"));
     }
@@ -368,7 +369,7 @@ public class KGroupedStreamImplTest {
 
     @Test
     public void shouldAcceptNullStoreNameWhenAggregatingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(10))
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(10)))
                 .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
                     @Override
                     public String apply(final String aggKey, final String aggOne, final String aggTwo) {
@@ -379,7 +380,7 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAcceptInvalidStoreNameWhenAggregatingSessionWindows() {
-        groupedStream.windowedBy(SessionWindows.with(10))
+        groupedStream.windowedBy(SessionWindows.with(ofMillis(10)))
                 .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, new Merger<String, String>() {
                     @Override
                     public String apply(final String aggKey, final String aggOne, final String aggTwo) {
@@ -531,7 +532,7 @@ public class KGroupedStreamImplTest {
         driver.pipeInput(recordFactory.create(TOPIC, "1", "D"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "E"));
         driver.pipeInput(recordFactory.create(TOPIC, "3", "F"));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", null));
+        driver.pipeInput(recordFactory.create(TOPIC, "3", (String) null));
     }
 
     private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) {
@@ -558,7 +559,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountWindowed() {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
-        groupedStream.windowedBy(TimeWindows.of(500L)).count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("aggregate-by-key-windowed"))
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(500L))).count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("aggregate-by-key-windowed"))
             .toStream()
             .foreach(new ForeachAction<Windowed<String>, Long>() {
                 @Override
@@ -573,7 +574,7 @@ public class KGroupedStreamImplTest {
     @Test
     public void shouldCountWindowedWithInternalStoreName() {
         final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
-        groupedStream.windowedBy(TimeWindows.of(500L)).count()
+        groupedStream.windowedBy(TimeWindows.of(ofMillis(500L))).count()
             .toStream()
             .foreach(new ForeachAction<Windowed<String>, Long>() {
                 @Override

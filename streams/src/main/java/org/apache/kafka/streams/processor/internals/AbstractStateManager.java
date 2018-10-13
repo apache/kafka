@@ -36,17 +36,18 @@ abstract class AbstractStateManager implements StateManager {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     final File baseDir;
-    final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
-
+    private final boolean eosEnabled;
     OffsetCheckpoint checkpoint;
 
+    final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
     final Map<String, StateStore> stores = new LinkedHashMap<>();
     final Map<String, StateStore> globalStores = new LinkedHashMap<>();
 
-    AbstractStateManager(final File baseDir) {
+    AbstractStateManager(final File baseDir,
+                         final boolean eosEnabled) {
         this.baseDir = baseDir;
+        this.eosEnabled = eosEnabled;
         this.checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
-
     }
 
     public void reinitializeStateStoresForPartitions(final Logger log,
@@ -62,11 +63,14 @@ abstract class AbstractStateManager implements StateManager {
             checkpointableOffsets.remove(topicPartition);
             storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
         }
-        try {
-            checkpoint.write(checkpointableOffsets);
-        } catch (final IOException fatalException) {
-            log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stateStores, fatalException);
-            throw new StreamsException("Failed to reinitialize global store.", fatalException);
+
+        if (!eosEnabled) {
+            try {
+                checkpoint.write(checkpointableOffsets);
+            } catch (final IOException fatalException) {
+                log.error("Failed to write offset checkpoint file to {} while re-initializing {}: {}", checkpoint, stateStores, fatalException);
+                throw new StreamsException("Failed to reinitialize global store.", fatalException);
+            }
         }
 
         for (final Map.Entry<String, StateStore> entry : storesCopy.entrySet()) {

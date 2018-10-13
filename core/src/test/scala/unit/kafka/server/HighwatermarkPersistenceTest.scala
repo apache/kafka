@@ -83,7 +83,7 @@ class HighwatermarkPersistenceTest {
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
       // set the high watermark for local replica
-      partition0.getReplica().get.highWatermark = new LogOffsetMetadata(5L)
+      partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
       assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
@@ -127,7 +127,7 @@ class HighwatermarkPersistenceTest {
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(leaderReplicaTopic1Partition0.highWatermark.messageOffset, topic1Partition0Hw)
       // set the high watermark for local replica
-      topic1Partition0.getReplica().get.highWatermark = new LogOffsetMetadata(5L)
+      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
@@ -144,10 +144,10 @@ class HighwatermarkPersistenceTest {
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
       assertEquals(leaderReplicaTopic2Partition0.highWatermark.messageOffset, topic2Partition0Hw)
       // set the highwatermark for local replica
-      topic2Partition0.getReplica().get.highWatermark = new LogOffsetMetadata(15L)
+      topic2Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(15L)
       assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark.messageOffset)
       // change the highwatermark for topic1
-      topic1Partition0.getReplica().get.highWatermark = new LogOffsetMetadata(10L)
+      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(10L)
       assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
       replicaManager.checkpointHighWatermarks()
       // verify checkpointed hw for topic 2

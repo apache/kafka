@@ -17,12 +17,13 @@
 
 package org.apache.kafka.streams.tests;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -38,7 +39,6 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.TimeUnit;
 
 public class StreamsStandByReplicaTest {
 
@@ -110,9 +110,9 @@ public class StreamsStandByReplicaTest {
 
         final Serde<String> stringSerde = Serdes.String();
 
-        KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
+        final KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
 
-        ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
+        final ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
             @Override
             public String apply(final Long value) {
                 return value.toString();
@@ -164,7 +164,7 @@ public class StreamsStandByReplicaTest {
     }
 
     private static void shutdown(final KafkaStreams streams) {
-        streams.close(10, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(10));
     }
 
     private static boolean confirmCorrectConfigs(final Properties properties) {

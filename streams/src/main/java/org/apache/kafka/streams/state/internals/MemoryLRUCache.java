@@ -73,8 +73,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             private static final long serialVersionUID = 1L;
 
             @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                boolean evict = super.size() > maxCacheSize;
+            protected boolean removeEldestEntry(final Map.Entry<K, V> eldest) {
+                final boolean evict = super.size() > maxCacheSize;
                 if (evict && !restoring && listener != null) {
                     listener.apply(eldest.getKey(), eldest.getValue());
                 }
@@ -100,7 +100,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -110,7 +110,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         // register the store
         context.register(root, new StateRestoreCallback() {
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void restore(final byte[] key, final byte[] value) {
                 restoring = true;
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
@@ -153,7 +153,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized V putIfAbsent(final K key, final V value) {
         Objects.requireNonNull(key);
-        V originalValue = get(key);
+        final V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -162,7 +162,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+        for (final KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
 

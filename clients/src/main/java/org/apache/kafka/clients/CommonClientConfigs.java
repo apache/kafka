@@ -46,9 +46,11 @@ public class CommonClientConfigs {
 
     public static final String SEND_BUFFER_CONFIG = "send.buffer.bytes";
     public static final String SEND_BUFFER_DOC = "The size of the TCP send buffer (SO_SNDBUF) to use when sending data. If the value is -1, the OS default will be used.";
+    public static final int SEND_BUFFER_LOWER_BOUND = -1;
 
     public static final String RECEIVE_BUFFER_CONFIG = "receive.buffer.bytes";
     public static final String RECEIVE_BUFFER_DOC = "The size of the TCP receive buffer (SO_RCVBUF) to use when reading data. If the value is -1, the OS default will be used.";
+    public static final int RECEIVE_BUFFER_LOWER_BOUND = -1;
 
     public static final String CLIENT_ID_CONFIG = "client.id";
     public static final String CLIENT_ID_DOC = "An id string to pass to the server when making requests. The purpose of this is to be able to track the source of requests beyond just ip/port by allowing a logical application name to be included in server-side request logging.";
@@ -90,6 +92,10 @@ public class CommonClientConfigs {
                                                          + "for the response of a request. If the response is not received before the timeout "
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
+
+    public static final String CLIENT_DNS_LOOKUP_CONFIG = "client.dns.lookup";
+    public static final String CLIENT_DNS_LOOKUP_DOC = "<p>Controls how the client uses DNS lookups.</p><p>If set to <code>use_all_dns_ips</code> then, when the lookup returns multiple IP addresses for a hostname,"
+                                                        + " they will all be attempted to connect to before failing the connection. Applies to both bootstrap and advertised servers.</p>";
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

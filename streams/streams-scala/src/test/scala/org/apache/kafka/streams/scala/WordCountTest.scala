@@ -26,20 +26,17 @@ import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import org.junit._
 import org.junit.rules.TemporaryFolder
-
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams._
 import org.apache.kafka.streams.scala.kstream._
-
 import org.apache.kafka.streams.integration.utils.{EmbeddedKafkaCluster, IntegrationTestUtils}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
-
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.test.TestUtils
-
+import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import ImplicitConversions._
+import org.junit.experimental.categories.Category
 
 /**
  * Test suite that does a classic word count example.
@@ -49,7 +46,8 @@ import ImplicitConversions._
  * <p>
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
- */ 
+ */
+@Category(Array(classOf[IntegrationTest]))
 class WordCountTest extends JUnitSuite with WordCountTestData {
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
@@ -60,11 +58,8 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   val mockTime: MockTime = cluster.time
   mockTime.setCurrentTimeMs(alignedTime)
 
-
   val tFolder: TemporaryFolder = new TemporaryFolder(TestUtils.tempDirectory())
   @Rule def testFolder: TemporaryFolder = tFolder
-    
-
   @Before
   def startKafkaCluster(): Unit = {
     cluster.createTopic(inputTopic)
@@ -74,7 +69,6 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   }
 
   @Test def testShouldCountWords(): Unit = {
-
     import Serdes._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -86,9 +80,42 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
 
     // generate word counts
     val wordCounts: KTable[String, Long] =
-      textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-        .groupBy((k, v) => v)
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((_, v) => v)
         .count()
+
+    // write to output topic
+    wordCounts.toStream.to(outputTopic)
+
+    val streams: KafkaStreams = new KafkaStreams(streamBuilder.build(), streamsConfiguration)
+    streams.start()
+
+    // produce and consume synchronously
+    val actualWordCounts: java.util.List[KeyValue[String, Long]] = produceNConsume(inputTopic, outputTopic)
+
+    streams.close()
+
+    import collection.JavaConverters._
+    assertEquals(actualWordCounts.asScala.take(expectedWordCounts.size).sortBy(_.key), expectedWordCounts.sortBy(_.key))
+  }
+
+  @Test def testShouldCountWordsMaterialized(): Unit = {
+    import Serdes._
+
+    val streamsConfiguration = getStreamsConfiguration()
+
+    val streamBuilder = new StreamsBuilder
+    val textLines = streamBuilder.stream[String, String](inputTopic)
+
+    val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
+
+    // generate word counts
+    val wordCounts: KTable[String, Long] =
+      textLines
+        .flatMapValues(v => pattern.split(v.toLowerCase))
+        .groupBy((k, v) => v)
+        .count()(Materialized.as("word-count"))
 
     // write to output topic
     wordCounts.toStream.to(outputTopic)
@@ -108,7 +135,12 @@ class WordCountTest extends JUnitSuite with WordCountTestData {
   @Test def testShouldCountWordsJava(): Unit = {
 
     import org.apache.kafka.streams.{KafkaStreams => KafkaStreamsJ, StreamsBuilder => StreamsBuilderJ}
-    import org.apache.kafka.streams.kstream.{KTable => KTableJ, KStream => KStreamJ, KGroupedStream => KGroupedStreamJ, _}
+    import org.apache.kafka.streams.kstream.{
+      KTable => KTableJ,
+      KStream => KStreamJ,
+      KGroupedStream => KGroupedStreamJ,
+      _
+    }
     import collection.JavaConverters._
 
     val streamsConfiguration = getStreamsConfiguration()
@@ -219,4 +251,3 @@ trait WordCountTestData {
     new KeyValue("слова", 1L)
   )
 }
-

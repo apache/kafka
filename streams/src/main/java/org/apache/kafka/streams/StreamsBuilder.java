@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KGroupedTable;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.regex.Pattern;
 
 /**
@@ -221,10 +223,11 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
-        return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
-                                            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
     /**
@@ -270,12 +273,11 @@ public class StreamsBuilder {
                                                   final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
-        return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(consumed),
-                                            new MaterializedInternal<>(
-                                                    Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
-                                                    internalStreamsBuilder,
-                                                    topic + "-"));
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()));
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
     /**
@@ -299,12 +301,12 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal
-                = new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
-        return internalStreamsBuilder.table(topic,
-                                            new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
-                                                                                 materializedInternal.valueSerde())),
-                                            materializedInternal);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final ConsumedInternal<K, V> consumedInternal =
+                new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
+
+        return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
     /**
@@ -327,14 +329,12 @@ public class StreamsBuilder {
                                                               final Consumed<K, V> consumed) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized =
-                new MaterializedInternal<>(
-                        Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumed.keySerde, consumed.valueSerde),
-                        internalStreamsBuilder,
-                        topic + "-");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()));
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
 
-
-        return internalStreamsBuilder.globalTable(topic, new ConsumedInternal<>(consumed), materialized);
+        return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
 
     /**
@@ -395,11 +395,13 @@ public class StreamsBuilder {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
-        materialized.withKeySerde(consumed.keySerde).withValueSerde(consumed.valueSerde);
-        return internalStreamsBuilder.globalTable(topic,
-                                                  new ConsumedInternal<>(consumed),
-                                                  new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-"));
+        materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+
+        return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
 
     /**
@@ -431,8 +433,9 @@ public class StreamsBuilder {
                                                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),
                                                                                        materializedInternal.valueSerde())),
@@ -511,10 +514,23 @@ public class StreamsBuilder {
 
     /**
      * Returns the {@link Topology} that represents the specified processing logic.
+     * Note that using this method means no optimizations are performed.
      *
      * @return the {@link Topology} that represents the specified processing logic
      */
     public synchronized Topology build() {
+        return build(null);
+    }
+    
+    /**
+     * Returns the {@link Topology} that represents the specified processing logic and accepts
+     * a {@link Properties} instance used to indicate whether to optimize topology or not.
+     *
+     * @param props the {@link Properties} used for building possibly optimized topology
+     * @return the {@link Topology} that represents the specified processing logic
+     */
+    public synchronized Topology build(final Properties props) {
+        internalStreamsBuilder.buildAndOptimizeTopology(props);
         return topology;
     }
 }

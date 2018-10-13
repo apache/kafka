@@ -51,9 +51,11 @@ public abstract class AbstractTask implements Task {
     final boolean eosEnabled;
     final Logger log;
     final LogContext logContext;
+    final StateDirectory stateDirectory;
+
     boolean taskInitialized;
     boolean taskClosed;
-    final StateDirectory stateDirectory;
+    boolean commitNeeded;
 
     InternalProcessorContext processorContext;
 
@@ -137,6 +139,10 @@ public abstract class AbstractTask implements Task {
         return toString("");
     }
 
+    public boolean isEosEnabled() {
+        return eosEnabled;
+    }
+
     /**
      * Produces a string representation containing useful information about a Task starting with the given indent.
      * This is useful in debugging scenarios.
@@ -167,7 +173,7 @@ public abstract class AbstractTask implements Task {
         return sb.toString();
     }
 
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
         return Collections.emptyMap();
     }
 
@@ -242,7 +248,7 @@ public abstract class AbstractTask implements Task {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {
-            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+            stateMgr.close(writeCheckpoint ? activeTaskCheckpointableOffsets() : null);
         } catch (final ProcessorStateException e) {
             exception = e;
         } finally {
@@ -261,6 +267,10 @@ public abstract class AbstractTask implements Task {
 
     public boolean isClosed() {
         return taskClosed;
+    }
+
+    public boolean commitNeeded() {
+        return commitNeeded;
     }
 
     public boolean hasStateStores() {

@@ -21,22 +21,22 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 
+import java.time.Duration;
 import java.util.Map;
 
 public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
-    private final boolean queryable;
+    private final boolean queriable;
 
-
-    public MaterializedInternal(final Materialized<K, V, S> materialized,
-                                final InternalNameProvider nameProvider,
-                                final String generatedStorePrefix) {
+    public MaterializedInternal(final Materialized<K, V, S> materialized) {
         super(materialized);
+        queriable = storeName() != null;
+    }
+
+    public void generateStoreNameIfNeeded(final InternalNameProvider nameProvider,
+                                          final String generatedStorePrefix) {
         if (storeName() == null) {
-            queryable = false;
             storeName = nameProvider.newStoreName(generatedStorePrefix);
-        } else {
-            queryable = true;
         }
     }
 
@@ -63,15 +63,19 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         return loggingEnabled;
     }
 
-    public Map<String, String> logConfig() {
+    Map<String, String> logConfig() {
         return topicConfig;
     }
 
-    boolean cachingEnabled() {
+    public boolean cachingEnabled() {
         return cachingEnabled;
     }
 
-    boolean isQueryable() {
-        return queryable;
+    public boolean isQueryable() {
+        return queriable;
+    }
+
+    Duration retention() {
+        return retention;
     }
 }

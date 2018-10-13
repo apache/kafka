@@ -21,7 +21,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
 
-import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
@@ -100,7 +99,6 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = TopicAndPartition(topic, part)
   this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {

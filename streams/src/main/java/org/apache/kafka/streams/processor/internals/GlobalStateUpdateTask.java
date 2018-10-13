@@ -74,7 +74,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
             );
         }
         initTopology();
-        processorContext.initialized();
+        processorContext.initialize();
         return stateMgr.checkpointed();
     }
 
@@ -89,7 +89,8 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                 new ProcessorRecordContext(deserialized.timestamp(),
                     deserialized.offset(),
                     deserialized.partition(),
-                    deserialized.topic());
+                    deserialized.topic(),
+                    deserialized.headers());
             processorContext.setRecordContext(recordContext);
             processorContext.setCurrentNode(sourceNodeAndDeserializer.sourceNode());
             sourceNodeAndDeserializer.sourceNode().process(deserialized.key(), deserialized.value());

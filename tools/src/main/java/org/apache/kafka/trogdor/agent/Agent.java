@@ -66,7 +66,7 @@ public final class Agent {
      * @param platform      The platform object to use.
      * @param scheduler     The scheduler to use for this Agent.
      * @param restServer    The REST server to use.
-     * @param resource      The AgentRestResoure to use.
+     * @param resource      The AgentRestResource to use.
      */
     public Agent(Platform platform, Scheduler scheduler,
                  JsonRestServer restServer, AgentRestResource resource) {

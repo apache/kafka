@@ -17,11 +17,12 @@
 
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
@@ -31,6 +32,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
@@ -100,8 +102,13 @@ public class DescribeConfigsResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESOURCES_KEY_NAME, new ArrayOf(DESCRIBE_CONFIGS_RESPONSE_ENTITY_V1)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_CONFIGS_RESPONSE_V2 = DESCRIBE_CONFIGS_RESPONSE_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1};
+        return new Schema[]{DESCRIBE_CONFIGS_RESPONSE_V0, DESCRIBE_CONFIGS_RESPONSE_V1, DESCRIBE_CONFIGS_RESPONSE_V2};
     }
 
     public static class Config {
@@ -109,8 +116,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         private final Collection<ConfigEntry> entries;
 
         public Config(ApiError error, Collection<ConfigEntry> entries) {
-            this.error = error;
-            this.entries = entries;
+            this.error = Objects.requireNonNull(error, "error");
+            this.entries = Objects.requireNonNull(entries, "entries");
         }
 
         public ApiError error() {
@@ -133,12 +140,12 @@ public class DescribeConfigsResponse extends AbstractResponse {
         public ConfigEntry(String name, String value, ConfigSource source, boolean isSensitive, boolean readOnly,
                            Collection<ConfigSynonym> synonyms) {
 
-            this.name = name;
+            this.name = Objects.requireNonNull(name, "name");
             this.value = value;
-            this.source = source;
+            this.source = Objects.requireNonNull(source, "source");
             this.isSensitive = isSensitive;
             this.readOnly = readOnly;
-            this.synonyms = synonyms;
+            this.synonyms = Objects.requireNonNull(synonyms, "synonyms");
         }
 
         public String name() {
@@ -196,9 +203,9 @@ public class DescribeConfigsResponse extends AbstractResponse {
         private final ConfigSource source;
 
         public ConfigSynonym(String name, String value, ConfigSource source) {
-            this.name = name;
+            this.name = Objects.requireNonNull(name, "name");
             this.value = value;
-            this.source = source;
+            this.source = Objects.requireNonNull(source, "source");
         }
 
         public String name() {
@@ -214,11 +221,11 @@ public class DescribeConfigsResponse extends AbstractResponse {
 
 
     private final int throttleTimeMs;
-    private final Map<Resource, Config> configs;
+    private final Map<ConfigResource, Config> configs;
 
-    public DescribeConfigsResponse(int throttleTimeMs, Map<Resource, Config> configs) {
+    public DescribeConfigsResponse(int throttleTimeMs, Map<ConfigResource, Config> configs) {
         this.throttleTimeMs = throttleTimeMs;
-        this.configs = configs;
+        this.configs = Objects.requireNonNull(configs, "configs");
     }
 
     public DescribeConfigsResponse(Struct struct) {
@@ -229,9 +236,9 @@ public class DescribeConfigsResponse extends AbstractResponse {
             Struct resourceStruct = (Struct) resourceObj;
 
             ApiError error = new ApiError(resourceStruct);
-            ResourceType resourceType = ResourceType.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
+            ConfigResource.Type resourceType = ConfigResource.Type.forId(resourceStruct.getByte(RESOURCE_TYPE_KEY_NAME));
             String resourceName = resourceStruct.getString(RESOURCE_NAME_KEY_NAME);
-            Resource resource = new Resource(resourceType, resourceName);
+            ConfigResource resource = new ConfigResource(resourceType, resourceName);
 
             Object[] configEntriesArray = resourceStruct.getArray(CONFIG_ENTRIES_KEY_NAME);
             List<ConfigEntry> configEntries = new ArrayList<>(configEntriesArray.length);
@@ -282,14 +289,15 @@ public class DescribeConfigsResponse extends AbstractResponse {
         }
     }
 
-    public Map<Resource, Config> configs() {
+    public Map<ConfigResource, Config> configs() {
         return configs;
     }
 
-    public Config config(Resource resource) {
+    public Config config(ConfigResource resource) {
         return configs.get(resource);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -307,10 +315,10 @@ public class DescribeConfigsResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.DESCRIBE_CONFIGS.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> resourceStructs = new ArrayList<>(configs.size());
-        for (Map.Entry<Resource, Config> entry : configs.entrySet()) {
+        for (Map.Entry<ConfigResource, Config> entry : configs.entrySet()) {
             Struct resourceStruct = struct.instance(RESOURCES_KEY_NAME);
 
-            Resource resource = entry.getKey();
+            ConfigResource resource = entry.getKey();
             resourceStruct.set(RESOURCE_TYPE_KEY_NAME, resource.type().id());
             resourceStruct.set(RESOURCE_NAME_KEY_NAME, resource.name());
 
@@ -340,7 +348,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
                 }
             }
             resourceStruct.set(CONFIG_ENTRIES_KEY_NAME, configEntryStructs.toArray(new Struct[0]));
-            
+
             resourceStructs.add(resourceStruct);
         }
         struct.set(RESOURCES_KEY_NAME, resourceStructs.toArray(new Struct[0]));
@@ -351,4 +359,8 @@ public class DescribeConfigsResponse extends AbstractResponse {
         return new DescribeConfigsResponse(ApiKeys.DESCRIBE_CONFIGS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

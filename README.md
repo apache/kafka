@@ -4,9 +4,9 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 3.0 or higher.
+Kafka requires Gradle 4.7 or higher.
 
-Java 7 should be used for building in order to support both Java 7 and Java 8 at runtime.
+Java 8 should be used for building in order to support both Java 8 and Java 10 at runtime.
 
 ### First bootstrap and download the wrapper ###
     cd kafka_source_dir
@@ -84,8 +84,6 @@ You can pass either the major version (eg 2.11) or the full version (eg 2.11.12)
     ./gradlew -PscalaVersion=2.11 jar
     ./gradlew -PscalaVersion=2.11 test
     ./gradlew -PscalaVersion=2.11 releaseTarGz
-
-Scala 2.12.x requires Java 8.
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -170,7 +168,7 @@ Please note for this to work you should create/update user maven settings (typic
     ./gradlew dependencyUpdates
 
 ### Running code quality checks ###
-There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
+There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
 
 #### Checkstyle ####
 Checkstyle enforces a consistent coding style in Kafka.
@@ -181,14 +179,14 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
 
-#### Findbugs ####
-Findbugs uses static analysis to look for bugs in the code.
-You can run findbugs using:
+#### Spotbugs ####
+Spotbugs uses static analysis to look for bugs in the code.
+You can run spotbugs using:
 
-    ./gradlew findbugsMain findbugsTest -x test
+    ./gradlew spotbugsMain spotbugsTest -x test
 
-The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
+The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
+directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
 
 ### Common build options ###
 
@@ -200,7 +198,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
-* `xmlFindBugsReport`: enable XML reports for findBugs. This also disables HTML reports as only one can be enabled at a time.
+* `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 
 ### Running in Vagrant ###
 

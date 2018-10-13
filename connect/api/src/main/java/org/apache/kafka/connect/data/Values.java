@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.data;
 
-import org.apache.kafka.common.utils.Base64;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema.Type;
 import org.apache.kafka.connect.errors.DataException;
@@ -31,6 +30,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.text.StringCharacterIterator;
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.Calendar;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -38,6 +38,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.TimeZone;
+import java.util.regex.Pattern;
 
 /**
  * Utility for converting from one Connect value to a different form. This is useful when the caller expects a value of a particular type
@@ -69,7 +70,7 @@ public class Values {
     private static final String FALSE_LITERAL = Boolean.TRUE.toString();
     private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
     private static final String NULL_VALUE = "null";
-    private static final String ISO_8601_DATE_FORMAT_PATTERN = "YYYY-MM-DD";
+    private static final String ISO_8601_DATE_FORMAT_PATTERN = "yyyy-MM-dd";
     private static final String ISO_8601_TIME_FORMAT_PATTERN = "HH:mm:ss.SSS'Z'";
     private static final String ISO_8601_TIMESTAMP_FORMAT_PATTERN = ISO_8601_DATE_FORMAT_PATTERN + "'T'" + ISO_8601_TIME_FORMAT_PATTERN;
 
@@ -83,6 +84,10 @@ public class Values {
     private static final int ISO_8601_DATE_LENGTH = ISO_8601_DATE_FORMAT_PATTERN.length();
     private static final int ISO_8601_TIME_LENGTH = ISO_8601_TIME_FORMAT_PATTERN.length() - 2; // subtract single quotes
     private static final int ISO_8601_TIMESTAMP_LENGTH = ISO_8601_TIMESTAMP_FORMAT_PATTERN.length() - 4; // subtract single quotes
+
+    private static final Pattern TWO_BACKSLASHES = Pattern.compile("\\\\");
+
+    private static final Pattern DOUBLEQOUTE = Pattern.compile("\"");
 
     /**
      * Convert the specified value to an {@link Type#BOOLEAN} value. The supplied schema is required if the value is a logical
@@ -644,7 +649,7 @@ public class Values {
                 sb.append(value);
             }
         } else if (value instanceof byte[]) {
-            value = Base64.encoder().encodeToString((byte[]) value);
+            value = Base64.getEncoder().encodeToString((byte[]) value);
             if (embedded) {
                 sb.append('"').append(value).append('"');
             } else {
@@ -704,10 +709,11 @@ public class Values {
     }
 
     protected static String escape(String value) {
-        return value.replaceAll("\\\\", "\\\\\\\\").replaceAll("\"", "\\\\\"");
+        String replace1 = TWO_BACKSLASHES.matcher(value).replaceAll("\\\\\\\\");
+        return DOUBLEQOUTE.matcher(replace1).replaceAll("\\\\\"");
     }
 
-    protected static DateFormat dateFormatFor(java.util.Date value) {
+    public static DateFormat dateFormatFor(java.util.Date value) {
         if (value.getTime() < MILLIS_PER_DAY) {
             return new SimpleDateFormat(ISO_8601_TIME_FORMAT_PATTERN);
         }

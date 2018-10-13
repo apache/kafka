@@ -26,15 +26,16 @@ import java.util.concurrent.atomic._
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
-import kafka.common.KafkaException
 import kafka.metrics.KafkaMetricsGroup
+import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
-import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.{KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -55,9 +56,6 @@ import scala.util.control.ControlThrowable
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
 
   private val maxQueuedRequests = config.queuedMaxRequests
-
-  private val maxConnectionsPerIp = config.maxConnectionsPerIp
-  private val maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides
 
   private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
   this.logIdent = logContext.logPrefix
@@ -89,7 +87,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
    */
   def startup(startupProcessors: Boolean = true) {
     this.synchronized {
-      connectionQuotas = new ConnectionQuotas(maxConnectionsPerIp, maxConnectionsPerIpOverrides)
+      connectionQuotas = new ConnectionQuotas(config.maxConnectionsPerIp, config.maxConnectionsPerIpOverrides)
       createAcceptorAndProcessors(config.numNetworkThreads, config.listeners)
       if (startupProcessors) {
         startProcessors()
@@ -104,7 +102,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
             metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
           }
           ioWaitRatioMetricNames.map { metricName =>
-            Option(metrics.metric(metricName)).fold(0.0)(_.value)
+            Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
           }.sum / processors.size
         }
       }
@@ -228,6 +226,16 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     }
   }
 
+  def updateMaxConnectionsPerIp(maxConnectionsPerIp: Int): Unit = {
+    info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
+    connectionQuotas.updateMaxConnectionsPerIp(maxConnectionsPerIp)
+  }
+
+  def updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides: Map[String, Int]): Unit = {
+    info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
+    connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
+  }
+
   /* `protected` for test usage */
   protected[network] def newProcessor(id: Int, connectionQuotas: ConnectionQuotas, listenerName: ListenerName,
                                       securityProtocol: SecurityProtocol, memoryPool: MemoryPool): Processor = {
@@ -237,6 +245,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       requestChannel,
       connectionQuotas,
       config.connectionsMaxIdleMs,
+      config.failedAuthenticationDelayMs,
       listenerName,
       securityProtocol,
       config,
@@ -424,7 +433,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
    */
   private def openServerSocket(host: String, port: Int): ServerSocketChannel = {
     val socketAddress =
-      if(host == null || host.trim.isEmpty)
+      if (host == null || host.trim.isEmpty)
         new InetSocketAddress(port)
       else
         new InetSocketAddress(host, port)
@@ -494,6 +503,7 @@ private[kafka] class Processor(val id: Int,
                                requestChannel: RequestChannel,
                                connectionQuotas: ConnectionQuotas,
                                connectionsMaxIdleMs: Long,
+                               failedAuthenticationDelayMs: Int,
                                listenerName: ListenerName,
                                securityProtocol: SecurityProtocol,
                                config: KafkaConfig,
@@ -530,7 +540,8 @@ private[kafka] class Processor(val id: Int,
   newGauge(IdlePercentMetricName,
     new Gauge[Double] {
       def value = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags))).fold(0.0)(_.value)
+        Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags)))
+          .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }
     },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
@@ -554,6 +565,7 @@ private[kafka] class Processor(val id: Int,
     new KSelector(
       maxRequestSize,
       connectionsMaxIdleMs,
+      failedAuthenticationDelayMs,
       metrics,
       time,
       "socket-server",
@@ -616,25 +628,37 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def processNewResponses() {
-    var curr: RequestChannel.Response = null
-    while ({curr = dequeueResponse(); curr != null}) {
-      val channelId = curr.request.context.connectionId
+    var currentResponse: RequestChannel.Response = null
+    while ({currentResponse = dequeueResponse(); currentResponse != null}) {
+      val channelId = currentResponse.request.context.connectionId
       try {
-        curr.responseAction match {
-          case RequestChannel.NoOpAction =>
+        currentResponse match {
+          case response: NoOpResponse =>
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
-            updateRequestMetrics(curr)
-            trace("Socket server received empty response to send, registering for read: " + curr)
-            openOrClosingChannel(channelId).foreach(c => selector.unmute(c.id))
-          case RequestChannel.SendAction =>
-            val responseSend = curr.responseSend.getOrElse(
-              throw new IllegalStateException(s"responseSend must be defined for SendAction, response: $curr"))
-            sendResponse(curr, responseSend)
-          case RequestChannel.CloseConnectionAction =>
-            updateRequestMetrics(curr)
+            updateRequestMetrics(response)
+            trace("Socket server received empty response to send, registering for read: " + response)
+            // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
+            // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
+            // throttling delay has already passed by now.
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.RESPONSE_SENT)
+            tryUnmuteChannel(channelId)
+
+          case response: SendResponse =>
+            sendResponse(response, response.responseSend)
+          case response: CloseConnectionResponse =>
+            updateRequestMetrics(response)
             trace("Closing socket connection actively according to the response code.")
             close(channelId)
+          case _: StartThrottlingResponse =>
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.THROTTLE_STARTED)
+          case _: EndThrottlingResponse =>
+            // Try unmuting the channel. The channel will be unmuted only if the response has already been sent out to
+            // the client.
+            handleChannelMuteEvent(channelId, ChannelMuteEvent.THROTTLE_ENDED)
+            tryUnmuteChannel(channelId)
+          case _ =>
+            throw new IllegalArgumentException(s"Unknown response type: ${currentResponse.getClass}")
         }
       } catch {
         case e: Throwable =>
@@ -677,12 +701,14 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            val context = new RequestContext(header, receive.source, channel.socketAddress,
+            val connectionId = receive.source
+            val context = new RequestContext(header, connectionId, channel.socketAddress,
               channel.principal, listenerName, securityProtocol)
             val req = new RequestChannel.Request(processor = id, context = context,
               startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
             requestChannel.sendRequest(req)
-            selector.mute(receive.source)
+            selector.mute(connectionId)
+            handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
             throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
@@ -699,19 +725,27 @@ private[kafka] class Processor(val id: Int,
   private def processCompletedSends() {
     selector.completedSends.asScala.foreach { send =>
       try {
-        val resp = inflightResponses.remove(send.destination).getOrElse {
+        val response = inflightResponses.remove(send.destination).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destination} completed, but not in `inflightResponses`")
         }
-        updateRequestMetrics(resp)
-        selector.unmute(send.destination)
+        updateRequestMetrics(response)
+
+        // Invoke send completion callback
+        response.onComplete.foreach(onComplete => onComplete(send))
+
+        // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
+        // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
+        // delay has already passed by now.
+        handleChannelMuteEvent(send.destination, ChannelMuteEvent.RESPONSE_SENT)
+        tryUnmuteChannel(send.destination)
       } catch {
         case e: Throwable => processChannelException(send.destination,
-            s"Exception while processing completed send to ${send.destination}", e)
+          s"Exception while processing completed send to ${send.destination}", e)
       }
     }
   }
 
-  private def updateRequestMetrics(response: RequestChannel.Response) {
+  private def updateRequestMetrics(response: RequestChannel.Response): Unit = {
     val request = response.request
     val networkThreadTimeNanos = openOrClosingChannel(request.context.connectionId).fold(0L)(_.getAndResetNetworkThreadTimeNanos())
     request.updateRequestMetrics(networkThreadTimeNanos, response)
@@ -821,7 +855,17 @@ private[kafka] class Processor(val id: Int,
   // Visible for testing
   // Only methods that are safe to call on a disconnected channel should be invoked on 'openOrClosingChannel'.
   private[network] def openOrClosingChannel(connectionId: String): Option[KafkaChannel] =
-     Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+    Option(selector.channel(connectionId)).orElse(Option(selector.closingChannel(connectionId)))
+
+  // Indicate the specified channel that the specified channel mute-related event has happened so that it can change its
+  // mute state.
+  private def handleChannelMuteEvent(connectionId: String, event: ChannelMuteEvent): Unit = {
+    openOrClosingChannel(connectionId).foreach(c => c.handleChannelMuteEvent(event))
+  }
+
+  private def tryUnmuteChannel(connectionId: String) = {
+    openOrClosingChannel(connectionId).foreach(c => selector.unmute(c.id))
+  }
 
   /* For test usage */
   private[network] def channel(connectionId: String): Option[KafkaChannel] =
@@ -845,17 +889,26 @@ private[kafka] class Processor(val id: Int,
 
 class ConnectionQuotas(val defaultMax: Int, overrideQuotas: Map[String, Int]) {
 
-  private val overrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var defaultMaxConnectionsPerIp = defaultMax
+  @volatile private var maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   private val counts = mutable.Map[InetAddress, Int]()
 
   def inc(address: InetAddress) {
     counts.synchronized {
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
-      val max = overrides.getOrElse(address, defaultMax)
+      val max = maxConnectionsPerIpOverrides.getOrElse(address, defaultMaxConnectionsPerIp)
       if (count >= max)
         throw new TooManyConnectionsException(address, max)
     }
+  }
+
+  def updateMaxConnectionsPerIp(maxConnectionsPerIp: Int): Unit = {
+    defaultMaxConnectionsPerIp = maxConnectionsPerIp
+  }
+
+  def updateMaxConnectionsPerIpOverride(overrideQuotas: Map[String, Int]): Unit = {
+    maxConnectionsPerIpOverrides = overrideQuotas.map { case (host, count) => (InetAddress.getByName(host), count) }
   }
 
   def dec(address: InetAddress) {

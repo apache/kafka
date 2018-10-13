@@ -26,6 +26,7 @@ import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.config.ConfigException
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -225,4 +226,56 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
   }
 
+  @Test
+  def testInvalidTopicLevelConfig(): Unit = {
+    val brokers = List(0)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the topic
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "message.timestamp.type=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: Exception => // topic creation should fail due to the invalid config
+    }
+
+    // try to create the topic with another invalid config
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "message.format.version=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: ConfigException => // topic creation should fail due to the invalid config value
+    }
+  }
+
+  @Test
+  def testDescribeAndListTopicsWithoutInternalTopics() {
+    val brokers = List(0)
+    val topic = "testDescribeAndListTopicsWithoutInternalTopics"
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic)))
+    // create a internal topic
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
+
+    // test describe
+    var output = TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient,
+      new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+
+    // test list
+    output = TestUtils.grabConsoleOutput(TopicCommand.listTopics(zkClient,
+      new TopicCommandOptions(Array("--list", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+  }
 }

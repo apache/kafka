@@ -45,10 +45,11 @@ import java.util.Properties;
 import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.requests.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE;
+import static org.apache.kafka.streams.StreamsConfig.TOPOLOGY_OPTIMIZATION;
 import static org.apache.kafka.streams.StreamsConfig.adminClientPrefix;
 import static org.apache.kafka.streams.StreamsConfig.consumerPrefix;
 import static org.apache.kafka.streams.StreamsConfig.producerPrefix;
-import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
+import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
@@ -455,9 +456,7 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "anyValue");
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("groupId", "clientId");
-        String isoLevel = (String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG);
-        String name = READ_COMMITTED.name();
-        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
     }
 
     @Test
@@ -465,7 +464,7 @@ public class StreamsConfigTest {
         props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("groupId", "clientrId");
-        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT)));
     }
 
 
@@ -483,7 +482,7 @@ public class StreamsConfigTest {
         props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, false);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
-        assertThat((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
+        assertThat(producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), equalTo(false));
     }
 
     @Test
@@ -494,9 +493,9 @@ public class StreamsConfigTest {
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs("groupId", "clientId");
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
 
-        assertThat((String) consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
+        assertThat(consumerConfigs.get(ConsumerConfig.ISOLATION_LEVEL_CONFIG), equalTo(READ_COMMITTED.name().toLowerCase(Locale.ROOT)));
         assertTrue((Boolean) producerConfigs.get(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG));
-        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(Integer.MAX_VALUE));
+        assertThat(producerConfigs.get(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG), equalTo(Integer.MAX_VALUE));
         assertThat(streamsConfig.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG), equalTo(100L));
     }
 
@@ -509,7 +508,7 @@ public class StreamsConfigTest {
 
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs("clientId");
 
-        assertThat((Integer) producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
+        assertThat(producerConfigs.get(ProducerConfig.RETRIES_CONFIG), equalTo(numberOfRetries));
     }
 
     @Test
@@ -524,7 +523,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldUseNewConfigsWhenPresent() {
-        final Properties props = minimalStreamsConfig();
+        final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, MockTimestampExtractor.class);
@@ -537,7 +536,7 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldUseCorrectDefaultsWhenNoneSpecified() {
-        final StreamsConfig config = new StreamsConfig(minimalStreamsConfig());
+        final StreamsConfig config = new StreamsConfig(getStreamsConfig());
         assertTrue(config.defaultKeySerde() instanceof Serdes.ByteArraySerde);
         assertTrue(config.defaultValueSerde() instanceof Serdes.ByteArraySerde);
         assertTrue(config.defaultTimestampExtractor() instanceof FailOnInvalidTimestamp);
@@ -545,13 +544,13 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
-        final Properties props = minimalStreamsConfig();
+        final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
         try {
             config.defaultKeySerde();
             fail("Test should throw a StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             assertEquals("Failed to configure key serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
@@ -559,13 +558,13 @@ public class StreamsConfigTest {
     @SuppressWarnings("deprecation")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
-        final Properties props = minimalStreamsConfig();
+        final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, MisconfiguredSerde.class);
         final StreamsConfig config = new StreamsConfig(props);
         try {
             config.defaultValueSerde();
             fail("Test should throw a StreamsException");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             assertEquals("Failed to configure value serde class org.apache.kafka.streams.StreamsConfigTest$MisconfiguredSerde", e.getMessage());
         }
     }
@@ -583,6 +582,27 @@ public class StreamsConfigTest {
         }
     }
 
+    @Test
+    public void shouldSpecifyNoOptimizationWhenNotExplicitlyAddedToConfigs() {
+        final String expectedOptimizeConfig = "none";
+        final String actualOptimizedConifig = streamsConfig.getString(TOPOLOGY_OPTIMIZATION);
+        assertEquals("Optimization should be \"none\"", expectedOptimizeConfig, actualOptimizedConifig);
+    }
+
+    @Test
+    public void shouldSpecifyOptimizationWhenNotExplicitlyAddedToConfigs() {
+        final String expectedOptimizeConfig = "all";
+        props.put(TOPOLOGY_OPTIMIZATION, "all");
+        final StreamsConfig config = new StreamsConfig(props);
+        final String actualOptimizedConifig = config.getString(TOPOLOGY_OPTIMIZATION);
+        assertEquals("Optimization should be \"all\"", expectedOptimizeConfig, actualOptimizedConifig);
+    }
+
+    @Test(expected = ConfigException.class)
+    public void shouldThrowConfigExceptionWhenOptimizationConfigNotValueInRange() {
+        props.put(TOPOLOGY_OPTIMIZATION, "maybe");
+        new StreamsConfig(props);
+    }
 
     static class MisconfiguredSerde implements Serde {
         @Override

@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class StopReplicaResponseTest {
 
@@ -56,6 +57,18 @@ public class StopReplicaResponseTest {
         assertEquals(2, errorCounts.size());
         assertEquals(1, errorCounts.get(Errors.NONE).intValue());
         assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
+    }
+
+    @Test
+    public void testToString() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 0), Errors.NONE);
+        errors.put(new TopicPartition("foo", 1), Errors.CLUSTER_AUTHORIZATION_FAILED);
+        StopReplicaResponse response = new StopReplicaResponse(Errors.NONE, errors);
+        String responseStr = response.toString();
+        assertTrue(responseStr.contains(StopReplicaResponse.class.getSimpleName()));
+        assertTrue(responseStr.contains(errors.toString()));
+        assertTrue(responseStr.contains(Errors.NONE.name()));
     }
 
 }

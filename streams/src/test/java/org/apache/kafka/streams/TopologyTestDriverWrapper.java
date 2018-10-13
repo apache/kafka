@@ -16,22 +16,55 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 import java.util.Properties;
 
 /**
- *  This class allows the instantiation of a {@link TopologyTestDriver} using a
- *  {@link InternalTopologyBuilder} by exposing a protected constructor.
- *
- *  It should be used only for testing, and should be removed once the deprecated
- *  classes {@link org.apache.kafka.streams.kstream.KStreamBuilder} and
- *  {@link org.apache.kafka.streams.processor.TopologyBuilder} are removed.
+ * This class provides access to {@link TopologyTestDriver} protected methods.
+ * It should only be used for internal testing, in the rare occasions where the
+ * necessary functionality is not supported by {@link TopologyTestDriver}.
  */
 public class TopologyTestDriverWrapper extends TopologyTestDriver {
 
-    public TopologyTestDriverWrapper(final InternalTopologyBuilder builder,
+
+    public TopologyTestDriverWrapper(final Topology topology,
                                      final Properties config) {
-        super(builder, config);
+        super(topology, config);
+    }
+
+    /**
+     * Get the processor context, setting the processor whose name is given as current node
+     *
+     * @param processorName processor name to set as current node
+     * @return the processor context
+     */
+    public ProcessorContext setCurrentNodeForProcessorContext(final String processorName) {
+        final ProcessorContext context = task.context();
+        ((ProcessorContextImpl) context).setCurrentNode(getProcessor(processorName));
+        return context;
+    }
+
+    /**
+     * Get a processor by name
+     *
+     * @param name the name to search for
+     * @return the processor matching the search name
+     */
+    public ProcessorNode getProcessor(final String name) {
+        for (final ProcessorNode node : processorTopology.processors()) {
+            if (node.name().equals(name)) {
+                return node;
+            }
+        }
+        for (final ProcessorNode node : globalTopology.processors()) {
+            if (node.name().equals(name)) {
+                return node;
+            }
+        }
+        throw new StreamsException("Could not find a processor named '" + name + "'");
     }
 }

@@ -39,6 +39,11 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
     public static final Schema TOKEN_DESCRIBE_REQUEST_V0 = new Schema(
         new Field(OWNER_KEY_NAME, ArrayOf.nullable(new Schema(PRINCIPAL_TYPE, PRINCIPAL_NAME)), "An array of token owners."));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    public static final Schema TOKEN_DESCRIBE_REQUEST_V1 = TOKEN_DESCRIBE_REQUEST_V0;
+
     public static class Builder extends AbstractRequest.Builder<DescribeDelegationTokenRequest> {
         // describe token for the given list of owners, or null if we want to describe all tokens.
         private final List<KafkaPrincipal> owners;
@@ -64,12 +69,12 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
     }
 
     private DescribeDelegationTokenRequest(short version, List<KafkaPrincipal> owners) {
-        super(version);
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN, version);
         this.owners = owners;
     }
 
     public DescribeDelegationTokenRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.DESCRIBE_DELEGATION_TOKEN, versionId);
 
         Object[] ownerArray = struct.getArray(OWNER_KEY_NAME);
 
@@ -86,7 +91,7 @@ public class DescribeDelegationTokenRequest extends AbstractRequest {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{TOKEN_DESCRIBE_REQUEST_V0};
+        return new Schema[]{TOKEN_DESCRIBE_REQUEST_V0, TOKEN_DESCRIBE_REQUEST_V1};
     }
 
     @Override

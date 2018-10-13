@@ -93,7 +93,6 @@ public class ProcessorNodeTest {
             anyStateSerde,
             new RecordCollectorImpl(
                 null,
-                null,
                 new LogContext("processnode-test "),
                 new DefaultProductionExceptionHandler(),
                 metrics.sensor("skipped-records")
@@ -111,12 +110,6 @@ public class ProcessorNodeTest {
         metricTags.put("task-id", context.taskId().toString());
         metricTags.put("client-id", "mock");
 
-
-        for (final String operation : latencyOperations) {
-            assertNotNull(metrics.getSensor(operation));
-        }
-        assertNotNull(metrics.getSensor(throughputOperation));
-
         for (final String opName : latencyOperations) {
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
@@ -124,7 +117,8 @@ public class ProcessorNodeTest {
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
         assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-            "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
+                                                               metricTags)));
 
         // test "all"
         metricTags.put("processor-node-id", "all");
@@ -134,8 +128,10 @@ public class ProcessorNodeTest {
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
             StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
         }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-            "The average number of occurrence of " + throughputOperation + " operation per second.", metricTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate",
+                                                               groupName,
+                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
+                                                               metricTags)));
 
 
     }

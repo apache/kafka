@@ -140,7 +140,7 @@ public class JaasContext {
      * The type of the SASL login context, it should be SERVER for the broker and CLIENT for the clients (consumer, producer,
      * etc.). This is used to validate behaviour (e.g. some functionality is only available in the broker or clients).
      */
-    public enum Type { CLIENT, SERVER; }
+    public enum Type { CLIENT, SERVER }
 
     private final String name;
     private final Type type;

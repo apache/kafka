@@ -26,14 +26,14 @@ import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException, InvalidConfigurationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
-import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse, Resource, ResourceType}
+import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
@@ -131,6 +131,9 @@ class AdminManager(val config: KafkaConfig,
         case e: ApiException =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
+        case e: ConfigException =>
+          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
           error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
@@ -281,7 +284,7 @@ class AdminManager(val config: KafkaConfig,
     }
   }
 
-  def describeConfigs(resourceToConfigNames: Map[Resource, Option[Set[String]]], includeSynonyms: Boolean): Map[Resource, DescribeConfigsResponse.Config] = {
+  def describeConfigs(resourceToConfigNames: Map[ConfigResource, Option[Set[String]]], includeSynonyms: Boolean): Map[ConfigResource, DescribeConfigsResponse.Config] = {
     resourceToConfigNames.map { case (resource, configNames) =>
 
       def allConfigs(config: AbstractConfig) = {
@@ -301,7 +304,7 @@ class AdminManager(val config: KafkaConfig,
       try {
         val resourceConfig = resource.`type` match {
 
-          case ResourceType.TOPIC =>
+          case ConfigResource.Type.TOPIC =>
             val topic = resource.name
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
@@ -313,7 +316,7 @@ class AdminManager(val config: KafkaConfig,
               new DescribeConfigsResponse.Config(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null), Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
             }
 
-          case ResourceType.BROKER =>
+          case ConfigResource.Type.BROKER =>
             if (resource.name == null || resource.name.isEmpty)
               createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
                 createBrokerConfigEntry(perBrokerConfig = false, includeSynonyms))
@@ -339,7 +342,7 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  def alterConfigs(configs: Map[Resource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[Resource, ApiError] = {
+  def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
 
       def validateConfigPolicy(resourceType: ConfigResource.Type): Unit = {
@@ -353,7 +356,7 @@ class AdminManager(val config: KafkaConfig,
       }
       try {
         resource.`type` match {
-          case ResourceType.TOPIC =>
+          case ConfigResource.Type.TOPIC =>
             val topic = resource.name
 
             val properties = new Properties
@@ -368,7 +371,7 @@ class AdminManager(val config: KafkaConfig,
 
             resource -> ApiError.NONE
 
-          case ResourceType.BROKER =>
+          case ConfigResource.Type.BROKER =>
             val brokerId = if (resource.name == null || resource.name.isEmpty)
               None
             else {
@@ -386,6 +389,8 @@ class AdminManager(val config: KafkaConfig,
             this.config.dynamicConfig.validate(configProps, perBrokerConfig)
             validateConfigPolicy(ConfigResource.Type.BROKER)
             if (!validateOnly) {
+              if (perBrokerConfig)
+                this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
               adminZkClient.changeBrokerConfig(brokerId,
                 this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
             }

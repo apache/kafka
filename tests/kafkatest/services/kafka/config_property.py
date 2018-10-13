@@ -48,6 +48,7 @@ THROTTLING_REPLICATION_RATE_LIMIT = "replication.quota.throttled.rate"
 LOG_FLUSH_INTERVAL_MESSAGE = "log.flush.interval.messages"
 REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS = "replica.high.watermark.checkpoint.interval.ms"
 LOG_ROLL_TIME_MS = "log.roll.ms"
+OFFSETS_TOPIC_NUM_PARTITIONS = "offsets.topic.num.partitions"
 
 """
 From KafkaConfig.scala

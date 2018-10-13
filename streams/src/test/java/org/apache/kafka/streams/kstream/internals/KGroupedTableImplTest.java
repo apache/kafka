@@ -21,7 +21,7 @@ import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -56,7 +56,7 @@ public class KGroupedTableImplTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
     private final String topic = "input";
 
     @Before
@@ -132,7 +132,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -157,7 +157,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -183,7 +183,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -199,7 +199,7 @@ public class KGroupedTableImplTest {
         final Map<String, Integer> results = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(results, topic, driver);
-            final KeyValueStore<String, Integer> reduce = (KeyValueStore<String, Integer>) driver.getStateStore("reduce");
+            final KeyValueStore<String, Integer> reduce = driver.getKeyValueStore("reduce");
             assertThat(reduce.get("A"), equalTo(5));
             assertThat(reduce.get("B"), equalTo(6));
         }
@@ -240,7 +240,7 @@ public class KGroupedTableImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
-            final KeyValueStore<String, String> aggregate = (KeyValueStore<String, String>) driver.getStateStore("aggregate");
+            final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
             assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
             assertThat(aggregate.get("2"), equalTo("0+2+2"));
         }

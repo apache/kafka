@@ -43,8 +43,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -79,14 +80,6 @@ public class GlobalStateManagerImplTest {
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
-
-    private final GlobalStateManagerImpl.IsRunning alwaysRunning = new GlobalStateManagerImpl.IsRunning() {
-        @Override
-        public boolean check() {
-            return true;
-        }
-    };
-
     private GlobalStateManagerImpl stateManager;
     private StateDirectory stateDirectory;
     private StreamsConfig streamsConfig;
@@ -127,8 +120,7 @@ public class GlobalStateManagerImplTest {
             consumer,
             stateDirectory,
             stateRestoreListener,
-            streamsConfig,
-            alwaysRunning);
+            streamsConfig);
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -357,7 +349,7 @@ public class GlobalStateManagerImplTest {
         try {
             stateManager.register(store1, null);
             fail("should have thrown due to null callback");
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             //pass
         }
     }
@@ -412,7 +404,7 @@ public class GlobalStateManagerImplTest {
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // expected
         }
         assertFalse(store.isOpen());
@@ -424,7 +416,7 @@ public class GlobalStateManagerImplTest {
         writeCorruptCheckpoint();
         try {
             stateManager.initialize();
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // expected
         }
         final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime());
@@ -497,6 +489,16 @@ public class GlobalStateManagerImplTest {
         assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
     }
 
+    @Test
+    public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
+        stateManager.initialize();
+        initializeConsumer(10, 1, t3);
+        stateManager.register(store3, stateRestoreCallback);
+        stateManager.close(Collections.emptyMap());
+
+        assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
+    }
+
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
                                                                                 ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -516,8 +518,7 @@ public class GlobalStateManagerImplTest {
                 }
             },
             stateRestoreListener,
-            streamsConfig,
-            alwaysRunning
+            streamsConfig
         );
 
         try {
@@ -534,7 +535,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized Map<TopicPartition, Long> endOffsets(Collection<org.apache.kafka.common.TopicPartition> partitions) {
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<org.apache.kafka.common.TopicPartition> partitions) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }
@@ -555,8 +556,7 @@ public class GlobalStateManagerImplTest {
                 consumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig,
-                alwaysRunning);
+                streamsConfig);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -568,7 +568,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized List<PartitionInfo> partitionsFor(String topic) {
+            public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }
@@ -589,8 +589,7 @@ public class GlobalStateManagerImplTest {
                 consumer,
                 stateDirectory,
                 stateRestoreListener,
-                streamsConfig,
-                alwaysRunning);
+                streamsConfig);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -660,7 +659,7 @@ public class GlobalStateManagerImplTest {
 
     private void writeCorruptCheckpoint() throws IOException {
         final File checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
-        try (final FileOutputStream stream = new FileOutputStream(checkpointFile)) {
+        try (final OutputStream stream = Files.newOutputStream(checkpointFile.toPath())) {
             stream.write("0\n1\nfoo".getBytes());
         }
     }

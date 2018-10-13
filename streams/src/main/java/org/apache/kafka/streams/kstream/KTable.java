@@ -24,6 +24,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -69,7 +70,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate.
+     * predicate, with default serializers, deserializers, and state store.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -91,7 +92,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists of all records of this {@code KTable} which satisfy the given
-     * predicate.
+     * predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that do not satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -129,7 +131,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate.
+     * given predicate, with default serializers, deserializers, and state store.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -151,7 +153,8 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
-     * given predicate.
+     * given predicate, with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
      * All records that <em>do</em> satisfy the predicate are dropped.
      * For each {@code KTable} update, the filter is evaluated based on the current update
      * record and then an update record is produced for the result {@code KTable}.
@@ -189,7 +192,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -223,7 +226,7 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with default serializers, deserializers, and state store.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -258,7 +261,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapper} is applied to the value of the updated record and
      * computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -302,7 +307,9 @@ public interface KTable<K, V> {
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
-     * (with possible new type) in the new {@code KTable}.
+     * (with possibly a new type) in the new {@code KTable}, with the {@link Serde key serde}, {@link Serde value serde},
+     * and the underlying {@link KeyValueStore materialized state storage} configured in the {@link Materialized}
+     * instance.
      * For each {@code KTable} update the provided {@link ValueMapperWithKey} is applied to the value of the update
      * record and computes a new value for it, resulting in an updated record for the result {@code KTable}.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -383,6 +390,168 @@ public interface KTable<K, V> {
     <KR> KStream<KR, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
+     * Suppress some updates from this changelog stream, determined by the supplied {@link Suppressed} configuration.
+     *
+     * This controls what updates downstream table and stream operations will receive.
+     *
+     * @param suppressed Configuration object determining what, if any, updates to suppress
+     * @return A new KTable with the desired suppression characteristics.
+     */
+    KTable<K, V> suppress(final Suppressed<? super K> suppressed);
+
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possibly a new type), with default serializers, deserializers, and state store.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
+     * record value and computes a new value for it.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
+     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing access to additional state-stores,
+     * and access to the {@link ProcessorContext}.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
+     * periodic actions can be performed.
+     * <p>
+     * If the downstream topology uses aggregation functions, (e.g. {@link KGroupedTable#reduce}, {@link KGroupedTable#aggregate}, etc),
+     * care must be taken when dealing with state, (either held in state-stores or transformer instances), to ensure correct aggregate results.
+     * In contrast, if the resulting KTable is materialized, (cf. {@link #transformValues(ValueTransformerWithKeySupplier, Materialized, String...)}),
+     * such concerns are handled for you.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KTable outputTable = inputTable.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * }</pre>
+     * <p>
+     * Within the {@link ValueTransformerWithKey}, the state is obtained via the
+     * {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private KeyValueStore<String, String> state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *             }
+     *
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * Setting a new value preserves data co-location with respect to the key.
+     *
+     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                            {@link ValueTransformerWithKey}.
+     *                            At least one transformer instance will be created per streaming task.
+     *                            Transformers do not need to be thread-safe.
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <VR>                the value type of the result table
+     * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     */
+    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
+                                       final String... stateStoreNames);
+
+    /**
+     * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
+     * (with possibly a new type), with the {@link Serde key serde}, {@link Serde value serde}, and the underlying
+     * {@link KeyValueStore materialized state storage} configured in the {@link Materialized} instance.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
+     * record value and computes a new value for it.
+     * This is similar to {@link #mapValues(ValueMapperWithKey)}, but more flexible, allowing stateful, rather than stateless,
+     * record-by-record operation, access to additional state-stores, and access to the {@link ProcessorContext}.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
+     * periodic actions can be performed.
+     * The resulting {@code KTable} is materialized into another state store (additional to the provided state store names)
+     * as specified by the user via {@link Materialized} parameter, and is queryable through its given name.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KTable outputTable = inputTable.transformValues(
+     *     new ValueTransformerWithKeySupplier() { ... },
+     *     Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("outputTable")
+     *                                 .withKeySerde(Serdes.String())
+     *                                 .withValueSerde(Serdes.String()),
+     *     "myValueTransformState");
+     * }</pre>
+     * <p>
+     * Within the {@link ValueTransformerWithKey}, the state is obtained via the
+     * {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new ValueTransformerWithKeySupplier() {
+     *     ValueTransformerWithKey get() {
+     *         return new ValueTransformerWithKey() {
+     *             private KeyValueStore<String, String> state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
+     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *             }
+     *
+     *             NewValueType transform(K readOnlyKey, V value) {
+     *                 // can access this.state and use read-only key
+     *                 return new NewValueType(readOnlyKey); // or null
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * <p>
+     * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
+     * Setting a new value preserves data co-location with respect to the key.
+     *
+     * @param transformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
+     *                            {@link ValueTransformerWithKey}.
+     *                            At least one transformer instance will be created per streaming task.
+     *                            Transformers do not need to be thread-safe.
+     * @param materialized        an instance of {@link Materialized} used to describe how the state store of the
+     *                            resulting table should be materialized.
+     *                            Cannot be {@code null}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <VR>                the value type of the result table
+     * @return a {@code KTable} that contains records with unmodified key and new values (possibly of different type)
+     * @see #mapValues(ValueMapper)
+     * @see #mapValues(ValueMapperWithKey)
+     */
+    <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
+                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+                                       final String... stateStoreNames);
+
+    /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper} and default serializers
      * and deserializers.
      * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
@@ -393,8 +562,8 @@ public interface KTable<K, V> {
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -421,12 +590,12 @@ public interface KTable<K, V> {
      * provided {@link KeyValueMapper}.
      * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedTable}).
-     * The {@link KeyValueMapper} selects a new key and value (with should both have unmodified type).
+     * The {@link KeyValueMapper} selects a new key and value (with both maybe being the same type or a new type).
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-XXX-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "XXX" is
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -441,12 +610,49 @@ public interface KTable<K, V> {
      * @param <KR>          the key type of the result {@link KGroupedTable}
      * @param <VR>          the value type of the result {@link KGroupedTable}
      * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
+     *
+     * @deprecated since 2.1. Use {@link org.apache.kafka.streams.kstream.KTable#groupBy(KeyValueMapper, Grouped)} instead
      */
+    @Deprecated
     <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
                                            final Serialized<KR, VR> serialized);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper}
+     * and {@link Serde}s as specified by {@link Grouped}.
+     * Each {@link KeyValue} pair of this {@code KTable} is mapped to a new {@link KeyValue} pair by applying the
+     * provided {@link KeyValueMapper}.
+     * Re-grouping a {@code KTable} is required before an aggregation operator can be applied to the data
+     * (cf. {@link KGroupedTable}).
+     * The {@link KeyValueMapper} selects a new key and value (where both could the same type or a new type).
+     * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
+     * <p>
+     * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
+     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},  "&lt;name&gt" is
+     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
+     *
+     * <p>
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
+     * <p>
+     * All data of this {@code KTable} will be redistributed through the repartitioning topic by writing all update
+     * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
+     * on the new key.
+     *
+     * @param selector      a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated
+     * @param grouped       the {@link Grouped} instance used to specify {@link org.apache.kafka.common.serialization.Serdes}
+     *                      and the name for a repartition topic if repartitioning is required.
+     * @param <KR>          the key type of the result {@link KGroupedTable}
+     * @param <VR>          the value type of the result {@link KGroupedTable}
+     * @return a {@link KGroupedTable} that contains the re-grouped records of the original {@code KTable}
+     */
+    <KR, VR> KGroupedTable<KR, VR> groupBy(final KeyValueMapper<? super K, ? super V, KeyValue<KR, VR>> selector,
+                                           final Grouped<KR, VR> grouped);
+
+    /**
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
+     * with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
      * of the join.
@@ -520,7 +726,9 @@ public interface KTable<K, V> {
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner);
 
     /**
-     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join.
+     * Join records of this {@code KTable} with another {@code KTable}'s records using non-windowed inner equi join,
+     * with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * The result is an ever updating {@code KTable} that represents the <em>current</em> (i.e., processing time) result
      * of the join.
@@ -599,7 +807,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join.
+     * non-windowed left equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
@@ -681,7 +889,8 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed left equi join.
+     * non-windowed left equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join}, all records from left {@code KTable} will produce
      * an output record (cf. below).
@@ -767,7 +976,7 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join.
+     * non-windowed outer equi join, with default serializers, deserializers, and state store.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).
@@ -848,7 +1057,8 @@ public interface KTable<K, V> {
 
     /**
      * Join records of this {@code KTable} (left input) with another {@code KTable}'s (right input) records using
-     * non-windowed outer equi join.
+     * non-windowed outer equi join, with the {@link Materialized} instance for configuration of the {@link Serde key serde},
+     * {@link Serde the result table's value serde}, and {@link KeyValueStore state store}.
      * The join is a primary key join with join attribute {@code thisKTable.key == otherKTable.key}.
      * In contrast to {@link #join(KTable, ValueJoiner) inner-join} or {@link #leftJoin(KTable, ValueJoiner) left-join},
      * all records from both input {@code KTable}s will produce an output record (cf. below).

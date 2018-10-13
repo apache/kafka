@@ -17,12 +17,13 @@
 
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -52,7 +53,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 import kafka.utils.MockTime;
 
@@ -103,10 +103,10 @@ public class GlobalThreadShutDownOrderTest {
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(Stores.persistentKeyValueStore(globalStore),
-                                                                                     Serdes.String(),
-                                                                                     Serdes.Long(),
-                                                                                     mockTime);
+        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(Stores.persistentKeyValueStore(globalStore),
+                                                                                           Serdes.String(),
+                                                                                           Serdes.Long(),
+                                                                                           mockTime);
 
         builder.addGlobalStore(storeBuilder,
                                globalStoreTopic,
@@ -146,11 +146,11 @@ public class GlobalThreadShutDownOrderTest {
             public boolean conditionMet() {
                 return firstRecordProcessed;
             }
-        }, 5000L, "Has not processed record within 5 seconds");
+        }, 10000L, "Has not processed record within 10 seconds");
 
-        kafkaStreams.close(30, TimeUnit.SECONDS);
+        kafkaStreams.close(Duration.ofSeconds(30));
 
-        List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
+        final List<Long> expectedRetrievedValues = Arrays.asList(1L, 2L, 3L, 4L);
         assertEquals(expectedRetrievedValues, retrievedValuesList);
     }
 
@@ -163,7 +163,7 @@ public class GlobalThreadShutDownOrderTest {
     }
 
 
-    private void populateTopics(String topicName) throws Exception {
+    private void populateTopics(final String topicName) throws Exception {
         IntegrationTestUtils.produceKeyValuesSynchronously(
             topicName,
             Arrays.asList(
@@ -205,8 +205,8 @@ public class GlobalThreadShutDownOrderTest {
 
         @Override
         public void close() {
-            List<String> keys = Arrays.asList("A", "B", "C", "D");
-            for (String key : keys) {
+            final List<String> keys = Arrays.asList("A", "B", "C", "D");
+            for (final String key : keys) {
                 // need to simulate thread slow in closing
                 Utils.sleep(1000);
                 retrievedValuesList.add(store.get(key));

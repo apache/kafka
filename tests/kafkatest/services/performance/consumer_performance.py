@@ -18,7 +18,7 @@ import os
 
 from kafkatest.services.performance import PerformanceService
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, V_0_9_0_0, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, V_0_9_0_0, V_2_0_0, LATEST_0_10_0
 
 
 class ConsumerPerformanceService(PerformanceService):
@@ -81,6 +81,9 @@ class ConsumerPerformanceService(PerformanceService):
 
         assert version >= V_0_9_0_0 or (not new_consumer), \
             "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(version)
+
+        assert version < V_2_0_0 or new_consumer, \
+            "new_consumer==false is only supported if version < 2.0.0, version %s" % str(version)
 
         security_protocol = self.security_config.security_protocol
         assert version >= V_0_9_0_0 or security_protocol == SecurityConfig.PLAINTEXT, \

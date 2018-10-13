@@ -18,7 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
@@ -99,7 +99,7 @@ public class GlobalKTableJoinsTest {
 
     private void verifyJoin(final Map<String, String> expected) {
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
-        final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.String());
+        final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             // write some data to the global table

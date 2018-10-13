@@ -42,7 +42,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singleton;
 
-class TaskManager {
+public class TaskManager {
     // initialize the task list
     // activeTasks needs to be concurrent as it can be accessed
     // by QueryableState
@@ -187,14 +187,14 @@ class TaskManager {
         return standby.allAssignedTaskIds();
     }
 
-    Set<TaskId> prevActiveTaskIds() {
+    public Set<TaskId> prevActiveTaskIds() {
         return active.previousTaskIds();
     }
 
     /**
      * Returns ids of tasks whose states are kept on the local storage.
      */
-    Set<TaskId> cachedTasksIds() {
+    public Set<TaskId> cachedTasksIds() {
         // A client could contain some inactive tasks whose states are still kept on the local storage in the following scenarios:
         // 1) the client is actively maintaining standby tasks by maintaining their states from the change log.
         // 2) the client has just got some tasks migrated out of itself to other clients while these task states
@@ -221,7 +221,7 @@ class TaskManager {
         return tasks;
     }
 
-    UUID processId() {
+    public UUID processId() {
         return processId;
     }
 
@@ -278,6 +278,10 @@ class TaskManager {
         }
     }
 
+    AdminClient getAdminClient() {
+        return adminClient;
+    }
+
     Set<TaskId> suspendedActiveTaskIds() {
         return active.previousTaskIds();
     }
@@ -309,7 +313,6 @@ class TaskManager {
     /**
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
-     * @throws TaskMigratedException if the task producer got fenced or consumer discovered changelog offset changes (EOS only)
      */
     boolean updateNewAndRestoringTasks() {
         active.initializeNewTasks();
@@ -320,7 +323,7 @@ class TaskManager {
         active.updateRestored(restored);
 
         if (active.allTasksRunning()) {
-            Set<TopicPartition> assignment = consumer.assignment();
+            final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
@@ -356,21 +359,21 @@ class TaskManager {
         }
     }
 
-    void setClusterMetadata(final Cluster cluster) {
+    public void setClusterMetadata(final Cluster cluster) {
         this.cluster = cluster;
     }
 
-    void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
+    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
         this.streamsMetadataState.onChange(partitionsByHostState, cluster);
     }
 
-    void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
+    public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
                                final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }
 
-    void updateSubscriptionsFromAssignment(List<TopicPartition> partitions) {
+    public void updateSubscriptionsFromAssignment(final List<TopicPartition> partitions) {
         if (builder().sourceTopicPattern() != null) {
             final Set<String> assignedTopics = new HashSet<>();
             for (final TopicPartition topicPartition : partitions) {
@@ -385,7 +388,7 @@ class TaskManager {
         }
     }
 
-    void updateSubscriptionsFromMetadata(Set<String> topics) {
+    public void updateSubscriptionsFromMetadata(final Set<String> topics) {
         if (builder().sourceTopicPattern() != null) {
             final Collection<String> existingTopics = builder().subscriptionUpdates().getUpdates();
             if (!existingTopics.equals(topics)) {
@@ -399,15 +402,15 @@ class TaskManager {
      *                               or if the task producer got fenced (EOS)
      */
     int commitAll() {
-        int committed = active.commit();
+        final int committed = active.commit();
         return committed + standby.commit();
     }
 
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    int process() {
-        return active.process();
+    int process(final long now) {
+        return active.process(now);
     }
 
     /**
@@ -421,8 +424,8 @@ class TaskManager {
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
      */
-    int maybeCommitActiveTasks() {
-        return active.maybeCommit();
+    int maybeCommitActiveTasksPerUserRequested() {
+        return active.maybeCommitPerUserRequested();
     }
 
     void maybePurgeCommitedRecords() {

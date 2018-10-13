@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsBuilderTest;
+import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -59,49 +59,6 @@ public class KStreamTestDriver extends ExternalResource {
     private ProcessorTopology globalTopology;
     private final LogContext logContext = new LogContext("testCache ");
 
-    @Deprecated
-    public void setUp(final KStreamBuilder builder) {
-        setUp(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
-    }
-
-    @Deprecated
-    public void setUp(final KStreamBuilder builder, final File stateDir) {
-        setUp(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray());
-    }
-
-    @Deprecated
-    public void setUp(final KStreamBuilder builder, final File stateDir, final long cacheSize) {
-        setUp(builder, stateDir, Serdes.ByteArray(), Serdes.ByteArray(), cacheSize);
-    }
-
-    @Deprecated
-    public void setUp(final KStreamBuilder builder,
-                      final File stateDir,
-                      final Serde<?> keySerde,
-                      final Serde<?> valSerde) {
-        setUp(builder, stateDir, keySerde, valSerde, DEFAULT_CACHE_SIZE_BYTES);
-    }
-
-    @Deprecated
-    public void setUp(final KStreamBuilder builder,
-                      final File stateDir,
-                      final Serde<?> keySerde,
-                      final Serde<?> valSerde,
-                      final long cacheSize) {
-        builder.setApplicationId("TestDriver");
-        topology = builder.build(null);
-        globalTopology = builder.buildGlobalStateTopology();
-        final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
-        context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
-        // init global topology first as it will add stores to the
-        // store map that are required for joins etc.
-        if (globalTopology != null) {
-            initTopology(globalTopology, globalTopology.globalStateStores());
-        }
-        initTopology(topology, topology.stateStores());
-    }
-
     public void setUp(final StreamsBuilder builder) {
         setUp(builder, null, Serdes.ByteArray(), Serdes.ByteArray());
     }
@@ -126,7 +83,7 @@ public class KStreamTestDriver extends ExternalResource {
                       final Serde<?> keySerde,
                       final Serde<?> valSerde,
                       final long cacheSize) {
-        final InternalTopologyBuilder internalTopologyBuilder = StreamsBuilderTest.internalTopologyBuilder(builder);
+        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
 
         internalTopologyBuilder.setApplicationId("TestDriver");
         topology = internalTopologyBuilder.build(null);
@@ -134,7 +91,7 @@ public class KStreamTestDriver extends ExternalResource {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSize, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(stateDir, keySerde, valSerde, new MockRecordCollector(), cache);
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic"));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "topic", null));
 
         // init global topology first as it will add stores to the
         // store map that are required for joins etc.
@@ -273,18 +230,19 @@ public class KStreamTestDriver extends ExternalResource {
     }
 
     private ProcessorRecordContext createRecordContext(final String topicName, final long timestamp) {
-        return new ProcessorRecordContext(timestamp, -1, -1, topicName);
+        return new ProcessorRecordContext(timestamp, -1, -1, topicName, null);
     }
 
     private class MockRecordCollector extends RecordCollectorImpl {
         MockRecordCollector() {
-            super(null, "KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
+            super("KStreamTestDriver", new LogContext("KStreamTestDriver "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records"));
         }
 
         @Override
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer,
@@ -299,6 +257,7 @@ public class KStreamTestDriver extends ExternalResource {
         public <K, V> void send(final String topic,
                                 final K key,
                                 final V value,
+                                final Headers headers,
                                 final Integer partition,
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,

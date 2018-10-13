@@ -22,6 +22,7 @@ import java.util.Map.Entry
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.utils.Time
@@ -38,7 +39,7 @@ abstract class InterBrokerSendThread(name: String,
   extends ShutdownableThread(name, isInterruptible) {
 
   def generateRequests(): Iterable[RequestAndCompletionHandler]
-  def unsentExpiryMs: Int
+  def requestTimeoutMs: Int
   private val unsentRequests = new UnsentRequests
 
   def hasUnsentRequests = unsentRequests.iterator().hasNext
@@ -56,7 +57,8 @@ abstract class InterBrokerSendThread(name: String,
     generateRequests().foreach { request =>
       val completionHandler = request.handler
       unsentRequests.put(request.destination,
-        networkClient.newClientRequest(request.destination.idString, request.request, now, true, completionHandler))
+        networkClient.newClientRequest(request.destination.idString, request.request, now, true,
+          requestTimeoutMs, completionHandler))
     }
 
     try {
@@ -106,9 +108,10 @@ abstract class InterBrokerSendThread(name: String,
       if (!requests.isEmpty && networkClient.connectionFailed(node)) {
         iterator.remove()
         for (request <- requests.asScala) {
-          if (networkClient.authenticationException(node) != null)
+          val authenticationException = networkClient.authenticationException(node)
+          if (authenticationException != null)
             error(s"Failed to send the following request due to authentication error: $request")
-          completeWithDisconnect(request, now)
+          completeWithDisconnect(request, now, authenticationException)
         }
       }
     }
@@ -116,18 +119,20 @@ abstract class InterBrokerSendThread(name: String,
 
   private def failExpiredRequests(now: Long): Unit = {
     // clear all expired unsent requests
-    val expiredRequests = unsentRequests.removeExpiredRequests(now, unsentExpiryMs)
-    for (request <- expiredRequests.asScala) {
-      debug(s"Failed to send the following request after $unsentExpiryMs ms: $request")
-      completeWithDisconnect(request, now)
+    val timedOutRequests = unsentRequests.removeAllTimedOut(now)
+    for (request <- timedOutRequests.asScala) {
+      debug(s"Failed to send the following request after ${request.requestTimeoutMs} ms: $request")
+      completeWithDisconnect(request, now, null)
     }
   }
 
-  def completeWithDisconnect(request: ClientRequest, now: Long): Unit = {
+  def completeWithDisconnect(request: ClientRequest,
+                             now: Long,
+                             authenticationException: AuthenticationException): Unit = {
     val handler = request.callback
     handler.onComplete(new ClientResponse(request.makeHeader(request.requestBuilder().latestAllowedVersion()),
       handler, request.destination, now /* createdTimeMs */ , now /* receivedTimeMs */ , true /* disconnected */ ,
-      null /* versionMismatch */ , null /* responseBody */))
+      null /* versionMismatch */ , authenticationException, null))
   }
 
   def wakeup(): Unit = networkClient.wakeup()
@@ -148,14 +153,15 @@ private class UnsentRequests {
     requests.add(request)
   }
 
-  def removeExpiredRequests(now: Long, unsentExpiryMs: Long): Collection[ClientRequest] = {
+  def removeAllTimedOut(now: Long): Collection[ClientRequest] = {
     val expiredRequests = new ArrayList[ClientRequest]
     for (requests <- unsent.values.asScala) {
       val requestIterator = requests.iterator
       var foundExpiredRequest = false
       while (requestIterator.hasNext && !foundExpiredRequest) {
         val request = requestIterator.next
-        if (request.createdTimeMs < now - unsentExpiryMs) {
+        val elapsedMs = Math.max(0, now - request.createdTimeMs)
+        if (elapsedMs > request.requestTimeoutMs) {
           expiredRequests.add(request)
           requestIterator.remove()
           foundExpiredRequest = true
