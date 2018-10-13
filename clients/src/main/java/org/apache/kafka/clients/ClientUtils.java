@@ -17,7 +17,6 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -42,10 +41,12 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public final class ClientUtils {
     private static final Logger log = LoggerFactory.getLogger(ClientUtils.class);
 
-    private ClientUtils() {}
+    private ClientUtils() {
+    }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
+        ClientDnsLookup clientDnsLookupBehaviour = ClientDnsLookup.forConfig(clientDnsLookup);
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {
@@ -54,15 +55,30 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    InetSocketAddress address = new InetSocketAddress(host, port);
-
-                    if (address.isUnresolved()) {
-                        log.warn("Removing server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                    if (clientDnsLookupBehaviour == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+                        InetAddress[] inetAddresses = InetAddress.getAllByName(host);
+                        for (InetAddress inetAddress : inetAddresses) {
+                            String resolvedCanonicalName = inetAddress.getCanonicalHostName();
+                            InetSocketAddress address = new InetSocketAddress(resolvedCanonicalName, port);
+                            if (address.isUnresolved()) {
+                                log.warn("Couldn't resolve server {} from {} as DNS resolution of the canonical hostname [} failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, resolvedCanonicalName, host);
+                            } else {
+                                addresses.add(address);
+                            }
+                        }
                     } else {
-                        addresses.add(address);
+                        InetSocketAddress address = new InetSocketAddress(host, port);
+                        if (address.isUnresolved()) {
+                            log.warn("Couldn't resolve server {} from {} as DNS resolution failed for {}", url, CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, host);
+                        } else {
+                            addresses.add(address);
+                        }
                     }
+
                 } catch (IllegalArgumentException e) {
                     throw new ConfigException("Invalid port in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
+                } catch (UnknownHostException e) {
+                    throw new ConfigException("Unknown host in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
                 }
             }
         }

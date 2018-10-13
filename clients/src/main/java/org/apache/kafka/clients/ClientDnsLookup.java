@@ -14,14 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.config;
+package org.apache.kafka.clients;
 
 import java.util.Locale;
 
 public enum ClientDnsLookup {
 
     DEFAULT("default"),
-    USE_ALL_DNS_IPS("use_all_dns_ips");
+    USE_ALL_DNS_IPS("use_all_dns_ips"),
+    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only");
 
     private String clientDnsLookup;
 

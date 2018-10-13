@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.config.ConfigException;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -31,27 +30,46 @@ import java.util.List;
 
 public class ClientUtilsTest {
 
+
     @Test
-    public void testParseAndValidateAddresses() {
-        check("127.0.0.1:8000");
-        check("mydomain.com:8080");
-        check("[::1]:8000");
-        check("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "mydomain.com:10000");
-        List<InetSocketAddress> validatedAddresses = check("some.invalid.hostname.foo.bar.local:9999", "mydomain.com:10000");
+    public void testParseAndValidateAddresses() throws UnknownHostException {
+        checkWithoutLookup("127.0.0.1:8000");
+        checkWithoutLookup("localhost:8080");
+        checkWithoutLookup("[::1]:8000");
+        checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+        List<InetSocketAddress> validatedAddresses = checkWithoutLookup("localhost:10000");
         assertEquals(1, validatedAddresses.size());
         InetSocketAddress onlyAddress = validatedAddresses.get(0);
-        assertEquals("mydomain.com", onlyAddress.getHostName());
+        assertEquals("localhost", onlyAddress.getHostName());
         assertEquals(10000, onlyAddress.getPort());
+    }
+
+    @Test
+    public void testParseAndValidateAddressesWithReverseLookup() {
+        checkWithoutLookup("127.0.0.1:8000");
+        checkWithoutLookup("localhost:8080");
+        checkWithoutLookup("[::1]:8000");
+        checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
+        assertEquals(2, validatedAddresses.size());
+        InetSocketAddress address = validatedAddresses.get(0);
+        assertEquals("93.184.216.34", address.getHostName());
+        assertEquals(10000, address.getPort());
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testInvalidConfig() {
+        ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
     }
 
     @Test(expected = ConfigException.class)
     public void testNoPort() {
-        check("127.0.0.1");
+        checkWithoutLookup("127.0.0.1");
     }
 
     @Test(expected = ConfigException.class)
     public void testOnlyBadHostname() {
-        check("some.invalid.hostname.foo.bar.local:9999");
+        checkWithoutLookup("some.invalid.hostname.foo.bar.local:9999");
     }
 
     @Test
@@ -87,7 +105,12 @@ public class ClientUtilsTest {
         assertEquals(2, ClientUtils.resolve("kafka.apache.org", ClientDnsLookup.USE_ALL_DNS_IPS).size());
     }
 
-    private List<InetSocketAddress> check(String... url) {
-        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url));
+    private List<InetSocketAddress> checkWithoutLookup(String... url) {
+        return ClientUtils.parseAndValidateAddresses(Arrays.asList(url), ClientDnsLookup.DEFAULT.toString());
     }
+
+    private List<InetSocketAddress> checkWithLookup(List<String> url) {
+        return ClientUtils.parseAndValidateAddresses(url, ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString());
+    }
+
 }
