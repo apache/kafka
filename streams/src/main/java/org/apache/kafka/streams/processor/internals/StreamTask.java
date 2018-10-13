@@ -52,6 +52,7 @@ import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -234,7 +235,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         recordInfo = new PartitionGroup.RecordInfo();
-        partitionGroup = new PartitionGroup(partitionQueues);
+        partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor(processorContextImpl));
         processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
@@ -274,7 +275,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             transactionInFlight = true;
         }
 
-        processorContext.initialized();
+        processorContext.initialize();
 
         taskInitialized = true;
 

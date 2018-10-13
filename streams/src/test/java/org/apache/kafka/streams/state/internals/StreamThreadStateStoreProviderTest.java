@@ -78,7 +78,7 @@ public class StreamThreadStateStoreProviderTest {
         topology.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv-store"), Serdes.String(), Serdes.String()), "the-processor");
         topology.addStateStore(
             Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("window-store", 10L, 2L, false),
+                Stores.persistentWindowStore("window-store", Duration.ofMillis(10L), Duration.ofMillis(2L), false),
                 Serdes.String(),
                 Serdes.String()),
             "the-processor"

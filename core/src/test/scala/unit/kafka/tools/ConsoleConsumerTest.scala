@@ -27,7 +27,9 @@ import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetRe
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.test.MockDeserializer
-import org.easymock.EasyMock
+import org.mockito.Mockito._
+import org.mockito.ArgumentMatchers
+import ArgumentMatchers._
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -61,69 +63,53 @@ class ConsoleConsumerTest {
       mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
     }
 
-    // Mocks
-    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
+    val formatter = mock(classOf[MessageFormatter])
 
-    // Expectations
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(maxMessages)
-    EasyMock.replay(formatter)
-
-    // Test
     ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
     assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
 
     consumer.resetUnconsumedOffsets()
     assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
 
-    EasyMock.verify(formatter)
+    verify(formatter, times(maxMessages)).writeTo(any(), any())
   }
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {
-    //Mocks
-    val consumer = EasyMock.createNiceMock(classOf[ConsumerWrapper])
-    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
-
-    //Stubs
+    val consumer = mock(classOf[ConsumerWrapper])
+    val formatter = mock(classOf[MessageFormatter])
     val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
 
-    //Expectations
     val messageLimit: Int = 10
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.anyObject())).times(messageLimit)
-    EasyMock.expect(consumer.receive()).andReturn(record).times(messageLimit)
+    when(consumer.receive()).thenReturn(record)
 
-    EasyMock.replay(consumer)
-    EasyMock.replay(formatter)
-
-    //Test
     ConsoleConsumer.process(messageLimit, formatter, consumer, System.out, true)
+
+    verify(consumer, times(messageLimit)).receive()
+    verify(formatter, times(messageLimit)).writeTo(any(), any())
+
+    consumer.cleanup()
   }
 
   @Test
   def shouldStopWhenOutputCheckErrorFails() {
-    //Mocks
-    val consumer = EasyMock.createNiceMock(classOf[ConsumerWrapper])
-    val formatter = EasyMock.createNiceMock(classOf[MessageFormatter])
-    val printStream = EasyMock.createNiceMock(classOf[PrintStream])
+    val consumer = mock(classOf[ConsumerWrapper])
+    val formatter = mock(classOf[MessageFormatter])
+    val printStream = mock(classOf[PrintStream])
 
-    //Stubs
     val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
 
-    //Expectations
-    EasyMock.expect(consumer.receive()).andReturn(record)
-    EasyMock.expect(formatter.writeTo(EasyMock.anyObject(), EasyMock.eq(printStream)))
+    when(consumer.receive()).thenReturn(record)
     //Simulate an error on System.out after the first record has been printed
-    EasyMock.expect(printStream.checkError()).andReturn(true)
+    when(printStream.checkError()).thenReturn(true)
 
-    EasyMock.replay(consumer)
-    EasyMock.replay(formatter)
-    EasyMock.replay(printStream)
-
-    //Test
     ConsoleConsumer.process(-1, formatter, consumer, printStream, true)
 
-    //Verify
-    EasyMock.verify(consumer, formatter, printStream)
+    verify(formatter).writeTo(any(), ArgumentMatchers.eq(printStream))
+    verify(consumer).receive()
+    verify(printStream).checkError()
+
+    consumer.cleanup()
   }
 
   @Test

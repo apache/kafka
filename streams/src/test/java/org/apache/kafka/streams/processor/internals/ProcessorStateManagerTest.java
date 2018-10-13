@@ -122,7 +122,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(persistentStore, batchingRestoreCallback);
             stateMgr.updateStandbyStates(
                 persistentStorePartition,
-                singletonList(KeyValue.pair(consumerRecord.key(), consumerRecord.value())),
+                singletonList(consumerRecord),
                 consumerRecord.offset()
             );
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
@@ -144,7 +144,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
             stateMgr.updateStandbyStates(
                 persistentStorePartition,
-                singletonList(KeyValue.pair(consumerRecord.key(), consumerRecord.value())),
+                singletonList(consumerRecord),
                 consumerRecord.offset()
             );
             assertThat(persistentStore.keys.size(), is(1));
@@ -411,7 +411,7 @@ public class ProcessorStateManagerTest {
         final byte[] bytes = Serdes.Integer().serializer().serialize("", 10);
         stateMgr.updateStandbyStates(
             persistentStorePartition,
-            singletonList(KeyValue.pair(bytes, bytes)),
+            singletonList(new ConsumerRecord<>("", 0, 0L, bytes, bytes)),
             888L
         );
 

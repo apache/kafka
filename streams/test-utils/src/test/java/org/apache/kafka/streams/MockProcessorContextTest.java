@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
@@ -345,7 +346,7 @@ public class MockProcessorContextTest {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
-                    1000L,
+                    Duration.ofSeconds(1L),
                     PunctuationType.WALL_CLOCK_TIME,
                     timestamp -> context.commit()
                 );

@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
@@ -40,10 +41,8 @@ import java.util.Set;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.REDUCE_NAME;
 
-public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implements SessionWindowedKStream<K, V> {
+public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> implements SessionWindowedKStream<K, V> {
     private final SessionWindows windows;
-    private final Serde<K> keySerde;
-    private final Serde<V> valSerde;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
     private final Merger<K, Long> countMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
 
@@ -55,11 +54,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                                final Serde<V> valSerde,
                                final GroupedStreamAggregateBuilder<K, V> aggregateBuilder,
                                final StreamsGraphNode streamsGraphNode) {
-        super(builder, name, sourceNodes, streamsGraphNode);
+        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         Objects.requireNonNull(windows, "windows can't be null");
         this.windows = windows;
-        this.keySerde = keySerde;
-        this.valSerde = valSerde;
         this.aggregateBuilder = aggregateBuilder;
     }
 
@@ -92,16 +89,17 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         }
 
         return aggregateBuilder.build(
-            new KStreamSessionWindowAggregate<>(
-                windows, materializedInternal.storeName(),
-                aggregateBuilder.countInitializer,
-                aggregateBuilder.countAggregator,
-                countMerger
-            ),
             AGGREGATE_NAME,
             materialize(materializedInternal),
-            materializedInternal.isQueryable()
-        );
+            new KStreamSessionWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator,
+                countMerger),
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
@@ -125,6 +123,8 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         }
 
         return aggregateBuilder.build(
+            REDUCE_NAME,
+            materialize(materializedInternal),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
@@ -132,10 +132,9 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
                 reduceAggregator,
                 mergerForAggregator(reduceAggregator)
             ),
-            REDUCE_NAME,
-            materialize(materializedInternal),
-            materializedInternal.isQueryable()
-        );
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
 
     @Override
@@ -160,18 +159,19 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K> implemen
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
+
         return aggregateBuilder.build(
+            AGGREGATE_NAME,
+            materialize(materializedInternal),
             new KStreamSessionWindowAggregate<>(
                 windows,
                 materializedInternal.storeName(),
                 initializer,
                 aggregator,
-                sessionMerger
-            ),
-            AGGREGATE_NAME,
-            materialize(materializedInternal),
-            materializedInternal.isQueryable()
-        );
+                sessionMerger),
+            materializedInternal.isQueryable(),
+            materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
+            materializedInternal.valueSerde());
     }
 
     @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode

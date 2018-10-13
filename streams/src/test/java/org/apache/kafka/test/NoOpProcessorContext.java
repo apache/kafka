@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.time.Duration;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -52,7 +53,15 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+    @Override
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        return null;
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         return null;
     }
 
@@ -81,7 +90,7 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
         initialized = true;
     }
 

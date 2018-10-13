@@ -26,6 +26,7 @@ import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.utils.ZkUtils.getDeleteTopicPath
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.config.ConfigException
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -239,6 +240,17 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       fail("Expected exception on invalid topic-level config.")
     } catch {
       case _: Exception => // topic creation should fail due to the invalid config
+    }
+
+    // try to create the topic with another invalid config
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "message.format.version=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: ConfigException => // topic creation should fail due to the invalid config value
     }
   }
 

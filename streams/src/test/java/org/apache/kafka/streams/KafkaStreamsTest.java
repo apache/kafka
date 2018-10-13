@@ -16,12 +16,16 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
@@ -93,6 +97,28 @@ public class KafkaStreamsTest {
         if (globalStreams != null) {
             globalStreams.close();
         }
+    }
+
+    @Test
+    public void testOsDefaultSocketBufferSizes() {
+        props.put(CommonClientConfigs.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        props.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.close();
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testInvalidSocketSendBufferSize() {
+        props.put(CommonClientConfigs.SEND_BUFFER_CONFIG, -2);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.close();
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testInvalidSocketReceiveBufferSize() {
+        props.put(CommonClientConfigs.RECEIVE_BUFFER_CONFIG, -2);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        streams.close();
     }
 
     @Test
@@ -438,7 +464,7 @@ public class KafkaStreamsTest {
                 System.currentTimeMillis());
 
             assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
-            assertFalse(streams.close(10, TimeUnit.MILLISECONDS));
+            assertFalse(streams.close(Duration.ofMillis(10)));
         } finally {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);
@@ -517,6 +543,34 @@ public class KafkaStreamsTest {
             verifyCleanupStateDir(appDir, oldTaskDir);
             assertTrue(oldTaskDir.mkdirs());
             verifyCleanupStateDir(appDir, oldTaskDir);
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void shouldThrowOnNegativeTimeoutForClose() {
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        try {
+            streams.close(Duration.ofMillis(-1L));
+            fail("should not accept negative close parameter");
+        } catch (final IllegalArgumentException e) {
+            // expected
+        } finally {
+            streams.close();
+        }
+    }
+
+    @Test
+    public void shouldNotBlockInCloseForZeroDuration() throws InterruptedException {
+        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
+        final Thread th = new Thread(() -> streams.close(Duration.ofMillis(0L)));
+
+        th.start();
+
+        try {
+            th.join(30_000L);
+            assertFalse(th.isAlive());
         } finally {
             streams.close();
         }
