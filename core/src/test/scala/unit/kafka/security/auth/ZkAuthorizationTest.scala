@@ -320,7 +320,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
       // For all other paths, try to delete it
       case path =>
         try {
-          zkClient.deletePath(path, false)
+          zkClient.deletePath(path, recursiveDelete = false)
           Failure(new Exception(s"Have been able to delete $path"))
         } catch {
           case _: Exception => result

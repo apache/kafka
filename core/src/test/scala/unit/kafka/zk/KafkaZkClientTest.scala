@@ -544,8 +544,13 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(path)
     zkClient.deletePath(path)
     assertFalse(zkClient.pathExists(path))
+
     zkClient.createRecursive(path)
-    zkClient.deletePath(path, false)
+    zkClient.deletePath("/a")
+    assertFalse(zkClient.pathExists(path))
+
+    zkClient.createRecursive(path)
+    zkClient.deletePath(path, recursiveDelete =  false)
     assertFalse(zkClient.pathExists(path))
     assertTrue(zkClient.pathExists("/a/b"))
   }

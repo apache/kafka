@@ -538,11 +538,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteLogDirEventNotifications(sequenceNumbers: Seq[String], expectedControllerEpochZkVersion: Int): Unit = {
-    val deleteRequests = sequenceNumbers.map { sequenceNumber =>
-      DeleteRequest(LogDirEventNotificationSequenceZNode.path(sequenceNumber), ZkVersion.MatchAnyVersion,
-        zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion))
-    }
-    retryRequestsUntilConnected(deleteRequests)
+    sequenceNumbers.foreach(sequenceNumber => deletePath(LogDirEventNotificationSequenceZNode.path(sequenceNumber),
+      expectedControllerEpochZkVersion))
   }
 
   /**
@@ -761,9 +758,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteTopicDeletions(topics: Seq[String], expectedControllerEpochZkVersion: Int): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(DeleteTopicsTopicZNode.path(topic), ZkVersion.MatchAnyVersion,
-      zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion)))
-    retryRequestsUntilConnected(deleteRequests)
+    topics.foreach(topic => deletePath(DeleteTopicsTopicZNode.path(topic), expectedControllerEpochZkVersion))
   }
 
   /**
@@ -832,9 +827,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deletePartitionReassignment(expectedControllerEpochZkVersion: Int): Unit = {
-    val deleteRequest = DeleteRequest(ReassignPartitionsZNode.path, ZkVersion.MatchAnyVersion,
-      zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion))
-    retryRequestUntilConnected(deleteRequest)
+    deletePath(ReassignPartitionsZNode.path, expectedControllerEpochZkVersion)
   }
 
   /**
@@ -1241,20 +1234,20 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Deletes the zk node recursively
-   * @param path
-   * @param recursiveDelete
+   * @param path path to delete
+   * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
+   * @param recursiveDelete enable recursive delete
    * @return  return true if it succeeds, false otherwise
    */
-  def deletePath(path: String, recursiveDelete: Boolean = true): Boolean = {
+  def deletePath(path: String, expectedControllerEpochZkVersion: Int = ZkVersion.MatchAnyVersion, recursiveDelete: Boolean = true): Unit = {
     if (recursiveDelete)
-      deleteRecursive(path)
+      deleteRecursive(path, expectedControllerEpochZkVersion)
     else {
-      val deleteRequest = DeleteRequest(path, ZkVersion.MatchAnyVersion)
+      val deleteRequest = DeleteRequest(path, ZkVersion.MatchAnyVersion, zkVersionCheck = controllerZkVersionCheck(expectedControllerEpochZkVersion))
       val deleteResponse = retryRequestUntilConnected(deleteRequest)
       if (deleteResponse.resultCode != Code.OK && deleteResponse.resultCode != Code.NONODE) {
           throw deleteResponse.resultException.get
       }
-      true
     }
   }
 
@@ -1467,10 +1460,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * sets the ACLs to the node of the given path
     * @param path the given path for the node
     * @param acl the given acl for the node
-    * @param aclVersion the given acl version of the node
+    * @param zkVersion the given zk version of the node
     */
-  def setACL(path: String, acl: Seq[ACL], aclVersion: Int): Unit = {
-    val setAclRequest = SetAclRequest(path, acl, aclVersion)
+  def setACL(path: String, acl: Seq[ACL], zkVersion: Int): Unit = {
+    val setAclRequest = SetAclRequest(path, acl, zkVersion)
     val setAclResponse = retryRequestUntilConnected(setAclRequest)
     setAclResponse.maybeThrow
   }
