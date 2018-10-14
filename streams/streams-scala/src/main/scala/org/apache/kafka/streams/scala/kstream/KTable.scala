@@ -215,12 +215,27 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * and `Serde`s as specified by `Grouped`.
    *
    * @param selector      a function that computes a new grouping key and value to be aggregated
+   * @param serialized       the `Grouped` instance used to specify `Serdes`
+   * @return a [[KGroupedTable]] that contains the re-grouped records of the original [[KTable]]
+   * @see `org.apache.kafka.streams.kstream.KTable#groupBy`
+   */
+  @deprecated
+  def groupBy[KR, VR](selector: (K, V) => (KR, VR))(implicit serialized: Serialized[KR, VR]): KGroupedTable[KR, VR] =
+    inner.groupBy(selector.asKeyValueMapper, serialized)
+
+  /**
+   * Re-groups the records of this [[KTable]] using the provided key/value mapper
+   * and `Serde`s as specified by `Grouped`.
+   *
+   * @param selector      a function that computes a new grouping key and value to be aggregated
+   *@param name          the name used for part of the repartition topic if required
    * @param grouped       the `Grouped` instance used to specify `Serdes`
    * @return a [[KGroupedTable]] that contains the re-grouped records of the original [[KTable]]
    * @see `org.apache.kafka.streams.kstream.KTable#groupBy`
    */
-  def groupBy[KR, VR](selector: (K, V) => (KR, VR))(implicit grouped: Grouped[KR, VR]): KGroupedTable[KR, VR] =
-    inner.groupBy(selector.asKeyValueMapper, grouped)
+  def groupBy[KR, VR](selector: (K, V) => (KR, VR),
+                      name: String)(implicit grouped: Grouped[KR, VR]): KGroupedTable[KR, VR] =
+    inner.groupBy[KR, VR](selector.asKeyValueMapper, grouped.withName(name))
 
   /**
    * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed inner equi join.

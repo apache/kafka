@@ -62,6 +62,39 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     testDriver.close()
   }
 
+  "filter a KTable" should "filter records satisfying the predicate with named repartition topic" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+
+    val table = builder.stream[String, String](sourceTopic).groupBy((key, _) => key, "repartition").count()
+    table.filter((_, value) => value > 1).toStream.to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe (null: java.lang.Long)
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe 2
+    }
+    {
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"))
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "2"
+      record.value shouldBe (null: java.lang.Long)
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
   "filterNot a KTable" should "filter records not satisfying the predicate" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"
