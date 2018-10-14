@@ -351,8 +351,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Group the records by their current key into a [[KGroupedStream]]
    * <p>
-   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Grouped` instance implicitly.
+   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
+   * serdes that will be converted to a `Serialized` instance implicitly.
    * <p>
    * {{{
    * Example:
@@ -365,7 +365,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *     .leftJoin(userRegionsTable, (clicks: Long, region: String) => (if (region == null) "UNKNOWN" else region, clicks))
    *     .map((_, regionWithClicks) => regionWithClicks)
    *
-   *     // the groupByKey gets the Grouped instance through an implicit conversion of the
+   *     // the groupByKey gets the Serialized instance through an implicit conversion of the
    *     // serdes brought into scope through the import Serdes._ above
    *     .groupByKey
    *     .reduce(_ + _)
@@ -420,8 +420,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
    * and the `Grouped` instance.
    * <p>
-   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Grouped` instance implicitly.
+   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
+   * serdes that will be converted to a `Serialized` instance implicitly.
    * <p>
    * {{{
    * Example:

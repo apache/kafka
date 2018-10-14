@@ -212,10 +212,10 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   /**
    * Re-groups the records of this [[KTable]] using the provided key/value mapper
-   * and `Serde`s as specified by `Grouped`.
+   * and `Serde`s as specified by `Serialized`.
    *
    * @param selector      a function that computes a new grouping key and value to be aggregated
-   * @param serialized       the `Grouped` instance used to specify `Serdes`
+   * @param serialized       the `Serialized` instance used to specify `Serdes`
    * @return a [[KGroupedTable]] that contains the re-grouped records of the original [[KTable]]
    * @see `org.apache.kafka.streams.kstream.KTable#groupBy`
    */
