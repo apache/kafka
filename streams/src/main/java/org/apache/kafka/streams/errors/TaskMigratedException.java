@@ -51,14 +51,14 @@ public class TaskMigratedException extends StreamsException {
     }
 
     public TaskMigratedException(final Task task) {
-        super(String.format("Task %s is unexpectedly closed during processing", task.id()), null);
+        super(String.format("Task %s is unexpectedly closed during processing", task.metadata()), null);
 
         this.task = task;
     }
 
     public TaskMigratedException(final Task task,
                                  final Throwable throwable) {
-        super(String.format("Client request for task %s has been fenced due to a rebalance", task.id()), throwable);
+        super(String.format("Client request for task %s has been fenced due to a rebalance", task.metadata()), throwable);
 
         this.task = task;
     }

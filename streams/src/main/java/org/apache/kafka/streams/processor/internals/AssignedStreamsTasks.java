@@ -50,11 +50,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 if (task.commitRequested() && task.commitNeeded()) {
                     task.commit();
                     committed++;
-                    log.debug("Committed active task {} per user request in", task.id());
+                    log.debug("Committed active task {} per user request in", task.metadata());
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
+                        "Closing it as zombie before triggering a new rebalance.", task.metadata());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -63,7 +63,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 throw e;
             } catch (final RuntimeException t) {
                 log.error("Failed to commit StreamTask {} due to the following error:",
-                        task.id(),
+                        task.metadata(),
                         t);
                 if (firstException == null) {
                     firstException = t;
@@ -106,7 +106,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to process stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
+                        "Closing it as zombie before triggering a new rebalance.", task.metadata());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -114,7 +114,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 it.remove();
                 throw e;
             } catch (final RuntimeException e) {
-                log.error("Failed to process stream task {} due to the following error:", task.id(), e);
+                log.error("Failed to process stream task {} due to the following error:", task.metadata(), e);
                 throw e;
             }
         }
@@ -139,7 +139,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to punctuate stream task {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", task.id());
+                        "Closing it as zombie before triggering a new rebalance.", task.metadata());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -147,7 +147,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
                 it.remove();
                 throw e;
             } catch (final KafkaException e) {
-                log.error("Failed to punctuate stream task {} due to the following error:", task.id(), e);
+                log.error("Failed to punctuate stream task {} due to the following error:", task.metadata(), e);
                 throw e;
             }
         }

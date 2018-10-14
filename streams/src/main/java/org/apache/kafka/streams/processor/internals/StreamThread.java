@@ -783,7 +783,7 @@ public class StreamThread extends Thread {
                 log.warn("Detected task {} that got migrated to another thread. " +
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
-                    ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
+                    ignoreAndRejoinGroup.migratedTask().metadata(), ignoreAndRejoinGroup.migratedTask().toString(">"));
 
                 enforceRebalance();
             }
@@ -1126,7 +1126,7 @@ public class StreamThread extends Thread {
 
                     if (task.isClosed()) {
                         log.info("Standby task {} is already closed, probably because it got unexpectedly migrated to another thread already. " +
-                            "Notifying the thread to trigger a new rebalance immediately.", task.id());
+                            "Notifying the thread to trigger a new rebalance immediately.", task.metadata());
                         throw new TaskMigratedException(task);
                     }
 

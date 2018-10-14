@@ -165,7 +165,7 @@ public class AbstractTaskTest {
             },
             stateDirectory);
 
-        final String taskDir = stateDirectory.directoryForTask(task.id).getAbsolutePath();
+        final String taskDir = stateDirectory.directoryForTask(task.metadata.taskId).getAbsolutePath();
         final File storeDirectory1 = new File(taskDir
             + File.separator + "rocksdb"
             + File.separator + storeName1);
@@ -195,7 +195,7 @@ public class AbstractTaskTest {
         testFile4.createNewFile();
         assertTrue(testFile4.exists());
 
-        task.processorContext = new InternalMockProcessorContext(stateDirectory.directoryForTask(task.id), streamsConfig);
+        task.processorContext = new InternalMockProcessorContext(stateDirectory.directoryForTask(task.metadata.taskId), streamsConfig);
 
         task.stateMgr.register(store1, new MockRestoreCallback());
         task.stateMgr.register(store2, new MockRestoreCallback());

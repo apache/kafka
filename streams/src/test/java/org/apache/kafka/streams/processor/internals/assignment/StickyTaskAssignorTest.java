@@ -115,8 +115,8 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor firstAssignor = createTaskAssignor(task00, task01, task02);
         firstAssignor.assign(0);
 
-        assertThat(clients.get(p1).activeTasks(), hasItems(task00));
-        assertThat(clients.get(p2).activeTasks(), hasItems(task01));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p1).activeTasks()), hasItems(task00));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p2).activeTasks()), hasItems(task01));
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
 
         clients.clear();
@@ -128,8 +128,8 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor secondAssignor = createTaskAssignor(task00, task01, task02);
         secondAssignor.assign(0);
 
-        assertThat(clients.get(p1).activeTasks(), hasItems(task01));
-        assertThat(clients.get(p2).activeTasks(), hasItems(task02));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p1).activeTasks()), hasItems(task01));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p2).activeTasks()), hasItems(task02));
         assertThat(allActiveTasks(), equalTo(Arrays.asList(task00, task01, task02)));
     }
 
@@ -216,11 +216,11 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignTasksToClientWithPreviousStandbyTasks() {
         final ClientState client1 = createClient(p1, 1);
-        client1.addPreviousStandbyTasks(Utils.mkSet(task02));
+        client1.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task02)));
         final ClientState client2 = createClient(p2, 1);
-        client2.addPreviousStandbyTasks(Utils.mkSet(task01));
+        client2.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task01)));
         final ClientState client3 = createClient(p3, 1);
-        client3.addPreviousStandbyTasks(Utils.mkSet(task00));
+        client3.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task00)));
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
@@ -234,9 +234,9 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldAssignBasedOnCapacityWhenMultipleClientHaveStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task00);
-        c1.addPreviousStandbyTasks(Utils.mkSet(task01));
+        c1.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task01)));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 2, task02);
-        c2.addPreviousStandbyTasks(Utils.mkSet(task01));
+        c2.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task01)));
 
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02);
 
@@ -256,13 +256,13 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor taskAssignor = createTaskAssignor(task00, task01, task02, task03);
         taskAssignor.assign(1);
 
-        assertThat(clients.get(p1).standbyTasks(), not(hasItems(task00)));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p1).standbyTasks()), not(hasItems(task00)));
         assertTrue(clients.get(p1).standbyTasks().size() <= 2);
-        assertThat(clients.get(p2).standbyTasks(), not(hasItems(task01)));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p2).standbyTasks()), not(hasItems(task01)));
         assertTrue(clients.get(p2).standbyTasks().size() <= 2);
-        assertThat(clients.get(p3).standbyTasks(), not(hasItems(task02)));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p3).standbyTasks()), not(hasItems(task02)));
         assertTrue(clients.get(p3).standbyTasks().size() <= 2);
-        assertThat(clients.get(p4).standbyTasks(), not(hasItems(task03)));
+        assertThat(SubscriptionInfo.convertTaskMetadataToId(clients.get(p4).standbyTasks()), not(hasItems(task03)));
         assertTrue(clients.get(p4).standbyTasks().size() <= 2);
 
         int nonEmptyStandbyTaskCount = 0;
@@ -403,7 +403,7 @@ public class StickyTaskAssignorTest {
         taskAssignor.assign(1);
 
         for (int i = p1; i <= p4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            final Set<TaskMetadata> taskIds = clients.get(i).assignedTasks();
             for (int j = p1; j <= p4; j++) {
                 if (j != i) {
                     assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
@@ -425,7 +425,7 @@ public class StickyTaskAssignorTest {
         taskAssignor.assign(1);
 
         for (int i = p1; i <= p4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            final Set<TaskMetadata> taskIds = clients.get(i).assignedTasks();
             for (int j = p1; j <= p4; j++) {
                 if (j != i) {
                     assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
@@ -439,9 +439,9 @@ public class StickyTaskAssignorTest {
     @Test
     public void shouldNotHaveSameAssignmentOnAnyTwoHostsWhenThereArePreviousStandbyTasks() {
         final ClientState c1 = createClientWithPreviousActiveTasks(p1, 1, task01, task02);
-        c1.addPreviousStandbyTasks(Utils.mkSet(task03, task00));
+        c1.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task03, task00)));
         final ClientState c2 = createClientWithPreviousActiveTasks(p2, 1, task03, task00);
-        c2.addPreviousStandbyTasks(Utils.mkSet(task01, task02));
+        c2.addPreviousStandbyTasks(SubscriptionInfo.convertTasksToMetadata(Utils.mkSet(task03, task00)));
 
         createClient(p3, 1);
         createClient(p4, 1);
@@ -450,7 +450,7 @@ public class StickyTaskAssignorTest {
         taskAssignor.assign(1);
 
         for (int i = p1; i <= p4; i++) {
-            final Set<TaskId> taskIds = clients.get(i).assignedTasks();
+            final Set<TaskMetadata> taskIds = clients.get(i).assignedTasks();
             for (int j = p1; j <= p4; j++) {
                 if (j != i) {
                     assertThat("clients shouldn't have same task assignment", clients.get(j).assignedTasks(),
@@ -513,7 +513,7 @@ public class StickyTaskAssignorTest {
         final StickyTaskAssignor<Integer> taskAssignor = createTaskAssignor(task00, task02, task01, task03);
         taskAssignor.assign(0);
 
-        final Set<TaskId> p3ActiveTasks = clients.get(p3).activeTasks();
+        final Set<TaskId> p3ActiveTasks = SubscriptionInfo.convertTaskMetadataToId(clients.get(p3).activeTasks());
         assertThat(p3ActiveTasks.size(), equalTo(1));
         if (p1PrevTasks.removeAll(p3ActiveTasks)) {
             assertThat(clients.get(p2).activeTasks(), equalTo(p2PrevTasks));
@@ -779,7 +779,7 @@ public class StickyTaskAssignorTest {
 
         setStateStoreAndInputPartitionCount(stateStoreCounts, inputPartitionCounts);
     }
-
+/*
     private void setStateStoreAndInputPartitionCount(final Map<TaskId, Integer> stateStoreCounts,
                                                      final Map<TaskId, Integer> inputPartitionCounts) {
         task00 = new TaskMetadata(task00, inputPartitionCounts.get(task00), stateStoreCounts.get(task00));
@@ -788,5 +788,5 @@ public class StickyTaskAssignorTest {
         task03 = new TaskMetadata(task03, inputPartitionCounts.get(task03), stateStoreCounts.get(task03));
         task04 = new TaskMetadata(task04, inputPartitionCounts.get(task04), stateStoreCounts.get(task04));
         task05 = new TaskMetadata(task05, inputPartitionCounts.get(task05), stateStoreCounts.get(task05));
-    }
+    }*/
 }

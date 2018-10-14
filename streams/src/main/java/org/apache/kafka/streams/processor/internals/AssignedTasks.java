@@ -57,7 +57,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     void addNewTask(final T task) {
-        created.put(task.id().taskId, task);
+        created.put(task.metadata().taskId, task);
     }
 
     /**
@@ -100,7 +100,7 @@ abstract class AssignedTasks<T extends Task> {
                 it.remove();
                 log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
                         taskTypeName,
-                        task.id(),
+                        task.metadata(),
                         task.changelogPartitions());
             } else {
                 if (log.isTraceEnabled()) {
@@ -108,7 +108,7 @@ abstract class AssignedTasks<T extends Task> {
                     outstandingPartitions.removeAll(restoredPartitions);
                     log.trace("{} {} cannot resume processing yet since some of its changelog partitions have not completed restoring: {}",
                               taskTypeName,
-                              task.id(),
+                              task.metadata(),
                               outstandingPartitions);
                 }
             }
@@ -152,7 +152,7 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 task.close(false, false);
             } catch (final RuntimeException e) {
-                log.error("Failed to close {}, {}", taskTypeName, task.id(), e);
+                log.error("Failed to close {}, {}", taskTypeName, task.metadata(), e);
                 if (exception == null) {
                     exception = e;
                 }
@@ -167,20 +167,20 @@ abstract class AssignedTasks<T extends Task> {
             final T task = it.next();
             try {
                 task.suspend();
-                suspended.put(task.id().taskId, task);
+                suspended.put(task.metadata().taskId, task);
             } catch (final TaskMigratedException closeAsZombieAndSwallow) {
                 // as we suspend a task, we are either shutting down or rebalancing, thus, we swallow and move on
                 log.info("Failed to suspend {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
+                        "Closing it as zombie and move on.", taskTypeName, task.metadata());
                 firstException.compareAndSet(null, closeZombieTask(task));
                 it.remove();
             } catch (final RuntimeException e) {
-                log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.id(), e);
+                log.error("Suspending {} {} failed due to the following error:", taskTypeName, task.metadata(), e);
                 firstException.compareAndSet(null, e);
                 try {
                     task.close(false, false);
                 } catch (final RuntimeException f) {
-                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.id(), f);
+                    log.error("After suspending failed, closing the same {} {} failed again due to the following error:", taskTypeName, task.metadata(), f);
                 }
             }
         }
@@ -191,7 +191,7 @@ abstract class AssignedTasks<T extends Task> {
         try {
             task.close(false, true);
         } catch (final RuntimeException e) {
-            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.id(), e.toString());
+            log.warn("Failed to close zombie {} {} due to {}; ignore and proceed.", taskTypeName, task.metadata(), e.toString());
             return e;
         }
         return null;
@@ -217,15 +217,15 @@ abstract class AssignedTasks<T extends Task> {
                     // we need to catch migration exception internally since this function
                     // is triggered in the rebalance callback
                     log.info("Failed to resume {} {} since it got migrated to another thread already. " +
-                            "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
+                            "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.metadata());
                     final RuntimeException fatalException = closeZombieTask(task);
-                    running.remove(task.id());
+                    running.remove(task.metadata());
                     if (fatalException != null) {
                         throw fatalException;
                     }
                     throw e;
                 }
-                log.trace("resuming suspended {} {}", taskTypeName, task.id());
+                log.trace("resuming suspended {} {}", taskTypeName, task.metadata());
                 return true;
             } else {
                 log.warn("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
@@ -235,7 +235,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     private void addToRestoring(final T task) {
-        restoring.put(task.id().taskId, task);
+        restoring.put(task.metadata().taskId, task);
         for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
         }
@@ -248,8 +248,8 @@ abstract class AssignedTasks<T extends Task> {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     private void transitionToRunning(final T task) {
-        log.debug("transitioning {} {} to running", taskTypeName, task.id());
-        running.put(task.id().taskId, task);
+        log.debug("transitioning {} {} to running", taskTypeName, task.metadata());
+        running.put(task.metadata().taskId, task);
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {
             runningByPartition.put(topicPartition, task);
@@ -348,7 +348,7 @@ abstract class AssignedTasks<T extends Task> {
                 }
             } catch (final TaskMigratedException e) {
                 log.info("Failed to commit {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.id());
+                        "Closing it as zombie before triggering a new rebalance.", taskTypeName, task.metadata());
                 final RuntimeException fatalException = closeZombieTask(task);
                 if (fatalException != null) {
                     throw fatalException;
@@ -358,7 +358,7 @@ abstract class AssignedTasks<T extends Task> {
             } catch (final RuntimeException t) {
                 log.error("Failed to commit {} {} due to the following error:",
                         taskTypeName,
-                        task.id(),
+                        task.metadata(),
                         t);
                 if (firstException == null) {
                     firstException = t;
@@ -377,12 +377,12 @@ abstract class AssignedTasks<T extends Task> {
         final Iterator<T> standByTaskIterator = suspended.values().iterator();
         while (standByTaskIterator.hasNext()) {
             final T suspendedTask = standByTaskIterator.next();
-            if (!newAssignment.containsKey(suspendedTask.id()) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.id()))) {
-                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.id());
+            if (!newAssignment.containsKey(suspendedTask.metadata().taskId) || !suspendedTask.partitions().equals(newAssignment.get(suspendedTask.metadata().taskId))) {
+                log.debug("Closing suspended and not re-assigned {} {}", taskTypeName, suspendedTask.metadata());
                 try {
                     suspendedTask.closeSuspended(true, false, null);
                 } catch (final Exception e) {
-                    log.error("Failed to remove suspended {} {} due to the following error:", taskTypeName, suspendedTask.id(), e);
+                    log.error("Failed to remove suspended {} {} due to the following error:", taskTypeName, suspendedTask.metadata(), e);
                 } finally {
                     standByTaskIterator.remove();
                 }
@@ -397,12 +397,12 @@ abstract class AssignedTasks<T extends Task> {
                 task.close(clean, false);
             } catch (final TaskMigratedException e) {
                 log.info("Failed to close {} {} since it got migrated to another thread already. " +
-                        "Closing it as zombie and move on.", taskTypeName, task.id());
+                        "Closing it as zombie and move on.", taskTypeName, task.metadata());
                 firstException.compareAndSet(null, closeZombieTask(task));
             } catch (final RuntimeException t) {
                 log.error("Failed while closing {} {} due to the following error:",
                           task.getClass().getSimpleName(),
-                          task.id(),
+                          task.metadata(),
                           t);
                 if (clean) {
                     if (!closeUnclean(task)) {
@@ -423,13 +423,13 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     private boolean closeUnclean(final T task) {
-        log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.id());
+        log.info("Try to close {} {} unclean.", task.getClass().getSimpleName(), task.metadata());
         try {
             task.close(false, false);
         } catch (final RuntimeException fatalException) {
             log.error("Failed while closing {} {} due to the following error:",
                 task.getClass().getSimpleName(),
-                task.id(),
+                task.metadata(),
                 fatalException);
             return false;
         }

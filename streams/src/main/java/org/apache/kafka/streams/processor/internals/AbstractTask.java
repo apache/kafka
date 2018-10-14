@@ -80,7 +80,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task",metadata);
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", metadata);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -190,11 +190,11 @@ public abstract class AbstractTask implements Task {
                     log.trace("Updating store offset limits {} for changelog {}", offset, partition);
                 }
             } catch (final AuthorizationException e) {
-                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s",metadata, partition), e);
+                throw new ProcessorStateException(String.format("task [%s] AuthorizationException when initializing offsets for %s", metadata, partition), e);
             } catch (final WakeupException e) {
                 throw e;
             } catch (final KafkaException e) {
-                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s",metadata, partition), e);
+                throw new ProcessorStateException(String.format("task [%s] Failed to initialize offsets for %s", metadata, partition), e);
             }
         }
     }
@@ -218,12 +218,12 @@ public abstract class AbstractTask implements Task {
 
         try {
             if (!stateDirectory.lock(metadata.taskId)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix,metadata));
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, metadata));
             }
         } catch (final IOException e) {
             throw new StreamsException(
                 String.format("%sFatal error while trying to lock the state directory for task %s",
-                logPrefix,metadata));
+                logPrefix, metadata));
         }
         log.trace("Initializing state stores");
 

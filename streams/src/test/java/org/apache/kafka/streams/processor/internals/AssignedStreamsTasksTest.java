@@ -53,8 +53,8 @@ public class AssignedStreamsTasksTest {
     @Before
     public void before() {
         assignedTasks = new AssignedStreamsTasks(new LogContext("log "));
-        EasyMock.expect(t1.id()).andReturn(taskId1).anyTimes();
-        EasyMock.expect(t2.id()).andReturn(taskId2).anyTimes();
+        EasyMock.expect(t1.metadata().taskId).andReturn(taskId1).anyTimes();
+        EasyMock.expect(t2.metadata().taskId).andReturn(taskId2).anyTimes();
     }
 
     @Test

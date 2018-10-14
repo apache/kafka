@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals.assignment;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TaskMetadata;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -38,14 +39,14 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveReachedCapacityWhenAssignedTasksGreaterThanOrEqualToCapacity() {
-        client.assign(new TaskId(0, 1), true);
+        client.assign(new TaskMetadata(new TaskId(0, 1), 0, 0), true);
         assertTrue(client.reachedCapacity());
     }
 
 
     @Test
     public void shouldAddActiveTasksToBothAssignedAndActive() {
-        final TaskId tid = new TaskId(0, 1);
+        final TaskMetadata tid = new TaskMetadata(new TaskId(0, 1), 0, 0);
 
         client.assign(tid, true);
         assertThat(client.activeTasks(), equalTo(Collections.singleton(tid)));
@@ -56,7 +57,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddStandbyTasksToBothStandbyAndActive() {
-        final TaskId tid = new TaskId(0, 1);
+        final TaskMetadata tid = new TaskMetadata(new TaskId(0, 1), 0, 0);
 
         client.assign(tid, false);
         assertThat(client.assignedTasks(), equalTo(Collections.singleton(tid)));
@@ -67,8 +68,8 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddPreviousActiveTasksToPreviousAssignedAndPreviousActive() {
-        final TaskId tid1 = new TaskId(0, 1);
-        final TaskId tid2 = new TaskId(0, 2);
+        final TaskMetadata tid1 = new TaskMetadata(new TaskId(0, 1), 0, 0);
+        final TaskMetadata tid2 = new TaskMetadata(new TaskId(0, 2), 0, 0);
 
         client.addPreviousActiveTasks(Utils.mkSet(tid1, tid2));
         assertThat(client.previousActiveTasks(), equalTo(Utils.mkSet(tid1, tid2)));
@@ -77,8 +78,8 @@ public class ClientStateTest {
 
     @Test
     public void shouldAddPreviousStandbyTasksToPreviousAssigned() {
-        final TaskId tid1 = new TaskId(0, 1);
-        final TaskId tid2 = new TaskId(0, 2);
+        final TaskMetadata tid1 = new TaskMetadata(new TaskId(0, 1), 0, 0);
+        final TaskMetadata tid2 = new TaskMetadata(new TaskId(0, 2), 0, 0);
 
         client.addPreviousStandbyTasks(Utils.mkSet(tid1, tid2));
         assertThat(client.previousActiveTasks().size(), equalTo(0));
@@ -87,7 +88,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveAssignedTaskIfActiveTaskAssigned() {
-        final TaskId tid = new TaskId(0, 2);
+        final TaskMetadata tid = new TaskMetadata(new TaskId(0, 2), 0, 0);
 
         client.assign(tid, true);
         assertTrue(client.hasAssignedTask(tid));
@@ -95,7 +96,7 @@ public class ClientStateTest {
 
     @Test
     public void shouldHaveAssignedTaskIfStandbyTaskAssigned() {
-        final TaskId tid = new TaskId(0, 2);
+        final TaskMetadata tid = new TaskMetadata(new TaskId(0, 2), 0, 0);
 
         client.assign(tid, false);
         assertTrue(client.hasAssignedTask(tid));
@@ -104,14 +105,14 @@ public class ClientStateTest {
     @Test
     public void shouldNotHaveAssignedTaskIfTaskNotAssigned() {
 
-        client.assign(new TaskId(0, 2), true);
-        assertFalse(client.hasAssignedTask(new TaskId(0, 3)));
+        client.assign(new TaskMetadata(new TaskId(0, 2), 0, 0), true);
+        assertFalse(client.hasAssignedTask(new TaskMetadata(new TaskId(0, 3), 0, 0)));
     }
 
     @Test
     public void shouldHaveMoreAvailableCapacityWhenCapacityTheSameButFewerAssignedTasks() {
         final ClientState c2 = new ClientState(1);
-        client.assign(new TaskId(0, 1), true);
+        client.assign(new TaskMetadata(new TaskId(0, 1), 0, 0), true);
         assertTrue(c2.hasMoreAvailableCapacityThan(client));
         assertFalse(client.hasMoreAvailableCapacityThan(c2));
     }
@@ -128,11 +129,11 @@ public class ClientStateTest {
         final ClientState c2 = new ClientState(2);
 
         for (int i = 0; i < 7; i++) {
-            c2.assign(new TaskId(0, i), true);
+            c2.assign(new TaskMetadata(new TaskId(0, i), 0, 0), true);
         }
 
         for (int i = 7; i < 11; i++) {
-            client.assign(new TaskId(0, i), true);
+            client.assign(new TaskMetadata(new TaskId(0, i), 0, 0), true);
         }
 
         assertTrue(c2.hasMoreAvailableCapacityThan(client));
@@ -143,10 +144,10 @@ public class ClientStateTest {
         final ClientState c1 = new ClientState(3);
         final ClientState c2 = new ClientState(3);
         for (int i = 0; i < 4; i++) {
-            c1.assign(new TaskId(0, i), true);
-            c2.assign(new TaskId(0, i), true);
+            c1.assign(new TaskMetadata(new TaskId(0, i), 0, 0), true);
+            c2.assign(new TaskMetadata(new TaskId(0, i), 0, 0), true);
         }
-        c2.assign(new TaskId(0, 5), true);
+        c2.assign(new TaskMetadata(new TaskId(0, 5), 0, 0), true);
         assertTrue(c1.hasMoreAvailableCapacityThan(c2));
     }
 
@@ -165,14 +166,14 @@ public class ClientStateTest {
     @Test
     public void shouldHaveUnfulfilledQuotaWhenActiveTaskSizeLessThanCapacityTimesTasksPerThread() {
         final ClientState client = new ClientState(1);
-        client.assign(new TaskId(0, 1), true);
+        client.assign(new TaskMetadata(new TaskId(0, 1), 0, 0), true);
         assertTrue(client.hasUnfulfilledQuota(2));
     }
 
     @Test
     public void shouldNotHaveUnfulfilledQuotaWhenActiveTaskSizeGreaterEqualThanCapacityTimesTasksPerThread() {
         final ClientState client = new ClientState(1);
-        client.assign(new TaskId(0, 1), true);
+        client.assign(new TaskMetadata(new TaskId(0, 1), 0, 0), true);
         assertFalse(client.hasUnfulfilledQuota(1));
     }
 
