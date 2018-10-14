@@ -1517,7 +1517,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     }
 
-    private void closeFetchSessions(long timeoutMs) {
+    private void closeFetchSessions(Timer timer) {
         Cluster cluster = metadata.fetch();
 
         for (Map.Entry<Integer, FetchSessionHandler> entry : sessionHandlers.entrySet()) {
@@ -1530,23 +1530,20 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     .metadata(closeSessionMetadata);
             client.send(cluster.nodeById(nodeId), closeSessionRequest);
         }
-        client.poll(timeoutMs);
+        client.poll(timer);
     }
 
-    /**
-     * @param timeoutMs the maximum amount of time (in milliseconds) this method can block for
-     */
-    public void close(long timeoutMs) {
+    public void close(Timer timer) {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
         decompressionBufferSupplier.close();
-        closeFetchSessions(timeoutMs);
+        closeFetchSessions(timer);
         sessionHandlers.clear();
     }
 
     @Override
     public void close() {
-        close(Long.MAX_VALUE);
+        close(time.timer(Long.MAX_VALUE));
     }
 
 }

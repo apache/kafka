@@ -2135,22 +2135,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
-        long closeStart = time.milliseconds();
-        try {
-            if (coordinator != null)
-                coordinator.close(time.timer(Math.min(timeoutMs, requestTimeoutMs)));
-        } catch (Throwable t) {
-            firstException.compareAndSet(null, t);
-            log.error("Failed to close coordinator", t);
+        // at most requestTimeoutMs since all we do to close is one request
+        Timer coordinatorCloseTimer = time.timer(Math.min(requestTimeoutMs, timeoutMs));
+        if (coordinator != null)
+            ClientUtils.closeQuietly((Runnable) () -> coordinator.close(coordinatorCloseTimer), "consumer coordinator", firstException);
+        if (fetcher != null) {
+            long remainingMs;
+            if (timeoutMs > requestTimeoutMs)
+                remainingMs = timeoutMs - coordinatorCloseTimer.elapsedMs();
+            else
+                remainingMs = coordinatorCloseTimer.remainingMs();
+
+            long fetcherTimeoutMs = Math.min(requestTimeoutMs, remainingMs);
+            ClientUtils.closeQuietly((Runnable) () -> fetcher.close(time.timer(fetcherTimeoutMs)),
+                "consumer fetcher", firstException);
         }
-        long closeTimeoutLeft = timeoutMs - (time.milliseconds() - closeStart);
-        try {
-            if (fetcher != null)
-                fetcher.close(closeTimeoutLeft);
-        } catch (Throwable t) {
-            firstException.compareAndSet(null, t);
-            log.error("Failed to close Fetcher", t);
-        }
+
         ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
         ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
         ClientUtils.closeQuietly(client, "consumer network client", firstException);
