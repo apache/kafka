@@ -149,13 +149,12 @@
     <p>
         We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
         <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
-        the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by passing in the <code>java.util.Properties</code> instance with a
-        <code>StreamsBuilder#build</code> call Kafka Streams can now optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
+        the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by providing a <code>java.util.Properties</code> instance when
+        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
         config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
         reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
-        repartition topic, when the repartition topics are the result of a key-changing operation (i.e <code>KStream#selectKey</code>, <code>KStream#map</code>,
-        <code>KStream#transform</code> etc.).  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not attempt
-        to optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
+        repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not
+        optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
         details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-312%3A+Add+Overloaded+StreamsBuilder+Build+Method+to+Accept+java.util.Properties">KIP-312</a>
     </p>
 
