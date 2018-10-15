@@ -833,15 +833,16 @@ public class SslTransportLayer implements TransportLayer {
         state = State.HANDSHAKE_FAILED;
         handshakeException = new SslAuthenticationException("SSL handshake failed", sslException);
 
-        // Attempt to flush any outgoing bytes. If this fails because remote end has closed the channel, log the
-        // exception, but continue to handle the handshake failure as an authentication exception.
+        // Attempt to flush any outgoing bytes. If flush doesn't complete, delay exception handling until outgoing bytes
+        // are flushed. If write fails because remote end has closed the channel, log the I/O exception and  continue to
+        // handle the handshake failure as an authentication exception.
         try {
-            if (flush)
-                flush(netWriteBuffer);
+            if (!flush || flush(netWriteBuffer))
+                throw handshakeException;
         } catch (IOException e) {
             log.debug("Failed to flush all bytes before closing channel", e);
+            throw handshakeException;
         }
-        throw handshakeException;
     }
 
     // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
