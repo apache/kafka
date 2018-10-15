@@ -25,6 +25,10 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Iterator;
+import java.util.Map;
+import java.util.Map.Entry;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 
 public final class ConnectUtils {
@@ -64,5 +68,24 @@ public final class ConnectUtils {
             throw new ConnectException("Failed to connect to and describe Kafka cluster. "
                                        + "Check worker's broker connection and security properties.", e);
         }
+    }
+
+    /**
+     * Modify the supplied map of configurations to remove all configuration name-value pairs that are not included in the
+     * specified set of names.
+     *
+     * @param configs the map of configurations to be modified; may not be null
+     * @param configNames the names of the configuration properties that are to be retained; may not be null
+     * @return the supplied {@code configs} parameter, returned for convenience
+     */
+    public static Map<String, Object> retainConfigs(Map<String, Object> configs, Set<String> configNames) {
+        Iterator<Entry<String, Object>> entryIter = configs.entrySet().iterator();
+        while (entryIter.hasNext()) {
+            Map.Entry<String, Object> entry = entryIter.next();
+            if (!configNames.contains(entry.getKey())) {
+                entryIter.remove();
+            }
+        }
+        return configs;
     }
 }

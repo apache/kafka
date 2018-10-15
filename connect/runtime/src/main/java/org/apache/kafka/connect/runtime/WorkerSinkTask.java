@@ -472,6 +472,8 @@ class WorkerSinkTask extends WorkerTask {
 
         KafkaConsumer<byte[], byte[]> newConsumer;
         try {
+            // Prevent logging unused config warnings
+            props = ConnectUtils.retainConfigs(props, ConsumerConfig.configNames());
             newConsumer = new KafkaConsumer<>(props);
         } catch (Throwable t) {
             throw new ConnectException("Failed to create consumer", t);

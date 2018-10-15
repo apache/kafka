@@ -165,7 +165,8 @@ public class TopicAdmin implements AutoCloseable {
      * @param adminConfig the configuration for the {@link AdminClient}
      */
     public TopicAdmin(Map<String, Object> adminConfig) {
-        this(adminConfig, AdminClient.create(adminConfig));
+        // Prevent logging unused config warnings
+        this(adminConfig, AdminClient.create(ConnectUtils.retainConfigs(adminConfig, AdminClientConfig.configNames())));
     }
 
     // visible for testing

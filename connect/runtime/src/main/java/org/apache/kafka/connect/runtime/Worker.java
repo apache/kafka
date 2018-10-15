@@ -49,6 +49,7 @@ import org.apache.kafka.connect.storage.OffsetBackingStore;
 import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageReaderImpl;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -141,6 +142,9 @@ public class Worker {
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+        // Prevent logging unused config warnings
+        ConnectUtils.retainConfigs(producerProps, ProducerConfig.configNames());
+
     }
 
     private WorkerConfigTransformer initConfigTransformer() {
