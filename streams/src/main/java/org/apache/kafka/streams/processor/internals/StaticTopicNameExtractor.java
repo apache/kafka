@@ -19,23 +19,26 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
+import java.util.Collection;
+import java.util.Collections;
+
 /**
  * Static topic name extractor
  */
 public class StaticTopicNameExtractor<K, V> implements TopicNameExtractor<K, V> {
 
-    public final String topicName;
+    public final Collection<String> topicSingleton;
 
     public StaticTopicNameExtractor(final String topicName) {
-        this.topicName = topicName;
+        this.topicSingleton = Collections.singleton(topicName);
     }
 
-    public String extract(final K key, final V value, final RecordContext recordContext) {
-        return topicName;
+    public Collection<String> extract(final K key, final V value, final RecordContext recordContext) {
+        return topicSingleton;
     }
 
     @Override
     public String toString() {
-        return "StaticTopicNameExtractor(" + topicName + ")";
+        return "StaticTopicNameExtractor(" + topicSingleton + ")";
     }
 }
