@@ -216,7 +216,7 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        LoggingContext logCtx = LoggingContext.forTask(id());
+        LoggingContext.forTask(id());
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         String savedName = Thread.currentThread().getName();
         try {
@@ -237,8 +237,11 @@ abstract class WorkerTask implements Runnable {
                 try {
                     releaseResources();
                 } finally {
-                    taskMetricsGroup.close();
-                    logCtx.close();
+                    try {
+                        taskMetricsGroup.close();
+                    } finally {
+                        LoggingContext.clear();
+                    }
                 }
             }
         }

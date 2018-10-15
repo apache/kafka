@@ -18,28 +18,15 @@ package org.apache.kafka.connect.util;
 
 import org.slf4j.MDC;
 
-import java.util.HashMap;
-import java.util.Map;
-
 /**
  * A utility for defining Mapped Diagnostic Context (MDC) for SLF4J logs.
- *
- * <p>Logging contexts may be nested. In this case, the nested context may override some or all of the parameters of the outer context.
- * In these cases, both contexts may be active but the nested context takes priority. It is assumed that the nested context will be
- * stopped before the outer context.
- *
  */
-public final class LoggingContext implements AutoCloseable {
+public final class LoggingContext {
 
     /**
      * The parameter keys used by Connect.
      */
     public static final class Parameters {
-
-        /**
-         * The name of the Mapped Diagnostic Context (MDC) key that defines shortened class name for the <i>connector</i>.
-         */
-        public static final String CONNECTOR_CLASS = "connector.class.short";
 
         /**
          * The name of the Mapped Diagnostic Context (MDC) key that defines the name of a <i>connector</i>.
@@ -87,45 +74,27 @@ public final class LoggingContext implements AutoCloseable {
     }
 
     /**
-     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_SCOPE scope} to the specified value.
+     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_NAME connector name} to the
+     * supplied name and the {@link Parameters#CONNECTOR_SCOPE scope} to {@link Scope#WORKER}.
      *
-     * @param scope the scope; may be null
-     * @return the resulting LoggingContext that is already {@link LoggingContext#start() started}; never null
+     * @param connectorName the connector name; may not be null
      */
-    public static LoggingContext forScope(Scope scope) {
-        Map<String, String> context = new HashMap<>();
-        context.put(Parameters.CONNECTOR_SCOPE, scope.value());
-        return new LoggingContext(context).start();
+    public static void forConnector(String connectorName) {
+        MDC.put(Parameters.CONNECTOR_NAME, connectorName);
+        MDC.remove(Parameters.CONNECTOR_TASK);
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.value());
     }
 
     /**
      * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_NAME connector name} and
      * {@link Parameters#CONNECTOR_TASK task number} to the same values in the supplied {@link ConnectorTaskId}.
      *
-     * @param id the connector task ID; may be null
-     * @return the resulting LoggingContext that is already {@link LoggingContext#start() started}; never null
+     * @param id the connector task ID; may not be null
      */
-    public static LoggingContext forTask(ConnectorTaskId id) {
-        Map<String, String> context = new HashMap<>();
-        context.put(Parameters.CONNECTOR_NAME, id.connector());
-        context.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        context.put(Parameters.CONNECTOR_SCOPE, Scope.TASK.value());
-        return new LoggingContext(context).start();
-    }
-
-    /**
-     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_CLASS connector class} to a shortened name
-     * for the supplied class and the {@link Parameters#CONNECTOR_NAME connector name} to the supplied name.
-     *
-     * @param connectorClassName the fully qualified or shortened connector class name; may be null
-     * @return the resulting LoggingContext that is already {@link LoggingContext#start() started}; never null
-     */
-    public static LoggingContext forConnector(String connectorClassName, String connectorName) {
-        Map<String, String> context = new HashMap<>();
-        context.put(Parameters.CONNECTOR_CLASS, shortNameFor(connectorClassName));
-        context.put(Parameters.CONNECTOR_NAME, connectorName);
-        context.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.value());
-        return new LoggingContext(context).start();
+    public static void forTask(ConnectorTaskId id) {
+        MDC.put(Parameters.CONNECTOR_NAME, id.connector());
+        MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.TASK.value());
     }
 
     /**
@@ -133,97 +102,20 @@ public final class LoggingContext implements AutoCloseable {
      * {@link Parameters#CONNECTOR_TASK task number} and to the same values in the supplied {@link ConnectorTaskId}, and to set
      * the scope to {@link Scope#OFFSETS}.
      *
-     * @param id the connector task ID; may be null
-     * @return the resulting LoggingContext that is already {@link LoggingContext#start() started}; never null
+     * @param id the connector task ID; may not be null
      */
-    public static LoggingContext forOffsets(ConnectorTaskId id) {
-        Map<String, String> context = new HashMap<>();
-        context.put(Parameters.CONNECTOR_NAME, id.connector());
-        context.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        context.put(Parameters.CONNECTOR_SCOPE, Scope.OFFSETS.value());
-        return new LoggingContext(context).start();
-    }
-
-    protected static String shortNameFor(String className) {
-        return className.replaceAll("^(.*)[.]", "") // greedy wildcard
-                        .replaceAll("^(.*)[$]", "") // greedy wildcard
-                        .replaceAll("Connector", "")
-                        .replaceAll("Task", "");
-    }
-
-    private static final String NULL_VALUE = null;
-
-    final Map<String, String> previous = new HashMap<>();
-    final Map<String, String> context;
-    private boolean active = false;
-
-    protected LoggingContext(Map<String, String> context) {
-        this.context = context;
+    public static void forOffsets(ConnectorTaskId id) {
+        MDC.put(Parameters.CONNECTOR_NAME, id.connector());
+        MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.OFFSETS.value());
     }
 
     /**
-     * Change the {@link MDC} to use this context's parameters.
-     *
-     * <p>This method has no effect when this context is already active.
-     *
-     * @return this instance, for chaining purposes; never null
+     * Remove all of the Connect-specific {@link Parameters parameters} from the current {@link MDC} logging context.
      */
-    public LoggingContext start() {
-        if (!active) {
-            previous.clear();
-            for (Map.Entry<String, String> entry : context.entrySet()) {
-                previous.put(entry.getKey(), MDC.get(entry.getKey()));
-                if (entry.getValue() != NULL_VALUE && entry.getValue() != null) {
-                    MDC.put(entry.getKey(), entry.getValue());
-                } else {
-                    MDC.remove(entry.getKey());
-                }
-            }
-            active = true;
-        }
-        return this;
-    }
-
-    /**
-     * Change the {@link MDC} to no longer use the parameters of this context, restoring any values for the parameters that existed
-     * when {@link #start()} was called. This method does not affect other parameters not defined on this context.
-     *
-     * <p>This method has no effect when this context is not active.
-     *
-     * @return this instance, for chaining purposes; never null
-     */
-    public LoggingContext stop() {
-        if (active) {
-            for (Map.Entry<String, String> entry : previous.entrySet()) {
-                if (entry.getValue() != NULL_VALUE && entry.getValue() != null) {
-                    MDC.put(entry.getKey(), entry.getValue());
-                } else {
-                    MDC.remove(entry.getKey());
-                }
-            }
-            active = false;
-        }
-        return this;
-    }
-
-    @Override
-    public void close() {
-        stop();
-    }
-
-    @Override
-    public String toString() {
-        return "LoggingContext:" + context;
-    }
-
-    /**
-     * Return whether this context still active. Note that even if this is active other "nested" contexts may have been started since
-     * this was started and may take priority (e.g., they may have overwritten some or all of the parameters of this context),
-     * but once they are stopped this context will still be active.
-     *
-     * @return true if active, or false otherwise
-     */
-    protected boolean isActive() {
-        return active;
+    public static void clear() {
+        MDC.remove(Parameters.CONNECTOR_NAME);
+        MDC.remove(Parameters.CONNECTOR_TASK);
+        MDC.remove(Parameters.CONNECTOR_SCOPE);
     }
 }

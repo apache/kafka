@@ -231,11 +231,10 @@ public class Worker {
 
         final WorkerConnector workerConnector;
         ClassLoader savedLoader = plugins.currentThreadLoader();
-        LoggingContext logContext = null;
         try {
+            LoggingContext.forConnector(connName);
             final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
             final String connClass = connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
-            logContext = LoggingContext.forConnector(connClass, connName);
             log.info("Creating connector {} of type {}", connName, connClass);
             final Connector connector = plugins.newConnector(connClass);
             workerConnector = new WorkerConnector(connName, connector, ctx, metrics,  statusListener);
@@ -253,9 +252,7 @@ public class Worker {
             statusListener.onFailure(connName, t);
             return false;
         } finally {
-            if (logContext != null) {
-                logContext.close();
-            }
+            LoggingContext.clear();
         }
 
         WorkerConnector existing = connectors.putIfAbsent(connName, workerConnector);
@@ -401,7 +398,7 @@ public class Worker {
             TaskStatus.Listener statusListener,
             TargetState initialState
     ) {
-        LoggingContext logContext = LoggingContext.forTask(id);
+        LoggingContext.forTask(id);
         log.info("Creating task {}", id);
 
         if (tasks.containsKey(id))
@@ -469,7 +466,7 @@ public class Worker {
             statusListener.onFailure(id, t);
             return false;
         } finally {
-            logContext.close();
+            LoggingContext.clear();
         }
 
         WorkerTask existing = tasks.putIfAbsent(id, workerTask);
