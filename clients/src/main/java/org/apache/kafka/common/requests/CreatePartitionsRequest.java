@@ -94,13 +94,13 @@ public class CreatePartitionsRequest extends AbstractRequest {
             return totalCount;
         }
 
-        public List<List<Integer>> assignments() {
+        public List<List<Integer>> newAssignments() {
             return newAssignments;
         }
 
         @Override
         public String toString() {
-            return "(totalCount=" + totalCount() + ", newAssignments=" + assignments() + ")";
+            return "(totalCount=" + totalCount() + ", newAssignments=" + newAssignments() + ")";
         }
 
     }
@@ -207,10 +207,10 @@ public class CreatePartitionsRequest extends AbstractRequest {
             Struct partitionCountStruct = topicPartitionCountStruct.instance(NEW_PARTITIONS_KEY_NAME);
             partitionCountStruct.set(COUNT_KEY_NAME, partitionDetails.totalCount());
             Object[][] assignments = null;
-            if (partitionDetails.assignments() != null) {
-                assignments = new Object[partitionDetails.assignments().size()][];
+            if (partitionDetails.newAssignments() != null) {
+                assignments = new Object[partitionDetails.newAssignments().size()][];
                 int i = 0;
-                for (List<Integer> partitionAssignment : partitionDetails.assignments()) {
+                for (List<Integer> partitionAssignment : partitionDetails.newAssignments()) {
                     assignments[i] = partitionAssignment.toArray(new Object[0]);
                     i++;
                 }
