@@ -1297,8 +1297,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
 
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            metadata = metadata != null ? metadata : new RecordMetadata(tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
-            this.interceptors.onAcknowledgement(metadata, exception);
+            RecordMetadata newMetadata = metadata != null ? metadata : new RecordMetadata(
+                    tp, -1, -1, RecordBatch.NO_TIMESTAMP, Long.valueOf(-1L), -1, -1);
+            this.interceptors.onAcknowledgement(newMetadata, exception);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
