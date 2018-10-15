@@ -51,6 +51,9 @@ public class ClientUtilsTest {
         checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
         checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+
+        // With lookup of example.com, either one or two addresses are expected depending on
+        // whether ipv4 and ipv6 are enabled
         List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
         assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
