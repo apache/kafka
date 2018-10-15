@@ -22,7 +22,6 @@ import kafka.log.LogConfig
 import kafka.network.RequestChannel.Session
 import kafka.security.auth._
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
@@ -342,7 +341,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.CREATE_PARTITIONS =>
           new CreatePartitionsRequest.Builder(
-            Collections.singletonMap("topic-2", NewPartitions.increaseTo(1)), 0, false
+            Collections.singletonMap("topic-2", new CreatePartitionsRequest.PartitionDetails(1)), 0, false
           )
 
         case ApiKeys.CREATE_DELEGATION_TOKEN =>

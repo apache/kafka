@@ -80,6 +80,7 @@ import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
 import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest;
+import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
@@ -141,6 +142,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
@@ -2083,7 +2085,8 @@ public class KafkaAdminClient extends AdminClient {
         for (String topic : newPartitions.keySet()) {
             futures.put(topic, new KafkaFutureImpl<>());
         }
-        final Map<String, NewPartitions> requestMap = new HashMap<>(newPartitions);
+        final Map<String, PartitionDetails> requestMap = newPartitions.entrySet().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> partitionDetails(e.getValue())));
 
         final long now = time.milliseconds();
         runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.timeoutMs()),
@@ -2480,6 +2483,10 @@ public class KafkaAdminClient extends AdminClient {
             return true;
         }
         return false;
+    }
+
+    private PartitionDetails partitionDetails(NewPartitions newPartitions) {
+        return new PartitionDetails(newPartitions.totalCount(), newPartitions.assignments());
     }
 
     private final static class ListConsumerGroupsResults {

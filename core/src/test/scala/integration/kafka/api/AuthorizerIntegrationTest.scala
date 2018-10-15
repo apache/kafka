@@ -324,7 +324,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createPartitionsRequest = {
     new CreatePartitionsRequest.Builder(
-      Map(topic -> NewPartitions.increaseTo(10)).asJava, 10000, true
+      Map(topic -> new CreatePartitionsRequest.PartitionDetails(10)).asJava, 10000, true
     ).build()
   }
 

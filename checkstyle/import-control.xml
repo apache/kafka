@@ -131,7 +131,6 @@
     </subpackage>
 
     <subpackage name="requests">
-      <allow pkg="org.apache.kafka.clients.admin" />
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />
