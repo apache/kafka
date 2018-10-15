@@ -27,6 +27,7 @@ import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
 public class ClientUtilsTest {
 
@@ -50,11 +51,16 @@ public class ClientUtilsTest {
         checkWithoutLookup("localhost:8080");
         checkWithoutLookup("[::1]:8000");
         checkWithoutLookup("[2001:db8:85a3:8d3:1319:8a2e:370:7348]:1234", "localhost:10000");
+
+        // With lookup of example.com, either one or two addresses are expected depending on
+        // whether ipv4 and ipv6 are enabled
         List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
-        assertEquals(2, validatedAddresses.size());
-        InetSocketAddress address = validatedAddresses.get(0);
-        assertEquals("93.184.216.34", address.getHostName());
-        assertEquals(10000, address.getPort());
+        assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
+        List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
+                .collect(Collectors.toList());
+        List<String> expectedHostNames = Arrays.asList("93.184.216.34", "2606:2800:220:1:248:1893:25c8:1946");
+        assertTrue("Unexpected addresses " + validatedHostNames, expectedHostNames.containsAll(validatedHostNames));
+        validatedAddresses.forEach(address -> assertEquals(10000, address.getPort()));
     }
 
     @Test(expected = IllegalArgumentException.class)
