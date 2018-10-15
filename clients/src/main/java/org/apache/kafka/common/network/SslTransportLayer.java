@@ -267,15 +267,19 @@ public class SslTransportLayer implements TransportLayer {
         } catch (IOException e) {
             maybeThrowSslAuthenticationException();
 
-            // this exception could be due to a write. If there is data available to unwrap,
-            // process the data so that any SSL handshake exceptions are reported
-            if (handshakeStatus == HandshakeStatus.NEED_UNWRAP && netReadBuffer.position() > 0) {
+            // This exception could be due to a write. If there is data available to unwrap in the buffer, or data available
+            // in the socket channel to read and unwrap, process the data so that any SSL handshake exceptions are reported.
+            do {
                 try {
                     handshakeUnwrap(false);
+                    if (key.isReadable())
+                        read = readFromSocketChannel();
                 } catch (SSLException e1) {
                     maybeProcessHandshakeFailure(e1, false, e);
                 }
-            }
+
+            } while (netReadBuffer.position() > 0 && read > 0);
+
             // If we get here, this is not a handshake failure, throw the original IOException
             throw e;
         }
@@ -828,8 +832,16 @@ public class SslTransportLayer implements TransportLayer {
 
         state = State.HANDSHAKE_FAILED;
         handshakeException = new SslAuthenticationException("SSL handshake failed", sslException);
-        if (!flush || flush(netWriteBuffer))
-            throw handshakeException;
+
+        // Attempt to flush any outgoing bytes. If this fails because remote end has closed the channel, log the
+        // exception, but continue to handle the handshake failure as an authentication exception.
+        try {
+            if (flush)
+                flush(netWriteBuffer);
+        } catch (IOException e) {
+            log.debug("Failed to flush all bytes before closing channel", e);
+        }
+        throw handshakeException;
     }
 
     // SSL handshake failures are typically thrown as SSLHandshakeException, SSLProtocolException,
