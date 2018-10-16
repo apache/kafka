@@ -88,6 +88,9 @@
         Additionally, we've updated the <code>Joined</code> class with a new method <code>Joined#withName</code>
         enabling users to name any repartition topics required for performing Stream/Stream or Stream/Table join.  For more details repartition
         topic naming, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-372%3A+Naming+Repartition+Topics+for+Joins+and+Grouping">KIP-372</a>.
+
+        As a result we've updated the Kafka Streams Scala API and removed the <code>Serialized</code> class in favor of adding <code>Grouped</code>.
+        If you just rely on the implicit <code>Serialized</code>, you just need to recompile; if you pass in <code>Serialized</code> explicitly, sorry you'll have to make code changes.
     </p>
 
     <p>
