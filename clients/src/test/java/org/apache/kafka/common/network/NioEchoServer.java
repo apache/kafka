@@ -153,7 +153,7 @@ public class NioEchoServer extends Thread {
         try {
             acceptorThread.start();
             while (serverSocketChannel.isOpen()) {
-                selector.poll(1000);
+                selector.poll(100);
                 synchronized (newChannels) {
                     for (SocketChannel socketChannel : newChannels) {
                         String id = id(socketChannel);
