@@ -46,6 +46,10 @@
     <li>Jetty has been upgraded to 9.4.12, which excludes TLS_RSA_* ciphers by default because they do not support forward
         secrecy, see https://github.com/eclipse/jetty.project/issues/2807 for more information.</li>
     <li>Unclean leader election is automatically enabled by the controller when <code>unclean.leader.election.enable</code> config is dynamically updated by using per-topic config override.</li>
+    <li>The <code>AdminClient</code> has added a method <code>AdminClient#metrics()</code>. Now any application using the <code>AdminClient</code> can gain more information
+        and insight by viewing the metrics captured from the <code>AdminClient</code>. For more information
+        see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-324%3A+Add+method+to+get+metrics%28%29+in+AdminClient">KIP-324</a>
+    </li>
 </ul>
 
 <h4><a id="upgrade_2_0_0" href="#upgrade_2_0_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, or 1.1.x to 2.0.0</a></h4>
