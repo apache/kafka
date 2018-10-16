@@ -78,6 +78,19 @@
     </p>
 
     <p>
+        We've added a new class <code>Grouped</code> and deprecated <code>Serialized</code>.  The intent of adding <code>Grouped</code> is the ability to
+        name repartition topics created when performing aggregation operations.  Users can name the potential repartition topic using the
+        <code>Grouped#as()</code> method which takes a <code>String</code> and is used as part of the repartition topic name.  The resulting repartition
+        topic name will still follow the pattern of <code>${application-id}-&gt;name&lt;-repartition</code>.  The <code>Grouped</code> class is now favored over
+        <code>Serialized</code> in <code>KStream#groupByKey()</code>, <code>KStream#groupBy()</code>, and <code>KTable#groupBy()</code>.
+        Note that Kafka Streams does not automatically create repartition topics for aggregation operations.
+
+        Additionally, we've updated the <code>Joined</code> class with a new method <code>Joined#withName</code>
+        enabling users to name any repartition topics required for performing Stream/Stream or Stream/Table join.  For more details repartition
+        topic naming, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-372%3A+Naming+Repartition+Topics+for+Joins+and+Grouping">KIP-372</a>.
+    </p>
+
+    <p>
         We've added a new config named <code>max.task.idle.ms</code> to allow users specify how to handle out-of-order data within a task that may be processing multiple
         topic-partitions (see <a href="/{{version}}/documentation/streams/core-concepts.html#streams_out_of_ordering">Out-of-Order Handling</a> section for more details).
         The default value is set to <code>0</code>, to favor minimized latency over synchronization between multiple input streams from topic-partitions.
