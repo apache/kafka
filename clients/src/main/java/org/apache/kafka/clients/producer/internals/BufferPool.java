@@ -274,7 +274,7 @@ public class BufferPool {
                     this.nextOvermemoryWarn = this.time.milliseconds() + TimeUnit.HOURS.toMillis(1);
                 }
             } else {
-                long freeMem = Math.min(Math.max(buffer.capacity(), size), this.totalMemory - availableMemory);
+                long freeMem = Math.min(size, this.totalMemory - availableMemory);
                 this.nonPooledAvailableMemory += freeMem;
             }
             Condition moreMem = this.waiters.peekFirst();
