@@ -61,13 +61,10 @@ object ImplicitConversions {
   implicit def tuple2ToKeyValue[K, V](tuple: (K, V)): KeyValue[K, V] = new KeyValue(tuple._1, tuple._2)
 
   // we would also like to allow users implicit serdes
-  // and these implicits will convert them to `Grouped`, `Serialized`, `Produced` or `Consumed`
+  // and these implicits will convert them to `Grouped`, `Produced` or `Consumed`
 
   implicit def groupedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] =
     Grouped.`with`[K, V]
-
-  implicit def serializedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Serialized[K, V] =
-    Serialized.`with`[K, V]
 
   implicit def consumedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Consumed[K, V] =
     Consumed.`with`[K, V]

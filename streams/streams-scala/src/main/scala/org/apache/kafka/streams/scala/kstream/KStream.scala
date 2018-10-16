@@ -351,40 +351,6 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Group the records by their current key into a [[KGroupedStream]]
    * <p>
-   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Serialized` instance implicitly.
-   * <p>
-   * {{{
-   * Example:
-   *
-   * // brings implicit serdes in scope
-   * import Serdes._
-   *
-   * val clicksPerRegion: KTable[String, Long] =
-   *   userClicksStream
-   *     .leftJoin(userRegionsTable, (clicks: Long, region: String) => (if (region == null) "UNKNOWN" else region, clicks))
-   *     .map((_, regionWithClicks) => regionWithClicks)
-   *
-   *     // the groupByKey gets the Serialized instance through an implicit conversion of the
-   *     // serdes brought into scope through the import Serdes._ above
-   *     .groupByKey
-   *     .reduce(_ + _)
-   *
-   * // Similarly you can create an implicit Serialized and it will be passed implicitly
-   * // to the groupByKey call
-   * }}}
-   *
-   * @param serialized the instance of Serialized that gives the serdes
-   * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`
-   */
-  @deprecated
-  def groupByKey(implicit serialized: Serialized[K, V]): KGroupedStream[K, V] =
-    inner.groupByKey(serialized)
-
-  /**
-   * Group the records by their current key into a [[KGroupedStream]]
-   * <p>
    * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
    * serdes that will be converted to a `Grouped` instance implicitly.
    * <p>
@@ -401,56 +367,19 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *
    *     // the groupByKey gets the Grouped instance through an implicit conversion of the
    *     // serdes brought into scope through the import Serdes._ above
-   *      // the name provided is used as part of the repartition topic name if required
-   *     .groupByKey(repartition-topic-name)
+   *     .groupByKey
    *     .reduce(_ + _)
    *
    * // Similarly you can create an implicit Grouped and it will be passed implicitly
    * // to the groupByKey call
    * }}}
    *
-   * @param name    the name used for part of the repartition topic if required
    * @param grouped the instance of Grouped that gives the serdes
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`
    */
-  def groupByKey(name: String)(implicit grouped: Grouped[K, V]): KGroupedStream[K, V] =
-    inner.groupByKey(grouped.withName(name))
-
-  /**
-   * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
-   * and the `Grouped` instance.
-   * <p>
-   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Serialized` instance implicitly.
-   * <p>
-   * {{{
-   * Example:
-   *
-   * // brings implicit serdes in scope
-   * import Serdes._
-   *
-   * val textLines = streamBuilder.stream[String, String](inputTopic)
-   *
-   * val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
-   *
-   * val wordCounts: KTable[String, Long] =
-   *   textLines.flatMapValues(v => pattern.split(v.toLowerCase))
-   *
-   *     // the groupBy gets the Serialized instance through an implicit conversion of the
-   *     // serdes brought into scope through the import Serdes._ above
-   *     .groupBy((k, v) => v)
-   *
-   *     .count()
-   * }}}
-   *
-   * @param selector a function that computes a new key for grouping
-   * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
-   * @see `org.apache.kafka.streams.kstream.KStream#groupBy`
-   */
-  @deprecated
-  def groupBy[KR](selector: (K, V) => KR)(implicit serialized: Serialized[KR, V]): KGroupedStream[KR, V] =
-    inner.groupBy(selector.asKeyValueMapper, serialized)
+  def groupByKey(implicit grouped: Grouped[K, V]): KGroupedStream[K, V] =
+    inner.groupByKey(grouped)
 
   /**
    * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
@@ -474,19 +403,17 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *
    *     // the groupBy gets the Grouped instance through an implicit conversion of the
    *     // serdes brought into scope through the import Serdes._ above
-   *    // the name provided is used as part of the repartition topic name if required
-   *     .groupBy((k, v) => v, name)
+   *     .groupBy((k, v) => v)
    *
    *     .count()
    * }}}
    *
    * @param selector a function that computes a new key for grouping
-   * @param name     the name used for part of the reparition topic if required
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupBy`
    */
-  def groupBy[KR](selector: (K, V) => KR, name: String)(implicit grouped: Grouped[KR, V]): KGroupedStream[KR, V] =
-    inner.groupBy[KR](selector.asKeyValueMapper, grouped.withName(name))
+  def groupBy[KR](selector: (K, V) => KR)(implicit grouped: Grouped[KR, V]): KGroupedStream[KR, V] =
+    inner.groupBy(selector.asKeyValueMapper, grouped)
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with

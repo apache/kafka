@@ -104,7 +104,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
         .map((_, regionWithClicks) => regionWithClicks)
 
         // Compute the total per region by summing the individual click counts per region.
-        .groupByKey("word-clicks") // Naming part of the repartition topic
+        .groupByKey
         .reduce(_ + _)
 
     // Write the (continuously updating) results to the output topic.
