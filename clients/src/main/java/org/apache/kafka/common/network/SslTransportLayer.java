@@ -270,16 +270,22 @@ public class SslTransportLayer implements TransportLayer {
 
             // This exception could be due to a write. If there is data available to unwrap in the buffer, or data available
             // in the socket channel to read and unwrap, process the data so that any SSL handshake exceptions are reported.
-            do {
-                try {
+            try {
+                boolean unwrappedAvailable;
+                do {
+                    int position = netReadBuffer.position();
                     handshakeUnwrap(false);
-                    if (readable)
-                        read = readFromSocketChannel();
-                } catch (SSLException e1) {
-                    maybeProcessHandshakeFailure(e1, false, e);
-                }
+                    // handshakeUnwrap unwraps data in the buffer, looping until handshakeStatus != NEED_UNWRAP. Here we
+                    // want to process all incoming data regardless of handshakeStatus. If some data was unwrapped, but
+                    // there is more remaining, try again while `handshakeUnwrap` is able to unwrap any data.
+                    unwrappedAvailable = position != netReadBuffer.position() && netReadBuffer.position() != 0;
 
-            } while (read > 0);
+                    if (readable)
+                        unwrappedAvailable = readFromSocketChannel() > 0 || unwrappedAvailable;
+                } while (unwrappedAvailable);
+            } catch (SSLException e1) {
+                maybeProcessHandshakeFailure(e1, false, e);
+            }
 
             // If we get here, this is not a handshake failure, throw the original IOException
             throw e;
