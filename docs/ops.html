@@ -1546,6 +1546,16 @@ All the following metrics have a recording level of ``debug``:
         <td>The total number of commit calls. </td>
         <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>record-lateness-avg</td>
+        <td>The average observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-max</td>
+        <td>The max observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
@@ -1646,16 +1656,6 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>forward-total</td>
         <td>The total number of of records being forwarded downstream, from source nodes only. </td>
-        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>record-lateness-avg</td>
-        <td>The average observed lateness of records.</td>
-        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
-      </tr>
-      <tr>
-        <td>record-lateness-max</td>
-        <td>The max observed lateness of records.</td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
  </tbody>

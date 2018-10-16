@@ -48,21 +48,19 @@ public class Sensors {
     public static Sensor recordLatenessSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
 
-        final Sensor sensor = metrics.nodeLevelSensor(
+        final Sensor sensor = metrics.taskLevelSensor(
             context.taskId().toString(),
-            context.currentNode().name(),
             "record-lateness",
             Sensor.RecordingLevel.DEBUG
         );
 
         final Map<String, String> tags = metrics.tagMap(
-            "task-id", context.taskId().toString(),
-            "processor-node-id", context.currentNode().name()
+            "task-id", context.taskId().toString()
         );
         sensor.add(
             new MetricName(
                 "record-lateness-avg",
-                "stream-processor-node-metrics",
+                "stream-task-metrics",
                 "The average observed lateness of records.",
                 tags),
             new Avg()
@@ -70,7 +68,7 @@ public class Sensors {
         sensor.add(
             new MetricName(
                 "record-lateness-max",
-                "stream-processor-node-metrics",
+                "stream-task-metrics",
                 "The max observed lateness of records.",
                 tags),
             new Max()

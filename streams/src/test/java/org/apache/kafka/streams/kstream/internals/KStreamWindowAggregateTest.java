@@ -390,7 +390,7 @@ public class KStreamWindowAggregateTest {
 
         final MetricName latenessMaxMetric = new MetricName(
             "record-lateness-max",
-            "stream-processor-node-metrics",
+            "stream-task-metrics",
             "The max observed lateness of records.",
             mkMap(
                 mkEntry("client-id", "topology-test-driver-virtual-thread"),
@@ -401,7 +401,7 @@ public class KStreamWindowAggregateTest {
 
         final MetricName latenessAvgMetric = new MetricName(
             "record-lateness-avg",
-            "stream-processor-node-metrics",
+            "stream-task-metrics",
             "The average observed lateness of records.",
             mkMap(
                 mkEntry("client-id", "topology-test-driver-virtual-thread"),
