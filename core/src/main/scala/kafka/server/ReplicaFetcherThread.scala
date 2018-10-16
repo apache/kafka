@@ -115,7 +115,12 @@ class ReplicaFetcherThread(name: String,
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
     if (justShutdown) {
-      leaderEndpoint.close()
+      try {
+        leaderEndpoint.close()
+      } catch {
+        case t: Throwable =>
+          error(s"Fail to close leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
+      }
     }
     justShutdown
   }
