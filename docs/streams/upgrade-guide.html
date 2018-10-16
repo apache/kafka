@@ -140,10 +140,22 @@
         If you implement custom windows, you should update your code accordingly.
         Similarly, <code>WindowBytesStoreSupplier#segments()</code> was deprecated and replaced with <code>WindowBytesStoreSupplier#segmentInterval()</code>.
         If you implement custom window store, you need to update your code accordingly.
-	Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
+	    Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>
         (note: <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-328%3A+Ability+to+suppress+updates+for+KTables">KIP-328</a> and 
-	<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a> 'overlap' with KIP-319).
+	    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a> 'overlap' with KIP-319).
+    </p>
+
+    <p>
+        We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
+        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
+        the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by providing a <code>java.util.Properties</code> instance when
+        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
+        config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
+        reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
+        repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not
+        optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
+        details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-312%3A+Add+Overloaded+StreamsBuilder+Build+Method+to+Accept+java.util.Properties">KIP-312</a>
     </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
