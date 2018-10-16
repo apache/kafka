@@ -91,7 +91,28 @@
     </p>
 
     <p>
-        We added a new serde for UUIDs (<code>Serdes.UUIDSerde</code>) that you can use via <code>Serdes.UUID()</code> (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-206%3A+Add+support+for+UUID+serialization+and+deserialization">KIP-206</a>).
+        We added a new serde for UUIDs (<code>Serdes.UUIDSerde</code>) that you can use via <code>Serdes.UUID()</code>
+	(cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-206%3A+Add+support+for+UUID+serialization+and+deserialization">KIP-206</a>).
+    </p>
+
+    <p>
+        We updated a list of methods that take <code>long</long> arguments as either timestamp (fix point) or duration (time period)
+        and replaced them with <code>Instant</code> and <code>Duration</code> parameters for improved semantics.
+        Some old methods base on <code>long</code> are deprecated and users are encouraged to update their code.
+        <br />
+        In particular, aggregation windows (hopping/tumbling/unlimited time windows and session windows) as well as join windows now take <code>Duration</code>
+        arguments to specify window size, hop, and gap parameters.
+        Also, window sizes and retention times are now specified as <code>Duration</code> type in <code>Stores</code> class.
+        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime</code> that return window start/end timestamp as <code>Instant</code>.
+        For interactive queries, there are new <code>#fetch(...)</code> overloads taking <code>Instant</code> arguments.
+        Additionally, punctuations are now registerd via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
+    </p>
+
+    <p>
+        We deprecated <code>KafkaStreams#close(...)</code> and replaced it with <code>KafkaStreams#close(Duration)</code> that accepts a single timeout argument
+        Note: the new <code>#close</code> method has improved (but slightly different) semantics than the old one.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
     </p>
 
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
