@@ -576,7 +576,7 @@ public class Sender implements Runnable {
                                long now, long throttleUntilTimeMs) {
         Errors error = response.error;
 
-        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
+        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && batch.finalState() == null &&
                 (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
             // If the batch is too large, we split the batch and send the split batches again. We do not decrement
             // the retry attempts in this case.
