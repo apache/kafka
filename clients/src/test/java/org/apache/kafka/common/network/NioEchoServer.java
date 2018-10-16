@@ -178,24 +178,7 @@ public class NioEchoServer extends Thread {
                 MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("failed-reauthentication", failedReauthentications,
                 MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
-    }
-
-    public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications,
-            int successfulReauthentications, final int failedReauthentications, boolean includeReauthenticationLatency,
-            int successfulAuthenticationNoReauths)
-            throws InterruptedException {
-        verifyAuthenticationMetrics(successfulAuthentications, failedAuthentications);
-        if (includeReauthenticationLatency)
-            verifyReauthenticationMetricsIncludingLatency(successfulReauthentications, failedReauthentications);
-        else
-            verifyReauthenticationMetrics(successfulReauthentications, failedReauthentications);
-        verifyAuthenticationNoReauthMetric(successfulAuthenticationNoReauths);
-    }
-
-    public void verifyReauthenticationMetricsIncludingLatency(int successfulReauthentications,
-            final int failedReauthentications) throws InterruptedException {
-        verifyReauthenticationMetrics(successfulReauthentications, failedReauthentications);
-        // non-zero re-authentications implies some latency recorded
+        waitForMetrics("successful-authentication-no-reauth", 0, MetricType.setOf(MetricType.TOTAL));
         waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications), MetricType.setOf(MetricType.MAX, MetricType.AVG));
     }
 
@@ -216,8 +199,10 @@ public class NioEchoServer extends Thread {
             long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
             String metricName = namePrefix + metricType.metricNameSuffix();
             if (expectedValue == 0.0)
-                assertEquals(metricType == MetricType.MAX ? Double.NEGATIVE_INFINITY : 0d, metricValue(metricName),
-                        EPS);
+                assertEquals(
+                        "Metric not updated " + metricName + " expected:<" + expectedValue + "> but was:<"
+                                + metricValue(metricName) + ">",
+                        metricType == MetricType.MAX ? Double.NEGATIVE_INFINITY : 0d, metricValue(metricName), EPS);
             else if (metricType == MetricType.TOTAL)
                 TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
                         thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue

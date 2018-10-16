@@ -77,7 +77,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +93,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private enum SaslState {
         INITIAL_REQUEST,               // May be GSSAPI token, SaslHandshake or ApiVersions for authentication
         REAUTH_PROCESS_HANDSHAKE,      // Initial state for re-authentication, processes SASL handshake request
+        REAUTH_BAD_MECHANISM,          // When re-authentication requested with wrong mechanism, generate exception
         HANDSHAKE_OR_VERSIONS_REQUEST, // May be SaslHandshake or ApiVersions
         HANDSHAKE_REQUEST,             // After an ApiVersions request, next request must be SaslHandshake
         AUTHENTICATE,                  // Authentication tokens (SaslHandshake v1 and above indicate SaslAuthenticate headers)
@@ -266,6 +266,8 @@ public class SaslServerAuthenticator implements Authenticator {
                 case HANDSHAKE_REQUEST:
                     handleKafkaRequest(clientToken);
                     break;
+                case REAUTH_BAD_MECHANISM:
+                    throw new SaslAuthenticationException(reauthInfo.badMechanismErrorMessage);
                 case INITIAL_REQUEST:
                     if (handleKafkaRequest(clientToken))
                         break;
@@ -465,7 +467,6 @@ public class SaslServerAuthenticator implements Authenticator {
     private boolean handleKafkaRequest(byte[] requestBytes) throws IOException, AuthenticationException {
         boolean isKafkaRequest = false;
         String clientMechanism = null;
-        RequestContext requestContext = null;
         try {
             ByteBuffer requestBuffer = ByteBuffer.wrap(requestBytes);
             RequestHeader header = RequestHeader.parse(requestBuffer);
@@ -485,7 +486,7 @@ public class SaslServerAuthenticator implements Authenticator {
             LOG.debug("Handling Kafka request {} during {}", apiKey, reauthInfo.authenticationOrReauthenticationText());
 
 
-            requestContext = new RequestContext(header, connectionId, clientAddress(),
+            RequestContext requestContext = new RequestContext(header, connectionId, clientAddress(),
                     KafkaPrincipal.ANONYMOUS, listenerName, securityProtocol);
             RequestAndSize requestAndSize = requestContext.parseRequest(requestBuffer);
             if (apiKey == ApiKeys.API_VERSIONS)
@@ -506,27 +507,16 @@ public class SaslServerAuthenticator implements Authenticator {
                     }
                     LOG.debug("Received client packet of length {} starting with bytes 0x{}, process as GSSAPI packet", requestBytes.length, tokenBuilder);
                 }
-                /*
-                 * Perform explicit check here to make sure mechanism doesn't change during
-                 * re-authentication because we don't have a request context required for the
-                 * check below
-                 */
-                if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM) && (!reauthInfo.reauthenticating()
-                        || reauthInfo.previousSaslMechanism.equals(SaslConfigs.GSSAPI_MECHANISM))) {
+                if (enabledMechanisms.contains(SaslConfigs.GSSAPI_MECHANISM)) {
                     LOG.debug("First client packet is not a SASL mechanism request, using default mechanism GSSAPI");
                     clientMechanism = SaslConfigs.GSSAPI_MECHANISM;
                 } else
-                    throw new UnsupportedSaslMechanismException(
-                            "Exception handling first SASL packet from client during "
-                                    + reauthInfo.authenticationOrReauthenticationText()
-                                    + ", GSSAPI is not supported by server",
-                            e);
+                    throw new UnsupportedSaslMechanismException("Exception handling first SASL packet from client, GSSAPI is not supported by server", e);
             } else
                 throw e;
         }
-        if (clientMechanism != null) {
-            if (reauthInfo.reauthenticating())
-                reauthInfo.ensureSaslMechanismUnchanged(clientMechanism, requestContext);
+        if (clientMechanism != null && (!reauthInfo.reauthenticating()
+                || reauthInfo.saslMechanismUnchanged(clientMechanism))) {
             createSaslServer(clientMechanism);
             setSaslState(SaslState.AUTHENTICATE);
         }
@@ -608,6 +598,7 @@ public class SaslServerAuthenticator implements Authenticator {
         public Long sessionExpirationTimeNanos;
         public boolean connectedClientSupportsReauthentication;
         public long authenticationEndNanos;
+        public String badMechanismErrorMessage;
 
         public void reauthenticating(String previousSaslMechanism, KafkaPrincipal previousKafkaPrincipal,
                 long reauthenticationBeginNanos) {
@@ -633,16 +624,20 @@ public class SaslServerAuthenticator implements Authenticator {
             }
         }
 
-        public void ensureSaslMechanismUnchanged(String clientMechanism, RequestContext requestContext)
-                throws UnsupportedSaslMechanismException {
-            if (!previousSaslMechanism.equals(clientMechanism)) {
-                LOG.debug(
-                        "SASL mechanism '{}' requested by client is not supported for re-authentication of mechanism '{}'",
-                        clientMechanism, previousSaslMechanism);
-                buildResponseOnAuthenticateFailure(requestContext, new SaslHandshakeResponse(
-                        Errors.UNSUPPORTED_SASL_MECHANISM, new HashSet<>(Arrays.asList(previousSaslMechanism))));
-                throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
-            }
+        /*
+         * We define the REAUTH_BAD_MECHANISM state because the failed re-authentication
+         * metric does not get updated if we send back an error immediately upon the
+         * start of re-authentication.
+         */
+        public boolean saslMechanismUnchanged(String clientMechanism) {
+            if (previousSaslMechanism.equals(clientMechanism))
+                return true;
+            badMechanismErrorMessage = String.format(
+                    "SASL mechanism '%s' requested by client is not supported for re-authentication of mechanism '%s'",
+                    clientMechanism, previousSaslMechanism);
+            LOG.debug(badMechanismErrorMessage);
+            setSaslState(SaslState.REAUTH_BAD_MECHANISM);
+            return false;
         }
 
         private long calcCompletionTimesAndReturnSessionLifetimeMs() {
@@ -693,10 +688,11 @@ public class SaslServerAuthenticator implements Authenticator {
         }
 
         public Long reauthenticationLatencyMs() {
-            return reauthenticating()
-                    ? Long.valueOf(
-                            (authenticationEndNanos - reauthenticationBeginNanos) / 1000 / 1000)
-                    : null;
+            if (!reauthenticating())
+                return null;
+            // record at least 1 ms if there is some latency
+            long latencyNanos = authenticationEndNanos - reauthenticationBeginNanos;
+            return latencyNanos == 0L ? 0L : Math.max(1L, Long.valueOf(Math.round(latencyNanos / 1000.0 / 1000.0)));
         }
 
         private long zeroIfNegative(long value) {
