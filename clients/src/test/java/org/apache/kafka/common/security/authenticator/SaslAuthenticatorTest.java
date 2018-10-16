@@ -1514,9 +1514,12 @@ public class SaslAuthenticatorTest {
             checkClientConnection(node);
             server.verifyAuthenticationMetrics(1, 0);
             server.verifyReauthenticationMetrics(0, 0);
-            double successfulReauthentications = server.metricValue("successful-reauthentication-total");
+            double successfulReauthentications = 0;
             int desiredNumReauthentications = 5;
-            while (successfulReauthentications < desiredNumReauthentications) {
+            long startMs = Time.SYSTEM.milliseconds();
+            long timeoutMs = startMs + 1000 * 15; // stop after 15 seconds
+            while (successfulReauthentications < desiredNumReauthentications
+                    && Time.SYSTEM.milliseconds() < timeoutMs) {
                 checkClientConnection(node);
                 successfulReauthentications = server.metricValue("successful-reauthentication-total");
             }
