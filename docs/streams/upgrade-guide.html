@@ -137,9 +137,9 @@
     <p>
         We deprecated the notion of segments in window stores as those are intended to be an implementation details.
         Thus, method <code>Windows#segments()</code> and variable <code>Windows#segments</code> were deprecated.
-        If you implement custom windows, you should updated your code accordingly.
+        If you implement custom windows, you should update your code accordingly.
         Similarly, <code>WindowBytesStoreSupplier#segments()</code> was deprecated and replaced with <code>WindowBytesStoreSupplier#segmentInterval()</code>.
-        If you implement custom window store, you need to updated your code accordingly.
+        If you implement custom window store, you need to update your code accordingly.
 	Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>
         (note: <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-328%3A+Ability+to+suppress+updates+for+KTables">KIP-328</a> and 
