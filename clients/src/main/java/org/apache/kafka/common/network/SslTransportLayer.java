@@ -254,11 +254,12 @@ public class SslTransportLayer implements TransportLayer {
             throw closingException();
 
         int read = 0;
+        boolean readable = key.isReadable();
         try {
             // Read any available bytes before attempting any writes to ensure that handshake failures
             // reported by the peer are processed even if writes fail (since peer closes connection
             // if handshake fails)
-            if (key.isReadable())
+            if (readable)
                 read = readFromSocketChannel();
 
             doHandshake();
@@ -272,13 +273,13 @@ public class SslTransportLayer implements TransportLayer {
             do {
                 try {
                     handshakeUnwrap(false);
-                    if (key.isReadable())
+                    if (readable)
                         read = readFromSocketChannel();
                 } catch (SSLException e1) {
                     maybeProcessHandshakeFailure(e1, false, e);
                 }
 
-            } while (netReadBuffer.position() > 0 && read > 0);
+            } while (read > 0);
 
             // If we get here, this is not a handshake failure, throw the original IOException
             throw e;
