@@ -48,14 +48,16 @@ public class Sensors {
     public static Sensor recordLatenessSensor(final InternalProcessorContext context) {
         final StreamsMetricsImpl metrics = context.metrics();
 
-        final Sensor sensor = metrics.taskLevelSensor(
+        final Sensor sensor = metrics.nodeLevelSensor(
             context.taskId().toString(),
+            context.currentNode().name(),
             "record-lateness",
             Sensor.RecordingLevel.DEBUG
         );
 
         final Map<String, String> tags = metrics.tagMap(
-            "task-id", context.taskId().toString()
+            "task-id", context.taskId().toString(),
+            "processor-node-id", context.currentNode().name()
         );
         sensor.add(
             new MetricName(

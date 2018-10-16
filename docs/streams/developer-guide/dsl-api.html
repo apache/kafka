@@ -2978,7 +2978,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 			       For many applications, this is ideal, since fresh results are always available.
 			       and Kafka Streams is designed to make programming continuous computations seamless.
 			       However, some applications need to take action <strong>only</strong> on the final result of a windowed computation.
-			       A common example of this is sending alerts.
+			       Common examples of this are sending alerts or delivering results to a system that doesn't support updates.
 			    </p>
 			    <p>Suppose that you have an hourly windowed count of events per user.
 			       If you want to send an alert when a user has <em>less than</em> three events in an hour, you have a real challange.
@@ -2986,12 +2986,12 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
 			       send an alert when someone matches the condition; you have to wait until you know you won't see any more events for a particular window
 			       and <em>then</em> send the alert.
 			    </p>
-                            <p>Kafka Streams offers a cleaner way to support this use case: after defining your windowed computation, you can
-			       <span class="pre">suppress</span> the intermediate results, emitting the final count for each user when the window <strong>is closed</strong>.
+                            <p>Kafka Streams offers a clean way to define this logig: after defining your windowed computation, you can
+			       <span class="pre">suppress</span> the intermediate results, emitting the final count for each user when the window is <strong>closed</strong>.
 			    </p>
 			    <p>For example:</p>
 			    <div class="highlight-java"><div class="highlight">
-<pre style="line-height: 100%;font-family:monospace;background-color:#ffffff; border-width:0.01mm; border-color:#000000; border-style:solid;padding:4px;font-size:18pt;">
+<pre>
 KGroupedStream&lt;UserId, Event&gt; grouped = ...;
 grouped
     .windowedBy(TimeWindows.of(Duration.ofHours(1)).grace(ofMinutes(10)))
@@ -3004,23 +3004,37 @@ grouped
 			    </div></div>
 			    <p>The key parts of this program are:
 			    <dl>
-				    <dt><pre>grace(ofMinutes(10))</pre></dt>
+				    <dt><code>grace(ofMinutes(10))</code></dt>
 				    <dd>This allows us to bound the lateness of events the window will accept.
-				        For example, the 09:00 to 10:00 window will accept late-arriving records until 10:10, at which point, the window <strong>is closed</strong>.
+				        For example, the 09:00 to 10:00 window will accept late-arriving records until 10:10, at which point, the window is <strong>closed</strong>.
 				    </dd>
-				    <dt><pre>.suppress(Suppressed.untilWindowCloses(unbounded()))</pre></dt>
+				    <dt><code>.suppress(Suppressed.untilWindowCloses(...))</code></dt>
 				    <dd>This configures the suppression operator to emit nothing for a window until it closes, and then emit the final result.
-				        For example, if user <pre>U</pre> gets 10 events between 09:00 and 10:10, the <pre>filter</pre> downstream of the suppression
-					will get no events for the windowed key <pre>U@09:00-10:00</pre> until 10:10, and then it will get exactly one with the value <pre>10</pre>.
+				        For example, if user <code>U</code> gets 10 events between 09:00 and 10:10, the <code>filter</code> downstream of the suppression
+					will get no events for the windowed key <code>U@09:00-10:00</code> until 10:10, and then it will get exactly one with the value <code>10</code>.
 					This is the final result of the windowed count.
+				    </dd>
+				    <dt><code>unbounded()</code></dt>
+				    <dd>
+				      This configures the buffer used for storing events
+				      until their windows close.
+				      Production code is able to put a cap on the amount
+				      of memory to use for the buffer,
+				      but this simple example creates a buffer with no
+				      upper bound.
 				    </dd>
 			    </dl>
 			    </p>
-			    <p>One thing to note is that suppression is just like any other Kafka Streams operator, so you can build a topology with two branches emerging from count,
-			       one suppressed, and one not, or even multiple differently configured suppressions.
-			       This allows you to apply suppressions where they are needed and otherwise rely on the default continuous update behavior.
+			    <p>
+			      One thing to note is that suppression is just like any other
+			      Kafka Streams operator, so you can build a topology with two
+			      branches emerging from the <code>count</code>,
+			      one suppressed, and one not, or even multiple differently
+			      configured suppressions.
+			      This allows you to apply suppressions where they are needed
+			      and otherwise rely on the default continuous update behavior.
 			    </p>
-			    <p>For more detailed information, see the JavaDoc on the <pre>Suppressed</pre> config object
+			    <p>For more detailed information, see the JavaDoc on the <code>Suppressed</code> config object
 	                       and <a href="https://cwiki.apache.org/confluence/x/sQU0BQ" title="KIP-328">KIP-328</a>.
 			    </p>
 		    </div>
@@ -3197,27 +3211,27 @@ grouped
 	       Logically speaking, most programs describe a series of transformations, and the update rate is not a factor in the program behavior.
 	       In these cases, the rate of update is more of a performance concern.
 	       Operators are able to optimize both the network traffic (to the Kafka brokers) and the disk traffic (to the local state stores) by adjusting
-	       the commit interval and batch size configurations.
+	       commit interval and batch size configurations.
 	    </p>
 	    <p>However, some applications need to take other actions, such as calling out to external systems, 
-	       and therefore need to exercise some control over the rate of invocations, for example of <pre>KStream#foreach</pre>.
+	       and therefore need to exercise some control over the rate of invocations, for example of <code>KStream#foreach</code>.
 	    </p>
 	    <p>Rather than achieving this as a side-effect of the  <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">KTable record cache</span></a>,
-	       you can directly impose a rate limit via the <pre>KTable#suppress</pre> operator.
+	       you can directly impose a rate limit via the <code>KTable#suppress</code> operator.
 	    </p>
 	    <p>For example:
 	    </p>
 	    <div class="highlight-java"><div class="highlight">
 <pre>
-KGroupedTable&lt;String, String$gt; groupedTable = ...;
+KGroupedTable&lt;String, String&gt; groupedTable = ...;
 groupedTable
     .count()
     .suppress(untilTimeLimit(ofMinutes(5), maxBytes(1_000_000L).emitEarlyWhenFull()))
     .toStream()
-    .foreach((key, count) -$gt; updateCountsDatabase(key, count));
+    .foreach((key, count) -&gt; updateCountsDatabase(key, count));
 </pre>
 	    </div></div>
-	    <p>This configuration ensures that <pre>updateCountsDatabase</pre> gets events for each <pre>key</pre> no more than once every 5 minutes.
+	    <p>This configuration ensures that <code>updateCountsDatabase</code> gets events for each <code>key</code> no more than once every 5 minutes.
 	       Note that the latest state for each key has to be buffered in memory for that 5-minute period.
 	       You have the option to control the maximum amount of memory to use for this buffer (in this case, 1MB).
 	       There is also an option to impose a limit in terms of number of records (or to leave both limits unspecified).
@@ -3229,7 +3243,7 @@ groupedTable
 	       After the application shuts down, you could allocate more memory for the buffer and resume processing.
 	       Emitting early is preferable for most applications.
 	    </p>
-	    <p>For more detailed information, see the JavaDoc on the <pre>Suppressed</pre> config object
+	    <p>For more detailed information, see the JavaDoc on the <code>Suppressed</code> config object
 	       and <a href="https://cwiki.apache.org/confluence/x/sQU0BQ" title="KIP-328">KIP-328</a>.
 	    </p>
 	</div>
