@@ -84,21 +84,6 @@ public abstract class Windows<W extends Window> {
     }
 
     /**
-     * Return the segment interval in milliseconds.
-     *
-     * @return the segment interval
-     * @deprecated since 2.1. Instead, directly configure the segment interval in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
-     */
-    @Deprecated
-    public long segmentInterval() {
-        // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
-        final long minimumSegmentInterval = 60_000L;
-        // Scaled to the (possibly overridden) retention period
-        return Math.max(maintainMs() / (segments - 1), minimumSegmentInterval);
-    }
-
-
-    /**
      * Set the number of segments to be used for rolling the window store.
      * This function is not exposed to users but can be called by developers that extend this class.
      *
