@@ -192,8 +192,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
                 supplier = Stores.persistentWindowStore(
                     materialized.storeName(),
-                    Duration.ofMillis(windows.maintainMs()),
-                    Duration.ofMillis(windows.size()),
+                    windows.maintainMs(),
+                    windows.segments,
+                    windows.size(),
                     false
                 );
             }
