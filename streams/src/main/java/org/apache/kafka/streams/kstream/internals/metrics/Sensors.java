@@ -60,7 +60,7 @@ public class Sensors {
         sensor.add(
             new MetricName(
                 "record-lateness-avg",
-                "stream-processor-node-metrics",
+                "stream-task-metrics",
                 "The average observed lateness of records.",
                 tags),
             new Avg()
@@ -68,7 +68,7 @@ public class Sensors {
         sensor.add(
             new MetricName(
                 "record-lateness-max",
-                "stream-processor-node-metrics",
+                "stream-task-metrics",
                 "The max observed lateness of records.",
                 tags),
             new Max()
