@@ -1548,6 +1548,12 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DescribeAclsResult describeAcls(final AclBindingFilter filter, DescribeAclsOptions options) {
+        if (filter.isUnknown()) {
+            KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
+            future.completeExceptionally(new InvalidRequestException("The AclBindingFilter " +
+                    "must not contain UNKNOWN elements."));
+            return new DescribeAclsResult(future);
+        }
         final long now = time.milliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
