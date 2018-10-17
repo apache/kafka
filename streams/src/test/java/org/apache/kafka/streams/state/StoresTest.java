@@ -54,19 +54,15 @@ public class StoresTest {
     }
 
     @Test(expected = NullPointerException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
         Stores.persistentWindowStore(null, 0L, 0L, false, 0L);
     }
 
     @Test(expected = IllegalArgumentException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
         Stores.persistentWindowStore("anyName", -1L, 0L, false, 0L);
-    }
-
-    @Deprecated
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
-        Stores.persistentWindowStore("anyName", 0L, 1, 0L, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -75,6 +71,7 @@ public class StoresTest {
     }
 
     @Test(expected = IllegalArgumentException.class)
+    @SuppressWarnings("deprecation")
     public void shouldThrowIfIPersistentWindowStoreIfSegmentIntervalIsTooSmall() {
         Stores.persistentWindowStore("anyName", 1L, 1L, false, -1L);
     }

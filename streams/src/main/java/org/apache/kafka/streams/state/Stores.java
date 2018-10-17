@@ -144,38 +144,23 @@ public class Stores {
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * @param name                  name of the store (cannot be {@code null})
-     * @param retentionPeriod       length of time to retain data in the store (cannot be negative).
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
      *                              Note that the retention period must be at least long enough to contain the
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period.
-     * @param numSegments           number of db segments (cannot be zero or negative)
-     * @param windowSize            size of the windows that are stored (cannot be negative). Note: the window size
-     *                              is not stored with the records, so this value is used to compute the keys that
-     *                              the store returns. No effort is made to validate this parameter, so you must be
-     *                              careful to set it the same as the windowed keys you're actually storing.
+     * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
-     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
+     * @deprecated since 2.1 Use {@link #persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
     @Deprecated
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
-                                                                 final int numSegments,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
-        if (numSegments < 2) {
-            throw new IllegalArgumentException("numSegments cannot must smaller than 2");
-        }
-
-        final long legacySegmentInterval = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
-
-        return persistentWindowStore(
-            name,
-            retentionPeriod,
-            windowSize,
-            retainDuplicates,
-            legacySegmentInterval
-        );
+        // we're arbitrarily defaulting to segments no smaller than one minute.
+        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
     }
 
     /**
@@ -185,11 +170,15 @@ public class Stores {
      *                              Note that the retention period must be at least long enough to contain the
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period.
-     * @param windowSize            size of the windows (cannot be negative)
+     * @param windowSize            size of the windows (cannot be negative). Note: the window size
+     *                              is not stored with the records, so this value is used to compute the keys that
+     *                              the store returns. No effort is made to validate this parameter, so you must be
+     *                              careful to set it the same as the windowed keys you're actually storing.
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
+    @SuppressWarnings("deprecation")
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final Duration retentionPeriod,
                                                                  final Duration windowSize,
@@ -197,17 +186,28 @@ public class Stores {
         Objects.requireNonNull(name, "name cannot be null");
         ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
         ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
-
-        final long defaultSegmentInterval = Math.max(retentionPeriod.toMillis() / 2, 60_000L);
-
-        return persistentWindowStore(name, retentionPeriod.toMillis(), windowSize.toMillis(), retainDuplicates, defaultSegmentInterval);
+        return persistentWindowStore(name, retentionPeriod.toMillis(), windowSize.toMillis(), retainDuplicates);
     }
 
-    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                  final long retentionPeriod,
-                                                                  final long windowSize,
-                                                                  final boolean retainDuplicates,
-                                                                  final long segmentInterval) {
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              Note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period.
+     * @param segmentInterval       size of segments in ms (cannot be negative)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @deprecated Use {@link #persistentWindowStore(String, Duration, Duration, boolean)} instead
+     */
+    @Deprecated
+    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                 final long retentionPeriod,
+                                                                 final long windowSize,
+                                                                 final boolean retainDuplicates,
+                                                                 final long segmentInterval) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
