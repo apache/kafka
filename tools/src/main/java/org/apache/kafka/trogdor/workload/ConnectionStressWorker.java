@@ -20,6 +20,7 @@ package org.apache.kafka.trogdor.workload;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
@@ -125,7 +126,8 @@ public class ConnectionStressWorker implements TaskWorker {
                 WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.commonClientConf());
                 AdminClientConfig conf = new AdminClientConfig(props);
                 List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-                    conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
+                        conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                        conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
                 ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
                 while (true) {
                     if (doneFuture.isDone()) {
@@ -180,6 +182,7 @@ public class ConnectionStressWorker implements TaskWorker {
                                     4096,
                                     4096,
                                     1000,
+                                    ClientDnsLookup.forConfig(conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                                     Time.SYSTEM,
                                     false,
                                     new ApiVersions(),

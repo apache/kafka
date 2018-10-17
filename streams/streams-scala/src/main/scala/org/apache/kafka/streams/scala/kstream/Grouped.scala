@@ -14,23 +14,39 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.streams.scala.kstream
 
 import org.apache.kafka.common.serialization.Serde
-import org.apache.kafka.streams.kstream.{Serialized => SerializedJ}
+import org.apache.kafka.streams.kstream.{Grouped => GroupedJ}
 
-object Serialized {
+object Grouped {
 
   /**
-   * Construct a `Serialized` instance with the provided key and value [[Serde]]s.
+   * Construct a `Grouped` instance with the provided key and value [[Serde]]s.
    * If the [[Serde]] params are `null` the default serdes defined in the configs will be used.
    *
-   * @tparam K         the key type
-   * @tparam V         the value type
+   * @tparam K the key type
+   * @tparam V the value type
    * @param keySerde   keySerde that will be used to materialize a stream
    * @param valueSerde valueSerde that will be used to materialize a stream
-   * @return a new instance of [[Serialized]] configured with the provided serdes
+   * @return a new instance of [[Grouped]] configured with the provided serdes
    */
-  def `with`[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): SerializedJ[K, V] =
-    SerializedJ.`with`(keySerde, valueSerde)
+  def `with`[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): GroupedJ[K, V] =
+    GroupedJ.`with`(keySerde, valueSerde)
+
+  /**
+   * Construct a `Grouped` instance with the provided key and value [[Serde]]s.
+   * If the [[Serde]] params are `null` the default serdes defined in the configs will be used.
+   *
+   * @tparam K the key type
+   * @tparam V the value type
+   * @param name the name used as part of a potential repartition topic
+   * @param keySerde   keySerde that will be used to materialize a stream
+   * @param valueSerde valueSerde that will be used to materialize a stream
+   * @return a new instance of [[Grouped]] configured with the provided serdes
+   */
+  def `with`[K, V](name: String)(implicit keySerde: Serde[K], valueSerde: Serde[V]): GroupedJ[K, V] =
+    GroupedJ.`with`(name, keySerde, valueSerde)
+
 }

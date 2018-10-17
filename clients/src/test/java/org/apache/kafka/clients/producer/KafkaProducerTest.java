@@ -20,9 +20,11 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.producer.internals.ProducerInterceptors;
+import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -39,6 +41,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockMetricsReporter;
@@ -46,15 +49,8 @@ import org.apache.kafka.test.MockPartitioner;
 import org.apache.kafka.test.MockProducerInterceptor;
 import org.apache.kafka.test.MockSerializer;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.powermock.api.easymock.PowerMock;
-import org.powermock.api.support.membermodification.MemberModifier;
-import org.powermock.core.classloader.annotations.PowerMockIgnore;
-import org.powermock.core.classloader.annotations.PrepareOnlyThisForTest;
-import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -66,14 +62,23 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.notNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-@RunWith(PowerMockRunner.class)
-@PowerMockIgnore("javax.management.*")
 public class KafkaProducerTest {
 
     @Test
@@ -209,7 +214,7 @@ public class KafkaProducerTest {
 
         final Producer<String, String> producer = new KafkaProducer<>(
             new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-            new StringSerializer(), new StringSerializer(), metadata, client);
+            new StringSerializer(), new StringSerializer(), metadata, client, null, time);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final AtomicReference<Exception> closeException = new AtomicReference<>();
@@ -271,17 +276,13 @@ public class KafkaProducerTest {
         new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
-    @PrepareOnlyThisForTest(Metadata.class)
     @Test
-    public void testMetadataFetch() throws Exception {
+    public void testMetadataFetch() throws InterruptedException {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
-        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
-
+        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
+                new StringSerializer()));
         String topic = "topic";
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
         final Cluster emptyCluster = new Cluster(null, nodes,
                 Collections.emptySet(),
@@ -293,42 +294,48 @@ public class KafkaProducerTest {
                 Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.emptySet(),
                 Collections.emptySet());
+        Metadata metadata = mock(Metadata.class);
 
-        // Expect exactly one fetch for each attempt to refresh while topic metadata is not available
-        final int refreshAttempts = 5;
-        EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        // Return empty cluster 4 times and cluster from then on
+        when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, cluster);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(config, null, null,
+                metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
+            }
+        };
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
         producer.send(record);
-        PowerMock.verify(metadata);
 
-        // Expect exactly one fetch if topic metadata is available
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        // One request update for each empty cluster returned
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(5)).fetch();
+
+        // Should not request update for subsequent `send`
         producer.send(record, null);
-        PowerMock.verify(metadata);
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(6)).fetch();
 
-        // Expect exactly one fetch if topic metadata is available
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        // Should not request update for subsequent `partitionsFor`
         producer.partitionsFor(topic);
-        PowerMock.verify(metadata);
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(7)).fetch();
+
+        producer.close(0, TimeUnit.MILLISECONDS);
     }
 
-    @PrepareOnlyThisForTest(Metadata.class)
     @Test
     public void testMetadataFetchOnStaleMetadata() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
-        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
-
+        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
+                new StringSerializer()));
         String topic = "topic";
         ProducerRecord<String, String> initialRecord = new ProducerRecord<>(topic, "value");
         // Create a record with a partition higher than the initial (outdated) partition range
@@ -353,134 +360,145 @@ public class KafkaProducerTest {
                         new PartitionInfo(topic, 2, null, null, null)),
                 Collections.emptySet(),
                 Collections.emptySet());
+        Metadata metadata = mock(Metadata.class);
 
-        // Expect exactly one fetch for each attempt to refresh while topic metadata is not available
-        final int refreshAttempts = 5;
-        EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        AtomicInteger invocationCount = new AtomicInteger(0);
+
+        // Return empty cluster 4 times, initialCluster 5 times and extendedCluster after that
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() > 9)
+                return extendedCluster;
+            else if (invocationCount.get() > 4)
+                return initialCluster;
+            return emptyCluster;
+        });
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(config, null, null,
+                metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
+            }
+        };
         producer.send(initialRecord);
-        PowerMock.verify(metadata);
 
-        // Expect exactly one fetch if topic metadata is available and records are still within range
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
-        producer.send(initialRecord, null);
-        PowerMock.verify(metadata);
+        // One request update for each empty cluster returned
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(5)).fetch();
 
-        // Expect exactly two fetches if topic metadata is available but metadata response still returns
+        // Should not request update if metadata is available and records are within range
+        producer.send(initialRecord);
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(6)).fetch();
+
+        // One request update followed by exception if topic metadata is available but metadata response still returns
         // the same partition size (either because metadata are still stale at the broker too or because
-        // there weren't any partitions added in the first place).
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        // there weren't any partitions added in the first place)
         try {
-            producer.send(extendedRecord, null);
+            producer.send(extendedRecord);
             fail("Expected KafkaException to be raised");
         } catch (KafkaException e) {
             // expected
         }
-        PowerMock.verify(metadata);
+        verify(metadata, times(5)).requestUpdate();
+        verify(metadata, times(5)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(8)).fetch();
 
-        // Expect exactly two fetches if topic metadata is available but outdated for the given record
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andReturn(extendedCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
-        producer.send(extendedRecord, null);
-        PowerMock.verify(metadata);
+        // One request update if metadata is available but outdated for the given record
+        producer.send(extendedRecord);
+        verify(metadata, times(6)).requestUpdate();
+        verify(metadata, times(6)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(10)).fetch();
+
+        producer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
-    public void testTopicRefreshInMetadata() throws Exception {
+    public void testTopicRefreshInMetadata() throws InterruptedException {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
+            new StringSerializer()));
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
         final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
                 true, new ClusterResourceListeners());
         final Time time = new MockTime();
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
-        MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
         final String topic = "topic";
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(config, null, null, metadata,
+                null, null, time)) {
 
-        Thread t = new Thread(() -> {
-            long startTimeMs = System.currentTimeMillis();
-            for (int i = 0; i < 10; i++) {
-                while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
-                    Thread.yield();
-                metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
-                time.sleep(60 * 1000L);
+            Thread t = new Thread(() -> {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        Thread.yield();
+                    metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
+                    time.sleep(60 * 1000L);
+                }
+            });
+            t.start();
+            try {
+                producer.partitionsFor(topic);
+                fail("Expect TimeoutException");
+            } catch (TimeoutException e) {
+                // skip
             }
-        });
-        t.start();
-        try {
-            producer.partitionsFor(topic);
-            fail("Expect TimeoutException");
-        } catch (TimeoutException e) {
-            // skip
+            t.join();
         }
-        Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
+        assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
-    @SuppressWarnings("unchecked") // safe as generic parameters won't vary
-    @PrepareOnlyThisForTest(Metadata.class)
     @Test
-    public void testHeadersWithExtendedClasses() throws Exception {
+    @Deprecated
+    public void testHeadersWithExtendedClasses() {
         doTestHeaders(ExtendedSerializer.class);
     }
 
-    @SuppressWarnings("unchecked")
-    @PrepareOnlyThisForTest(Metadata.class)
     @Test
-    public void testHeaders() throws Exception {
+    public void testHeaders() {
         doTestHeaders(Serializer.class);
     }
 
-    private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) throws Exception {
+    private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        T keySerializer = PowerMock.createNiceMock(serializerClassToMock);
-        T valueSerializer = PowerMock.createNiceMock(serializerClassToMock);
-
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, keySerializer, valueSerializer);
-        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
+        Serializer<String> keySerializer = mock(serializerClassToMock);
+        @SuppressWarnings("unchecked")
+        Serializer<String> valueSerializer = mock(serializerClassToMock);
+        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, keySerializer,
+                valueSerializer));
 
         String topic = "topic";
         final Cluster cluster = new Cluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
-                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+                Collections.singletonList(new PartitionInfo(topic, 0, null, new Node[0], new Node[0])),
                 Collections.emptySet(),
                 Collections.emptySet());
+        Metadata metadata = new Metadata(0, 90000, true);
+        metadata.update(cluster, Collections.emptySet(), Time.SYSTEM.milliseconds());
 
+        KafkaProducer<String, String> producer = new KafkaProducer<>(config, keySerializer, valueSerializer,
+                metadata, null, null, Time.SYSTEM);
 
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).anyTimes();
-
-        PowerMock.replay(metadata);
+        when(keySerializer.serialize(any(), any(), any())).then(invocation ->
+                invocation.<String>getArgument(2).getBytes());
+        when(valueSerializer.serialize(any(), any(), any())).then(invocation ->
+                invocation.<String>getArgument(2).getBytes());
 
         String value = "value";
-
-        ProducerRecord<String, String> record = new ProducerRecord<>(topic, value);
-        EasyMock.expect(keySerializer.serialize(topic, record.headers(), null)).andReturn(null).once();
-        EasyMock.expect(valueSerializer.serialize(topic, record.headers(), value)).andReturn(value.getBytes()).once();
-
-        PowerMock.replay(keySerializer);
-        PowerMock.replay(valueSerializer);
-
+        String key = "key";
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, key, value);
 
         //ensure headers can be mutated pre send.
         record.headers().add(new RecordHeader("test", "header2".getBytes()));
-
         producer.send(record, null);
 
         //ensure headers are closed and cannot be mutated post send
@@ -492,11 +510,12 @@ public class KafkaProducerTest {
         }
 
         //ensure existing headers are not changed, and last header for key is still original value
-        assertTrue(Arrays.equals(record.headers().lastHeader("test").value(), "header2".getBytes()));
+        assertArrayEquals(record.headers().lastHeader("test").value(), "header2".getBytes());
 
-        PowerMock.verify(valueSerializer);
-        PowerMock.verify(keySerializer);
+        verify(valueSerializer).serialize(topic, record.headers(), value);
+        verify(keySerializer).serialize(topic, record.headers(), key);
 
+        producer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -522,40 +541,38 @@ public class KafkaProducerTest {
         }
     }
 
-    @PrepareOnlyThisForTest(Metadata.class)
     @Test
-    public void testInterceptorPartitionSetOnTooLargeRecord() throws Exception {
+    public void testInterceptorPartitionSetOnTooLargeRecord() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
+        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
+                new StringSerializer()));
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(),
-                new StringSerializer());
-        Metadata metadata = PowerMock.createNiceMock(Metadata.class);
-        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        Metadata metadata = new Metadata(0, 90000, true);
         final Cluster cluster = new Cluster(
             "dummy",
             Collections.singletonList(new Node(0, "host1", 1000)),
-            Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.singletonList(new PartitionInfo(topic, 0, null, new Node[0], new Node[0])),
             Collections.emptySet(),
             Collections.emptySet());
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        metadata.update(cluster, Collections.emptySet(), Time.SYSTEM.milliseconds());
 
-        // Mock interceptors field
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
-        ProducerInterceptors<String, String> interceptors = PowerMock.createMock(ProducerInterceptors.class);
-        EasyMock.expect(interceptors.onSend(record)).andReturn(record);
-        interceptors.onSendError(EasyMock.eq(record), EasyMock.notNull(), EasyMock.notNull());
-        EasyMock.expectLastCall();
-        MemberModifier.field(KafkaProducer.class, "interceptors").set(producer, interceptors);
+                ProducerInterceptors<String, String> interceptors = mock(ProducerInterceptors.class);
+        KafkaProducer<String, String> producer = new KafkaProducer<>(config, null, null,
+                metadata, null, interceptors, Time.SYSTEM);
 
-        PowerMock.replay(metadata);
-        EasyMock.replay(interceptors);
+        when(interceptors.onSend(any())).then(invocation -> invocation.getArgument(0));
+
         producer.send(record);
 
-        EasyMock.verify(interceptors);
+        verify(interceptors).onSend(record);
+        verify(interceptors).onSendError(eq(record), notNull(), notNull());
+
+        producer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -577,7 +594,7 @@ public class KafkaProducerTest {
         props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
-        Time time = new MockTime();
+        Time time = Time.SYSTEM;
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
         Node node = cluster.nodes().get(0);
 
@@ -589,7 +606,7 @@ public class KafkaProducerTest {
 
         try (Producer<String, String> producer = new KafkaProducer<>(
                 new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, client)) {
+                null, null, metadata, client, null, time)) {
             producer.initTransactions();
             fail("initTransactions() should have raised TimeoutException");
         }
@@ -614,7 +631,7 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = new KafkaProducer<>(
                 new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, client);
+                null, null, metadata, client, null, time);
         try {
             producer.initTransactions();
         } catch (TimeoutException e) {
@@ -630,7 +647,6 @@ public class KafkaProducerTest {
 
     @Test
     public void testSendToInvalidTopic() throws Exception {
-
         Properties props = new Properties();
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
@@ -647,9 +663,9 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = new KafkaProducer<>(new ProducerConfig(
                 ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, client);
+                null, null, metadata, client, null, time);
 
-        String invalidTopicName = "topic abc";          // Invalid topic name due to space
+        String invalidTopicName = "topic abc"; // Invalid topic name due to space
         ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
 
         Set<String> invalidTopic = new HashSet<>();
@@ -665,8 +681,11 @@ public class KafkaProducerTest {
 
         Future<RecordMetadata> future = producer.send(record);
 
-        assertEquals("Cluster has incorrect invalid topic list.", metaDataUpdateResponseCluster.invalidTopics(), metadata.fetch().invalidTopics());
+        assertEquals("Cluster has incorrect invalid topic list", metaDataUpdateResponseCluster.invalidTopics(),
+                metadata.fetch().invalidTopics());
         TestUtils.assertFutureError(future, InvalidTopicException.class);
+
+        producer.close(0, TimeUnit.MILLISECONDS);
     }
 
     @Test
@@ -689,7 +708,7 @@ public class KafkaProducerTest {
 
         Producer<String, String> producer = new KafkaProducer<>(
                 new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, client);
+                new StringSerializer(), new StringSerializer(), metadata, client, null, time);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final AtomicReference<Exception> sendException = new AtomicReference<>();

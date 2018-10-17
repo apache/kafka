@@ -28,7 +28,6 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -87,7 +86,7 @@ public class NetworkTestUtils {
         assertTrue(selector.isChannelReady(node));
     }
 
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState, MockTime mockTime)
+    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState)
             throws IOException {
         boolean closed = false;
         for (int i = 0; i < 300; i++) {
@@ -96,17 +95,11 @@ public class NetworkTestUtils {
                 closed = true;
                 break;
             }
-            if (mockTime != null)
-                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 150);
         }
         assertTrue("Channel was not closed by timeout", closed);
         ChannelState finalState = selector.disconnected().get(node);
         assertEquals(channelState, finalState.state());
         return finalState;
-    }
-
-    public static ChannelState waitForChannelClose(Selector selector, String node, ChannelState.State channelState) throws IOException {
-        return waitForChannelClose(selector, node, channelState, null);
     }
 
     public static void completeDelayedChannelClose(Selector selector, long currentTimeNanos) {

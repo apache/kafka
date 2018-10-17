@@ -14,27 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients;
 
-package org.apache.kafka.streams.kstream.internals;
+import java.util.Locale;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Grouped;
+public enum ClientDnsLookup {
 
-public class GroupedInternal<K, V> extends Grouped<K, V> {
+    DEFAULT("default"),
+    USE_ALL_DNS_IPS("use_all_dns_ips"),
+    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only");
 
-    public GroupedInternal(final Grouped<K, V> grouped) {
-        super(grouped);
+    private String clientDnsLookup;
+
+    ClientDnsLookup(String clientDnsLookup) {
+        this.clientDnsLookup = clientDnsLookup;
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
+    @Override
+    public String toString() {
+        return clientDnsLookup;
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public String name() {
-        return name;
+    public static ClientDnsLookup forConfig(String config) {
+        return ClientDnsLookup.valueOf(config.toUpperCase(Locale.ROOT));
     }
 }

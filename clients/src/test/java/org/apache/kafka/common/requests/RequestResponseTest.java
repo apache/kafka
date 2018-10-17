@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -44,6 +43,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
 import org.apache.kafka.common.resource.PatternType;
@@ -1214,16 +1214,16 @@ public class RequestResponseTest {
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequest() {
-        Map<String, NewPartitions> assignments = new HashMap<>();
-        assignments.put("my_topic", NewPartitions.increaseTo(3));
-        assignments.put("my_other_topic", NewPartitions.increaseTo(3));
+        Map<String, PartitionDetails> assignments = new HashMap<>();
+        assignments.put("my_topic", new PartitionDetails(3));
+        assignments.put("my_other_topic", new PartitionDetails(3));
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }
 
     private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
-        Map<String, NewPartitions> assignments = new HashMap<>();
-        assignments.put("my_topic", NewPartitions.increaseTo(3, asList(asList(2))));
-        assignments.put("my_other_topic", NewPartitions.increaseTo(3, asList(asList(2, 3), asList(3, 1))));
+        Map<String, PartitionDetails> assignments = new HashMap<>();
+        assignments.put("my_topic", new PartitionDetails(3, asList(asList(2))));
+        assignments.put("my_other_topic", new PartitionDetails(3, asList(asList(2, 3), asList(3, 1))));
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }
 

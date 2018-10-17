@@ -146,6 +146,26 @@ case class CompletedTxn(producerId: Long, firstOffset: Long, lastOffset: Long, i
 }
 
 /**
+ * A class used to hold params required to decide to rotate a log segment or not.
+ */
+case class RollParams(maxSegmentMs: Long,
+                      maxSegmentBytes: Int,
+                      maxTimestampInMessages: Long,
+                      maxOffsetInMessages: Long,
+                      messagesSize: Int,
+                      now: Long)
+
+object RollParams {
+  def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
+   new RollParams(config.segmentMs,
+     config.segmentSize,
+     appendInfo.maxTimestamp,
+     appendInfo.lastOffset,
+     messagesSize, now)
+  }
+}
+
+/**
  * An append-only log for storing messages.
  *
  * The log is a sequence of LogSegments, each with a base offset denoting the first message in the segment.
@@ -193,7 +213,7 @@ class Log(@volatile var dir: File,
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
-  // The memory mapped buffer for index files of this log will be closed for index files of this log will be closed with either delete() or closeHandlers()
+  // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log
   @volatile private var isMemoryMappedBufferClosed = false
 
@@ -1493,7 +1513,7 @@ class Log(@volatile var dir: File,
     val maxTimestampInMessages = appendInfo.maxTimestamp
     val maxOffsetInMessages = appendInfo.lastOffset
 
-    if (segment.shouldRoll(messagesSize, maxTimestampInMessages, maxOffsetInMessages, now)) {
+    if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
         s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
         s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +

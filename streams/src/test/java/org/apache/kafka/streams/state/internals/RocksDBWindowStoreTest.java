@@ -96,8 +96,8 @@ public class RocksDBWindowStoreTest {
                                   final Serializer<K1> keySerializer,
                                   final Serializer<V1> valueSerializer) {
             changeLog.add(new KeyValue<>(
-                keySerializer.serialize(topic, key),
-                valueSerializer.serialize(topic, value))
+                keySerializer.serialize(topic, headers, key),
+                valueSerializer.serialize(topic, headers, value))
             );
         }
     };

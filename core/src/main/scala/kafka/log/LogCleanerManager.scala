@@ -73,11 +73,54 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
+  /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
+   *   for each log directory */
+  private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()
+
+  /* the set of directories marked as uncleanable and therefore offline */
+  private val uncleanableDirs = mutable.HashSet[String]()
+
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
 
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
+
+  /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
+  for (dir <- logDirs) {
+    newGauge(
+      "uncleanable-partitions-count",
+      new Gauge[Int] { def value = inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) } },
+      Map("logDirectory" -> dir.getAbsolutePath)
+    )
+  }
+
+  /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
+    for (dir <- logDirs) {
+      newGauge(
+        "uncleanable-bytes",
+        new Gauge[Long] {
+          def value = {
+            inLock(lock) {
+              uncleanablePartitions.get(dir.getAbsolutePath) match {
+                case Some(partitions) => {
+                  val lastClean = allCleanerCheckpoints
+                  val now = Time.SYSTEM.milliseconds
+                  partitions.map { tp =>
+                    val log = logs.get(tp)
+                    val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, tp, lastClean, now)
+                    val (_, uncleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
+                    uncleanableBytes
+                  }.sum
+                }
+                case _ => 0
+              }
+            }
+          }
+        },
+        Map("logDirectory" -> dir.getAbsolutePath)
+      )
+    }
 
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
@@ -135,7 +178,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val dirtyLogs = logs.filter {
         case (_, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
-        case (topicPartition, _) => inProgress.contains(topicPartition) // skip any logs already in-progress
+        case (topicPartition, log) =>
+          // skip any logs already in-progress and uncleanable partitions
+          inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
           val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, topicPartition,
@@ -179,13 +224,15 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   }
 
   /**
-    * Find any logs that have compaction enabled. Include logs without delete enabled, as they may have segments
+    * Find any logs that have compaction enabled. Mark them as being cleaned
+    * Include logs without delete enabled, as they may have segments
     * that precede the start offset.
     */
   def deletableLogs(): Iterable[(TopicPartition, Log)] = {
     inLock(lock) {
       val toClean = logs.filter { case (topicPartition, log) =>
-        !inProgress.contains(topicPartition) && log.config.compact
+        !inProgress.contains(topicPartition) && log.config.compact &&
+          !isUncleanablePartition(log, topicPartition)
       }
       toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
       toClean
@@ -332,6 +379,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
         case e: KafkaStorageException =>
           error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
       }
+
+      val logUncleanablePartitions = uncleanablePartitions.getOrElse(sourceLogDir.toString, mutable.Set[TopicPartition]())
+      if (logUncleanablePartitions.contains(topicPartition)) {
+        logUncleanablePartitions.remove(topicPartition)
+        markPartitionUncleanable(destLogDir.toString, topicPartition)
+      }
     }
   }
 
@@ -391,6 +444,33 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
               throw new IllegalStateException(s"In-progress partition $topicPartition cannot be in $s state.")
           }
       }
+    }
+  }
+
+  /**
+   * Returns an immutable set of the uncleanable partitions for a given log directory
+   * Only used for testing
+   */
+  private[log] def uncleanablePartitions(logDir: String): Set[TopicPartition] = {
+    var partitions: Set[TopicPartition] = Set()
+    inLock(lock) { partitions ++= uncleanablePartitions.getOrElse(logDir, partitions) }
+    partitions
+  }
+
+  def markPartitionUncleanable(logDir: String, partition: TopicPartition): Unit = {
+    inLock(lock) {
+      uncleanablePartitions.get(logDir) match {
+        case Some(partitions) =>
+          partitions.add(partition)
+        case None =>
+          uncleanablePartitions.put(logDir, mutable.Set(partition))
+      }
+    }
+  }
+
+  private def isUncleanablePartition(log: Log, topicPartition: TopicPartition): Boolean = {
+    inLock(lock) {
+      uncleanablePartitions.get(log.dir.getParent).exists(partitions => partitions.contains(topicPartition))
     }
   }
 }

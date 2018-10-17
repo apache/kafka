@@ -14,27 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.streams.kstream.internals;
+/**
+ * The requesting client does not support the compression type of given partition.
+ */
+public class UnsupportedCompressionTypeException extends ApiException {
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Grouped;
+    private static final long serialVersionUID = 1L;
 
-public class GroupedInternal<K, V> extends Grouped<K, V> {
-
-    public GroupedInternal(final Grouped<K, V> grouped) {
-        super(grouped);
+    public UnsupportedCompressionTypeException(String message) {
+        super(message);
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
+    public UnsupportedCompressionTypeException(String message, Throwable cause) {
+        super(message, cause);
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
-    }
-
-    public String name() {
-        return name;
-    }
 }

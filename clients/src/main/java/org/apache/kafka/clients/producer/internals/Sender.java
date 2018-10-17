@@ -40,8 +40,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -149,7 +147,7 @@ public class Sender implements Runnable {
         this.acks = acks;
         this.retries = retries;
         this.time = time;
-        this.sensors = new SenderMetrics(metricsRegistry);
+        this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
         this.apiVersions = apiVersions;
@@ -811,7 +809,7 @@ public class Sender implements Runnable {
     /**
      * A collection of sensors for the sender
      */
-    private class SenderMetrics {
+    private static class SenderMetrics {
         public final Sensor retrySensor;
         public final Sensor errorSensor;
         public final Sensor queueTimeSensor;
@@ -822,9 +820,11 @@ public class Sender implements Runnable {
         public final Sensor maxRecordSizeSensor;
         public final Sensor batchSplitSensor;
         private final SenderMetricsRegistry metrics;
+        private final Time time;
 
-        public SenderMetrics(SenderMetricsRegistry metrics) {
+        public SenderMetrics(SenderMetricsRegistry metrics, Metadata metadata, KafkaClient client, Time time) {
             this.metrics = metrics;
+            this.time = time;
 
             this.batchSizeSensor = metrics.sensor("batch-size");
             this.batchSizeSensor.add(metrics.batchSizeAvg, new Avg());
@@ -855,16 +855,9 @@ public class Sender implements Runnable {
             this.maxRecordSizeSensor.add(metrics.recordSizeMax, new Max());
             this.maxRecordSizeSensor.add(metrics.recordSizeAvg, new Avg());
 
-            this.metrics.addMetric(metrics.requestsInFlight, new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return client.inFlightRequestCount();
-                }
-            });
-            metrics.addMetric(metrics.metadataAge, new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return (now - metadata.lastSuccessfulUpdate()) / 1000.0;
-                }
-            });
+            this.metrics.addMetric(metrics.requestsInFlight, (config, now) -> client.inFlightRequestCount());
+            this.metrics.addMetric(metrics.metadataAge,
+                (config, now) -> (now - metadata.lastSuccessfulUpdate()) / 1000.0);
 
             this.batchSplitSensor = metrics.sensor("batch-split-rate");
             this.batchSplitSensor.add(new Meter(metrics.batchSplitRate, metrics.batchSplitTotal));

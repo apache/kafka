@@ -91,6 +91,7 @@ import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -284,7 +285,9 @@ public enum Errors {
     FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
             FencedLeaderEpochException::new),
     UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
-            UnknownLeaderEpochException::new);
+            UnknownLeaderEpochException::new),
+    UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
+            UnsupportedCompressionTypeException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

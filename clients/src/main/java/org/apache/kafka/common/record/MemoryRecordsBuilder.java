@@ -102,6 +102,8 @@ public class MemoryRecordsBuilder {
                 throw new IllegalArgumentException("Transactional records are not supported for magic " + magic);
             if (isControlBatch)
                 throw new IllegalArgumentException("Control records are not supported for magic " + magic);
+            if (compressionType == CompressionType.ZSTD)
+                throw new IllegalArgumentException("ZStandard compression is not supported for magic " + magic);
         }
 
         this.magic = magic;
