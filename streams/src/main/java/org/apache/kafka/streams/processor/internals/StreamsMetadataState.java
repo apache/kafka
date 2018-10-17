@@ -154,16 +154,18 @@ public class StreamsMetadataState {
             return null;
         }
 
-        if (assignmentVersion >= 4)
+        if (assignmentVersion >= 4) {
             return getStreamsMetadataForKeyNewVersion(storeName,
                     key,
                     new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                     sourceTopicsInfo);
-        else
+        }
+        else {
             return getStreamsMetadataForKeyOldVersion(storeName,
                     key,
                     new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                     sourceTopicsInfo);
+        }
     }
 
 
@@ -219,14 +221,10 @@ public class StreamsMetadataState {
      * @param currentState       the current mapping of {@link HostInfo} -> {@link TopicPartition}s
      * @param clusterMetadata    the current clusterMetadata {@link Cluster}
      */
-    synchronized void onChangeOldVersion(final Map<HostInfo, Set<TopicPartition>> currentState, final Cluster clusterMetadata, final int version) {
-        this.clusterMetadata = clusterMetadata;
-        rebuildMetdataOldVersion(currentState, version);
-    }
 
-    synchronized void onChangeNewVersion(final Map<HostInfo, Set<TaskId>> currentState, final Cluster clusterMetadata, final int version) {
+    synchronized void onChange(final Map<HostInfo, Set<TaskId>> currentState, final Cluster clusterMetadata, final int version) {
         this.clusterMetadata = clusterMetadata;
-        rebuildMetadataNewVersion(currentState, version);
+        rebuildMetadata(currentState, version);
     }
 
     private boolean hasPartitionsForAnyTopicPartition(final List<String> topicNames, final Set<String> partitionForHost) {
@@ -247,33 +245,7 @@ public class StreamsMetadataState {
         return false;
     }
 
-    private void rebuildMetdataOldVersion(final Map<HostInfo, Set<TopicPartition>> currentState, final int version) {
-        assignmentVersion = version;
-        allMetadata.clear();
-        if (currentState.isEmpty()) {
-            return;
-        }
-        final Map<String, List<String>> stores = builder.stateStoreNameToSourceTopics();
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : currentState.entrySet()) {
-            final HostInfo key = entry.getKey();
-            final Set<TopicPartition> partitionsForHost = new HashSet<>(entry.getValue());
-            final Set<String> storesOnHost = new HashSet<>();
-            for (final Map.Entry<String, List<String>> storeTopicEntry : stores.entrySet()) {
-                final List<String> topicsForStore = storeTopicEntry.getValue();
-                if (hasPartitionsForAnyTopics(topicsForStore, partitionsForHost)) {
-                    storesOnHost.add(storeTopicEntry.getKey());
-                }
-            }
-            storesOnHost.addAll(globalStores);
-            final StreamsMetadata metadata = new StreamsMetadata(key, storesOnHost, partitionsForHost, null);
-            allMetadata.add(metadata);
-            if (key.equals(thisHost)) {
-                myMetadata = metadata;
-            }
-        }
-    }
-
-    private void rebuildMetadataNewVersion(final Map<HostInfo, Set<TaskId>> currentState, final int version) {
+    private void rebuildMetadata(final Map<HostInfo, Set<TaskId>> currentState, final int version) {
         assignmentVersion = version;
         allMetadata.clear();
         if (currentState.isEmpty()) {

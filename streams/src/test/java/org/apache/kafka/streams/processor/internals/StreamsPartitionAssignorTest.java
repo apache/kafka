@@ -632,7 +632,7 @@ public class StreamsPartitionAssignorTest {
     }
 
     @Test
-    public void testOnNewAssignment() {
+    public void testAssignment() {
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
 
         final List<TaskId> activeTaskList = Utils.mkList(task0, task3);
@@ -646,7 +646,7 @@ public class StreamsPartitionAssignorTest {
         standbyTasks.put(task1, Utils.mkSet(t3p1));
         standbyTasks.put(task2, Utils.mkSet(t3p2));
 
-        final AssignmentInfo info = new AssignmentInfo(hostState, activeTaskList, standbyTasks);
+        final AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
         final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t3p0, t3p3), info.encode());
 
 
@@ -1285,9 +1285,9 @@ public class StreamsPartitionAssignorTest {
         assertThat(
             AssignmentInfo.decode(assignment.get("consumer1").userData()),
             equalTo(new AssignmentInfo(
-                Collections.<HostInfo, Set<TaskId>>emptyMap(),
                 new ArrayList<>(activeTasks),
-                standbyTaskMap
+                standbyTaskMap,
+                Collections.emptyMap()
             )));
         assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
 
@@ -1347,16 +1347,8 @@ public class StreamsPartitionAssignorTest {
     }
 
     private PartitionAssignor.Assignment createAssignment(final Map<HostInfo, Set<TaskId>> firstHostState) {
-        final AssignmentInfo info = new AssignmentInfo(firstHostState, Collections.<TaskId>emptyList(),
-                Collections.<TaskId, Set<TopicPartition>>emptyMap());
-
-        return new PartitionAssignor.Assignment(
-                Collections.<TopicPartition>emptyList(), info.encode());
-    }
-
-    private PartitionAssignor.Assignment createNewAssignment(final Map<HostInfo, Set<TaskId>> firstHostState) {
-        final AssignmentInfo info = new AssignmentInfo(firstHostState, Collections.<TaskId>emptyList(),
-                Collections.<TaskId, Set<TopicPartition>>emptyMap());
+        final AssignmentInfo info = new AssignmentInfo(Collections.<TaskId>emptyList(),
+                Collections.<TaskId, Set<TopicPartition>>emptyMap(), firstHostState);
 
         return new PartitionAssignor.Assignment(
                 Collections.<TopicPartition>emptyList(), info.encode());

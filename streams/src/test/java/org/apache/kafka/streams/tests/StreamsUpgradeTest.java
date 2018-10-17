@@ -178,7 +178,6 @@ public class StreamsUpgradeTest {
             final Map<HostInfo, Set<TaskId>> tasksByHost;
 
             processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-            partitionsByHost = info.partitionsByHost();
             tasksByHost = info.tasksByHost();
 
             final TaskManager taskManager = taskManger();
