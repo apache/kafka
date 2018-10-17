@@ -54,6 +54,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static java.time.Duration.ofMillis;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -70,7 +71,7 @@ public class RocksDBWindowStoreTest {
 
     private final int numSegments = 3;
     private final long windowSize = 3L;
-    private final long segmentInterval = 600L;
+    private final long segmentInterval = 60_000L;
     private final long retentionPeriod = segmentInterval * (numSegments - 1);
     private final String windowName = "window";
     private final Segments segments = new Segments(windowName, retentionPeriod, segmentInterval);
@@ -108,7 +109,7 @@ public class RocksDBWindowStoreTest {
 
     private WindowStore<Integer, String> createWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, retainDuplicates, segmentInterval),
+            Stores.persistentWindowStore(windowName, ofMillis(retentionPeriod), ofMillis(windowSize), retainDuplicates),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -771,7 +772,7 @@ public class RocksDBWindowStoreTest {
         final long retentionPeriod = 0x7a00000000000000L;
 
         final WindowStore<String, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, retentionPeriod, windowSize, true),
+            Stores.persistentWindowStore(windowName, ofMillis(retentionPeriod), ofMillis(windowSize), true),
             Serdes.String(),
             Serdes.String()).build();
 
@@ -848,7 +849,7 @@ public class RocksDBWindowStoreTest {
     @Test
     public void shouldFetchAndIterateOverExactBinaryKeys() {
         final WindowStore<Bytes, String> windowStore = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(windowName, 60_000L, 60_000L, true),
+            Stores.persistentWindowStore(windowName, ofMillis(60_000L), ofMillis(60_000L), true),
             Serdes.Bytes(),
             Serdes.String()).build();
 
