@@ -803,8 +803,6 @@ class ReplicaFetcherThreadTest {
     expect(mockBlockingSend.close()).andThrow(new IllegalArgumentException()).once()
     replay(mockBlockingSend)
 
-    val logCaptureAppender = LogCaptureAppender.createAndRegister()
-
     val thread = new ReplicaFetcherThread(
       name = "bob",
       fetcherId = 0,
@@ -816,9 +814,12 @@ class ReplicaFetcherThreadTest {
       quota = null,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
 
+    LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
+    val logCaptureAppender = LogCaptureAppender.createAndRegister()
+
     thread.initiateShutdown()
 
-    val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
+    val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.DEBUG
       && e.getRenderedMessage.contains(s"Fail to close leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
       && e.getThrowableInformation != null
       && e.getThrowableInformation.getThrowable.getClass.getName.equals(new IllegalArgumentException().getClass.getName))
