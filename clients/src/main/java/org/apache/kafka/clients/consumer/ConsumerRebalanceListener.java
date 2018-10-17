@@ -79,6 +79,14 @@ import org.apache.kafka.common.TopicPartition;
  */
 public interface ConsumerRebalanceListener {
 
+    ConsumerRebalanceListener NO_OP = new ConsumerRebalanceListener() {
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {}
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {}
+    };
+
     /**
      * A callback method the user can implement to provide handling of offset commits to a customized store on the start
      * of a rebalance operation. This method will be called before a rebalance operation starts and after the consumer

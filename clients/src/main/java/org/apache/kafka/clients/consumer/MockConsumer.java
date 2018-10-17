@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -95,7 +94,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Collection<String> topics) {
-        subscribe(topics, new NoOpConsumerRebalanceListener());
+        subscribe(topics, ConsumerRebalanceListener.NO_OP);
     }
 
     @Override
@@ -123,7 +122,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void subscribe(Pattern pattern) {
-        subscribe(pattern, new NoOpConsumerRebalanceListener());
+        subscribe(pattern, ConsumerRebalanceListener.NO_OP);
     }
 
     @Override

@@ -27,7 +27,6 @@ import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewPartitions}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
@@ -611,7 +610,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = createProducer()
     sendRecords(producer, 1, tp)
     removeAllAcls()
-    
+
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeRecords(consumer)
@@ -733,7 +732,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), groupResource)
 
     val consumer = createConsumer()
-    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    consumer.subscribe(Pattern.compile(topicPattern), ConsumerRebalanceListener.NO_OP)
     consumer.poll(50)
     assertTrue(consumer.subscription.isEmpty)
   }
