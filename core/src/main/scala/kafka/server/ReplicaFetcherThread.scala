@@ -115,7 +115,19 @@ class ReplicaFetcherThread(name: String,
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
     if (justShutdown) {
-      leaderEndpoint.close()
+      // leaderEndpoint.close() can throw an exception when the replica fetcher thread is still
+      // actively fetching because the selector can close the channel while sending the request
+      // after we initiate leaderEndpoint.close() and the leaderEndpoint.close() itself may also close
+      // the channel again. When this race condition happens, an exception will be thrown.
+      // Throwing the exception to the caller may fail the ReplicaManager shutdown. It is safe to catch
+      // the exception without here causing correctness issue because we are going to shutdown the thread
+      // and will not re-use the leaderEndpoint anyway.
+      try {
+        leaderEndpoint.close()
+      } catch {
+        case t: Throwable =>
+          debug(s"Fail to close leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
+      }
     }
     justShutdown
   }
