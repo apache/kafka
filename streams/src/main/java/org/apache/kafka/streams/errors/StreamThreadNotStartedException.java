@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-/**
- * Indicates that a task got migrated to another thread.
- * Thus, the task raising this exception can be cleaned up and closed as "zombie".
- */
 public class StreamThreadNotStartedException extends RetryableStateStoreException {
 
     private static final long serialVersionUID = 1L;
