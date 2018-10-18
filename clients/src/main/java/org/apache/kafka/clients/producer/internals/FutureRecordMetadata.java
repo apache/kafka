@@ -68,7 +68,8 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     public RecordMetadata get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         // Handle overflow.
         long now = System.currentTimeMillis();
-        long deadline = Long.MAX_VALUE - timeout < now ? Long.MAX_VALUE : now + timeout;
+        long timeoutMillis = unit.toMillis(timeout);
+        long deadline = Long.MAX_VALUE - timeoutMillis < now ? Long.MAX_VALUE : now + timeoutMillis;
         boolean occurred = this.result.await(timeout, unit);
         if (nextRecordMetadata != null)
             return nextRecordMetadata.get(deadline - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
