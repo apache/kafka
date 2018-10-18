@@ -158,8 +158,9 @@ object TopicCommand extends Logging {
           val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
           AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
         }
-        val allBrokers = adminZkClient.getBrokerMetadatas()
-        adminZkClient.addPartitions(topic, existingAssignment, allBrokers, nPartitions, newAssignment)
+        val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
+                            else RackAwareMode.Enforced
+        adminZkClient.addPartitions(topic, existingAssignment, nPartitions, newAssignment, rackAwareMode)
         println("Adding partitions succeeded!")
       }
     }
@@ -288,12 +289,7 @@ object TopicCommand extends Logging {
     val ret = new mutable.HashMap[Int, List[Int]]()
     for (i <- 0 until partitionList.size) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
-      val duplicateBrokers = CoreUtils.duplicates(brokerList)
-      if (duplicateBrokers.nonEmpty)
-        throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicateBrokers.mkString(",")))
       ret.put(i, brokerList.toList)
-      if (ret(i).size != ret(0).size)
-        throw new AdminOperationException("Partition " + i + " has different replication factor: " + brokerList)
     }
     ret.toMap
   }
