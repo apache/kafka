@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import java.nio.channels.ClosedChannelException
 import java.util.Optional
 
 import kafka.cluster.{BrokerEndPoint, Replica}
