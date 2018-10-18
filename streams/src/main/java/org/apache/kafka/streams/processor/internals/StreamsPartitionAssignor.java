@@ -668,10 +668,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
             }
         }
-        if (minReceivedMetadataVersion >= 4)
+        if (minReceivedMetadataVersion >= 4) {
             taskManager.setTasksByHostState(tasksByHostState, minReceivedMetadataVersion);
-        else
-        {
+        } else {
             tasksByHostState.putAll(convertTopicPartitionsToTaskIds(partitionsByHostState));
             taskManager.setTasksByHostState(tasksByHostState, minReceivedMetadataVersion);
         }
@@ -791,16 +790,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return assignment;
     }
 
-    Map<HostInfo, Set<TaskId>> convertTopicPartitionsToTaskIds(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState)
-    {
+    Map<HostInfo, Set<TaskId>> convertTopicPartitionsToTaskIds(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = this.taskManager.builder().topicGroups();
         final Map<String, Integer> topicToTaskMap = new HashMap<>();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet())
-        {
+        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
             final Set<String> topicGroupsForHost = new HashSet<>(entry.getValue().sourceTopics);
-            for(String sourceTopic : topicGroupsForHost)
-            {
-                topicToTaskMap.put(sourceTopic,entry.getKey());
+            for (final String sourceTopic : topicGroupsForHost) {
+                topicToTaskMap.put(sourceTopic, entry.getKey());
             }
         }
         final Map<HostInfo, Set<TaskId>> tasksByHostState = new HashMap<>();
@@ -812,8 +808,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 taskIdsForHost.add(new TaskId(topicToTaskMap.get(topicPartition.topic()), topicPartition.partition()));
             }
             tasksByHostState.put(key, taskIdsForHost);
-         }
-         return tasksByHostState;
+        }
+        return tasksByHostState;
     }
     // visible for testing
     List<List<TaskId>> interleaveTasksByGroupId(final Collection<TaskId> taskIds, final int numberThreads) {

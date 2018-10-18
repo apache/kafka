@@ -159,8 +159,7 @@ public class StreamsMetadataState {
                     key,
                     new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                     sourceTopicsInfo);
-        }
-        else {
+        } else {
             return getStreamsMetadataForKeyOldVersion(storeName,
                     key,
                     new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
