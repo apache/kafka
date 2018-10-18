@@ -160,10 +160,10 @@ public class AssignmentInfo {
 
     private void encodeVersionOne(final ByteArrayOutputStream baos) throws IOException {
         final DataOutputStream out = new DataOutputStream(baos);
-            out.writeInt(1); // version
-            encodeActiveAndStandbyTaskAssignment(out);
-            out.flush();
-            out.close();
+        out.writeInt(1); // version
+        encodeActiveAndStandbyTaskAssignment(out);
+        out.flush();
+        out.close();
     }
 
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
@@ -386,7 +386,7 @@ public class AssignmentInfo {
                     activeTasks.equals(other.activeTasks) &&
                     standbyTasks.equals(other.standbyTasks);
 
-             return result && tasksByHost.equals(other.tasksByHost);
+            return result && tasksByHost.equals(other.tasksByHost);
 
         } else {
             return false;
