@@ -271,18 +271,9 @@ public class SslTransportLayer implements TransportLayer {
             // This exception could be due to a write. If there is data available to unwrap in the buffer, or data available
             // in the socket channel to read and unwrap, process the data so that any SSL handshake exceptions are reported.
             try {
-                boolean unwrappedAvailable;
                 do {
-                    int position = netReadBuffer.position();
-                    handshakeUnwrap(false);
-                    // handshakeUnwrap unwraps data in the buffer, looping until handshakeStatus != NEED_UNWRAP. Here we
-                    // want to process all incoming data regardless of handshakeStatus. If some data was unwrapped, but
-                    // there is more remaining, try again while `handshakeUnwrap` is able to unwrap any data.
-                    unwrappedAvailable = position != netReadBuffer.position() && netReadBuffer.position() != 0;
-
-                    if (readable)
-                        unwrappedAvailable = readFromSocketChannel() > 0 || unwrappedAvailable;
-                } while (unwrappedAvailable);
+                    handshakeUnwrap(false, true);
+                } while (readable && readFromSocketChannel() > 0);
             } catch (SSLException e1) {
                 maybeProcessHandshakeFailure(e1, false, e);
             }
@@ -345,7 +336,7 @@ public class SslTransportLayer implements TransportLayer {
                 log.trace("SSLHandshake NEED_UNWRAP channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
                           channelId, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
                 do {
-                    handshakeResult = handshakeUnwrap(read);
+                    handshakeResult = handshakeUnwrap(read, false);
                     if (handshakeResult.getStatus() == Status.BUFFER_OVERFLOW) {
                         int currentAppBufferSize = applicationBufferSize();
                         appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentAppBufferSize);
@@ -467,12 +458,13 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Perform handshake unwrap
-    * @param doRead boolean
-    * @return SSLEngineResult
-    * @throws IOException
-    */
-    private SSLEngineResult handshakeUnwrap(boolean doRead) throws IOException {
+     * Perform handshake unwrap
+     * @param doRead boolean If true, read more from the socket channel
+     * @param ignoreHandshakeStatus If true, continue to unwrap if data available regardless of handshake status
+     * @return SSLEngineResult
+     * @throws IOException
+     */
+    private SSLEngineResult handshakeUnwrap(boolean doRead, boolean ignoreHandshakeStatus) throws IOException {
         log.trace("SSLHandshake handshakeUnwrap {}", channelId);
         SSLEngineResult result;
         int read = 0;
@@ -481,6 +473,7 @@ public class SslTransportLayer implements TransportLayer {
         boolean cont;
         do {
             //prepare the buffer with the incoming data
+            int position = netReadBuffer.position();
             netReadBuffer.flip();
             result = sslEngine.unwrap(netReadBuffer, appReadBuffer);
             netReadBuffer.compact();
@@ -489,8 +482,9 @@ public class SslTransportLayer implements TransportLayer {
                 result.getHandshakeStatus() == HandshakeStatus.NEED_TASK) {
                 handshakeStatus = runDelegatedTasks();
             }
-            cont = result.getStatus() == SSLEngineResult.Status.OK &&
-                handshakeStatus == HandshakeStatus.NEED_UNWRAP;
+            cont = (result.getStatus() == SSLEngineResult.Status.OK &&
+                    handshakeStatus == HandshakeStatus.NEED_UNWRAP) ||
+                    (ignoreHandshakeStatus && netReadBuffer.position() != position);
             log.trace("SSLHandshake handshakeUnwrap: handshakeStatus {} status {}", handshakeStatus, result.getStatus());
         } while (netReadBuffer.position() != 0 && cont);
 
