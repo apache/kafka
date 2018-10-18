@@ -154,17 +154,10 @@ public class StreamsMetadataState {
             return null;
         }
 
-        if (assignmentVersion >= 4) {
-            return getStreamsMetadataForKeyNewVersion(storeName,
+        return getStreamsMetadataForKey(storeName,
                     key,
                     new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
                     sourceTopicsInfo);
-        } else {
-            return getStreamsMetadataForKeyOldVersion(storeName,
-                    key,
-                    new DefaultStreamPartitioner<>(keySerializer, clusterMetadata),
-                    sourceTopicsInfo);
-        }
     }
 
 
@@ -208,10 +201,8 @@ public class StreamsMetadataState {
         if (sourceTopicsInfo == null) {
             return null;
         }
-        if (assignmentVersion >= 4)
-            return getStreamsMetadataForKeyNewVersion(storeName, key, partitioner, sourceTopicsInfo);
-        else
-            return getStreamsMetadataForKeyOldVersion(storeName, key, partitioner, sourceTopicsInfo);
+
+        return getStreamsMetadataForKey(storeName, key, partitioner, sourceTopicsInfo);
     }
 
     /**
@@ -281,30 +272,7 @@ public class StreamsMetadataState {
         }
     }
 
-    private <K> StreamsMetadata getStreamsMetadataForKeyOldVersion(final String storeName,
-                                                         final K key,
-                                                         final StreamPartitioner<? super K, ?> partitioner,
-                                                         final SourceTopicsInfo sourceTopicsInfo) {
-
-        final Integer partition = partitioner.partition(sourceTopicsInfo.topicWithMostPartitions, key, null, sourceTopicsInfo.maxPartitions);
-        final Set<TopicPartition> matchingPartitions = new HashSet<>();
-        for (final String sourceTopic : sourceTopicsInfo.sourceTopics) {
-            matchingPartitions.add(new TopicPartition(sourceTopic, partition));
-        }
-
-        for (final StreamsMetadata streamsMetadata : allMetadata) {
-            final Set<String> stateStoreNames = streamsMetadata.stateStoreNames();
-            final Set<TopicPartition> topicPartitions = new HashSet<>(streamsMetadata.topicPartitions());
-            topicPartitions.retainAll(matchingPartitions);
-            if (stateStoreNames.contains(storeName)
-                    && !topicPartitions.isEmpty()) {
-                return streamsMetadata;
-            }
-        }
-        return null;
-    }
-
-    private <K> StreamsMetadata getStreamsMetadataForKeyNewVersion(final String storeName,
+    private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,
                                                                    final K key,
                                                                    final StreamPartitioner<? super K, ?> partitioner,
                                                                    final SourceTopicsInfo sourceTopicsInfo) {
