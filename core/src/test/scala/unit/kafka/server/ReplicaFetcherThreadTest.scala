@@ -814,18 +814,23 @@ class ReplicaFetcherThreadTest {
       quota = null,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
 
-    LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
     val logCaptureAppender = LogCaptureAppender.createAndRegister()
 
-    thread.initiateShutdown()
+    try {
+      thread.initiateShutdown()
 
-    val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.DEBUG
-      && e.getRenderedMessage.contains(s"Fail to close leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
-      && e.getThrowableInformation != null
-      && e.getThrowableInformation.getThrowable.getClass.getName.equals(new IllegalArgumentException().getClass.getName))
-    assertTrue(event.isDefined)
+      val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.DEBUG
+        && e.getRenderedMessage.contains(s"Fail to close leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
+        && e.getThrowableInformation != null
+        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new IllegalArgumentException().getClass.getName))
+      assertTrue(event.isDefined)
 
-    verify(mockBlockingSend)
+      verify(mockBlockingSend)
+    } finally {
+      LogCaptureAppender.unregister(logCaptureAppender)
+      LogCaptureAppender.setClassLoggerLevel(thread.getClass, previousLevel)
+    }
   }
 
   def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager) = {
