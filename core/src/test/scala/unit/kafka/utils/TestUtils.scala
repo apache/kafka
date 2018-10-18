@@ -324,9 +324,9 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
+    adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
     // wait until the update metadata request for new topic reaches all servers
-    partitionReplicaAssignment.keySet.map { case i =>
+    partitionReplicaAssignment.keySet.map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap

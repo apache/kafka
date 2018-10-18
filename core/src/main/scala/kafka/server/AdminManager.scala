@@ -104,7 +104,7 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
+            adminZkClient.validateTopicCreate(topic, assignments, configs)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -117,13 +117,13 @@ class AdminManager(val config: KafkaConfig,
               arguments.configs))
 
             if (!validateOnly)
-              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
 
           case None =>
             if (validateOnly)
-              adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
+              adminZkClient.validateTopicCreate(topic, assignments, configs)
             else
-              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
         }
         CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
       } catch {
@@ -366,8 +366,10 @@ class AdminManager(val config: KafkaConfig,
 
             adminZkClient.validateTopicConfig(topic, properties)
             validateConfigPolicy(ConfigResource.Type.TOPIC)
-            if (!validateOnly)
+            if (!validateOnly) {
+              info(s"Updating topic $topic with new configuration $config")
               adminZkClient.changeTopicConfig(topic, properties)
+            }
 
             resource -> ApiError.NONE
 

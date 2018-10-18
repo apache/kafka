@@ -357,7 +357,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     testControllerMove(() => {
       val adminZkClient = new AdminZkClient(zkClient)
-      adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(tp.topic, assignment, new Properties())
+      adminZkClient.createTopicWithAssignment(tp.topic, config = new Properties(), assignment)
     })
   }
 
