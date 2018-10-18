@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.StateStoreNotAvailableException;
+import org.apache.kafka.streams.errors.StateStoreMigratedException;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -29,11 +32,11 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.NoSuchElementException;
 
@@ -51,6 +54,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
     private KeyValueStore<String, String> stubOneUnderlying;
     private KeyValueStore<String, String> otherUnderlyingStore;
     private CompositeReadOnlyKeyValueStore<String, String> theStore;
+    private CompositeReadOnlyKeyValueStore<String, String> rebalancingStore;
+    private CompositeReadOnlyKeyValueStore<String, String> notAvailableStore;
 
     @Before
     public void before() {
@@ -62,10 +67,11 @@ public class CompositeReadOnlyKeyValueStoreTest {
         otherUnderlyingStore = newStoreInstance();
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
-        theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                                        QueryableStoreTypes.<String, String>keyValueStore(),
-                                        storeName);
+        theStore = createKeyValueStore(State.RUNNING, storeName,
+                new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo))
+            );
+        rebalancingStore = createKeyValueStore(State.REBALANCING, storeName, new StateStoreProviderStub(true));
+        notAvailableStore = createKeyValueStore(State.PENDING_SHUTDOWN, storeName, new StateStoreProviderStub(true));
     }
 
     private KeyValueStore<String, String> newStoreInstance() {
@@ -223,24 +229,44 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(6, results.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionDuringRebalance() {
-        rebalancing().get("anything");
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionDuringRebalance() {
+        rebalancingStore.get("anything");
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionOnApproximateNumEntriesDuringRebalance() {
-        rebalancing().approximateNumEntries();
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionDuringStoreNotAvailable() {
+        notAvailableStore.get("anything");
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionOnRangeDuringRebalance() {
-        rebalancing().range("anything", "something");
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionOnApproximateNumEntriesDuringRebalance() {
+        rebalancingStore.approximateNumEntries();
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStoreExceptionOnAllDuringRebalance() {
-        rebalancing().all();
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionOnApproximateNumEntriesDuringStoreNotAvailable() {
+        notAvailableStore.approximateNumEntries();
+    }
+
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionOnRangeDuringRebalance() {
+        rebalancingStore.range("anything", "something");
+    }
+
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionOnRangeDuringStoreNotAvailable() {
+        notAvailableStore.range("anything", "something");
+    }
+
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionOnAllDuringRebalance() {
+        rebalancingStore.all();
+    }
+
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionOnAllDuringStoreNotAvailable() {
+        notAvailableStore.all();
     }
 
     @Test
@@ -290,9 +316,11 @@ public class CompositeReadOnlyKeyValueStoreTest {
         assertEquals(Long.MAX_VALUE, theStore.approximateNumEntries());
     }
 
-    private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
-                QueryableStoreTypes.keyValueStore(), storeName);
+    private CompositeReadOnlyKeyValueStore<String, String> createKeyValueStore(final State state, final String storeName,
+                                                                               final StateStoreProvider storeProvider) {
+        final KafkaStreams kafkaStreams = StreamsTestUtils.mockStreams(state);
+        return new CompositeReadOnlyKeyValueStore<>(kafkaStreams,
+                storeProvider, QueryableStoreTypes.keyValueStore(), storeName);
     }
 
 }

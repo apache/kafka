@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
+import org.apache.kafka.streams.errors.StreamThreadNotRunningException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -45,7 +46,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
             return Collections.emptyList();
         }
         if (!streamThread.isRunningAndNotRebalancing()) {
-            throw new InvalidStateStoreException("Cannot get state store " + storeName + " because the stream thread is " +
+            throw new StreamThreadNotRunningException("Cannot get state store " + storeName + " because the stream thread is " +
                     streamThread.state() + ", not RUNNING");
         }
         final List<T> stores = new ArrayList<>();
@@ -53,7 +54,7 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
             final StateStore store = streamTask.getStore(storeName);
             if (store != null && queryableStoreType.accepts(store)) {
                 if (!store.isOpen()) {
-                    throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
+                    throw new StateStoreClosedException("Cannot get state store " + storeName + " for task " + streamTask +
                             " because the store is not open. The state store may have migrated to another instances.");
                 }
                 stores.add((T) store);

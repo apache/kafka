@@ -46,4 +46,12 @@ public interface QueryableStoreType<T> {
      * @return a read-only interface over a {@code StateStore} (cf. {@link QueryableStoreTypes.KeyValueStoreType})
      */
     T create(final StateStoreProvider storeProvider, final String storeName);
+
+    /**
+     * Set the streams so that all store types can be check {@link KafkaStreams stream} state.
+     *
+     * @param streams
+     */
+    void setStreams(final KafkaStreams streams);
+
 }

@@ -22,7 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -215,43 +215,43 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals(0, cache.size());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToGetFromClosedCachingStore() {
         store.close();
         store.get(bytesKey("a"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         store.close();
         store.put(bytesKey("a"), bytesValue("a"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDoRangeQueryOnClosedCachingStore() {
         store.close();
         store.range(bytesKey("a"), bytesKey("b"));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDoAllQueryOnClosedCachingStore() {
         store.close();
         store.all();
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDoGetApproxSizeOnClosedCachingStore() {
         store.close();
         store.approximateNumEntries();
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDoPutAllClosedCachingStore() {
         store.close();
         store.putAll(Collections.singletonList(KeyValue.pair(bytesKey("a"), bytesValue("a"))));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDoPutIfAbsentClosedCachingStore() {
         store.close();
         store.putIfAbsent(bytesKey("b"), bytesValue("c"));
@@ -301,7 +301,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertTrue(store.underlying().equals(underlyingStore));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreClosedException.class)
     public void shouldThrowIfTryingToDeleteFromClosedCachingStore() {
         store.close();
         store.delete(bytesKey("key"));

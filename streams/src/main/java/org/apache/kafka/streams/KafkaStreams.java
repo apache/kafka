@@ -35,6 +35,11 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.StreamThreadNotStartedException;
+import org.apache.kafka.streams.errors.StreamThreadRebalancingException;
+import org.apache.kafka.streams.errors.StreamThreadNotRunningException;
+import org.apache.kafka.streams.errors.StateStoreMigratedException;
+import org.apache.kafka.streams.errors.StateStoreNotAvailableException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -61,6 +66,7 @@ import org.apache.kafka.streams.state.internals.GlobalStateStoreProvider;
 import org.apache.kafka.streams.state.internals.QueryableStoreProvider;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
+import org.apache.kafka.streams.state.internals.StateStoreUtils;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -728,7 +734,7 @@ public class KafkaStreams {
         }
 
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
-        queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
+        queryableStoreProvider = new QueryableStoreProvider(this, storeProviders, globalStateStoreProvider);
 
         stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
             @Override
@@ -1064,12 +1070,30 @@ public class KafkaStreams {
      * @param queryableStoreType  accept only stores that are accepted by {@link QueryableStoreType#accepts(StateStore)}
      * @param <T>                 return type
      * @return A facade wrapping the local {@link StateStore} instances
-     * @throws InvalidStateStoreException if Kafka Streams is (re-)initializing or a store with {@code storeName} and
-     * {@code queryableStoreType} doesn't exist
+     * @throws StreamThreadNotStartedException If the stream thread is not running and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#CREATED CREATED}.
+     * @throws StreamThreadRebalancingException If the stream thread is not running and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StreamThreadNotRunningException If the stream thread is not running and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     public <T> T store(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         validateIsRunning();
-        return queryableStoreProvider.getStore(storeName, queryableStoreType);
+        try {
+            return queryableStoreProvider.getStore(storeName, queryableStoreType);
+        } catch (final InvalidStateStoreException e) {
+            StateStoreUtils.handleInvalidStateStoreException(this, e);
+        }
+        return null;
     }
 
     /**

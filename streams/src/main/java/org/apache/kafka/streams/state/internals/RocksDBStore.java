@@ -22,8 +22,8 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallback;
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -204,7 +204,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private void validateStoreOpen() {
         if (!open) {
-            throw new InvalidStateStoreException("Store " + name + " is currently closed");
+            throw new StateStoreClosedException("Store " + name + " is currently closed");
         }
     }
 
@@ -444,7 +444,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
+                throw new StateStoreClosedException(String.format("RocksDB store %s has closed", storeName));
             }
             return super.hasNext();
         }

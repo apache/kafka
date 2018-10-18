@@ -21,9 +21,11 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.easymock.EasyMock;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -164,4 +166,12 @@ public final class StreamsTestUtils {
             return metric;
         }
     }
+
+    public static KafkaStreams mockStreams(KafkaStreams.State state) {
+        final KafkaStreams kafkaStreams = EasyMock.createNiceMock(KafkaStreams.class);
+        EasyMock.expect(kafkaStreams.state()).andStubReturn(state);
+        EasyMock.replay(kafkaStreams);
+        return kafkaStreams;
+    }
+
 }

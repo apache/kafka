@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.state;
 
 import java.time.Instant;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.StateStoreMigratedException;
+import org.apache.kafka.streams.errors.StateStoreNotAvailableException;
 import org.apache.kafka.streams.kstream.Windowed;
 
 /**
@@ -35,8 +36,14 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param key       the key to fetch
      * @param time      start timestamp (inclusive) of the window
      * @return The value or {@code null} if no value is found in the window
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     V fetch(K key, long time);
 
@@ -71,8 +78,14 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeFrom  time range start (inclusive)
      * @param timeTo    time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      * @deprecated Use {@link #fetch(K, Instant, Instant)} instead
      */
     @Deprecated
@@ -109,9 +122,15 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param from      time range start (inclusive)
      * @param from      time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
      * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     WindowStoreIterator<V> fetch(K key, Instant from, Instant to) throws IllegalArgumentException;
 
@@ -125,8 +144,14 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeFrom  time range start (inclusive)
      * @param timeTo    time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      * @deprecated Use {@link #fetch(Object, Object, Instant, Instant)} instead
      */
     @Deprecated
@@ -142,18 +167,30 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param fromTime  time range start (inclusive)
      * @param toTime    time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
      * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, Instant fromTime, Instant toTime)
         throws IllegalArgumentException;
 
     /**
-    * Gets all the key-value pairs in the existing windows.
-    *
-    * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-    * @throws InvalidStateStoreException if the store is not initialized
+     * Gets all the key-value pairs in the existing windows.
+     *
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
     */
     KeyValueIterator<Windowed<K>, V> all();
     
@@ -163,8 +200,14 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param timeFrom the beginning of the time slot from which to search (inclusive)
      * @param timeTo   the end of the time slot from which to search (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if {@code null} is used for any key
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      * @deprecated Use {@link #fetchAll(Instant, Instant)} instead
      */
     @Deprecated
@@ -176,9 +219,15 @@ public interface ReadOnlyWindowStore<K, V> {
      * @param from the beginning of the time slot from which to search (inclusive)
      * @param to   the end of the time slot from which to search (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-     * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if {@code null} is used for any key
      * @throws IllegalArgumentException if duration is negative or can't be represented as {@code long milliseconds}
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     KeyValueIterator<Windowed<K>, V> fetchAll(Instant from, Instant to) throws IllegalArgumentException;
 }

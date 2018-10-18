@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
@@ -36,28 +38,40 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
     private final StateStoreProvider storeProvider;
     private final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType;
     private final String storeName;
+    private final KafkaStreams streams;
 
-    public CompositeReadOnlyKeyValueStore(final StateStoreProvider storeProvider,
-                                          final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> storeType,
+    public CompositeReadOnlyKeyValueStore(final KafkaStreams streams,
+                                          final StateStoreProvider storeProvider,
+                                          final QueryableStoreType<ReadOnlyKeyValueStore<K, V>> keyValueStoreType,
                                           final String storeName) {
+        this.streams = streams;
         this.storeProvider = storeProvider;
-        this.storeType = storeType;
+        this.storeType = keyValueStoreType;
         this.storeName = storeName;
+    }
+
+    private List<ReadOnlyKeyValueStore<K, V>> getStores() {
+        try {
+            return storeProvider.stores(storeName, storeType);
+        } catch (final InvalidStateStoreException e) {
+            StateStoreUtils.handleInvalidStateStoreException(streams, e);
+        }
+        return null;
     }
 
 
     @Override
     public V get(final K key) {
         Objects.requireNonNull(key);
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = getStores();
         for (final ReadOnlyKeyValueStore<K, V> store : stores) {
             try {
                 final V result = store.get(key);
                 if (result != null) {
                     return result;
                 }
-            } catch (final InvalidStateStoreException e) {
-                throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+            } catch (final StateStoreClosedException e) {
+                StateStoreUtils.handleStateStoreClosedException(streams, storeName, e);
             }
 
         }
@@ -71,15 +85,12 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         final NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>> nextIteratorFunction = new NextIteratorFunction<K, V, ReadOnlyKeyValueStore<K, V>>() {
             @Override
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
-                try {
-                    return store.range(from, to);
-                } catch (final InvalidStateStoreException e) {
-                    throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
-                }
+                return store.range(from, to);
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
-        return new DelegatingPeekingKeyValueIterator<>(storeName, new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
+        final List<ReadOnlyKeyValueStore<K, V>> stores = getStores();
+        return new DelegatingPeekingKeyValueIterator<>(streams, storeName,
+                                                       new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
     }
 
     @Override
@@ -89,23 +100,29 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
             public KeyValueIterator<K, V> apply(final ReadOnlyKeyValueStore<K, V> store) {
                 try {
                     return store.all();
-                } catch (final InvalidStateStoreException e) {
-                    throw new InvalidStateStoreException("State store is not available anymore and may have been migrated to another instance; please re-discover its location from the state metadata.");
+                } catch (final StateStoreClosedException e) {
+                    StateStoreUtils.handleStateStoreClosedException(streams, storeName, e);
                 }
+                return null;
             }
         };
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
-        return new DelegatingPeekingKeyValueIterator<>(storeName, new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
+        final List<ReadOnlyKeyValueStore<K, V>> stores = getStores();
+        return new DelegatingPeekingKeyValueIterator<>(streams, storeName,
+                                                       new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
     }
 
     @Override
     public long approximateNumEntries() {
-        final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
+        final List<ReadOnlyKeyValueStore<K, V>> stores = getStores();
         long total = 0;
         for (final ReadOnlyKeyValueStore<K, V> store : stores) {
-            total += store.approximateNumEntries();
-            if (total < 0) {
-                return Long.MAX_VALUE;
+            try {
+                total += store.approximateNumEntries();
+                if (total < 0) {
+                    return Long.MAX_VALUE;
+                }
+            } catch (final StateStoreClosedException e) {
+                StateStoreUtils.handleStateStoreClosedException(streams, storeName, e);
             }
         }
         return total;

@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.util.NoSuchElementException;
@@ -28,11 +29,17 @@ import java.util.NoSuchElementException;
 class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
     private final KeyValueIterator<K, V> underlying;
     private final String storeName;
+    private final KafkaStreams streams;
     private KeyValue<K, V> next;
 
     private volatile boolean open = true;
 
     public DelegatingPeekingKeyValueIterator(final String storeName, final KeyValueIterator<K, V> underlying) {
+        this(null, storeName, underlying);
+    }
+
+    public DelegatingPeekingKeyValueIterator(final KafkaStreams streams, final String storeName, final KeyValueIterator<K, V> underlying) {
+        this.streams = streams;
         this.storeName = storeName;
         this.underlying = underlying;
     }
@@ -53,18 +60,25 @@ class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>,
 
     @Override
     public synchronized boolean hasNext() {
-        if (!open) {
-            throw new InvalidStateStoreException(String.format("Store %s has closed", storeName));
-        }
-        if (next != null) {
-            return true;
-        }
+        try {
+            if (!open) {
+                throw new StateStoreClosedException(String.format("Store %s has closed", storeName));
+            }
+            if (next != null) {
+                return true;
+            }
 
-        if (!underlying.hasNext()) {
-            return false;
-        }
+            if (!underlying.hasNext()) {
+                return false;
+            }
 
-        next = underlying.next();
+            next = underlying.next();
+        } catch (final StateStoreClosedException e) {
+            if (streams == null)
+                throw e;
+            else
+                StateStoreUtils.handleStateStoreClosedException(streams, storeName, e);
+        }
         return true;
     }
 

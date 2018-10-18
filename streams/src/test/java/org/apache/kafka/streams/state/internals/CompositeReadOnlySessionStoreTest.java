@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreams.State;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.StateStoreNotAvailableException;
+import org.apache.kafka.streams.errors.StateStoreMigratedException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,26 +40,30 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.fail;
 
 public class CompositeReadOnlySessionStoreTest {
 
     private final String storeName = "session-store";
     private final StateStoreProviderStub stubProviderOne = new StateStoreProviderStub(false);
     private final StateStoreProviderStub stubProviderTwo = new StateStoreProviderStub(false);
+    private final StateStoreProviderStub stubProviderThree = new StateStoreProviderStub(true);
     private final ReadOnlySessionStoreStub<String, Long> underlyingSessionStore = new ReadOnlySessionStoreStub<>();
     private final ReadOnlySessionStoreStub<String, Long> otherUnderlyingStore = new ReadOnlySessionStoreStub<>();
     private CompositeReadOnlySessionStore<String, Long> sessionStore;
+    private CompositeReadOnlySessionStore<String, Long> rebalancingStore;
+    private CompositeReadOnlySessionStore<String, Long> notAvailableStore;
+
 
     @Before
     public void before() {
         stubProviderOne.addStore(storeName, underlyingSessionStore);
         stubProviderOne.addStore("other-session-store", otherUnderlyingStore);
 
-
-        sessionStore = new CompositeReadOnlySessionStore<>(
-                new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                QueryableStoreTypes.<String, Long>sessionStore(), storeName);
+        sessionStore = createSessionStore(State.RUNNING, storeName,
+                new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo))
+            );
+        rebalancingStore = createSessionStore(State.REBALANCING, storeName, stubProviderThree);
+        notAvailableStore = createSessionStore(State.PENDING_SHUTDOWN, storeName, stubProviderThree);
     }
 
     @Test
@@ -105,23 +112,30 @@ public class CompositeReadOnlySessionStoreTest {
         assertFalse(result.hasNext());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
-        final CompositeReadOnlySessionStore<String, String> store
-                = new CompositeReadOnlySessionStore<>(new StateStoreProviderStub(true),
-                                                      QueryableStoreTypes.<String, String>sessionStore(),
-                                                      "whateva");
-
-        store.fetch("a");
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionOnFetchByKeyDuringRebalance() {
+        rebalancingStore.fetch("a");
     }
 
-    @Test
-    public void shouldThrowInvalidStateStoreExceptionIfSessionFetchThrows() {
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionOnFetchByKeyDuringStoreNotAvailable() {
+        notAvailableStore.fetch("a");
+    }
+
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionOnFetchByRangeDuringRebalance() {
+        rebalancingStore.fetch("a", "z");
+    }
+
+    @Test(expected = StateStoreNotAvailableException.class)
+    public void shouldThrowStateStoreNotAvailableExceptionOnFetchByRangeDuringStoreNotAvailable() {
+        notAvailableStore.fetch("a", "z");
+    }
+
+    @Test(expected = StateStoreMigratedException.class)
+    public void shouldThrowStateStoreMigratedExceptionIfSessionFetchThrows() {
         underlyingSessionStore.setOpen(false);
-        try {
-            sessionStore.fetch("key");
-            fail("Should have thrown InvalidStateStoreException with session store");
-        } catch (final InvalidStateStoreException e) { }
+        sessionStore.fetch("key");
     }
 
     @Test(expected = NullPointerException.class)
@@ -154,4 +168,12 @@ public class CompositeReadOnlySessionStoreTest {
     public void shouldThrowNPEIfToKeyIsNull() {
         underlyingSessionStore.fetch("a", null);
     }
+
+    private CompositeReadOnlySessionStore<String, Long> createSessionStore(final State streamState, final String storeName,
+                                                                             final StateStoreProvider storeProvider) {
+        final KafkaStreams kafkaStreams = StreamsTestUtils.mockStreams(streamState);
+        return new CompositeReadOnlySessionStore<>(kafkaStreams,
+                storeProvider, QueryableStoreTypes.sessionStore(), storeName);
+    }
+
 }

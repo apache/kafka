@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlySessionStore;
 import org.apache.kafka.streams.state.internals.CompositeReadOnlyWindowStore;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
+
+import java.util.Objects;
 
 /**
  * Provides access to the {@link QueryableStoreType}s provided with KafkaStreams. These
@@ -59,11 +62,12 @@ public class QueryableStoreTypes {
         return new SessionStoreType<>();
     }
 
-    private static abstract class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
+    private static abstract class AbstractQueryableStoreType<T> implements QueryableStoreType<T> {
 
         private final Class matchTo;
+        protected KafkaStreams streams = null;
 
-        QueryableStoreTypeMatcher(final Class matchTo) {
+        AbstractQueryableStoreType(final Class matchTo) {
             this.matchTo = matchTo;
         }
 
@@ -72,10 +76,15 @@ public class QueryableStoreTypes {
         public boolean accepts(final StateStore stateStore) {
             return matchTo.isAssignableFrom(stateStore.getClass());
         }
+
+        @Override
+        public void setStreams(final KafkaStreams streams) {
+            this.streams = streams;
+        }
     }
 
     private static class KeyValueStoreType<K, V> extends
-                                                 QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+                                                 AbstractQueryableStoreType<ReadOnlyKeyValueStore<K, V>> {
         KeyValueStoreType() {
             super(ReadOnlyKeyValueStore.class);
         }
@@ -83,12 +92,13 @@ public class QueryableStoreTypes {
         @Override
         public ReadOnlyKeyValueStore<K, V> create(final StateStoreProvider storeProvider,
                                                   final String storeName) {
-            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+            Objects.requireNonNull(streams, "streams can't be null");
+            return new CompositeReadOnlyKeyValueStore<>(streams, storeProvider, this, storeName);
         }
 
     }
 
-    private static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
+    private static class WindowStoreType<K, V> extends AbstractQueryableStoreType<ReadOnlyWindowStore<K, V>> {
         WindowStoreType() {
             super(ReadOnlyWindowStore.class);
         }
@@ -96,17 +106,19 @@ public class QueryableStoreTypes {
         @Override
         public ReadOnlyWindowStore<K, V> create(final StateStoreProvider storeProvider,
                                                 final String storeName) {
-            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
+            Objects.requireNonNull(streams, "streams can't be null");
+            return new CompositeReadOnlyWindowStore<>(streams, storeProvider, this, storeName);
         }
     }
 
-    private static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+    private static class SessionStoreType<K, V> extends AbstractQueryableStoreType<ReadOnlySessionStore<K, V>> {
         SessionStoreType() {
             super(ReadOnlySessionStore.class);
         }
         @Override
         public ReadOnlySessionStore<K, V> create(final StateStoreProvider storeProvider, final String storeName) {
-            return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
+            Objects.requireNonNull(streams, "streams can't be null");
+            return new CompositeReadOnlySessionStore<>(streams, storeProvider, this, storeName);
         }
     }
 }

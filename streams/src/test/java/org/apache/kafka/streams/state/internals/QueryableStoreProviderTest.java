@@ -17,12 +17,14 @@
 package org.apache.kafka.streams.state.internals;
 
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.errors.internals.StateStoreIsEmptyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.NoOpWindowStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.StateStoreProviderStub;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,17 +46,18 @@ public class QueryableStoreProviderTest {
         theStoreProvider.addStore(keyValueStore, new NoOpReadOnlyStore<>());
         theStoreProvider.addStore(windowStore, new NoOpWindowStore());
         globalStateStores = new HashMap<>();
+        final KafkaStreams kafkaStreams = StreamsTestUtils.mockStreams(KafkaStreams.State.RUNNING);
         storeProvider =
-            new QueryableStoreProvider(
+            new QueryableStoreProvider(kafkaStreams,
                     Collections.<StateStoreProvider>singletonList(theStoreProvider), new GlobalStateStoreProvider(globalStateStores));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreIsEmptyException.class)
     public void shouldThrowExceptionIfKVStoreDoesntExist() {
         storeProvider.getStore("not-a-store", QueryableStoreTypes.keyValueStore());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreIsEmptyException.class)
     public void shouldThrowExceptionIfWindowStoreDoesntExist() {
         storeProvider.getStore("not-a-store", QueryableStoreTypes.windowStore());
     }
@@ -69,12 +72,12 @@ public class QueryableStoreProviderTest {
         assertNotNull(storeProvider.getStore(windowStore, QueryableStoreTypes.windowStore()));
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreIsEmptyException.class)
     public void shouldThrowExceptionWhenLookingForWindowStoreWithDifferentType() {
         storeProvider.getStore(windowStore, QueryableStoreTypes.keyValueStore());
     }
 
-    @Test(expected = InvalidStateStoreException.class)
+    @Test(expected = StateStoreIsEmptyException.class)
     public void shouldThrowExceptionWhenLookingForKVStoreWithDifferentType() {
         storeProvider.getStore(keyValueStore, QueryableStoreTypes.windowStore());
     }

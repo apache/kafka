@@ -17,7 +17,7 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -45,7 +45,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         if (!open) {
-            throw new InvalidStateStoreException("not open");
+            throw new StateStoreClosedException("not open");
         }
         if (!sessions.containsKey(key)) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());
@@ -56,7 +56,7 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
         if (!open) {
-            throw new InvalidStateStoreException("not open");
+            throw new StateStoreClosedException("not open");
         }
         if (sessions.subMap(from, true, to, true).isEmpty()) {
             return new KeyValueIteratorStub<>(Collections.<KeyValue<Windowed<K>, V>>emptyIterator());

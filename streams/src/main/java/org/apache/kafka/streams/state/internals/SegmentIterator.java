@@ -18,7 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -76,7 +76,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
                 } else {
                     currentIterator = currentSegment.range(from, to);
                 }
-            } catch (final InvalidStateStoreException e) {
+            } catch (final StateStoreClosedException e) {
                 // segment may have been closed so we ignore it.
             }
         }
@@ -87,7 +87,7 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
         boolean hasNext = false;
         try {
             hasNext = hasNextCondition.hasNext(currentIterator);
-        } catch (final InvalidStateStoreException e) {
+        } catch (final StateStoreClosedException e) {
             //already closed so ignore
         }
         return hasNext;

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreIsEmptyException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 
@@ -45,12 +45,11 @@ public class WrappingStoreProvider implements StateStoreProvider {
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> type) {
         final List<T> allStores = new ArrayList<>();
         for (final StateStoreProvider provider : storeProviders) {
-            final List<T> stores =
-                provider.stores(storeName, type);
+            final List<T> stores = provider.stores(storeName, type);
             allStores.addAll(stores);
         }
         if (allStores.isEmpty()) {
-            throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
+            throw new StateStoreIsEmptyException("The state store, " + storeName + ", may have migrated to another instance.");
         }
         return allStores;
     }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -68,7 +68,7 @@ public interface WrappedStateStore extends StateStore {
 
         void validateStoreOpen() {
             if (!innerState.isOpen()) {
-                throw new InvalidStateStoreException("Store " + innerState.name() + " is currently closed.");
+                throw new StateStoreClosedException("Store " + innerState.name() + " is currently closed.");
             }
         }
 

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.errors.internals.StateStoreClosedException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.internals.StateStoreProvider;
@@ -40,7 +40,7 @@ public class StateStoreProviderStub implements StateStoreProvider {
     @Override
     public <T> List<T> stores(final String storeName, final QueryableStoreType<T> queryableStoreType) {
         if (throwException) {
-            throw new InvalidStateStoreException("store is unavailable");
+            throw new StateStoreClosedException("store is closed.");
         }
         if (stores.containsKey(storeName) && queryableStoreType.accepts(stores.get(storeName))) {
             return (List<T>) Collections.singletonList(stores.get(storeName));

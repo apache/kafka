@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state;
 
 
+import org.apache.kafka.streams.errors.StateStoreMigratedException;
+import org.apache.kafka.streams.errors.StateStoreNotAvailableException;
 import org.apache.kafka.streams.kstream.Windowed;
 
 /**
@@ -36,10 +38,16 @@ public interface ReadOnlySessionStore<K, AGG> {
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
      *
-     * @param    key record key to find aggregated session values for
-     * @return   KeyValueIterator containing all sessions for the provided key.
-     * @throws   NullPointerException If null is used for key.
-     *
+     * @param  key record key to find aggregated session values for
+     * @return KeyValueIterator containing all sessions for the provided key.
+     * @throws NullPointerException If null is used for key.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K key);
 
@@ -50,10 +58,17 @@ public interface ReadOnlySessionStore<K, AGG> {
      * For each key, the iterator guarantees ordering of sessions, starting from the oldest/earliest
      * available session to the newest/latest session.
      *
-     * @param    from first key in the range to find aggregated session values for
-     * @param    to last key in the range to find aggregated session values for
-     * @return   KeyValueIterator containing all sessions for the provided key.
-     * @throws   NullPointerException If null is used for any of the keys.
+     * @param  from first key in the range to find aggregated session values for
+     * @param  to last key in the range to find aggregated session values for
+     * @return KeyValueIterator containing all sessions for the provided key.
+     * @throws NullPointerException If null is used for any of the keys.
+     * @throws StateStoreMigratedException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#RUNNING RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#REBALANCING REBALANCING}.
+     * @throws StateStoreNotAvailableException If the store closed or cannot be found and stream state is
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#PENDING_SHUTDOWN PENDING_SHUTDOWN} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#NOT_RUNNING NOT_RUNNING} /
+     *         {@link org.apache.kafka.streams.KafkaStreams.State#ERROR ERROR}.
      */
     KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to);
 }
