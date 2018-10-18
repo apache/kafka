@@ -74,7 +74,7 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         if (nextRecordMetadata != null)
             return nextRecordMetadata.get(deadline - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
         if (!occurred)
-            throw new TimeoutException("Timeout after waiting for " + TimeUnit.MILLISECONDS.convert(timeout, unit) + " ms.");
+            throw new TimeoutException("Timeout after waiting for " + timeoutMillis + " ms.");
         return valueOrError();
     }
 
