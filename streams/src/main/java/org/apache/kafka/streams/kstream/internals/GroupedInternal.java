@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 
 public class GroupedInternal<K, V> extends Grouped<K, V> {
 
-    GroupedInternal(final Grouped<K, V> grouped) {
+    public GroupedInternal(final Grouped<K, V> grouped) {
         super(grouped);
     }
 
