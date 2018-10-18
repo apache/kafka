@@ -50,7 +50,6 @@ public class StreamsMetadataState {
     private final HostInfo thisHost;
     private Cluster clusterMetadata;
     private StreamsMetadata myMetadata;
-    private int assignmentVersion;
 
     public StreamsMetadataState(final InternalTopologyBuilder builder, final HostInfo thisHost) {
         this.builder = builder;
@@ -236,7 +235,6 @@ public class StreamsMetadataState {
     }
 
     private void rebuildMetadata(final Map<HostInfo, Set<TaskId>> currentState, final int version) {
-        assignmentVersion = version;
         allMetadata.clear();
         if (currentState.isEmpty()) {
             return;
