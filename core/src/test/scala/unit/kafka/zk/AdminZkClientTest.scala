@@ -150,6 +150,22 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
   }
 
   @Test
+  def testValidateCreateOrUpdateTopic() {
+    val topic = "test"
+    val zkMock = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
+    EasyMock.expect(zkMock.getSortedBrokerList).andReturn(Seq(1, 2, 3, 4))
+    EasyMock.replay(zkMock)
+    val adminZkClient = new AdminZkClient(zkMock)
+
+    val partitionReplicaAssignment = Map(0 -> Seq(1, 3, 5), 1 -> Seq(10, 11, 12))
+    intercept[InvalidReplicaAssignmentException] {
+      adminZkClient.validateCreateOrUpdateTopic(topic, partitionReplicaAssignment, new Properties, update = false)
+    }
+  }
+
+
+  @Test
   def testConcurrentTopicCreation() {
     val topic = "test-concurrent-topic-creation"
     TestUtils.createBrokersInZk(zkClient, List(0, 1, 2, 3, 4))
