@@ -20,17 +20,39 @@ package org.apache.kafka.trogdor.workload;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import org.apache.kafka.trogdor.common.Topology;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Set;
 
 /**
- * The specification for a benchmark that produces messages to a set of topics.
+ * The specification for a benchmark that consumer messages from a set of topic partitions.
+ *
+ * If the consumerGroup field is defined, the consumer will subscribe to the
+ * topics using the #{@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(Collection)} method.
+ * If it is not passed, #{@link org.apache.kafka.clients.consumer.KafkaConsumer#assign(Collection)} will be used,
+ * which means the Consumer will not use the consumer's group management functionality.
+ *
+ * An example JSON representation
+ * #{@code
+ *    {
+ *        "class": "org.apache.kafka.trogdor.workload.ConsumeBenchSpec",
+ *        "durationMs": 10000000,
+ *        "consumerNode": "node0",
+ *        "bootstrapServers": "localhost:9092",
+ *        "maxMessages": 100,
+ *        "consumerGroup": "cg",
+ *        "activeTopics": {
+ *            "foo[1-3]": {
+ *                "numPartitions": 3,
+ *                "replicationFactor": 1
+ *            }
+ *        }
+ *    }
+ * }
  */
 public class ConsumeBenchSpec extends TaskSpec {
 
@@ -42,6 +64,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
     private final TopicsSpec activeTopics;
+    private String consumerGroup;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -50,6 +73,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") int maxMessages,
+                            @JsonProperty("consumerGroup") String consumerGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -63,11 +87,20 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? TopicsSpec.EMPTY : activeTopics.immutableCopy();
+        this.consumerGroup = consumerGroup;
     }
 
     @JsonProperty
     public String consumerNode() {
         return consumerNode;
+    }
+
+    /**
+     * Potentially null
+     */
+    @JsonProperty
+    public String consumerGroup() {
+        return consumerGroup;
     }
 
     @JsonProperty
@@ -105,14 +138,13 @@ public class ConsumeBenchSpec extends TaskSpec {
         return activeTopics;
     }
 
+    public void consumerGroup(String consumerGroup) {
+        this.consumerGroup = consumerGroup;
+    }
+
     @Override
     public TaskController newController(String id) {
-        return new TaskController() {
-            @Override
-            public Set<String> targetNodes(Topology topology) {
-                return Collections.singleton(consumerNode);
-            }
-        };
+        return topology -> Collections.singleton(consumerNode);
     }
 
     @Override
