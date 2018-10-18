@@ -128,7 +128,7 @@ object LogCleanerLagIntegrationTest {
   @Parameters
   def parameters: java.util.Collection[Array[String]] = {
     val list = new java.util.ArrayList[Array[String]]()
-    for (codec <- CompressionType.values)
+    for (codec <- CompressionType.values.filter(_!=CompressionType.PASSTHROUGH))
       list.add(Array(codec.name))
     list
   }
