@@ -141,6 +141,11 @@ public class ConfigDefTest {
         new ConfigDef().define("name", Type.INT, -1, Range.between(0, 10), Importance.HIGH, "docs");
     }
 
+    @Test
+    public void testInvalidDefaultRangeWhitelisted() {
+        new ConfigDef().define("name", Type.INT, -1, Range.between(0, 10, Collections.singletonList(-1)), Importance.HIGH, "docs");
+    }
+
     @Test(expected = ConfigException.class)
     public void testInvalidDefaultString() {
         new ConfigDef().define("name", Type.STRING, "bad", ValidString.in("valid", "values"), Importance.HIGH, "docs");

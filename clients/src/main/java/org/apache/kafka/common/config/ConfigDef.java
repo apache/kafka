@@ -838,15 +838,18 @@ public class ConfigDef {
     public static class Range implements Validator {
         private final Number min;
         private final Number max;
+        private final List<Number> whitelist;
 
         /**
          *  A numeric range with inclusive upper bound and inclusive lower bound
          * @param min  the lower bound
          * @param max  the upper bound
+         * @param whitelist values which are allowed even if they are outside the range
          */
-        private Range(Number min, Number max) {
+        private Range(Number min, Number max, List<Number> whitelist) {
             this.min = min;
             this.max = max;
+            this.whitelist = whitelist;
         }
 
         /**
@@ -854,21 +857,31 @@ public class ConfigDef {
          *
          * @param min The minimum acceptable value
          */
+        public static Range atLeast(Number min, List<Number> whitelist) {
+            return new Range(min, null, whitelist);
+        }
+
         public static Range atLeast(Number min) {
-            return new Range(min, null);
+            return atLeast(min, new ArrayList<>());
         }
 
         /**
          * A numeric range that checks both the upper (inclusive) and lower bound
          */
+        public static Range between(Number min, Number max, List<Number> whitelist) {
+            return new Range(min, max, whitelist);
+        }
+
         public static Range between(Number min, Number max) {
-            return new Range(min, max);
+            return between(min, max, new ArrayList<>());
         }
 
         public void ensureValid(String name, Object o) {
             if (o == null)
                 throw new ConfigException(name, null, "Value must be non-null");
             Number n = (Number) o;
+            if (whitelist != null && whitelist.contains(n))
+                return;
             if (min != null && n.doubleValue() < min.doubleValue())
                 throw new ConfigException(name, o, "Value must be at least " + min);
             if (max != null && n.doubleValue() > max.doubleValue())
@@ -876,14 +889,19 @@ public class ConfigDef {
         }
 
         public String toString() {
+            String range;
+            String whitelistSuffix = " (whitelist: " + ((whitelist == null) ? "[]" : whitelist.toString()) + ")";
+
             if (min == null && max == null)
-                return "[...]";
+                range = "[...]";
             else if (min == null)
-                return "[...," + max + "]";
+                range = "[...," + max + "]";
             else if (max == null)
-                return "[" + min + ",...]";
+                range = "[" + min + ",...]";
             else
-                return "[" + min + ",...," + max + "]";
+                range = "[" + min + ",...," + max + "]";
+
+            return range + whitelistSuffix;
         }
     }
 
