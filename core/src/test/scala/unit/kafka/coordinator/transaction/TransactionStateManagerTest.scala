@@ -419,56 +419,57 @@ class TransactionStateManagerTest {
   def shouldRemoveCompleteCommmitExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteCommit)
     verifyMetadataDoesntExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldRemoveCompleteAbortExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, CompleteAbort)
     verifyMetadataDoesntExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldRemoveEmptyExpiredTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, Empty)
     verifyMetadataDoesntExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemoveExpiredTransactionalIdsIfLogAppendFails(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NOT_ENOUGH_REPLICAS, CompleteAbort)
-    verifyMetadataDoesExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId1)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemoveOngoingTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, Ongoing)
-    verifyMetadataDoesExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId1)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemovePrepareAbortTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareAbort)
-    verifyMetadataDoesExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId1)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
   @Test
   def shouldNotRemovePrepareCommitTransactionalIds(): Unit = {
     setupAndRunTransactionalIdExpiration(Errors.NONE, PrepareCommit)
-    verifyMetadataDoesExist(transactionalId1)
-    verifyMetadataDoesExist(transactionalId2)
+    verifyMetadataDoesExistAndIsUsable(transactionalId1)
+    verifyMetadataDoesExistAndIsUsable(transactionalId2)
   }
 
-  private def verifyMetadataDoesExist(transactionalId: String) = {
+  private def verifyMetadataDoesExistAndIsUsable(transactionalId: String) = {
     transactionManager.getTransactionState(transactionalId) match {
       case Left(errors) => fail("shouldn't have been any errors")
       case Right(None) => fail("metadata should have been removed")
-      case Right(Some(metadata)) => // ok
+      case Right(Some(metadata)) =>
+        assertTrue("metadata shouldn't be in a pending state", metadata.transactionMetadata.pendingState.isEmpty)
     }
   }
 
