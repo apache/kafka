@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from ducktape.utils.util import wait_until
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 
 from kafkatest.services.zookeeper import ZookeeperService
@@ -25,6 +25,7 @@ from kafkatest.services.mirror_maker import MirrorMaker
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
+from kafkatest.version import DEV_BRANCH, KafkaVersion
 
 import time
 
@@ -58,9 +59,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         # Target cluster
         self.target_zk.start()
 
-    def start_kafka(self, security_protocol):
+    def start_kafka(self, security_protocol, source_version=DEV_BRANCH, target_version=DEV_BRANCH):
+        self.source_kafka.set_version(source_version)
         self.source_kafka.security_protocol = security_protocol
         self.source_kafka.interbroker_security_protocol = security_protocol
+        self.target_kafka.set_version(target_version)
         self.target_kafka.security_protocol = security_protocol
         self.target_kafka.interbroker_security_protocol = security_protocol
         if self.source_kafka.security_config.has_sasl_kerberos:
@@ -70,6 +73,10 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
             minikdc.start()
         self.source_kafka.start()
         self.target_kafka.start()
+
+    def mirror_maker_start(self, version=DEV_BRANCH):
+        self.mirror_maker.set_version(version)
+        self.mirror_maker.start()
 
     def bounce(self, clean_shutdown=True):
         """Bounce mirror maker with a clean (kill -15) or hard (kill -9) shutdown"""
@@ -114,7 +121,8 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=8)
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_simple_end_to_end(self, security_protocol):
+    def test_simple_end_to_end(self, security_protocol,
+                               source_version=str(DEV_BRANCH), target_version=str(DEV_BRANCH), mm_version=str(DEV_BRANCH)):
         """
         Test end-to-end behavior under non-failure conditions.
 
@@ -126,8 +134,9 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
         - Consume messages from target.
         - Verify that number of consumed messages matches the number produced.
         """
-        self.start_kafka(security_protocol)
-        self.mirror_maker.start()
+        self.start_kafka(security_protocol,
+                         source_version=KafkaVersion(source_version), target_version=KafkaVersion(target_version))
+        self.mirror_maker_start(version=KafkaVersion(mm_version))
 
         mm_node = self.mirror_maker.nodes[0]
         with mm_node.account.monitor_log(self.mirror_maker.LOG_FILE) as monitor:
@@ -139,7 +148,8 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
     @matrix(clean_shutdown=[True, False], security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=8)
     @matrix(clean_shutdown=[True, False], security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_bounce(self, offsets_storage="kafka", clean_shutdown=True, security_protocol='PLAINTEXT'):
+    def test_bounce(self, offsets_storage="kafka", clean_shutdown=True, security_protocol='PLAINTEXT',
+                    source_version=str(DEV_BRANCH), target_version=str(DEV_BRANCH), mm_version=str(DEV_BRANCH)):
         """
         Test end-to-end behavior under failure conditions.
 
@@ -157,10 +167,11 @@ class TestMirrorMakerService(ProduceConsumeValidateTest):
             # the group until the previous session times out
             self.consumer.consumer_timeout_ms = 60000
 
-        self.start_kafka(security_protocol)
+        self.start_kafka(security_protocol,
+                         source_version=KafkaVersion(source_version), target_version=KafkaVersion(target_version))
 
         self.mirror_maker.offsets_storage = offsets_storage
-        self.mirror_maker.start()
+        self.mirror_maker_start(version=KafkaVersion(mm_version))
 
         # Wait until mirror maker has reset fetch offset at least once before continuing with the rest of the test
         mm_node = self.mirror_maker.nodes[0]

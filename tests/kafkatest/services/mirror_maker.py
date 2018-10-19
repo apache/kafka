@@ -19,6 +19,7 @@ from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.version import DEV_BRANCH
 
 """
 MirrorMaker is a tool for mirroring data between two Kafka clusters.
@@ -40,7 +41,7 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
             "collect_default": True}
         }
 
-    def __init__(self, context, num_nodes, source, target, whitelist=None, num_streams=1,
+    def __init__(self, context, num_nodes, source, target, whitelist=None, num_streams=1, version=DEV_BRANCH,
                  consumer_timeout_ms=None, offsets_storage="kafka",
                  offset_commit_interval_ms=60000, log_level="DEBUG", producer_interceptor_classes=None):
         """
@@ -69,6 +70,8 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         self.whitelist = whitelist
         self.source = source
         self.target = target
+        for node in self.nodes:
+            node.version = version
 
         self.offsets_storage = offsets_storage.lower()
         if not (self.offsets_storage in ["kafka", "zookeeper"]):
@@ -81,6 +84,10 @@ class MirrorMaker(KafkaPathResolverMixin, Service):
         # These properties are potentially used by third-party tests.
         self.source_auto_offset_reset = None
         self.partition_assignment_strategy = None
+
+    def set_version(self, version):
+        for node in self.nodes:
+            node.version = version
 
     def start_cmd(self, node):
         cmd = "export LOG_DIR=%s;" % MirrorMaker.LOG_DIR
