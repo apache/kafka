@@ -175,9 +175,11 @@ public class BufferPoolTest {
         } catch (TimeoutException e) {
             // this is good
         }
+        // Thread scheduling sometimes means that no deallocation happens by this point
+        assertTrue("available memory" + pool.availableMemory(), pool.availableMemory() >= 8 && pool.availableMemory() <= 10);
         long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
         assertTrue("TimeoutException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
-        assertTrue("TimeoutException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 100);
+        assertTrue("TimeoutException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
     }
 
     /**
