@@ -73,6 +73,8 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
          * As of 2.1, there's no way for users to directly interact with the buffer,
          * so this method is implemented solely to be called by Streams (which
          * it will do based on the {@code cache.max.bytes.buffering} config.
+         *
+         * It's currently a no-op.
          */
         @Override
         public StoreBuilder<StateStore> withCachingEnabled() {
@@ -83,6 +85,8 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
          * As of 2.1, there's no way for users to directly interact with the buffer,
          * so this method is implemented solely to be called by Streams (which
          * it will do based on the {@code cache.max.bytes.buffering} config.
+         *
+         * It's currently a no-op.
          */
         @Override
         public StoreBuilder<StateStore> withCachingDisabled() {
