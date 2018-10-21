@@ -24,19 +24,19 @@ import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class SSLPrincipalMapper {
+public class SslPrincipalMapper {
 
     private static final Pattern RULE_PARSER = Pattern.compile("((DEFAULT)|(RULE:(([^/]*)/([^/]*))/([LU])?))");
 
     private final List<Rule> rules;
 
-    public SSLPrincipalMapper(List<Rule> sslPrincipalMappingRules) {
+    public SslPrincipalMapper(List<Rule> sslPrincipalMappingRules) {
         this.rules = sslPrincipalMappingRules;
     }
 
-    public static SSLPrincipalMapper fromRules(List<String> sslPrincipalMappingRules) {
+    public static SslPrincipalMapper fromRules(List<String> sslPrincipalMappingRules) {
         List<String> rules = sslPrincipalMappingRules == null ? Collections.singletonList("DEFAULT") : sslPrincipalMappingRules;
-        return new SSLPrincipalMapper(parseRules(rules));
+        return new SslPrincipalMapper(parseRules(rules));
     }
 
     private static List<Rule> parseRules(List<String> rules) {
@@ -73,7 +73,7 @@ public class SSLPrincipalMapper {
 
     @Override
     public String toString() {
-        return "SSLPrincipalMapper(rules = " + rules + ")";
+        return "SslPrincipalMapper(rules = " + rules + ")";
     }
 
     public static class NoMatchingRule extends IOException {

@@ -24,7 +24,7 @@ import java.util.List;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-public class SSLPrincipalMapperTest {
+public class SslPrincipalMapperTest {
 
     @Test
     public void testValidRules() {
@@ -37,7 +37,7 @@ public class SSLPrincipalMapperTest {
     }
 
     private void testValidRule(List<String> rules) {
-        SSLPrincipalMapper.fromRules(rules);
+        SslPrincipalMapper.fromRules(rules);
     }
 
     @Test
@@ -57,14 +57,14 @@ public class SSLPrincipalMapperTest {
 
     private void testInvalidRule(List<String> rules) {
         try {
-            System.out.println(SSLPrincipalMapper.fromRules(rules));
+            System.out.println(SslPrincipalMapper.fromRules(rules));
             fail("should have thrown IllegalArgumentException");
         } catch (IllegalArgumentException e) {
         }
     }
 
     @Test
-    public void testSSLPrincipalMapper() throws Exception {
+    public void testSslPrincipalMapper() throws Exception {
         List<String> rules = Arrays.asList(
             "RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/L",
             "RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L",
@@ -73,7 +73,7 @@ public class SSLPrincipalMapperTest {
             "DEFAULT"
         );
 
-        SSLPrincipalMapper mapper = SSLPrincipalMapper.fromRules(rules);
+        SslPrincipalMapper mapper = SslPrincipalMapper.fromRules(rules);
 
         assertEquals("duke", mapper.getName("CN=Duke,OU=ServiceUsers,O=Org,C=US"));
         assertEquals("duke@sme", mapper.getName("CN=Duke,OU=SME,O=mycp,L=Fulton,ST=MD,C=US"));

@@ -23,7 +23,7 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
-import org.apache.kafka.common.security.ssl.SSLPrincipalMapper;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -47,7 +47,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private SslFactory sslFactory;
     private Mode mode;
     private Map<String, ?> configs;
-    private SSLPrincipalMapper sslPrincipalMapper;
+    private SslPrincipalMapper sslPrincipalMapper;
 
     /**
      * Constructs a SSL channel builder. ListenerName is provided only
@@ -65,7 +65,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
             @SuppressWarnings("unchecked")
             List<String> sslPrincipalMappingRules = (List<String>) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
             if (sslPrincipalMappingRules != null)
-                sslPrincipalMapper = SSLPrincipalMapper.fromRules(sslPrincipalMappingRules);
+                sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
             this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (Exception e) {
@@ -162,7 +162,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         private final KafkaPrincipalBuilder principalBuilder;
         private final ListenerName listenerName;
 
-        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName, SSLPrincipalMapper sslPrincipalMapper) {
+        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName, SslPrincipalMapper sslPrincipalMapper) {
             this.transportLayer = transportLayer;
             this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null, sslPrincipalMapper);
             this.listenerName = listenerName;

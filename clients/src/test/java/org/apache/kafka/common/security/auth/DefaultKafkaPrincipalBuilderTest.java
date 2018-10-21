@@ -23,7 +23,7 @@ import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
-import org.apache.kafka.common.security.ssl.SSLPrincipalMapper;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.junit.Test;
 
 import javax.net.ssl.SSLSession;
@@ -135,7 +135,7 @@ public class DefaultKafkaPrincipalBuilderTest {
 
 
     @Test
-    public void testPrincipalWithSSLPrincipalMapper() throws Exception {
+    public void testPrincipalWithSslPrincipalMapper() throws Exception {
         SSLSession session = mock(SSLSession.class);
 
         when(session.getPeerPrincipal()).thenReturn(new X500Principal("CN=Duke, OU=ServiceUsers, O=Org, C=US"))
@@ -150,7 +150,7 @@ public class DefaultKafkaPrincipalBuilderTest {
             "DEFAULT"
         );
 
-        SSLPrincipalMapper mapper = SSLPrincipalMapper.fromRules(rules);
+        SslPrincipalMapper mapper = SslPrincipalMapper.fromRules(rules);
         DefaultKafkaPrincipalBuilder builder = new DefaultKafkaPrincipalBuilder(null, mapper);
 
         SslAuthenticationContext sslContext = new SslAuthenticationContext(session, InetAddress.getLocalHost(), SecurityProtocol.PLAINTEXT.name());

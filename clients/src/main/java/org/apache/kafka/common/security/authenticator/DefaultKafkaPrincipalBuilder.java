@@ -33,7 +33,7 @@ import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
 import javax.net.ssl.SSLPeerUnverifiedException;
 import javax.net.ssl.SSLSession;
 import javax.security.sasl.SaslServer;
-import org.apache.kafka.common.security.ssl.SSLPrincipalMapper;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -58,7 +58,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
     private final Authenticator authenticator;
     private final TransportLayer transportLayer;
     private final KerberosShortNamer kerberosShortNamer;
-    private final SSLPrincipalMapper sslPrincipalMapper;
+    private final SslPrincipalMapper sslPrincipalMapper;
 
     /**
      * Construct a new instance which wraps an instance of the older {@link org.apache.kafka.common.security.auth.PrincipalBuilder}.
@@ -86,7 +86,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
                                          TransportLayer transportLayer,
                                          org.apache.kafka.common.security.auth.PrincipalBuilder oldPrincipalBuilder,
                                          KerberosShortNamer kerberosShortNamer,
-                                         SSLPrincipalMapper sslPrincipalMapper) {
+                                         SslPrincipalMapper sslPrincipalMapper) {
         this.authenticator = authenticator;
         this.transportLayer = transportLayer;
         this.oldPrincipalBuilder = oldPrincipalBuilder;
@@ -100,7 +100,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
      * @param kerberosShortNamer Kerberos name rewrite rules or null if none have been configured
      * @param sslPrincipalMapper SSL Principal mapper or null if none have been configured
      */
-    public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer, SSLPrincipalMapper sslPrincipalMapper) {
+    public DefaultKafkaPrincipalBuilder(KerberosShortNamer kerberosShortNamer, SslPrincipalMapper sslPrincipalMapper) {
         this(null, null, null, kerberosShortNamer, sslPrincipalMapper);
     }
 
@@ -118,7 +118,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
                 return convertToKafkaPrincipal(oldPrincipalBuilder.buildPrincipal(transportLayer, authenticator));
 
             try {
-                return applySSLPrincipalMapper(sslSession.getPeerPrincipal());
+                return applySslPrincipalMapper(sslSession.getPeerPrincipal());
             } catch (SSLPeerUnverifiedException se) {
                 return KafkaPrincipal.ANONYMOUS;
             }
@@ -144,7 +144,7 @@ public class DefaultKafkaPrincipalBuilder implements KafkaPrincipalBuilder, Clos
         }
     }
 
-    private KafkaPrincipal applySSLPrincipalMapper(Principal principal) {
+    private KafkaPrincipal applySslPrincipalMapper(Principal principal) {
         try {
             if (!(principal instanceof X500Principal) || principal == KafkaPrincipal.ANONYMOUS) {
                 return new KafkaPrincipal(KafkaPrincipal.USER_TYPE, principal.getName());
