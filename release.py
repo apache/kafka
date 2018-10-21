@@ -286,11 +286,11 @@ def command_release_announcement_email():
     release_tag_pattern = re.compile('^[0-9]+\.[0-9]+\.[0-9]+$')
     release_tags = sorted([t for t in tags if re.match(release_tag_pattern, t)])
     release_version_num = release_tags[-1]
-    if not user_ok("""Is the current release %s ? (y/n):""" %release_version_num):
+    if not user_ok("""Is the current release %s ? (y/n): """ % release_version_num):
         release_version_num = raw_input('What is the current release version:')
         validate_release_num(release_version_num)
     previous_release_version_num = release_tags[-2]
-    if not user_ok("""Is the previous release %s ? (y/n):""" %previous_release_version_num):
+    if not user_ok("""Is the previous release %s ? (y/n): """ % previous_release_version_num):
         previous_release_version_num = raw_input('What is the previous release version:')
         validate_release_num(previous_release_version_num)
     if release_version_num < previous_release_version_num :
@@ -304,70 +304,70 @@ def command_release_announcement_email():
     }
 
     release_announcement_email = """
-        To: announce@apache.org, dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
-        Subject: [ANNOUNCE] Apache Kafka %(release_version)s
-        
-        The Apache Kafka community is pleased to announce the release for Apache Kafka %(release_version)s
-        
-        <DETAILS OF THE CHANGES>
-        
-        All of the changes in this release can be found in the release notes:
-        https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html 
- 
+To: announce@apache.org, dev@kafka.apache.org, users@kafka.apache.org, kafka-clients@googlegroups.com
+Subject: [ANNOUNCE] Apache Kafka %(release_version)s
 
-        You can download the source and binary release (Scala <VERSIONS>) from:        
-        https://kafka.apache.org/downloads#%(release_version)s                
-        
-        ---------------------------------------------------------------------------------------------------
-              
-        
-        Apache Kafka is a distributed streaming platform with four core APIs:
-        
-                 
-        ** The Producer API allows an application to publish a stream records to        
-        one or more Kafka topics.        
-                 
-        ** The Consumer API allows an application to subscribe to one or more        
-        topics and process the stream of records produced to them.      
-        
-        ** The Streams API allows an application to act as a stream processor,
-        consuming an input stream from one or more topics and producing an        
-        output stream to one or more output topics, effectively transforming the        
-        input streams to output streams.         
-        
-        ** The Connector API allows building and running reusable producers or        
-        consumers that connect Kafka topics to existing applications or data        
-        systems. For example, a connector to a relational database might        
-        capture every change to a table.
-         
-        
-        With these APIs, Kafka can be used for two broad classes of application: 
-        
-        ** Building real-time streaming data pipelines that reliably get data        
-        between systems or applications.         
-        
-        ** Building real-time streaming applications that transform or react        
-        to the streams of data.
-         
-        
-        Apache Kafka is in use at large and small companies worldwide, including        
-        Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,        
-        Target, The New York Times, Uber, Yelp, and Zalando, among others.
+The Apache Kafka community is pleased to announce the release for Apache Kafka %(release_version)s
 
-        A big thank you for the following %(number_of_contributors)d contributors to this release!
-        
-        %(contributors)s
-        
-        We welcome your help and feedback. For more information on how to
-        report problems, and to get involved, visit the project website at
-        https://kafka.apache.org/ 
+<DETAILS OF THE CHANGES>
 
-        Thank you!
-        
-        
-        Regards,
- 
-        <YOU>""" % release_announcement_data
+All of the changes in this release can be found in the release notes:
+https://www.apache.org/dist/kafka/%(release_version)s/RELEASE_NOTES.html
+
+
+You can download the source and binary release (Scala <VERSIONS>) from:
+https://kafka.apache.org/downloads#%(release_version)s
+
+---------------------------------------------------------------------------------------------------
+
+
+Apache Kafka is a distributed streaming platform with four core APIs:
+
+
+** The Producer API allows an application to publish a stream records to
+one or more Kafka topics.
+
+** The Consumer API allows an application to subscribe to one or more
+topics and process the stream of records produced to them.
+
+** The Streams API allows an application to act as a stream processor,
+consuming an input stream from one or more topics and producing an
+output stream to one or more output topics, effectively transforming the
+input streams to output streams.
+
+** The Connector API allows building and running reusable producers or
+consumers that connect Kafka topics to existing applications or data
+systems. For example, a connector to a relational database might
+capture every change to a table.
+
+
+With these APIs, Kafka can be used for two broad classes of application:
+
+** Building real-time streaming data pipelines that reliably get data
+between systems or applications.
+
+** Building real-time streaming applications that transform or react
+to the streams of data.
+
+
+Apache Kafka is in use at large and small companies worldwide, including
+Capital One, Goldman Sachs, ING, LinkedIn, Netflix, Pinterest, Rabobank,
+Target, The New York Times, Uber, Yelp, and Zalando, among others.
+
+A big thank you for the following %(number_of_contributors)d contributors to this release!
+
+%(contributors)s
+
+We welcome your help and feedback. For more information on how to
+report problems, and to get involved, visit the project website at
+https://kafka.apache.org/
+
+Thank you!
+
+
+Regards,
+
+<YOU>""" % release_announcement_data
 
     print()
     print("*****************************************************************")
