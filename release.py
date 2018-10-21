@@ -285,13 +285,13 @@ if not user_ok("""Requirements:
       signing.keyId=your-gpgkeyId
       signing.password=your-gpg-passphrase
       signing.secretKeyRingFile=/Users/your-id/.gnupg/secring.gpg (if you are using GPG 2.1 and beyond, then this file will no longer exist anymore, and you have to manually create it from the new private key directory with "gpg --export-secret-keys -o ~/.gnupg/secring.gpg")
-8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e., 
+8. ~/.m2/settings.xml configured for pgp signing and uploading to apache release maven, i.e.,
        <server>
           <id>apache.releases.https</id>
           <username>your-apache-id</username>
           <password>your-apache-passwd</password>
         </server>
-	<server>
+        <server>
             <id>your-gpgkeyId</id>
             <passphrase>your-gpg-passphase</passphrase>
         </server>
@@ -299,18 +299,18 @@ if not user_ok("""Requirements:
             <id>gpg-signing</id>
             <properties>
                 <gpg.keyname>your-gpgkeyId</gpg.keyname>
-        	<gpg.passphraseServerId>your-gpgkeyId</gpg.passphraseServerId>
+                <gpg.passphraseServerId>your-gpgkeyId</gpg.passphraseServerId>
             </properties>
         </profile>
 9. You may also need to update some gnupgp configs:
-	~/.gnupg/gpg-agent.conf
-	allow-loopback-pinentry
+        ~/.gnupg/gpg-agent.conf
+        allow-loopback-pinentry
 
-	~/.gnupg/gpg.conf
-	use-agent
-	pinentry-mode loopback
+        ~/.gnupg/gpg.conf
+        use-agent
+        pinentry-mode loopback
 
-	echo RELOADAGENT | gpg-connect-agent
+        echo RELOADAGENT | gpg-connect-agent
 
 If any of these are missing, see https://cwiki.apache.org/confluence/display/KAFKA/Release+Process for instructions on setting them up.
 
@@ -404,7 +404,7 @@ cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
 cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
 cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
 # Command in explicit list due to messages with spaces
-cmd("Commiting version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
+cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
 cmd("Tagging release candidate %s" % rc_tag, ["git", "tag", "-a", rc_tag, "-m", rc_tag])
 rc_githash = cmd_output("git show-ref --hash " + rc_tag)
