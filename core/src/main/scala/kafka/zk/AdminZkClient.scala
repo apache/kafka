@@ -53,7 +53,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createTopicWithAssignment(topic, topicConfig, replicaAssignment)
+    createTopicWithAssignment(topic, topicConfig, replicaAssignment, rackAwareMode)
   }
 
   /**
@@ -82,8 +82,9 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
   def createTopicWithAssignment(topic: String,
                                 config: Properties,
-                                partitionReplicaAssignment: Map[Int, Seq[Int]]): Unit = {
-    validateTopicCreate(topic, partitionReplicaAssignment, config)
+                                partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
+    validateTopicCreate(topic, partitionReplicaAssignment, config, rackAwareMode)
 
     info(s"Creating topic $topic with configuration $config and initial partition " +
       s"assignment $partitionReplicaAssignment")
@@ -95,12 +96,24 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment, isUpdate = false)
   }
 
+  def validatePartitionReplicaAssignment(topic: String,
+                                         partitionReplicaAssignment: Map[Int, Seq[Int]],
+                                         rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
+    val assignmentPartition0 = partitionReplicaAssignment.getOrElse(0,
+      throw new AdminOperationException(
+        s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
+          s"Assignment: $partitionReplicaAssignment"))
+    val allBrokers = getBrokerMetadatas(rackAwareMode)
+    validateReplicaAssignment(partitionReplicaAssignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
+  }
+
   /**
    * Validate topic creation parameters
    */
   def validateTopicCreate(topic: String,
                           partitionReplicaAssignment: Map[Int, Seq[Int]],
-                          config: Properties): Unit = {
+                          config: Properties,
+                          rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
     Topic.validate(topic)
 
     if (zkClient.topicExists(topic))
@@ -117,13 +130,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       }
     }
 
-    if (partitionReplicaAssignment.values.map(_.size).toSet.size != 1)
-      throw new InvalidReplicaAssignmentException("All partitions should have the same number of replicas")
-
-    partitionReplicaAssignment.values.foreach(reps =>
-      if (reps.size != reps.toSet.size)
-        throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
-    )
+    //Validate partition replica assignment during topic creation.
+    validatePartitionReplicaAssignment(topic, partitionReplicaAssignment, rackAwareMode)
 
     LogConfig.validate(config)
   }
@@ -224,11 +232,13 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException(
           s"Duplicate brokers not allowed in replica assignment: " +
             s"${replicas.mkString(", ")} for partition id $partitionId.")
-      if (!replicas.toSet.subsetOf(availableBrokerIds))
+      // Topic creation should be interrupted if all the replicas are unavailable or not alive.
+      // Atleast one replica should be alive for topic creation.
+      if ((replicas.toSet -- availableBrokerIds).size == replicas.size)
         throw new BrokerNotAvailableException(
-          s"Some brokers specified for partition id $partitionId are not available. " +
+          s"All brokers specified for partition id $partitionId are not available. " +
             s"Specified brokers: ${replicas.mkString(", ")}, " +
-            s"available brokers: ${availableBrokerIds.mkString(", ")}.")
+            s"Available brokers: ${availableBrokerIds.mkString(", ")}.")
       partitionId -> replicas.size
     }
     val badRepFactors = replicaAssignment.collect {

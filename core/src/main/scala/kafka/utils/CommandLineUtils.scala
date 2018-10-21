@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
- package kafka.utils
+package kafka.utils
 
 import joptsimple.{OptionSpec, OptionSet, OptionParser}
 import scala.collection.Set
