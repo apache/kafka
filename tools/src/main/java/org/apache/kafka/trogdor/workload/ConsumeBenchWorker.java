@@ -42,8 +42,9 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Properties;
 import java.util.Map;
+import java.util.UUID;
+import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -56,7 +57,6 @@ public class ConsumeBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConsumeBenchWorker.class);
 
     private static final int THROTTLE_PERIOD_MS = 100;
-    private static final String DEFAULT_CONSUMER_GROUP = "consumer-group-1";
 
     private final String id;
     private final ConsumeBenchSpec spec;
@@ -89,90 +89,78 @@ public class ConsumeBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
-                for (Map.Entry<String, PartitionsSpec> entry : spec.activeTopics().materialize().entrySet()) {
-                    List<TopicPartition> partitions = new ArrayList<>();
-                    String topic = entry.getKey();
-                    for (Integer partitionNumber : entry.getValue().partitionNumbers()) {
-                        partitions.add(new TopicPartition(topic, partitionNumber));
-                    }
-                    partitionsByTopic.put(topic, partitions);
+                String consumerGroup = spec.consumerGroup();
+                boolean toUseGroupPartitionAssignment = spec.useGroupPartitionAssignment();
+
+                if (consumerGroup.equals(ConsumeBenchSpec.EMPTY_CONSUMER_GROUP)) {
+                    // consumer group is undefined, the consumer should use assign() and a random group
+                    consumerGroup = generateConsumerGroup();
+                    toUseGroupPartitionAssignment = false;
                 }
 
-                AbstractConsumeMessages consumeMessagesTask;
-                if (spec.consumerGroup() == null) {
-                    spec.consumerGroup(DEFAULT_CONSUMER_GROUP);
-                    consumeMessagesTask = new AssignConsumeMessages(partitionsByTopic);
-                } else
-                    consumeMessagesTask = new SubscribedConsumeMessage(partitionsByTopic);
-
-                log.info("Creating new task {}. Will consume from {}",
-                    consumeMessagesTask.getClass().getName(), partitionsByTopic);
-                executor.submit(consumeMessagesTask);
+                executor.submit(new ConsumeMessages(partitionsByTopic(), consumerGroup, toUseGroupPartitionAssignment));
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
         }
-    }
 
-    public class SubscribedConsumeMessage extends AbstractConsumeMessages {
-        SubscribedConsumeMessage(Map<String, List<TopicPartition>> topicPartitionsByTopic) {
-            super(topicPartitionsByTopic);
+        private String generateConsumerGroup() {
+            return "consumer-group-" + UUID.randomUUID().toString();
         }
 
-        @Override
-        KafkaConsumer<byte[], byte[]> createConsumer(Map<String, List<TopicPartition>> topicPartitionsByTopic) {
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
-                this.consumerProperties, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            consumer.subscribe(topicPartitionsByTopic.keySet());
-            return consumer;
-        }
-    }
-
-    public class AssignConsumeMessages extends AbstractConsumeMessages {
-        AssignConsumeMessages(Map<String, List<TopicPartition>> topicPartitionsByTopic) {
-            super(topicPartitionsByTopic);
-        }
-
-        @Override
-        KafkaConsumer<byte[], byte[]> createConsumer(Map<String, List<TopicPartition>> topicPartitionsByTopic) {
-            List<TopicPartition> topicPartitions = topicPartitionsByTopic.values().stream()
-                .flatMap(List::stream).collect(Collectors.toList());
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
-                consumerProperties, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            consumer.assign(topicPartitions);
-            return consumer;
+        private Map<String, List<TopicPartition>> partitionsByTopic() {
+            Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
+            for (Map.Entry<String, PartitionsSpec> entry : spec.activeTopics().materialize().entrySet()) {
+                List<TopicPartition> partitions = new ArrayList<>();
+                String topic = entry.getKey();
+                for (Integer partitionNumber : entry.getValue().partitionNumbers()) {
+                    partitions.add(new TopicPartition(topic, partitionNumber));
+                }
+                partitionsByTopic.put(topic, partitions);
+            }
+            return partitionsByTopic;
         }
     }
 
-    public abstract class AbstractConsumeMessages implements Callable<Void> {
+    public class ConsumeMessages implements Callable<Void> {
         private final Histogram latencyHistogram;
         private final Histogram messageSizeHistogram;
         private final Future<?> statusUpdaterFuture;
         private final Throttle throttle;
-        Properties consumerProperties;
 
-        AbstractConsumeMessages(Map<String, List<TopicPartition>> topicPartitionsByTopic) {
+        ConsumeMessages(Map<String, List<TopicPartition>> topicPartitionsByTopic, String consumerGroup, boolean toUseGroupAssignment) {
             this.latencyHistogram = new Histogram(5000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
                 new StatusUpdater(latencyHistogram, messageSizeHistogram), 1, 1, TimeUnit.MINUTES);
-            this.consumerProperties = new Properties();
-            consumerProperties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            consumerProperties.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer." + id);
-            consumerProperties.put(ConsumerConfig.GROUP_ID_CONFIG, spec.consumerGroup());
-            consumerProperties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            consumerProperties.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
+            Properties props = new Properties();
+            props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
+            props.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer." + id);
+            props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
+            props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+            props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
             // these defaults maybe over-written by the user-specified commonClientConf or
             // consumerConf
-            WorkerUtils.addConfigsToProperties(consumerProperties, spec.commonClientConf(), spec.consumerConf());
-            consumer = createConsumer(topicPartitionsByTopic);
+            WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
+            consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            if (toUseGroupAssignment) {
+                Set<String> topics = topicPartitionsByTopic.keySet();
+                log.info("Will consume from topics {} via dynamic group assignment. Tracking offsets in consumer group {}",
+                    topics, consumerGroup);
+                consumer.subscribe(topics);
+            }
+            else {
+                List<TopicPartition> partitions = topicPartitionsByTopic.values().stream()
+                    .flatMap(List::stream).collect(Collectors.toList());
+                log.info("Will consume from topic partitions {} via manual assignment. Tracking offsets in consumer group {}",
+                    partitions, consumerGroup);
+                consumer.assign(partitions);
+            }
+
             int perPeriod = WorkerUtils.perSecToPerPeriod(
                 spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
         }
-
-        abstract KafkaConsumer<byte[], byte[]> createConsumer(Map<String, List<TopicPartition>> topicPartitionsByTopic);
 
         @Override
         public Void call() throws Exception {

@@ -45,6 +45,7 @@ import java.util.Map;
  *        "bootstrapServers": "localhost:9092",
  *        "maxMessages": 100,
  *        "consumerGroup": "cg",
+ *        "useGroupPartitionAssignment": true,
  *        "activeTopics": {
  *            "foo[1-3]": {
  *                "numPartitions": 3,
@@ -56,10 +57,13 @@ import java.util.Map;
  */
 public class ConsumeBenchSpec extends TaskSpec {
 
+    public final static String EMPTY_CONSUMER_GROUP = "";
+
     private final String consumerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
     private final int maxMessages;
+    private final boolean useGroupPartitionAssignment;
     private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -73,6 +77,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") int maxMessages,
+                            @JsonProperty("useGroupPartitionAssignment") Boolean useGroupPartitionAssignment,
                             @JsonProperty("consumerGroup") String consumerGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
@@ -83,11 +88,12 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
+        this.useGroupPartitionAssignment = useGroupPartitionAssignment == null ? true : useGroupPartitionAssignment;
         this.consumerConf = configOrEmptyMap(consumerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? TopicsSpec.EMPTY : activeTopics.immutableCopy();
-        this.consumerGroup = consumerGroup;
+        this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
     }
 
     @JsonProperty
@@ -95,9 +101,6 @@ public class ConsumeBenchSpec extends TaskSpec {
         return consumerNode;
     }
 
-    /**
-     * Potentially null
-     */
     @JsonProperty
     public String consumerGroup() {
         return consumerGroup;
@@ -138,8 +141,12 @@ public class ConsumeBenchSpec extends TaskSpec {
         return activeTopics;
     }
 
-    public void consumerGroup(String consumerGroup) {
-        this.consumerGroup = consumerGroup;
+    /**
+     * Denotes whether to use a dynamic partition assignment from the consumer group or a manual assignment
+     */
+    @JsonProperty
+    public boolean useGroupPartitionAssignment() {
+        return useGroupPartitionAssignment;
     }
 
     @Override
