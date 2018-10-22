@@ -83,6 +83,7 @@ public final class ConnectUtils {
         while (entryIter.hasNext()) {
             Map.Entry<String, Object> entry = entryIter.next();
             if (!configNames.contains(entry.getKey())) {
+                log.debug("Not retaining the '{}' config property when passing to a subcomponent", entry.getKey());
                 entryIter.remove();
             }
         }
