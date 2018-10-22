@@ -136,7 +136,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                           : connectorClassOrAlias;
         SortedMap<PluginDesc<?>, ClassLoader> inner = pluginLoaders.get(fullName);
         if (inner == null) {
-            log.error(
+            log.warn(
                     "Plugin class loader for connector: '{}' was not found. Returning: {}",
                     connectorClassOrAlias,
                     this
