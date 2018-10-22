@@ -72,9 +72,8 @@ public final class ProducerBatch {
     private long lastAttemptMs;
     private long lastAppendTime;
     private long drainedMs;
-    private String expiryErrorMessage;
     private boolean retry;
-    private boolean reopened = false;
+    private boolean reopened;
 
     public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
         this(tp, recordsBuilder, createdMs, false);
@@ -154,6 +153,13 @@ public final class ProducerBatch {
 
         log.trace("Aborting batch for partition {}", topicPartition, exception);
         completeFutureAndFireCallbacks(ProduceResponse.INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, exception);
+    }
+
+    /**
+     * Return `true` if {@link #done(long, long, RuntimeException)} has been invoked at least once, `false` otherwise.
+     */
+    public boolean isDone() {
+        return finalState() != null;
     }
 
     /**
