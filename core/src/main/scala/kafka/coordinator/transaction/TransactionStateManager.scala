@@ -166,37 +166,32 @@ class TransactionStateManager(brokerId: Int,
             (topicPartition, records)
           }
 
-
         def removeFromCacheCallback(responses: collection.Map[TopicPartition, PartitionResponse]): Unit = {
           responses.foreach { case (topicPartition, response) =>
-            response.error match {
-              case Errors.NONE =>
-                inReadLock(stateLock) {
-                  val toRemove = transactionalIdByPartition(topicPartition.partition())
-                  transactionMetadataCache.get(topicPartition.partition)
-                    .foreach { txnMetadataCacheEntry =>
-                      toRemove.foreach { idCoordinatorEpochAndMetadata =>
-                        val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(idCoordinatorEpochAndMetadata.transactionalId)
-                        txnMetadata.inLock {
-                          if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
-                            && txnMetadata.pendingState.contains(Dead)
-                            && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
-                          )
-                            txnMetadataCacheEntry.metadataPerTransactionalId.remove(idCoordinatorEpochAndMetadata.transactionalId)
-                          else {
-                             debug(s"failed to remove expired transactionalId: ${idCoordinatorEpochAndMetadata.transactionalId}" +
-                               s" from cache. pendingState: ${txnMetadata.pendingState} producerEpoch: ${txnMetadata.producerEpoch}" +
-                               s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}" +
-                               s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch} expected coordinatorEpoch: " +
-                               s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
-                            txnMetadata.pendingState = None
-                          }
-                        }
-                      }
+            inReadLock(stateLock) {
+              val toRemove = transactionalIdByPartition(topicPartition.partition)
+              transactionMetadataCache.get(topicPartition.partition).foreach { txnMetadataCacheEntry =>
+                toRemove.foreach { idCoordinatorEpochAndMetadata =>
+                  val transactionalId = idCoordinatorEpochAndMetadata.transactionalId
+                  val txnMetadata = txnMetadataCacheEntry.metadataPerTransactionalId.get(transactionalId)
+                  txnMetadata.inLock {
+                    if (txnMetadataCacheEntry.coordinatorEpoch == idCoordinatorEpochAndMetadata.coordinatorEpoch
+                      && txnMetadata.pendingState.contains(Dead)
+                      && txnMetadata.producerEpoch == idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch
+                      && response.error == Errors.NONE) {
+                      txnMetadataCacheEntry.metadataPerTransactionalId.remove(transactionalId)
+                    } else {
+                      warn(s"Failed to remove expired transactionalId: $transactionalId" +
+                        s" from cache. Tombstone append error code: ${response.error}," +
+                        s" pendingState: ${txnMetadata.pendingState}, producerEpoch: ${txnMetadata.producerEpoch}," +
+                        s" expected producerEpoch: ${idCoordinatorEpochAndMetadata.transitMetadata.producerEpoch}," +
+                        s" coordinatorEpoch: ${txnMetadataCacheEntry.coordinatorEpoch}, expected coordinatorEpoch: " +
+                        s"${idCoordinatorEpochAndMetadata.coordinatorEpoch}")
+                      txnMetadata.pendingState = None
                     }
+                  }
                 }
-              case _ =>
-                debug(s"writing transactionalId tombstones for partition: ${topicPartition.partition} failed with error: ${response.error.message()}")
+              }
             }
           }
         }
