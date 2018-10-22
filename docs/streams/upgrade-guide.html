@@ -119,7 +119,7 @@
         In particular, aggregation windows (hopping/tumbling/unlimited time windows and session windows) as well as join windows now take <code>Duration</code>
         arguments to specify window size, hop, and gap parameters.
         Also, window sizes and retention times are now specified as <code>Duration</code> type in <code>Stores</code> class.
-        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime</code> that return window start/end timestamp as <code>Instant</code>.
+        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime()</code> that return window start/end timestamp as <code>Instant</code>.
         For interactive queries, there are new <code>#fetch(...)</code> overloads taking <code>Instant</code> arguments.
         Additionally, punctuations are now registerd via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
