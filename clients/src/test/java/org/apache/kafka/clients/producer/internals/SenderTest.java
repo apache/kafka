@@ -2037,6 +2037,36 @@ public class SenderTest {
     }
 
     @Test
+    public void testExpiredBatchDoesNotSplitOnMessageTooLargeError() throws Exception {
+        long deliverTimeoutMs = 1500L;
+        // create a producer batch with more than one record so it is eligible to split
+        Future<RecordMetadata> request1 =
+            accumulator.append(tp0, time.milliseconds(), "key1".getBytes(), "value1".getBytes(), null, null,
+                MAX_BLOCK_TIMEOUT).future;
+        Future<RecordMetadata> request2 =
+            accumulator.append(tp0, time.milliseconds(), "key2".getBytes(), "value2".getBytes(), null, null,
+                MAX_BLOCK_TIMEOUT).future;
+
+        sender.run(time.milliseconds());  // send request
+        assertEquals(1, client.inFlightRequestCount());
+        // return a MESSAGE_TOO_LARGE error
+        client.respond(produceResponse(tp0, -1, Errors.MESSAGE_TOO_LARGE, -1));
+
+        time.sleep(deliverTimeoutMs);
+        // expire the batch and process the response
+        sender.run(time.milliseconds());
+        assertTrue(request1.isDone());
+        assertTrue(request2.isDone());
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+
+        // run again and must not split big batch and resend anything.
+        sender.run(time.milliseconds());
+        assertEquals(0, client.inFlightRequestCount());
+        assertEquals(0, sender.inFlightBatches(tp0).size());
+    }
+
+    @Test
     public void testResetNextBatchExpiry() throws Exception {
         client = spy(new MockClient(time));
 
