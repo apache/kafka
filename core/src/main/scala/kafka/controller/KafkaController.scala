@@ -29,7 +29,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
@@ -195,7 +195,19 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def controlledShutdown(id: Int, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
+  def controlledShutdown(id: Int, epoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
+    // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
+    // so we will keep the previous behavior and don't reject the request
+    if (epoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+      val cachedBrokerEpoch = controllerContext.brokerEpochsCache(id)
+      if (epoch < cachedBrokerEpoch) {
+        val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
+          s"$epoch. Current broker epoch is $cachedBrokerEpoch"
+        stateChangeLogger.warn(stateBrokerEpochErrorMessage)
+        controlledShutdownCallback(Try {throw new StaleBrokerEpochException(stateChangeLogger.messageWithPrefix(stateBrokerEpochErrorMessage))})
+        return
+      }
+    }
     val controlledShutdownEvent = ControlledShutdown(id, controlledShutdownCallback)
     eventManager.put(controlledShutdownEvent)
   }
