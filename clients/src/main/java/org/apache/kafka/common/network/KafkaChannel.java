@@ -475,10 +475,10 @@ public class KafkaChannel {
     }
 
     /**
-     * If this is a server-side connection that has an expiration time, is not
-     * muted, and at least 1 second has passed since the prior re-authentication (if
-     * any) started then begin the process of re-authenticating the connection and
-     * return true, otherwise return false
+     * If this is a server-side connection that has an expiration time and at least
+     * 1 second has passed since the prior re-authentication (if any) started then
+     * begin the process of re-authenticating the connection and return true,
+     * otherwise return false
      * 
      * @param saslHandshakeNetworkReceive
      *            the mandatory {@link NetworkReceive} containing the
@@ -490,10 +490,10 @@ public class KafkaChannel {
      *            useful when compared to such a value -- it's absolute value is
      *            meaningless.
      * 
-     * @return true if this is a server-side connection that has an expiration time,
-     *         is not muted, and at least 1 second has passed since the prior
-     *         re-authentication (if any) started to indicate that the
-     *         re-authentication process has begun, otherwise false
+     * @return true if this is a server-side connection that has an expiration time
+     *         and at least 1 second has passed since the prior re-authentication
+     *         (if any) started to indicate that the re-authentication process has
+     *         begun, otherwise false
      * @throws AuthenticationException
      *             if re-authentication fails due to invalid credentials or other
      *             security configuration errors
@@ -505,7 +505,8 @@ public class KafkaChannel {
     public boolean maybeBeginServerReauthentication(NetworkReceive saslHandshakeNetworkReceive,
             Supplier<Long> nowNanosSupplier) throws AuthenticationException, IOException {
         if (!ready())
-            throw new IllegalStateException("KafkaChannel should always be \"ready\" upon receiving SASL Handshake");
+            throw new IllegalStateException(
+                    "KafkaChannel should be \"ready\" when processing SASL Handshake for potential re-authentication");
         /*
          * Re-authentication is disabled if there is no session expiration time, in
          * which case the SASL handshake network receive will be processed normally,
