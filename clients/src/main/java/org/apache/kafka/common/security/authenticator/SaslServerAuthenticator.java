@@ -90,15 +90,27 @@ public class SaslServerAuthenticator implements Authenticator {
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
     private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
+    /**
+     * The internal state transitions for initial authentication of a channel on the
+     * server side are declared in order, starting with {@link #INITIAL_REQUEST} and
+     * ending in either {@link #COMPLETE} or {@link #FAILED}.
+     * <p>
+     * Re-authentication of a channel on the server side starts with the state
+     * {@link #REAUTH_PROCESS_HANDSHAKE}. It may then flow to
+     * {@link #REAUTH_BAD_MECHANISM} before a transition to {@link #FAILED} if
+     * re-authentication is attempted with a mechanism different than the original
+     * one; otherwise it joins the authentication flow at the {@link #AUTHENTICATE}
+     * state and likewise ends at either {@link #COMPLETE} or {@link #FAILED}.
+     */
     private enum SaslState {
         INITIAL_REQUEST,               // May be GSSAPI token, SaslHandshake or ApiVersions for authentication
-        REAUTH_PROCESS_HANDSHAKE,      // Initial state for re-authentication, processes SASL handshake request
-        REAUTH_BAD_MECHANISM,          // When re-authentication requested with wrong mechanism, generate exception
         HANDSHAKE_OR_VERSIONS_REQUEST, // May be SaslHandshake or ApiVersions
         HANDSHAKE_REQUEST,             // After an ApiVersions request, next request must be SaslHandshake
         AUTHENTICATE,                  // Authentication tokens (SaslHandshake v1 and above indicate SaslAuthenticate headers)
         COMPLETE,                      // Authentication completed successfully
-        FAILED                         // Authentication failed
+        FAILED,                        // Authentication failed
+        REAUTH_PROCESS_HANDSHAKE,      // Initial state for re-authentication, processes SASL handshake request
+        REAUTH_BAD_MECHANISM,          // When re-authentication requested with wrong mechanism, generate exception
     }
 
     private final SecurityProtocol securityProtocol;
