@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateMetadataRequestData;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -44,6 +46,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     public static class Builder extends AbstractControlRequest.Builder<UpdateMetadataRequest> {
         private final List<UpdateMetadataPartitionState> partitionStates;
         private final List<UpdateMetadataBroker> liveBrokers;
+        private Lock buildLock = new ReentrantLock();
 
         // LIKAFKA-18349 - Cache the UpdateMetadataRequest Objects to reduce memory usage
         private final Map<Short, UpdateMetadataRequest> requestCache = new HashMap<>();
@@ -57,6 +60,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
         @Override
         public UpdateMetadataRequest build(short version) {
+            // the following inner blocks are not indented in order to make hotfix cherry-picking easier
+            buildLock.lock();
+            try {
             UpdateMetadataRequest updateMetadataRequest = requestCache.get(version);
             if (updateMetadataRequest == null) {
             if (version < 3) {
@@ -97,6 +103,9 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             requestCache.put(version, updateMetadataRequest);
             }
             return updateMetadataRequest;
+            } finally {
+                buildLock.unlock();
+            }
         }
 
         private static Map<String, UpdateMetadataTopicState> groupByTopic(List<UpdateMetadataPartitionState> partitionStates) {
@@ -128,6 +137,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     private final UpdateMetadataRequestData data;
     // LIKAFKA-18349 - Cache the UpdateMetadataRequest struct to reduce memory usage
     private Struct struct = null;
+    private Lock structLock = new ReentrantLock();
 
     UpdateMetadataRequest(UpdateMetadataRequestData data, short version) {
         super(ApiKeys.UPDATE_METADATA, version);
@@ -216,10 +226,16 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
 
     @Override
     protected Struct toStruct() {
+        // the following inner blocks are not indented in order to make hotfix cherry-picking easier
+        structLock.lock();
+        try {
         if (struct == null) {
-            struct = data.toStruct(version());
+        struct = data.toStruct(version());
         }
         return struct;
+        } finally {
+            structLock.unlock();
+        }
     }
 
     // Visible for testing
