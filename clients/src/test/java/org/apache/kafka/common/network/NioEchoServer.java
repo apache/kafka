@@ -67,26 +67,6 @@ public class NioEchoServer extends Thread {
         public String metricNameSuffix() {
             return metricNameSuffix;
         }
-
-        public static Set<MetricType> setOf(MetricType metricType) {
-            return EnumSet.of(metricType);
-        }
-
-        public static Set<MetricType> setOf(MetricType e1, MetricType e2) {
-            return EnumSet.of(e1, e2);
-        }
-
-        public static Set<MetricType> setOf(MetricType e1, MetricType e2, MetricType e3) {
-            return EnumSet.of(e1, e2, e3);
-        }
-
-        public static Set<MetricType> setOf(MetricType e1, MetricType e2, MetricType e3, MetricType e4) {
-            return EnumSet.of(e1, e2, e3, e4);
-        }
-
-        public static Set<MetricType> setOf(MetricType first, MetricType... rest) {
-            return EnumSet.of(first, rest);
-        }
     }
 
     private static final double EPS = 0.0001;
@@ -167,27 +147,28 @@ public class NioEchoServer extends Thread {
     public void verifyAuthenticationMetrics(int successfulAuthentications, final int failedAuthentications)
             throws InterruptedException {
         waitForMetrics("successful-authentication", successfulAuthentications,
-                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
-        waitForMetrics("failed-authentication", failedAuthentications,
-                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
+        waitForMetrics("failed-authentication", failedAuthentications, EnumSet.of(MetricType.TOTAL, MetricType.RATE));
     }
 
     public void verifyReauthenticationMetrics(int successfulReauthentications, final int failedReauthentications)
             throws InterruptedException {
         waitForMetrics("successful-reauthentication", successfulReauthentications,
-                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("failed-reauthentication", failedReauthentications,
-                MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
-        waitForMetrics("successful-authentication-no-reauth", 0, MetricType.setOf(MetricType.TOTAL));
-        waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications), MetricType.setOf(MetricType.MAX, MetricType.AVG));
+                EnumSet.of(MetricType.TOTAL, MetricType.RATE));
+        waitForMetrics("successful-authentication-no-reauth", 0, EnumSet.of(MetricType.TOTAL));
+        waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
+                EnumSet.of(MetricType.MAX, MetricType.AVG));
     }
 
     public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {
-        waitForMetrics("successful-authentication-no-reauth", successfulAuthenticationNoReauths, MetricType.setOf(MetricType.TOTAL));
+        waitForMetrics("successful-authentication-no-reauth", successfulAuthenticationNoReauths,
+                EnumSet.of(MetricType.TOTAL));
     }
 
     public void waitForMetric(String name, final double expectedValue) throws InterruptedException {
-        waitForMetrics(name, expectedValue, MetricType.setOf(MetricType.TOTAL, MetricType.RATE));
+        waitForMetrics(name, expectedValue, EnumSet.of(MetricType.TOTAL, MetricType.RATE));
     }
 
     public void waitForMetrics(String namePrefix, final double expectedValue, Set<MetricType> metricTypes)
