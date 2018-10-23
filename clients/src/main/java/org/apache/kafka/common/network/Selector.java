@@ -540,9 +540,11 @@ public class Selector implements Selectable, AutoCloseable {
                     }
                     if (channel.ready()) {
                         long readyTimeMs = time.milliseconds();
-                        if (channel.successfulAuthentications() == 1)
+                        if (channel.successfulAuthentications() == 1) {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
-                        else {
+                            if (!channel.connectedClientSupportsReauthentication())
+                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
+                        } else {
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
@@ -551,8 +553,6 @@ public class Selector implements Selectable, AutoCloseable {
                                 sensors.reauthenticationLatency
                                         .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
                         }
-                        if (!channel.connectedClientSupportsReauthentication())
-                            sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
                     }
                     List<NetworkReceive> responsesReceivedDuringReauthentication = channel
                             .getAndClearResponsesReceivedDuringReauthentication();
