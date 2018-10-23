@@ -44,7 +44,7 @@ public class StringExpander {
          * Given that the string "foo[5-7]" was expanded, its result would be:
          * @param parsedResult - the parsed string - "foo"
          * @param expandedResult - the result of the expansion - {"foo5", "foo6", "foo7"}
-         * @param range - the range of the expansions - [5, 6, 7]
+         * @param range - the range of the expansion - [5, 6, 7]
          */
         ExpandedResult(String parsedResult, Set<String> expandedResult, List<Integer> range) {
             this.parsedResult = parsedResult;
@@ -76,7 +76,7 @@ public class StringExpander {
     /**
      * Expands a string with a range in it.
      *
-     * It is important to check if the passed string can be expanded via @{{@link #canExpand(String)}}
+     * It is important to check if the passed string can be expanded via #{@link StringExpander#canExpand(String)}
      *
      * 'foo[1-3]' would be expanded to foo1, foo2, foo3.
      *
@@ -107,12 +107,12 @@ public class StringExpander {
     }
 
     /**
-     * Expands a string with two ranges in it into a map.
+     * Expands a string with one or two ranges in it into a map.
      *
      * 'foo[1-3][1-3]` => { foo1: [1,2,3], foo2: [1,2,3], foo3: [1,2,3] }
      * `foo[1-3]` => { foo1: [], foo2: [], foo3: [] }
      *
-     * It is important to check if the passed string can be expanded via @{{@link #canExpand(String)}}
+     * It is important to check if the passed string can be expanded via #{@link StringExpander#canExpand(String)}
      *
      * @throws IllegalArgumentException if the string cannot be expanded.
      */
