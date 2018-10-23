@@ -112,14 +112,14 @@
     </p>
 
     <p>
-        We updated a list of methods that take <code>long</long> arguments as either timestamp (fix point) or duration (time period)
+        We updated a list of methods that take <code>long</code> arguments as either timestamp (fix point) or duration (time period)
         and replaced them with <code>Instant</code> and <code>Duration</code> parameters for improved semantics.
         Some old methods base on <code>long</code> are deprecated and users are encouraged to update their code.
         <br />
         In particular, aggregation windows (hopping/tumbling/unlimited time windows and session windows) as well as join windows now take <code>Duration</code>
         arguments to specify window size, hop, and gap parameters.
         Also, window sizes and retention times are now specified as <code>Duration</code> type in <code>Stores</code> class.
-        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime</code> that return window start/end timestamp as <code>Instant</code>.
+        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime()</code> that return window start/end timestamp as <code>Instant</code>.
         For interactive queries, there are new <code>#fetch(...)</code> overloads taking <code>Instant</code> arguments.
         Additionally, punctuations are now registerd via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
@@ -127,7 +127,7 @@
 
     <p>
         We deprecated <code>KafkaStreams#close(...)</code> and replaced it with <code>KafkaStreams#close(Duration)</code> that accepts a single timeout argument
-        Note: the new <code>#close</code> method has improved (but slightly different) semantics than the old one.
+        Note: the new <code>#close(Duration)</code> method has improved (but slightly different) semantics.
         For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
     </p>
 
