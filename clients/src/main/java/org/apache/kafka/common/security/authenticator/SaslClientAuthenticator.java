@@ -70,20 +70,33 @@ import java.util.Random;
 import java.util.Set;
 
 public class SaslClientAuthenticator implements Authenticator {
+    /**
+     * The internal state transitions for initial authentication of a channel are
+     * declared in order, starting with {@link #SEND_APIVERSIONS_REQUEST} and ending
+     * in either {@link #COMPLETE} or {@link #FAILED}.
+     * <p>
+     * Re-authentication of a channel starts with the state
+     * {@link #REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE} and then flows to
+     * {@link #REAUTH_SEND_HANDSHAKE_REQUEST} followed by
+     * {@link #REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE} and then
+     * {@value #REAUTH_INITIAL}; after that the flow joins the authentication flow
+     * at the {@link #INTERMEDIATE} state and ends at either {@link #COMPLETE} or
+     * {@link #FAILED}.
+     */
     public enum SaslState {
         SEND_APIVERSIONS_REQUEST,                   // Initial state for authentication: client sends ApiVersionsRequest in this state when authenticating
         RECEIVE_APIVERSIONS_RESPONSE,               // Awaiting ApiVersionsResponse from server
         SEND_HANDSHAKE_REQUEST,                     // Received ApiVersionsResponse, send SaslHandshake request
         RECEIVE_HANDSHAKE_RESPONSE,                 // Awaiting SaslHandshake response from server when authenticating
         INITIAL,                                    // Initial authentication state starting SASL token exchange for configured mechanism, send first token
+        INTERMEDIATE,                               // Intermediate state during SASL token exchange, process challenges and send responses
+        CLIENT_COMPLETE,                            // Sent response to last challenge. If using SaslAuthenticate, wait for authentication status from server, else COMPLETE
+        COMPLETE,                                   // Authentication sequence complete. If using SaslAuthenticate, this state implies successful authentication.
+        FAILED,                                     // Failed authentication due to an error at some stage
         REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE,   // Initial state for re-authentication: process ApiVersionsResponse from original authentication
         REAUTH_SEND_HANDSHAKE_REQUEST,              // Processed original ApiVersionsResponse, send SaslHandshake request as part of re-authentication
         REAUTH_RECEIVE_HANDSHAKE_OR_OTHER_RESPONSE, // Awaiting SaslHandshake response from server when re-authenticating, and may receive other, in-flight responses sent prior to start of re-authentication as well
         REAUTH_INITIAL,                             // Initial re-authentication state starting SASL token exchange for configured mechanism, send first token
-        INTERMEDIATE,                               // Intermediate state during SASL token exchange, process challenges and send responses
-        CLIENT_COMPLETE,                            // Sent response to last challenge. If using SaslAuthenticate, wait for authentication status from server, else COMPLETE
-        COMPLETE,                                   // Authentication sequence complete. If using SaslAuthenticate, this state implies successful authentication.
-        FAILED                                      // Failed authentication due to an error at some stage
     }
 
     private static final Logger LOG = LoggerFactory.getLogger(SaslClientAuthenticator.class);
