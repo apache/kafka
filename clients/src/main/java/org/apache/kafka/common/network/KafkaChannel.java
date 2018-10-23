@@ -130,9 +130,6 @@ public class KafkaChannel {
     private ChannelState state;
     private SocketAddress remoteAddress;
     private int successfulAuthentications;
-    // At least one -- and possibly both -- of these next two values will be null
-    private Long clientSessionReauthenticationTimeNanos;
-    private Long serverSessionExpirationTimeNanos;
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
 
@@ -188,9 +185,6 @@ public class KafkaChannel {
         }
         if (ready()) {
             ++successfulAuthentications;
-            // At least one -- and possibly both -- of these next two values will be null
-            clientSessionReauthenticationTimeNanos = authenticator.clientSessionReauthenticationTimeNanos();
-            serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
             state = ChannelState.READY;
         }
     }
@@ -519,7 +513,7 @@ public class KafkaChannel {
          * check if we are muted since since we are processing a received packet when we
          * invoke this.
          */
-        if (serverSessionExpirationTimeNanos == null)
+        if (authenticator.serverSessionExpirationTimeNanos() == null)
             return false;
         /*
          * We've delayed getting the time as long as possible in case we don't need it,
@@ -569,14 +563,15 @@ public class KafkaChannel {
         if (!ready())
             throw new IllegalStateException(
                     "KafkaChannel should always be \"ready\" when it is checked for possible re-authentication");
-        if (muteState != ChannelMuteState.NOT_MUTED || midWrite || clientSessionReauthenticationTimeNanos == null)
+        if (muteState != ChannelMuteState.NOT_MUTED || midWrite
+                || authenticator.clientSessionReauthenticationTimeNanos() == null)
             return false;
         /*
          * We've delayed getting the time as long as possible in case we don't need it,
          * but at this point we need it -- so get it now.
          */
         long nowNanos = nowNanosSupplier.get().longValue();
-        if (nowNanos < clientSessionReauthenticationTimeNanos.longValue())
+        if (nowNanos < authenticator.clientSessionReauthenticationTimeNanos().longValue())
             return false;
         swapAuthenticatorsAndBeginReauthentication(new ReauthenticationContext(authenticator, receive, nowNanos));
         receive = null;
@@ -608,8 +603,8 @@ public class KafkaChannel {
      *         session expiration time, if any, otherwise false
      */
     public boolean serverAuthenticationSessionExpired(long nowNanos) {
-        return serverSessionExpirationTimeNanos != null
-                && nowNanos - serverSessionExpirationTimeNanos.longValue() > 0;
+        Long serverSessionExpirationTimeNanos = authenticator.serverSessionExpirationTimeNanos();
+        return serverSessionExpirationTimeNanos != null && nowNanos - serverSessionExpirationTimeNanos.longValue() > 0;
     }
     
     /**
