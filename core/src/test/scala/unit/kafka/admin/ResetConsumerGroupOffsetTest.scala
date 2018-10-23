@@ -20,8 +20,10 @@ import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.CoordinatorNotAvailableException
 import org.junit.Assert._
 import org.junit.Test
 
@@ -86,7 +88,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "missing.group", "--all-topics",
       "--to-current", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
-    val resetOffsets = consumerGroupCommand.resetOffsets()
+    val resetOffsets = tryResetOffsets(consumerGroupCommand)
     assertEquals(Map.empty, resetOffsets)
     assertEquals(resetOffsets, committedOffsets(group = "missing.group"))
   }
@@ -389,7 +391,21 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   private def resetOffsets(consumerGroupService: ConsumerGroupService): Map[TopicPartition, Long] = {
-    consumerGroupService.resetOffsets().mapValues(_.offset)
+    tryResetOffsets(consumerGroupService).mapValues(_.offset)
   }
 
+  private def tryResetOffsets(consumerGroupService: ConsumerGroupService): Map[TopicPartition, OffsetAndMetadata] = {
+    var retries = 0
+    var gotResult = false
+
+    while (retries < 3) {
+      try {
+        return consumerGroupService.resetOffsets()
+      } catch {
+        case _: CoordinatorNotAvailableException => retries += 1
+      }
+    }
+
+    fail(s"Could not reset offsets. $retries retries resulted in ${classOf[CoordinatorNotAvailableException].getName}")
+  }
 }
