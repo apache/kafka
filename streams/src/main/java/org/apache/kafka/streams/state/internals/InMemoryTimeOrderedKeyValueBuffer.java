@@ -28,8 +28,6 @@ import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -45,7 +43,6 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
-    private static final Logger LOG = LoggerFactory.getLogger(InMemoryTimeOrderedKeyValueBuffer.class);
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
 
@@ -72,14 +69,28 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
             this.storeName = storeName;
         }
 
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         *
+         * It's currently a no-op.
+         */
         @Override
         public StoreBuilder<StateStore> withCachingEnabled() {
-            throw new UnsupportedOperationException();
+            return this;
         }
 
+        /**
+         * As of 2.1, there's no way for users to directly interact with the buffer,
+         * so this method is implemented solely to be called by Streams (which
+         * it will do based on the {@code cache.max.bytes.buffering} config.
+         *
+         * It's currently a no-op.
+         */
         @Override
         public StoreBuilder<StateStore> withCachingDisabled() {
-            throw new UnsupportedOperationException();
+            return this;
         }
 
         @Override
