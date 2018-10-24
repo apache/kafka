@@ -582,7 +582,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-            FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+            partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
             unconvertedRecords)
         }
       }
