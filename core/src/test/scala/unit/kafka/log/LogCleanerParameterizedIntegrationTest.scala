@@ -96,7 +96,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
     logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String, Long)]) = {
-      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L)
+      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L, segmentSize = 2560)
       val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
@@ -190,10 +190,10 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
       return
 
     val maxMessageSize = 192
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
 
     val log = cleaner.logs.get(topicPartitions(0))
-    val props = logConfigProperties(maxMessageSize = maxMessageSize)
+    val props = logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256)
     props.put(LogConfig.MessageFormatVersionProp, KAFKA_0_9_0.version)
     log.config = new LogConfig(props)
 

@@ -42,7 +42,7 @@ abstract class AbstractLogCleanerIntegrationTest {
   private val defaultMinCleanableDirtyRatio = 0.0F
   private val defaultCompactionLag = 0L
   private val defaultDeleteDelay = 1000
-  private val defaultSegmentSize = 256
+  private val defaultSegmentSize = 5120
 
   def time: MockTime
 
