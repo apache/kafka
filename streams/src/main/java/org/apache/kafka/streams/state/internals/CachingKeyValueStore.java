@@ -132,8 +132,11 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         try {
             flush();
         } finally {
-            underlying.close();
-            cache.close(cacheName);
+            try {
+                underlying.close();
+            } finally {
+                cache.close(cacheName);
+            }
         }
     }
 
