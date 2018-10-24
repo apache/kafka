@@ -705,6 +705,114 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetchFromMultiplePartitions() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 2);
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptions.seek(tp0, 1);
+        subscriptions.seek(tp1, 4);
+
+        assertEquals(1, fetcher.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = new LinkedHashMap<>();
+        partitions.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, this.records));
+        partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, this.nextRecords));
+        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+            0, INVALID_SESSION_ID));
+
+        consumerClient.poll(time.timer(0));
+
+        records = fetcher.fetchedRecords().get(tp0);
+        assertEquals(2, records.size());
+        assertEquals(3L, subscriptions.position(tp0).longValue());
+        assertEquals(1, records.get(0).offset());
+        assertEquals(2, records.get(1).offset());
+
+        records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(2, records.size());
+        assertEquals(6L, subscriptions.position(tp1).longValue());
+        assertEquals(4, records.get(0).offset());
+        assertEquals(5, records.get(1).offset());
+        
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetcher.fetchedRecords();
+        assertNull(fetchedRecords.get(tp1));
+        records = fetchedRecords.get(tp0);
+        assertEquals(1, records.size());
+        assertEquals(4L, subscriptions.position(tp0).longValue());
+        assertEquals(3, records.get(0).offset());
+    }
+
+    @Test
+    public void testFetchFromMultiplePartitionsWithPause() {
+        Fetcher<byte[], byte[]> fetcher = createFetcher(subscriptions, new Metrics(time), 1);
+
+        List<ConsumerRecord<byte[], byte[]>> records;
+        subscriptions.assignFromUser(Utils.mkSet(tp0, tp1));
+        subscriptions.seek(tp0, 1);
+        subscriptions.seek(tp1, 4);
+
+        assertEquals(1, fetcher.sendFetches());
+
+        Map<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions = new LinkedHashMap<>();
+        partitions.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, this.records));
+        partitions.put(tp1, new FetchResponse.PartitionData<>(Errors.NONE, 100,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, FetchResponse.INVALID_LOG_START_OFFSET, null, this.nextRecords));
+        client.prepareResponse(new FetchResponse<>(Errors.NONE, new LinkedHashMap<>(partitions),
+            0, INVALID_SESSION_ID));
+
+        consumerClient.poll(time.timer(0));
+
+        records = fetcher.fetchedRecords().get(tp0);
+        assertEquals(1, records.size());
+        assertEquals(2L, subscriptions.position(tp0).longValue());
+        assertEquals(1, records.get(0).offset());
+        
+        subscriptions.pause(tp0);
+        
+        records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(1, records.size());
+        assertEquals(5L, subscriptions.position(tp1).longValue());
+        assertEquals(4, records.get(0).offset());
+
+        subscriptions.pause(tp1);
+        
+        assertTrue(fetcher.fetchedRecords().isEmpty());
+
+        subscriptions.resume(tp0);
+        
+        assertTrue(fetcher.fetchedRecords().isEmpty());
+
+        subscriptions.resume(tp1);
+        
+        assertTrue(fetcher.fetchedRecords().isEmpty());
+        subscriptions.pause(tp1);
+        
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+        
+        records = fetcher.fetchedRecords().get(tp0);
+        assertEquals(1, records.size());
+        assertEquals(3L, subscriptions.position(tp0).longValue());
+        assertEquals(2, records.get(0).offset());
+        
+        subscriptions.resume(tp1);
+        assertEquals(1, fetcher.sendFetches());
+        client.prepareResponse(fullFetchResponse(tp1, this.nextRecords, Errors.NONE, 100L, 0));
+        consumerClient.poll(time.timer(0));
+
+        records = fetcher.fetchedRecords().get(tp1);
+        assertEquals(1, records.size());
+        assertEquals(6L, subscriptions.position(tp1).longValue());
+        assertEquals(5, records.get(0).offset());
+        
+    }
+
+    @Test
     public void testFetchNonContinuousRecords() {
         // if we are fetching from a compacted topic, there may be gaps in the returned records
         // this test verifies the fetcher updates the current fetched/consumed positions correctly for this case

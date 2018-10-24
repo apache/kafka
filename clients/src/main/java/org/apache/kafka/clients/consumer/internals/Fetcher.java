@@ -16,6 +16,29 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import static java.util.Collections.emptyList;
+
+import java.io.Closeable;
+import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
+
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
@@ -69,27 +92,6 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.io.Closeable;
-import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Iterator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.PriorityQueue;
-import java.util.Set;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
-
-import static java.util.Collections.emptyList;
-
 /**
  * This class manages the fetching process with the brokers.
  * <p>
@@ -133,6 +135,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
     private PartitionRecords nextInLineRecords = null;
 
+    private ParsedFetches parsedFetches = new ParsedFetches();
+    
     public Fetcher(LogContext logContext,
                    ConsumerNetworkClient client,
                    int minBytes,
@@ -484,11 +488,29 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             while (recordsRemaining > 0) {
                 if (nextInLineRecords == null || nextInLineRecords.isFetched) {
                     CompletedFetch completedFetch = completedFetches.peek();
-                    if (completedFetch == null) break;
+                    if (completedFetch == null) {
+                        // use the ones parsed before
+                        nextInLineRecords = parsedFetches.next(); // return the next non-empty partition data, null if none
+                        if (nextInLineRecords != null) {
+                            continue;
+                        }
+
+                        break;
+                    }
 
                     try {
                         nextInLineRecords = parseCompletedFetch(completedFetch);
                     } catch (Exception e) {
+                        // use the ones parsed before
+                        nextInLineRecords = parsedFetches.next();
+                        if (nextInLineRecords != null) {
+                            // move the error one to the end of completedFetches to avoid exceptions when parsedFetches is not empty
+                            // This enables adding other good completedFetch instances to the parsedFetches
+                            completedFetches.poll();
+                            completedFetches.add(completedFetch);
+                            continue;
+                        }
+                        
                         // Remove a completedFetch upon a parse with exception if (1) it contains no records, and
                         // (2) there are no fetched records with actual content preceding this exception.
                         // The first condition ensures that the completedFetches is not stuck with the same completedFetch
@@ -498,9 +520,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
                             completedFetches.poll();
                         }
+                        
                         throw e;
                     }
                     completedFetches.poll();
+                    
+                    if (nextInLineRecords != null) {
+                        parsedFetches.add(nextInLineRecords);
+                    }
+                    
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
                     TopicPartition partition = nextInLineRecords.partition;
@@ -519,6 +547,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         }
                         recordsRemaining -= records.size();
                     }
+                    
+                    // receive from a different partition in the next loop
+                    nextInLineRecords = null;
                 }
             }
         } catch (KafkaException e) {
@@ -855,6 +886,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (CompletedFetch completedFetch : completedFetches) {
             exclude.add(completedFetch.partition);
         }
+        
+        for (TopicPartition partition : parsedFetches.getPartitions(true)) {
+            exclude.add(partition);
+        }
+        
         fetchable.removeAll(exclude);
         return fetchable;
     }
@@ -1062,6 +1098,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             nextInLineRecords.drain();
             nextInLineRecords = null;
         }
+        
+        parsedFetches.clearBufferedDataForUnassignedPartitions(assignedPartitions);
+        
     }
 
     /**
@@ -1310,6 +1349,126 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
     }
 
+    private class ParsedFetches {
+        private LinkedList<Fetcher<K, V>.PartitionRecords> parsed = new LinkedList<Fetcher<K, V>.PartitionRecords>();
+        private int nextIdx = 0;
+
+        /**
+         * append the currentRecords to the end and set the next index to 0
+         * 
+         * @param currentRecords
+         */
+        private void add(Fetcher<K, V>.PartitionRecords currentRecords) {
+            parsed.addLast(currentRecords);
+            nextIdx = 0;
+        }
+
+        private void clearBufferedDataForUnassignedPartitions(Collection<TopicPartition> assignedPartitions) {
+            Iterator<Fetcher<K, V>.PartitionRecords> itr = parsed.iterator();
+            while (itr.hasNext()) {
+                PartitionRecords item = itr.next();
+                if (assignedPartitions == null || !assignedPartitions.contains(item.partition)) {
+                    item.drain();
+                    itr.remove();
+                }
+            }
+        }
+
+        private void close() {
+            clearBufferedDataForUnassignedPartitions(null);
+        }
+
+        private Iterable<TopicPartition> getPartitions(final boolean notEmptyOnly) {
+
+            return new Iterable<TopicPartition>() {
+
+                @Override
+                public Iterator<TopicPartition> iterator() {
+                    return new Iterator<TopicPartition>() {
+                        private int nextIdx = 0;
+
+                        @Override
+                        public boolean hasNext() {
+                            if (notEmptyOnly) {
+                                for (int i = nextIdx; i < parsed.size(); i++) {
+                                    if (!parsed.get(i).isFetched) {
+                                        return true;
+                                    }
+                                }
+
+                                return false;
+                            }
+
+                            return nextIdx < parsed.size();
+                        }
+
+                        @Override
+                        public TopicPartition next() {
+                            if (notEmptyOnly) {
+                                for (int i = nextIdx; i < parsed.size(); i++) {
+                                    if (!parsed.get(i).isFetched) {
+                                        nextIdx = i + 1;
+                                        return parsed.get(i).partition;
+                                    }
+                                }
+
+                                throw new NoSuchElementException();
+                            }
+
+                            if (nextIdx < parsed.size()) {
+                                return parsed.get(nextIdx++).partition;
+                            }
+
+                            throw new NoSuchElementException();
+                        }
+
+                    };
+                }
+
+            };
+        }
+
+        /**
+         * remove any empty ones in the process
+         * 
+         * @return the next non-empty partition data, null if none
+         */
+        private Fetcher<K, V>.PartitionRecords next() {
+            Fetcher<K, V>.PartitionRecords next = null;
+
+            for (int i = 0; i < parsed.size(); i++) {
+                Fetcher<K, V>.PartitionRecords item = parsed.get((i + nextIdx) % parsed.size());
+                if (item != null && !item.isFetched) {
+                    next = item;
+                    break;
+                }
+            }
+
+            // Clean up the empty ones 
+            Iterator<Fetcher<K, V>.PartitionRecords> itr = parsed.iterator();
+            while (itr.hasNext()) {
+                PartitionRecords item = itr.next();
+                if (item == null || item.isFetched) {
+                    itr.remove();
+                }
+            }
+
+            // set the next Idx after clean-up
+            if (next == null) {
+                nextIdx = 0;
+            } else {
+                for (int i = 0; i < parsed.size(); i++) {
+                    if (parsed.get(i) == next) {
+                        nextIdx = (i + 1) % parsed.size();
+                    }
+                }
+            }
+
+            return next;
+        }
+
+    }
+    
     private static class CompletedFetch {
         private final TopicPartition partition;
         private final long fetchedOffset;
@@ -1525,6 +1684,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public void close() {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
+        
+        parsedFetches.close();
+        
         decompressionBufferSupplier.close();
     }
 
