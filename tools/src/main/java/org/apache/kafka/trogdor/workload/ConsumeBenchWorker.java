@@ -123,7 +123,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
 
         private String generateConsumerGroup() {
-            return "consumer-group-" + UUID.randomUUID().toString();
+            return "consume-bench-" + UUID.randomUUID().toString();
         }
 
         private Map<String, List<TopicPartition>> fetchPartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer) {

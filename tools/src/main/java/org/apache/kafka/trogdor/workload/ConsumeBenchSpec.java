@@ -80,8 +80,8 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
     private final List<String> activeTopics;
-    private Map<String, List<TopicPartition>> materializedTopics;
-    private boolean useGroupPartitionAssignment;
+    private final Map<String, List<TopicPartition>> materializedTopics;
+    private final boolean useGroupPartitionAssignment;
     private String consumerGroup;
 
     @JsonCreator
@@ -105,9 +105,10 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
+        this.materializedTopics = new HashMap<>();
         this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
-        this.useGroupPartitionAssignment = true; // use consumer group assignment unless we're given specific partitions
-        materializeTopics(this.activeTopics);
+        // use consumer group assignment unless we're given specific partitions
+        this.useGroupPartitionAssignment = materializeTopics(this.activeTopics);
     }
 
     @JsonProperty
@@ -182,10 +183,10 @@ public class ConsumeBenchSpec extends TaskSpec {
      *                                             'bar1': [1, 2], 'bar2': [1, 2] }
      *
      * @param topics - a list of topic names, potentially with ranges in them that would be expanded
+     * @return boolean - whether to use a dynamic partition assignment from the consumer group or not
      */
-    private void materializeTopics(List<String> topics) {
-        this.materializedTopics = new HashMap<>();
-
+    private boolean materializeTopics(List<String> topics) {
+        boolean useGroupPartitionAssignment = true;
         for (String rawTopicName : topics) {
             if (!StringExpander.canExpand(rawTopicName)) {
                 materializedTopics.put(rawTopicName, new ArrayList<>());
@@ -205,8 +206,10 @@ public class ConsumeBenchSpec extends TaskSpec {
 
                     materializedTopics.put(topicName, partitions);
                 }
-                this.useGroupPartitionAssignment = false; // use manual assignment
+                useGroupPartitionAssignment = false; // use manual assignment
             }
         }
+
+        return useGroupPartitionAssignment;
     }
 }
