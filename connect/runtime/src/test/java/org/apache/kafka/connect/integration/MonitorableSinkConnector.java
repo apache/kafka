@@ -56,6 +56,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         private final String taskId;
         private final AtomicReference<MonitorableSinkTask> taskRef = new AtomicReference<>();
+        //  a value of 1 in the latch means that there is no task available.
         private final CountDownLatch taskAvailable = new CountDownLatch(1);
 
         public Handle(String taskId) {
@@ -64,6 +65,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
         public void task(MonitorableSinkTask task) {
             if (this.taskRef.compareAndSet(null, task)) {
+                // we have a task, set latch to zero.
                 taskAvailable.countDown();
             }
         }
@@ -71,6 +73,8 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         public MonitorableSinkTask task() {
             try {
                 log.debug("Waiting on task {}", taskId);
+                // wait for limited duration for a task to be initialized and set to taskRef,
+                // if we already have a task (i.e., taskAvailable is set to zero), await will immediately return
                 if (!taskAvailable.await(MAX_WAIT_FOR_TASK_DURATION_MS, TimeUnit.MILLISECONDS)) {
                     throw new ConnectException("Could not find task '" + taskId + "'.");
                 }
@@ -86,7 +90,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         public String toString() {
             return "Handle{" +
                     "taskId='" + taskId + '\'' +
-                    ", taskAvailable=" + taskAvailable.getCount() +
+                    ", taskAvailable=" + (taskAvailable.getCount() == 0) +
                     '}';
         }
     }
@@ -101,7 +105,9 @@ public class MonitorableSinkConnector extends TestSinkConnector {
 
     public static void cleanHandle(String taskId) {
         HANDLES.computeIfPresent(taskId, (k, handle) -> {
+            // unblock any waiting threads
             handle.taskAvailable.countDown();
+            // remove this key from HANDLES
             return null;
         });
     }
