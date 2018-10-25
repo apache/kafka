@@ -575,7 +575,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
           }.getOrElse(unconvertedRecords)
         new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
+          partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
           convertedRecords)
       }
     }
