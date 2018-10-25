@@ -1192,10 +1192,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
     private static Map<String, Object> propsToMap(Properties properties) {
         Map<String, Object> map = new HashMap<>(properties.size());
-        for (Object key : properties.keySet()) {
-            if (key instanceof String) {
-                String k = (String) key;
+        for (Map.Entry<Object, Object> entry : properties.entrySet()) {
+            if (entry.getKey() instanceof String) {
+                String k = (String) entry.getKey();
                 map.put(k, properties.get(k));
+            }
+            else {
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
             }
         }
         return map;

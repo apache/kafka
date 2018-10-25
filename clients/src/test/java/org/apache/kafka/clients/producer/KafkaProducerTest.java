@@ -128,6 +128,18 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testConstructorWithNotStringKey() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(1, "not string key");
+        try (KafkaProducer<?, ?> ff = new KafkaProducer(props, new StringSerializer(), new StringSerializer())) {
+            fail("Constructor should throw exception");
+        } catch (ConfigException e) {
+            assertTrue("Unexpected exception message: " + e.getMessage(), e.getMessage().contains("not string key"));
+        }
+    }
+
+    @Test
     public void testSerializerClose() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
