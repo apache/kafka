@@ -226,7 +226,8 @@ public class SaslClientAuthenticator implements Authenticator {
                     // Fall through and start SASL authentication using the configured client mechanism
                 }
             case INITIAL:
-                sendInitialTokenAndSetIntermediateState();
+                sendInitialToken();
+                setSaslState(SaslState.INTERMEDIATE);
                 break;
             case REAUTH_PROCESS_ORIG_APIVERSIONS_RESPONSE:
                 saslAuthenticateVersion(reauthInfo.apiVersionsResponseFromOriginalAuthentication);
@@ -250,7 +251,8 @@ public class SaslClientAuthenticator implements Authenticator {
                  * changes related to re-authentication.
                  */
             case REAUTH_INITIAL:
-                sendInitialTokenAndSetIntermediateState();
+                sendInitialToken();
+                setSaslState(SaslState.INTERMEDIATE);
                 break;
             case INTERMEDIATE:
                 byte[] serverToken = receiveToken();
@@ -283,9 +285,8 @@ public class SaslClientAuthenticator implements Authenticator {
         send(handshakeRequest.toSend(node, nextRequestHeader(ApiKeys.SASL_HANDSHAKE, handshakeRequest.version())));
     }
 
-    private void sendInitialTokenAndSetIntermediateState() throws IOException {
+    private void sendInitialToken() throws IOException {
         sendSaslClientToken(new byte[0], true);
-        setSaslState(SaslState.INTERMEDIATE);
     }
 
     @Override
