@@ -45,7 +45,7 @@ public class ChannelBuildersTest {
 
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, OldPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null, null);
 
         // test old principal builder is properly configured and delegated to
         assertTrue(OldPrincipalBuilder.configured);
@@ -60,7 +60,7 @@ public class ChannelBuildersTest {
     public void testCreateConfigurableKafkaPrincipalBuilder() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
     }

@@ -26,6 +26,7 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.utils.Utils;
 
@@ -163,12 +164,13 @@ public class ChannelBuilders {
     public static KafkaPrincipalBuilder createPrincipalBuilder(Map<String, ?> configs,
                                                                TransportLayer transportLayer,
                                                                Authenticator authenticator,
-                                                               KerberosShortNamer kerberosShortNamer) {
+                                                               KerberosShortNamer kerberosShortNamer,
+                                                               SslPrincipalMapper sslPrincipalMapper) {
         Class<?> principalBuilderClass = (Class<?>) configs.get(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG);
         final KafkaPrincipalBuilder builder;
 
         if (principalBuilderClass == null || principalBuilderClass == DefaultKafkaPrincipalBuilder.class) {
-            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer);
+            builder = new DefaultKafkaPrincipalBuilder(kerberosShortNamer, sslPrincipalMapper);
         } else if (KafkaPrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
             builder = (KafkaPrincipalBuilder) Utils.newInstance(principalBuilderClass);
         } else if (org.apache.kafka.common.security.auth.PrincipalBuilder.class.isAssignableFrom(principalBuilderClass)) {
