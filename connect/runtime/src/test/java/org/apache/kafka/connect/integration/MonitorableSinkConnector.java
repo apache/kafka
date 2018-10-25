@@ -35,7 +35,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.Function;
 
 /**
  * A connector to be used in integration tests. This class provides methods to find task instances
@@ -92,8 +91,12 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         }
     }
 
-    public static Handle taskInstances(String taskId) {
-        return HANDLES.computeIfAbsent(taskId, connName -> new Handle(taskId));
+    public static MonitorableSinkTask task(String taskId) {
+        return HANDLES.computeIfAbsent(taskId, connName -> new Handle(taskId)).task();
+    }
+
+    public static void task(String taskId, MonitorableSinkTask task) {
+        HANDLES.computeIfAbsent(taskId, connName -> new Handle(taskId)).task(task);
     }
 
     public static void cleanHandle(String taskId) {
@@ -153,7 +156,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
             log.debug("Starting task {}", context);
             taskId = props.get("task.id");
             expectedRecords = Integer.parseInt(props.get(EXPECTED_RECORDS));
-            taskInstances(taskId).task(this);
+            task(taskId, this);
             latch = new CountDownLatch(expectedRecords);
         }
 

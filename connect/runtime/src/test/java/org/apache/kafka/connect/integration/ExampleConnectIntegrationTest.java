@@ -95,8 +95,8 @@ public class ExampleConnectIntegrationTest {
         connect.configureConnector("simple-conn", props);
 
         // wait for the connector tasks to consume desired number of records.
-        MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
-        MonitorableSinkConnector.taskInstances("simple-conn-1").task().awaitRecords(CONSUME_MAX_DURATION_MS);
+        MonitorableSinkConnector.task("simple-conn-0").awaitRecords(CONSUME_MAX_DURATION_MS);
+        MonitorableSinkConnector.task("simple-conn-1").awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // delete connector
         connect.deleteConnector("simple-conn");

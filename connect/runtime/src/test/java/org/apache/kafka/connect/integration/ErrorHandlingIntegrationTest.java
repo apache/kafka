@@ -132,7 +132,7 @@ public class ErrorHandlingIntegrationTest {
 
         connect.configureConnector("simple-conn", props);
 
-        MonitorableSinkConnector.taskInstances("simple-conn-0").task().awaitRecords(CONSUME_MAX_DURATION_MS);
+        MonitorableSinkConnector.task("simple-conn-0").awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
