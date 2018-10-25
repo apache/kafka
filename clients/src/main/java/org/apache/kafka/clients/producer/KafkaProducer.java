@@ -1196,8 +1196,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (entry.getKey() instanceof String) {
                 String k = (String) entry.getKey();
                 map.put(k, properties.get(k));
-            }
-            else {
+            } else {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
             }
         }
