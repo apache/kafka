@@ -143,7 +143,7 @@ public class ErrorHandlingIntegrationTest {
             assertTrue(recs.headers().toArray().length > 0);
             assertValue("test-topic", recs.headers(), ERROR_HEADER_ORIG_TOPIC);
             assertValue(RetriableException.class.getName(), recs.headers(), ERROR_HEADER_EXCEPTION);
-            assertValue("Error when when value='value-7'", recs.headers(), ERROR_HEADER_EXCEPTION_MESSAGE);
+            assertValue("Error when value='value-7'", recs.headers(), ERROR_HEADER_EXCEPTION_MESSAGE);
         }
 
         connect.deleteConnector("simple-conn");
@@ -182,12 +182,12 @@ public class ErrorHandlingIntegrationTest {
             String badValRetriable = "value-" + BAD_RECORD_VAL_RETRIABLE;
             if (badValRetriable.equals(record.value()) && shouldFail) {
                 shouldFail = false;
-                throw new RetriableException("Error when when value='" + badValRetriable
+                throw new RetriableException("Error when value='" + badValRetriable
                         + "'. A reattempt with this record will succeed.");
             }
             String badVal = "value-" + BAD_RECORD_VAL;
             if (badVal.equals(record.value())) {
-                throw new RetriableException("Error when when value='" + badVal + "'");
+                throw new RetriableException("Error when value='" + badVal + "'");
             }
             return record;
         }

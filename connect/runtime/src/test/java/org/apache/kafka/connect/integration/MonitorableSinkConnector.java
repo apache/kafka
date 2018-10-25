@@ -121,7 +121,6 @@ public class MonitorableSinkConnector extends TestSinkConnector {
         for (int i = 0; i < maxTasks; i++) {
             Map<String, String> config = new HashMap<>();
             config.put("task.id", connectorName + "-" + i);
-            config.put("required", "dummy-val");
             config.put(EXPECTED_RECORDS, expectedRecordsStr);
             configs.add(config);
         }
