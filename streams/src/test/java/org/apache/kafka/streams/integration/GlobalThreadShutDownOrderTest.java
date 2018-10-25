@@ -146,7 +146,7 @@ public class GlobalThreadShutDownOrderTest {
             public boolean conditionMet() {
                 return firstRecordProcessed;
             }
-        }, 5000L, "Has not processed record within 5 seconds");
+        }, "Has not processed record within 5 seconds");
 
         kafkaStreams.close(30, TimeUnit.SECONDS);
 
