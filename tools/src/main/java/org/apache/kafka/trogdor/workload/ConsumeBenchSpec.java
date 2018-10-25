@@ -41,10 +41,15 @@ import java.util.stream.Collectors;
  *  used to track offsets/subscribe to topics.
  *
  * This specification uses a specific way to represent a number of topic/partitions via its "activeTopics" field.
- * There are three value notations accepted in the "activeTopics" field:
- *   1. foo[1-3] - this will be expanded to 3 topics (foo1, foo2, foo3)
- *   2. foo[1-3][1-2] - this will expand to 3 topics (foo1, foo2, foo3), each with two partitions (1, 2)
- *   3. foo - this will denote one topic (foo)
+ * There are two special notations accepted in the "activeTopics" field:
+ *   1. A range ([1-3]) - expands the name of a topic.
+ *      * "foo[1-3]" will expand to 3 topics (foo1, foo2, foo3)
+ *   2. String ending in a colon with a number or range - denotes a partition for a topic
+ *      * "foo:[1-2]" - this will expand to 1 topic (foo) with two partitions (1, 2)
+ *      * "foo:1" - this will expand to 1 topic (foo) with one partition (1)
+ * Further, these can be mixed or dropped altogether
+ *   * "foo[1-3]:[1-2]" - this will expand to 3 topics (foo1, foo2, foo3), each with two partitions (1 and 2)
+ *   * "foo" - this will denote one topic (foo)
  *
  * If there is at least one value of notation #2, the consumer will be manually assign partitions to track via
  * #{@link org.apache.kafka.clients.consumer.KafkaConsumer#assign(Collection)}.
@@ -82,7 +87,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final List<String> activeTopics;
     private final Map<String, List<TopicPartition>> materializedTopics;
     private final boolean useGroupPartitionAssignment;
-    private String consumerGroup;
+    private final String consumerGroup;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -91,7 +96,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") int maxMessages,
-                            @JsonProperty("consumerGroup") String consumerGroup,
+                            @JsonProperty String consumerGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -179,8 +184,8 @@ public class ConsumeBenchSpec extends TaskSpec {
 
     /**
      * Materializes a list of topic names with ranges into partitions
-     * ['foo[1-3]', 'foobar', 'bar[1-2][1-2]'] => {'foo1': [], 'foo2': [], 'foo3': [], 'foobar': [],
-     *                                             'bar1': [1, 2], 'bar2': [1, 2] }
+     * ['foo[1-3]', 'foobar:2', 'bar[1-2]:[1-2]'] => {'foo1': [], 'foo2': [], 'foo3': [], 'foobar': [2],
+     *                                                'bar1': [1, 2], 'bar2': [1, 2] }
      *
      * @param topics - a list of topic names, potentially with ranges in them that would be expanded
      * @return boolean - whether to use a dynamic partition assignment from the consumer group or not
@@ -188,7 +193,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private boolean materializeTopics(List<String> topics) {
         boolean useGroupPartitionAssignment = true;
         for (String rawTopicName : topics) {
-            if (!StringExpander.canExpand(rawTopicName)) {
+            if (!StringExpander.canExpandIntoMap(rawTopicName)) {
                 materializedTopics.put(rawTopicName, new ArrayList<>());
                 continue;
             }

@@ -17,14 +17,17 @@
 
 package org.apache.kafka.trogdor.common;
 
-import java.util.List;
 import java.util.ArrayList;
-import java.util.Map;
-import java.util.HashMap;
-import java.util.Set;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.Set;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * Utilities for expanding strings that have range expressions in them.
@@ -32,45 +35,23 @@ import java.util.regex.Pattern;
 public class StringExpander {
     private final static Pattern NUMERIC_RANGE_PATTERN =
         Pattern.compile("(.*?)\\[([0-9]*)\\-([0-9]*)\\](.*?)");
+    private final static Pattern NUMERIC_RANGE_VALUE_PATTERN =
+        Pattern.compile("(.*?):(\\[([0-9]*)\\-([0-9]*)\\]|[0-9]+)$");
 
-    public static class ExpandedResult {
-        private String parsedResult;
-        private Set<String> expandedResult;
-        private List<Integer> range;
-
-        /**
-         * The result of an expansion on a string
-         *
-         * Given that the string "foo[5-7]" was expanded, its result would be:
-         * @param parsedResult - the parsed string - "foo"
-         * @param expandedResult - the result of the expansion - {"foo5", "foo6", "foo7"}
-         * @param range - the range of the expansion - [5, 6, 7]
-         */
-        ExpandedResult(String parsedResult, Set<String> expandedResult, List<Integer> range) {
-            this.parsedResult = parsedResult;
-            this.expandedResult = expandedResult;
-            this.range = range;
-        }
-
-        public Set<String> expandedResult() {
-            return expandedResult;
-        }
-
-        public String parsedResult() {
-            return parsedResult;
-        }
-
-        public List<Integer> range() {
-            return range;
-        }
+    /**
+     * Returns a boolean indicating whether this string can be expanded
+     * via the method #{@link StringExpander#expand(String)} and #{@link StringExpander#expandIntoMap(String)}
+     */
+    public static boolean canExpand(String val) {
+        return NUMERIC_RANGE_PATTERN.matcher(val).matches();
     }
 
     /**
      * Returns a boolean indicating whether this string can be expanded
-     * via the methods #{@link StringExpander#expand(String)} and #{@link StringExpander#expandIntoMap(String)}
+     * via the method #{@link StringExpander#expandIntoMap(String)}
      */
-    public static boolean canExpand(String val) {
-        return NUMERIC_RANGE_PATTERN.matcher(val).matches();
+    public static boolean canExpandIntoMap(String val) {
+        return NUMERIC_RANGE_PATTERN.matcher(val).matches() || NUMERIC_RANGE_VALUE_PATTERN.matcher(val).matches();
     }
 
     /**
@@ -82,12 +63,11 @@ public class StringExpander {
      *
      * @throws IllegalArgumentException if the string cannot be expanded.
      */
-    public static ExpandedResult expand(String val) throws IllegalArgumentException  {
+    public static Set<String> expand(String val) throws IllegalArgumentException  {
         Matcher matcher = NUMERIC_RANGE_PATTERN.matcher(val);
         if (!matcher.matches())
             throw new IllegalArgumentException(String.format("Cannot expand string %s", val));
         HashSet<String> set = new HashSet<>();
-        List<Integer> range = new ArrayList<>();
 
         String prequel = matcher.group(1);
         String rangeStart = matcher.group(2);
@@ -100,31 +80,68 @@ public class StringExpander {
                     " is higher than end " + rangeEndInt);
         }
         for (int i = rangeStartInt; i <= rangeEndInt; i++) {
-            range.add(i);
             set.add(String.format("%s%d%s", prequel, i, epilog));
         }
-        return new ExpandedResult(prequel + epilog, set, range);
+
+        return set;
     }
 
     /**
-     * Expands a string with one or two ranges in it into a map.
+     * Expands a key-value string into a map of the string and its integers.
      *
-     * 'foo[1-3][1-3]` => { foo1: [1,2,3], foo2: [1,2,3], foo3: [1,2,3] }
-     * `foo[1-3]` => { foo1: [], foo2: [], foo3: [] }
+     * This method supports three types of notations:
+     *  string[1-3] - denotes multiple strings, each with an unique suffix from the range
+     *  string:[1-3] - denotes one string that corresponds to a list of integers in that range
+     *  string:1 - denotes one string that corresponds to a list of one integer
      *
-     * It is important to check if the passed string can be expanded via #{@link StringExpander#canExpand(String)}
+     * 'foo[1-3]' => { foo1: [], foo2: [], foo3: [] }
+     * 'foo:1' => { foo: [1] }
+     * 'foo:[1-3]' => { foo: [1, 2, 3] }
+     * 'foo[1-3]:3' => { foo1: [3], foo2: [3], foo3: [3] }
+     * 'foo[1-3]:[1-3]' => { foo1: [1,2,3], foo2: [1,2,3], foo3: [1,2,3] }
+     *
+     * It is important to check if the passed string can be expanded via #{@link StringExpander#canExpandIntoMap(String)}
      *
      * @throws IllegalArgumentException if the string cannot be expanded.
      */
     public static Map<String, List<Integer>> expandIntoMap(String val) throws IllegalArgumentException {
+        if (!canExpandIntoMap(val))
+            throw new IllegalArgumentException(String.format("Cannot expand string %s into a map", val));
         Map<String, List<Integer>> expandedMap = new HashMap<>();
-        for (String range: expand(val).expandedResult()) {
-            if (canExpand(range)) {
-                ExpandedResult expandedRange = expand(range);
-                expandedMap.put(expandedRange.parsedResult(), expandedRange.range());
-            } else
-                expandedMap.put(range, new ArrayList<>());
+
+        Set<String> keys = new HashSet<>();
+        List<Integer> valueList;
+
+        Matcher valueMatcher = NUMERIC_RANGE_VALUE_PATTERN.matcher(val);
+        if (valueMatcher.matches()) {
+            val = valueMatcher.group(1);
+            String range = valueMatcher.group(2);
+            if (!range.contains("-"))
+                valueList = Collections.singletonList(Integer.parseInt(range));
+            else {
+                String rangeStart = valueMatcher.group(3);
+                String rangeEnd = valueMatcher.group(4);
+                int rangeStartInt = Integer.parseInt(rangeStart);
+                int rangeEndInt = Integer.parseInt(rangeEnd);
+                if (rangeEndInt < rangeStartInt) {
+                    throw new RuntimeException("Invalid range for a value: start " + rangeStartInt +
+                        " is higher than end " + rangeEndInt);
+                }
+                valueList = IntStream.range(rangeStartInt, rangeEndInt + 1).boxed().collect(Collectors.toList());
+            }
+        } else
+            valueList = new ArrayList<>();
+
+        if (canExpand(val)) {
+            keys.addAll(expand(val));
+        } else {
+            keys.add(val);
         }
+
+        for (String key : keys) {
+            expandedMap.put(key, Collections.unmodifiableList(valueList));
+        }
+
         return expandedMap;
     }
 }

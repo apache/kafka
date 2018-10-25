@@ -83,7 +83,7 @@ public class TopicsSpec extends Message {
             String topicName = entry.getKey();
             PartitionsSpec partitions = entry.getValue();
             if (StringExpander.canExpand(topicName))
-                for (String expandedTopicName : StringExpander.expand(topicName).expandedResult())
+                for (String expandedTopicName : StringExpander.expand(topicName))
                     all.put(expandedTopicName, partitions);
             else
                 all.put(topicName, partitions);
