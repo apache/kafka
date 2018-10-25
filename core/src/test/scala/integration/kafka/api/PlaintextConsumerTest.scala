@@ -1587,6 +1587,33 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @Test
+  def testPerPartitionLagMetricsWhenReadCommitted() {
+    val numMessages = 1000
+    // send some messages.
+    val producer = createProducer()
+    sendRecords(producer, numMessages, tp)
+    sendRecords(producer, numMessages, tp2)
+
+    consumerConfig.setProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
+    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
+    TestUtils.waitUntilTrue(() => {
+      records = consumer.poll(100)
+      !records.records(tp).isEmpty
+    }, "Consumer did not consume any message before timeout.")
+    // Verify the metric exist.
+    val tags = new util.HashMap[String, String]()
+    tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+    tags.put("topic", tp.topic())
+    tags.put("partition", String.valueOf(tp.partition()))
+    val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
+    assertNotNull(fetchLag)
+  }
+
+  @Test
   def testPerPartitionLeadWithMaxPollRecords() {
     val numMessages = 1000
     val maxPollRecords = 10
