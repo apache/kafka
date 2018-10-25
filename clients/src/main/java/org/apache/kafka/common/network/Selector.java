@@ -573,7 +573,7 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
                 if (channel.ready() && key.isWritable() && !channel.maybeBeginClientReauthentication(
-                    () -> channelStartTimeNanos != 0 ? channelStartTimeNanos : time.nanoseconds())) {
+                    () -> channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos)) {
                     Send send;
                     try {
                         send = channel.write();
