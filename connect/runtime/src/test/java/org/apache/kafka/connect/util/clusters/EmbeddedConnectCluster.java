@@ -19,7 +19,6 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
-import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,6 +39,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_HOST_NAME_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_PORT_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG;
@@ -68,6 +68,11 @@ public class EmbeddedConnectCluster {
 
     public EmbeddedConnectCluster() {
         this(UUID.randomUUID().toString());
+    }
+
+    public EmbeddedConnectCluster(Map<String, String> workerProps) {
+        // this empty map will be populated with defaults before starting Connect.
+        this(UUID.randomUUID().toString(), workerProps);
     }
 
     public EmbeddedConnectCluster(String name) {
@@ -116,6 +121,7 @@ public class EmbeddedConnectCluster {
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
+        workerProps.put(REST_PORT_CONFIG, "0"); // set this to zero so we pick a random port
 
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + clusterName);
         putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + clusterName);
@@ -140,7 +146,7 @@ public class EmbeddedConnectCluster {
      * @throws ConnectRestException if REST api returns error status
      */
     public void configureConnector(String connName, Map<String, String> connConfig) throws IOException {
-        String url = String.format("http://%s:%s/connectors/%s/config", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName);
+        String url = endpointForResource(String.format("connectors/%s/config", connName));
         ObjectMapper mapper = new ObjectMapper();
         int status;
         try {
@@ -162,10 +168,16 @@ public class EmbeddedConnectCluster {
      * @throws IOException if call to the REST api fails.
      */
     public void deleteConnector(String connName) throws IOException {
-        int status = executeDelete(String.format("http://%s:%s/connectors/%s", REST_HOST_NAME, WorkerConfig.REST_PORT_DEFAULT, connName));
+        String url = endpointForResource(String.format("connectors/%s", connName));
+        int status = executeDelete(url);
         if (status >= HttpServletResponse.SC_BAD_REQUEST) {
             throw new ConnectRestException(status, "Could not execute DELETE request.");
         }
+    }
+
+    public String endpointForResource(String resource) {
+        String url = String.valueOf(connect.restUrl());
+        return url + resource;
     }
 
     private static void putIfAbsent(Map<String, String> props, String propertyKey, String propertyValue) {

@@ -220,7 +220,9 @@ public class RestServer {
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
     }
 
-
+    public URI serverUrl() {
+        return jettyServer.getURI();
+    }
 
     public void stop() {
         log.info("Stopping REST server");
