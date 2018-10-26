@@ -376,6 +376,8 @@ class LogManager(logDirs: Seq[File],
     } catch {
       case e: ExecutionException =>
         error("There was an error in one of the threads during logs loading: " + e.getCause)
+        // skip loading remaining logs so we fail faster
+        threadPools.foreach(_.shutdownNow())
         throw e.getCause
     } finally {
       threadPools.foreach(_.shutdown())
