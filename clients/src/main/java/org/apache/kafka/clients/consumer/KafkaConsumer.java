@@ -1823,6 +1823,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Pausing partitions {}", partitions);
             for (TopicPartition partition: partitions) {
+                fetcher.removeRecentlyUnpausedPartition(partition);
                 subscriptions.pause(partition);
             }
         } finally {
@@ -1843,6 +1844,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Resuming partitions {}", partitions);
             for (TopicPartition partition: partitions) {
+                if (subscriptions.isPaused(partition)) {
+                    fetcher.addRecentlyUnpausedPartition(partition);
+                }
                 subscriptions.resume(partition);
             }
         } finally {
