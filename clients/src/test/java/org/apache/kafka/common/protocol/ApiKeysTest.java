@@ -49,8 +49,8 @@ public class ApiKeysTest {
      * <ul>
      *   <li> Cluster actions used only for inter-broker are throttled only if unauthorized
      *   <li> SASL_HANDSHAKE and SASL_AUTHENTICATE are not throttled when used for authentication
-     *        when a connection is established. At any other time, this request returns an error
-     *        response that may be throttled.
+     *        when a connection is established or for re-authentication thereafter; these requests
+     *        return an error response that may be throttled if they are sent otherwise.
      * </ul>
      */
     @Test

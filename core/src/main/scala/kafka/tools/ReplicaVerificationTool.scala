@@ -450,7 +450,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
   private val socketTimeout: Int = consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG)
 
   private val networkClient = {
-    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig)
+    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig, time)
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       consumerConfig.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),

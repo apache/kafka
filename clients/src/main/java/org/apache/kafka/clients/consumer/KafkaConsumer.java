@@ -715,7 +715,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
             ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
 
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
