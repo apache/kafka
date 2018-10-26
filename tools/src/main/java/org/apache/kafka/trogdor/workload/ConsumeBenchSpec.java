@@ -27,12 +27,13 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
-import java.util.stream.Collectors;
+import java.util.Set;
+import java.util.HashSet;
 
 /**
  * The specification for a benchmark that consumer messages from a set of topic/partitions.
@@ -40,22 +41,23 @@ import java.util.stream.Collectors;
  * If a consumer group is not given to the specification, a random one will be generated and
  *  used to track offsets/subscribe to topics.
  *
- * This specification uses a specific way to represent a number of topic/partitions via its "activeTopics" field.
- * There are two special notations accepted in the "activeTopics" field:
- *   1. A range ([1-3]) - expands the name of a topic.
- *      * "foo[1-3]" will expand to 3 topics (foo1, foo2, foo3)
- *   2. String ending in a colon with a number or range - denotes a partition for a topic
- *      * "foo:[1-2]" - this will expand to 1 topic (foo) with two partitions (1, 2)
- *      * "foo:1" - this will expand to 1 topic (foo) with one partition (1)
- * Further, these can be mixed or dropped altogether
- *   * "foo[1-3]:[1-2]" - this will expand to 3 topics (foo1, foo2, foo3), each with two partitions (1 and 2)
- *   * "foo" - this will denote one topic (foo)
+ * This specification uses a specific way to represent a topic partition via its "activeTopics" field.
+ * The notation for that is topic_name:partition_number (e.g "foo:1" represents partition-1 of topic "foo")
+ * Note that a topic name cannot have more than one colon.
  *
- * If there is at least one value of notation #2, the consumer will be manually assign partitions to track via
+ * The "activeTopics" field also supports ranges that get expanded. See #{@link StringExpander}.
+ *
+ * There now exists a clever and succinct way to represent multiple partitions of multiple topics.
+ * Example:
+ * Given "activeTopics": ["foo[1-3]:[1-3]"], "foo[1-3]:[1-3]" will get
+ * expanded to [foo1:1, foo1:2, foo1:3, foo2:1, ..., foo3:3].
+ * This represents all partitions 1-3 for the three topics foo1, foo2 and foo3.
+ *
+ * If there is at least one topic:partition pair, the consumer will be manually assigned partitions via
  * #{@link org.apache.kafka.clients.consumer.KafkaConsumer#assign(Collection)}.
- * Note that in this case the consumer will fetch all partitions for a topic if it is not represented using notation #2
+ * Note that in this case the consumer will fetch and assign all partitions for a topic if no partition is given for it (e.g ["foo:1", "bar"])
  *
- * If there are no values of notation #2, the consumer will subscribe to the given topics via
+ * If there are no topic:partition pairs given, the consumer will subscribe to the topics via
  * #{@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(Collection)}.
  * It will be assigned partitions dynamically from the consumer group.
  *
@@ -75,8 +77,8 @@ import java.util.stream.Collectors;
  */
 public class ConsumeBenchSpec extends TaskSpec {
 
-    public final static String EMPTY_CONSUMER_GROUP = "";
-
+    static final String EMPTY_CONSUMER_GROUP = "";
+    private static final String VALID_EXPANDED_TOPIC_NAME_PATTERN = "^[^:]+(:[\\d]+|[^:]*)$";
     private final String consumerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
@@ -85,8 +87,6 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
     private final List<String> activeTopics;
-    private final Map<String, List<TopicPartition>> materializedTopics;
-    private final boolean useGroupPartitionAssignment;
     private final String consumerGroup;
 
     @JsonCreator
@@ -96,7 +96,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") int maxMessages,
-                            @JsonProperty String consumerGroup,
+                            @JsonProperty("consumerGroup") String consumerGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -110,10 +110,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
-        this.materializedTopics = new HashMap<>();
         this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
-        // use consumer group assignment unless we're given specific partitions
-        this.useGroupPartitionAssignment = materializeTopics(this.activeTopics);
     }
 
     @JsonProperty
@@ -161,17 +158,6 @@ public class ConsumeBenchSpec extends TaskSpec {
         return activeTopics;
     }
 
-    public Map<String, List<TopicPartition>> materializedTopics() {
-        return materializedTopics;
-    }
-
-    /**
-     * Denotes whether to use a dynamic partition assignment from the consumer group or a manual assignment
-     */
-    boolean useGroupPartitionAssignment() {
-        return useGroupPartitionAssignment;
-    }
-
     @Override
     public TaskController newController(String id) {
         return topology -> Collections.singleton(consumerNode);
@@ -183,38 +169,52 @@ public class ConsumeBenchSpec extends TaskSpec {
     }
 
     /**
-     * Materializes a list of topic names with ranges into partitions
+     * Materializes a list of topic names (optionally with ranges) into a map of the topics and their partitions
+     *
+     * Example:
      * ['foo[1-3]', 'foobar:2', 'bar[1-2]:[1-2]'] => {'foo1': [], 'foo2': [], 'foo3': [], 'foobar': [2],
      *                                                'bar1': [1, 2], 'bar2': [1, 2] }
-     *
-     * @param topics - a list of topic names, potentially with ranges in them that would be expanded
-     * @return boolean - whether to use a dynamic partition assignment from the consumer group or not
      */
-    private boolean materializeTopics(List<String> topics) {
-        boolean useGroupPartitionAssignment = true;
-        for (String rawTopicName : topics) {
-            if (!StringExpander.canExpandIntoMap(rawTopicName)) {
-                materializedTopics.put(rawTopicName, new ArrayList<>());
-                continue;
-            }
+    Map<String, List<TopicPartition>> materializeTopics() {
+        Map<String, List<TopicPartition>> partitionsByTopics = new HashMap<>();
 
-            Map<String, List<Integer>> expandedResult = StringExpander.expandIntoMap(rawTopicName);
-            if (expandedResult.values().isEmpty()) {
-                for (String parsedTopicName : expandedResult.keySet())
-                    materializedTopics.put(parsedTopicName, new ArrayList<>());
-            } else {
-                // double range given in topic name (e.g foo[1-10][1-3])
-                for (Map.Entry<String, List<Integer>> expandedEntry : expandedResult.entrySet()) {
-                    String topicName = expandedEntry.getKey();
-                    List<TopicPartition> partitions = expandedEntry.getValue().stream()
-                        .map(i -> new TopicPartition(topicName, i)).collect(Collectors.toList());
+        for (String rawTopicName : this.activeTopics) {
+            Set<String> expandedNames = expandTopicName(rawTopicName);
+            if (!expandedNames.iterator().next().matches(VALID_EXPANDED_TOPIC_NAME_PATTERN))
+                throw new IllegalArgumentException(String.format("Expanded topic name %s is invalid", rawTopicName));
 
-                    materializedTopics.put(topicName, partitions);
+            for (String topicName : expandedNames) {
+                TopicPartition partition = null;
+                if (topicName.contains(":")) {
+                    String[] topicAndPartition = topicName.split(":");
+                    topicName = topicAndPartition[0];
+                    partition = new TopicPartition(topicName, Integer.parseInt(topicAndPartition[1]));
                 }
-                useGroupPartitionAssignment = false; // use manual assignment
+                if (!partitionsByTopics.containsKey(topicName)) {
+                    partitionsByTopics.put(topicName, new ArrayList<>());
+                }
+                if (partition != null) {
+                    partitionsByTopics.get(topicName).add(partition);
+                }
             }
         }
 
-        return useGroupPartitionAssignment;
+        return partitionsByTopics;
+    }
+
+    /**
+     * Expands a topic name until there are no more ranges in it
+     */
+    private Set<String> expandTopicName(String topicName) {
+        Set<String> expandedNames = StringExpander.expand(topicName);
+        if (expandedNames.size() == 1) {
+            return expandedNames;
+        }
+
+        Set<String> newNames = new HashSet<>();
+        for (String name : expandedNames) {
+            newNames.addAll(expandTopicName(name));
+        }
+        return newNames;
     }
 }

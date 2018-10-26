@@ -82,11 +82,8 @@ public class TopicsSpec extends Message {
         for (Map.Entry<String, PartitionsSpec> entry : map.entrySet()) {
             String topicName = entry.getKey();
             PartitionsSpec partitions = entry.getValue();
-            if (StringExpander.canExpand(topicName))
-                for (String expandedTopicName : StringExpander.expand(topicName))
-                    all.put(expandedTopicName, partitions);
-            else
-                all.put(topicName, partitions);
+            for (String expandedTopicName : StringExpander.expand(topicName))
+                all.put(expandedTopicName, partitions);
         }
         return all;
     }

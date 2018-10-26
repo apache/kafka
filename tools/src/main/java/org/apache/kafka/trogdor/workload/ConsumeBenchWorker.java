@@ -39,7 +39,6 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.time.Duration;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -97,15 +96,15 @@ public class ConsumeBenchWorker implements TaskWorker {
 
         private ConsumeMessages consumeTask() {
             String consumerGroup = spec.consumerGroup();
-            boolean toUseGroupPartitionAssignment = spec.useGroupPartitionAssignment();
+            Map<String, List<TopicPartition>> partitionsByTopic = spec.materializeTopics();
+            boolean toUseGroupPartitionAssignment = partitionsByTopic.values().isEmpty();
 
             if (consumerGroup.equals(ConsumeBenchSpec.EMPTY_CONSUMER_GROUP)) // consumer group is undefined, the consumer should use a random group
                 consumerGroup = generateConsumerGroup();
 
             consumer = consumer(consumerGroup);
-            Map<String, List<TopicPartition>> partitionsByTopic = toUseGroupPartitionAssignment ?
-                spec.materializedTopics() // will only use topic names
-                : fetchPartitionsByTopic(consumer);
+            if (!toUseGroupPartitionAssignment)
+                partitionsByTopic = populatePartitionsByTopic(consumer, partitionsByTopic);
 
             return new ConsumeMessages(consumer, partitionsByTopic, toUseGroupPartitionAssignment);
         }
@@ -126,24 +125,24 @@ public class ConsumeBenchWorker implements TaskWorker {
             return "consume-bench-" + UUID.randomUUID().toString();
         }
 
-        private Map<String, List<TopicPartition>> fetchPartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer) {
-            Map<String, List<TopicPartition>> partitionsByTopic = new HashMap<>();
-
+        private Map<String, List<TopicPartition>> populatePartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer,
+                                                                         Map<String, List<TopicPartition>> materializedTopics) {
             // fetch partitions for topics who do not have any listed
-            for (Map.Entry<String, List<TopicPartition>> entry : spec.materializedTopics().entrySet()) {
+            for (Map.Entry<String, List<TopicPartition>> entry : materializedTopics.entrySet()) {
                 String topicName = entry.getKey();
                 List<TopicPartition> partitions = entry.getValue();
 
                 if (partitions.isEmpty()) {
-                    partitions = consumer.partitionsFor(topicName).stream()
+                    List<TopicPartition> fetchedPartitions = consumer.partitionsFor(topicName).stream()
                         .map(partitionInfo -> new TopicPartition(partitionInfo.topic(), partitionInfo.partition()))
                         .collect(Collectors.toList());
+                    partitions.addAll(fetchedPartitions);
                 }
 
-                partitionsByTopic.put(topicName, partitions);
+                materializedTopics.put(topicName, partitions);
             }
 
-            return partitionsByTopic;
+            return materializedTopics;
         }
     }
 
