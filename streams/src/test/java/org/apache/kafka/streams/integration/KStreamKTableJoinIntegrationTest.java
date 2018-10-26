@@ -319,7 +319,7 @@ public class KStreamKTableJoinIntegrationTest {
             public boolean conditionMet() {
                 return remainingExpectedResult.isEmpty();
             }
-        }, "Never received expected result.");
+        }, 30000, "Never received all expected results.  Still waiting for " + remainingExpectedResult);
 
         final int expectedResultSize = expectedClicksPerRegion.size();
         final int expectedNumberOfOutputs = (cacheSizeBytes == 0)
