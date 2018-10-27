@@ -128,6 +128,18 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testConstructorWithNotStringKey() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.put(1, "not string key");
+        try (KafkaProducer<?, ?> ff = new KafkaProducer(props, new StringSerializer(), new StringSerializer())) {
+            fail("Constructor should throw exception");
+        } catch (ConfigException e) {
+            assertTrue("Unexpected exception message: " + e.getMessage(), e.getMessage().contains("not string key"));
+        }
+    }
+
+    @Test
     public void testSerializerClose() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
@@ -197,10 +209,10 @@ public class KafkaProducerTest {
 
     @Test
     public void shouldCloseProperlyAndThrowIfInterrupted() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
-        props.setProperty(ProducerConfig.BATCH_SIZE_CONFIG, "1");
+        Map<String, Object> configs = new HashMap();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
+        configs.put(ProducerConfig.BATCH_SIZE_CONFIG, "1");
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -212,9 +224,8 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        final Producer<String, String> producer = new KafkaProducer<>(
-            new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-            new StringSerializer(), new StringSerializer(), metadata, client, null, time);
+        final Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final AtomicReference<Exception> closeException = new AtomicReference<>();
@@ -278,10 +289,8 @@ public class KafkaProducerTest {
 
     @Test
     public void testMetadataFetch() throws InterruptedException {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
-                new StringSerializer()));
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         String topic = "topic";
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
         final Cluster emptyCluster = new Cluster(null, nodes,
@@ -299,8 +308,8 @@ public class KafkaProducerTest {
         // Return empty cluster 4 times and cluster from then on
         when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, cluster);
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(config, null, null,
-                metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
             @Override
             Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
@@ -332,10 +341,8 @@ public class KafkaProducerTest {
 
     @Test
     public void testMetadataFetchOnStaleMetadata() throws Exception {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
-                new StringSerializer()));
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         String topic = "topic";
         ProducerRecord<String, String> initialRecord = new ProducerRecord<>(topic, "value");
         // Create a record with a partition higher than the initial (outdated) partition range
@@ -374,8 +381,8 @@ public class KafkaProducerTest {
             return emptyCluster;
         });
 
-        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(config, null, null,
-                metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
             @Override
             Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
                 // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
@@ -419,19 +426,17 @@ public class KafkaProducerTest {
 
     @Test
     public void testTopicRefreshInMetadata() throws InterruptedException {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
-            new StringSerializer()));
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
         long refreshBackoffMs = 500L;
         long metadataExpireMs = 60000L;
         final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
                 true, new ClusterResourceListeners());
         final Time time = new MockTime();
         final String topic = "topic";
-        try (KafkaProducer<String, String> producer = new KafkaProducer<>(config, null, null, metadata,
-                null, null, time)) {
+        try (KafkaProducer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, null, null, time)) {
 
             Thread t = new Thread(() -> {
                 long startTimeMs = System.currentTimeMillis();
@@ -466,14 +471,12 @@ public class KafkaProducerTest {
     }
 
     private <T extends Serializer<String>> void doTestHeaders(Class<T> serializerClassToMock) {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
         Serializer<String> keySerializer = mock(serializerClassToMock);
         @SuppressWarnings("unchecked")
         Serializer<String> valueSerializer = mock(serializerClassToMock);
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, keySerializer,
-                valueSerializer));
 
         String topic = "topic";
         final Cluster cluster = new Cluster(
@@ -485,8 +488,8 @@ public class KafkaProducerTest {
         Metadata metadata = new Metadata(0, 90000, true);
         metadata.update(cluster, Collections.emptySet(), Time.SYSTEM.milliseconds());
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(config, keySerializer, valueSerializer,
-                metadata, null, null, Time.SYSTEM);
+        KafkaProducer<String, String> producer = new KafkaProducer<>(configs, keySerializer, valueSerializer, metadata,
+                null, null, Time.SYSTEM);
 
         when(keySerializer.serialize(any(), any(), any())).then(invocation ->
                 invocation.<String>getArgument(2).getBytes());
@@ -543,11 +546,9 @@ public class KafkaProducerTest {
 
     @Test
     public void testInterceptorPartitionSetOnTooLargeRecord() {
-        Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
-        ProducerConfig config = new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(),
-                new StringSerializer()));
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_REQUEST_SIZE_CONFIG, "1");
         String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
 
@@ -562,8 +563,8 @@ public class KafkaProducerTest {
 
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
                 ProducerInterceptors<String, String> interceptors = mock(ProducerInterceptors.class);
-        KafkaProducer<String, String> producer = new KafkaProducer<>(config, null, null,
-                metadata, null, interceptors, Time.SYSTEM);
+        KafkaProducer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, null, interceptors, Time.SYSTEM);
 
         when(interceptors.onSend(any())).then(invocation -> invocation.getArgument(0));
 
@@ -589,10 +590,10 @@ public class KafkaProducerTest {
 
     @Test(expected = TimeoutException.class)
     public void testInitTransactionTimeout() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
         Time time = Time.SYSTEM;
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -604,9 +605,8 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        try (Producer<String, String> producer = new KafkaProducer<>(
-                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                null, null, metadata, client, null, time)) {
+        try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             fail("initTransactions() should have raised TimeoutException");
         }
@@ -614,10 +614,10 @@ public class KafkaProducerTest {
 
     @Test(expected = KafkaException.class)
     public void testOnlyCanExecuteCloseAfterInitTransactionsTimeout() {
-        Properties props = new Properties();
-        props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
@@ -629,9 +629,8 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        Producer<String, String> producer = new KafkaProducer<>(
-                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                null, null, metadata, client, null, time);
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
         try {
             producer.initTransactions();
         } catch (TimeoutException e) {
@@ -647,9 +646,9 @@ public class KafkaProducerTest {
 
     @Test
     public void testSendToInvalidTopic() throws Exception {
-        Properties props = new Properties();
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
 
         Time time = new MockTime();
         Cluster cluster = TestUtils.singletonCluster();
@@ -661,9 +660,8 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        Producer<String, String> producer = new KafkaProducer<>(new ProducerConfig(
-                ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                null, null, metadata, client, null, time);
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
 
         String invalidTopicName = "topic abc"; // Invalid topic name due to space
         ProducerRecord<String, String> record = new ProducerRecord<>(invalidTopicName, "HelloKafka");
@@ -690,9 +688,9 @@ public class KafkaProducerTest {
 
     @Test
     public void testCloseWhenWaitingForMetadataUpdate() throws InterruptedException {
-        Properties props = new Properties();
-        props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
-        props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MAX_VALUE);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
         // Simulate a case where metadata for a particular topic is not available. This will cause KafkaProducer#send to
         // block in Metadata#awaitUpdate for the configured max.block.ms. When close() is invoked, KafkaProducer#send should
@@ -706,9 +704,8 @@ public class KafkaProducerTest {
         MockClient client = new MockClient(time, metadata);
         client.setNode(node);
 
-        Producer<String, String> producer = new KafkaProducer<>(
-                new ProducerConfig(ProducerConfig.addSerializerToConfig(props, new StringSerializer(), new StringSerializer())),
-                new StringSerializer(), new StringSerializer(), metadata, client, null, time);
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
 
         ExecutorService executor = Executors.newSingleThreadExecutor();
         final AtomicReference<Exception> sendException = new AtomicReference<>();

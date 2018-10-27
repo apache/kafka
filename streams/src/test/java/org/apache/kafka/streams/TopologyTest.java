@@ -258,7 +258,7 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToNonExistingProcessor() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
-        topology.addStateStore(storeBuilder, "no-such-processsor");
+        topology.addStateStore(storeBuilder, "no-such-processor");
     }
 
     @Test

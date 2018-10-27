@@ -522,6 +522,18 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldThrowExceptionIfCommitIntervalMsIsNegative() {
+        final long commitIntervalMs = -1;
+        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, commitIntervalMs);
+        try {
+            new StreamsConfig(props);
+            fail("Should throw ConfigException when commitIntervalMs is set to a negative value");
+        } catch (final ConfigException e) {
+            assertEquals("Invalid value -1 for configuration commit.interval.ms: Value must be at least 0", e.getMessage());
+        }
+    }
+
+    @Test
     public void shouldUseNewConfigsWhenPresent() {
         final Properties props = getStreamsConfig();
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Long().getClass());

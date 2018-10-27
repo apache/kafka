@@ -454,9 +454,6 @@ object ConsoleConsumer extends Logging {
       this.consumer.close()
     }
 
-    def commitSync() {
-      this.consumer.commitSync()
-    }
   }
 }
 

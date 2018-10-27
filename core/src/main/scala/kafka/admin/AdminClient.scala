@@ -432,7 +432,7 @@ object AdminClient {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata(100L, 60 * 60 * 1000L, true)
-    val channelBuilder = ClientUtils.createChannelBuilder(config)
+    val channelBuilder = ClientUtils.createChannelBuilder(config, time)
     val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 

@@ -582,6 +582,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(COMMIT_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,
+                    atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
             .define(CONNECTIONS_MAX_IDLE_MS_CONFIG,

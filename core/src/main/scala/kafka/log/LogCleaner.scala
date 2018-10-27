@@ -321,12 +321,9 @@ class LogCleaner(initialConfig: CleanerConfig,
         }
         val deletable: Iterable[(TopicPartition, Log)] = cleanerManager.deletableLogs()
         try {
-          deletable.foreach {
-            case (topicPartition, log) =>
-              try {
-                currentLog = Some(log)
-                log.deleteOldSegments()
-              }
+          deletable.foreach { case (topicPartition, log) =>
+            currentLog = Some(log)
+            log.deleteOldSegments()
           }
         } finally  {
           cleanerManager.doneDeleting(deletable.map(_._1))

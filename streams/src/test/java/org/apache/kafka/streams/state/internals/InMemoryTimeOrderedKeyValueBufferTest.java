@@ -14,27 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.token.delegation.internals;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.security.scram.ScramCredentialCallback;
+import org.junit.Test;
 
-public class DelegationTokenCredentialCallback extends ScramCredentialCallback {
-    private String tokenOwner;
-    private Long tokenExpiryTimestamp;
+public class InMemoryTimeOrderedKeyValueBufferTest {
 
-    public void tokenOwner(String tokenOwner) {
-        this.tokenOwner = tokenOwner;
+    @Test
+    public void bufferShouldAllowCacheEnablement() {
+        new InMemoryTimeOrderedKeyValueBuffer.Builder(null).withCachingEnabled();
     }
 
-    public String tokenOwner() {
-        return tokenOwner;
-    }
-    
-    public void tokenExpiryTimestamp(Long tokenExpiryTimestamp) {
-        this.tokenExpiryTimestamp = tokenExpiryTimestamp;
-    }
-
-    public Long tokenExpiryTimestamp() {
-        return tokenExpiryTimestamp;
+    @Test
+    public void bufferShouldAllowCacheDisablement() {
+        new InMemoryTimeOrderedKeyValueBuffer.Builder(null).withCachingDisabled();
     }
 }

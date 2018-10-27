@@ -184,9 +184,9 @@ public class Sender implements Runnable {
                     if (batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now)) {
                         iter.remove();
                         // expireBatches is called in Sender.sendProducerData, before client.poll.
-                        // The batch.finalState() == null invariant should always hold. An IllegalStateException
+                        // The !batch.isDone() invariant should always hold. An IllegalStateException
                         // exception will be thrown if the invariant is violated.
-                        if (batch.finalState() == null) {
+                        if (!batch.isDone()) {
                             expiredBatches.add(batch);
                         } else {
                             throw new IllegalStateException(batch.topicPartition + " batch created at " +
@@ -576,7 +576,7 @@ public class Sender implements Runnable {
                                long now, long throttleUntilTimeMs) {
         Errors error = response.error;
 
-        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 &&
+        if (error == Errors.MESSAGE_TOO_LARGE && batch.recordCount > 1 && !batch.isDone() &&
                 (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || batch.isCompressed())) {
             // If the batch is too large, we split the batch and send the split batches again. We do not decrement
             // the retry attempts in this case.
@@ -726,7 +726,7 @@ public class Sender implements Runnable {
     private boolean canRetry(ProducerBatch batch, ProduceResponse.PartitionResponse response, long now) {
         return !batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now) &&
             batch.attempts() < this.retries &&
-            batch.finalState() == null &&
+            !batch.isDone() &&
             ((response.error.exception() instanceof RetriableException) ||
                 (transactionManager != null && transactionManager.canRetry(response, batch)));
     }
