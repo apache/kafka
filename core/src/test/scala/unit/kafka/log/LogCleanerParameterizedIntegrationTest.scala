@@ -96,7 +96,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
     logProps.put(LogConfig.CleanupPolicyProp, "compact,delete")
 
     def runCleanerAndCheckCompacted(numKeys: Int): (Log, Seq[(Int, String, Long)]) = {
-      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L, segmentSize = 2560)
+      cleaner = makeCleaner(partitions = topicPartitions.take(1), propertyOverrides = logProps, backOffMs = 100L)
       val log = cleaner.logs.get(topicPartitions(0))
 
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
