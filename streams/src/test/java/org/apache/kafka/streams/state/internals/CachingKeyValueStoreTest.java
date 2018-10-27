@@ -107,8 +107,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
     public void shouldCloseAfterErrorWithFlush() {
         try {
             cache = EasyMock.niceMock(ThreadCache.class);
-            context = new InternalMockProcessorContext(null, null, null, (RecordCollector) null, cache);
-            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
+            context = new MockProcessorContext(null, null, null, (RecordCollector) null, cache);
+            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic));
             store.init(context, null);
             cache.flush("0_0-store");
             EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
