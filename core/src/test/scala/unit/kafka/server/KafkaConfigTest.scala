@@ -22,7 +22,6 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_8_2}
 import kafka.cluster.EndPoint
 import kafka.message._
-import kafka.metrics.KafkaMetricsConfig
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor

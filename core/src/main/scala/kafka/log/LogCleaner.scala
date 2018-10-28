@@ -267,7 +267,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
   private class CleanerThread(threadId: Int)
-    extends ShutdownableThread(name = "kafka-log-cleaner-thread-" + threadId, isInterruptible = false) {
+    extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false) {
 
     protected override def loggerName = classOf[LogCleaner].getName
 
@@ -458,7 +458,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName = classOf[LogCleaner].getName
 
-  this.logIdent = "Cleaner " + id + ": "
+  this.logIdent = s"Cleaner $id: "
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)
@@ -752,7 +752,7 @@ private[log] class Cleaner(val id: Int,
     if(readBuffer.capacity >= maxBufferSize || writeBuffer.capacity >= maxBufferSize)
       throw new IllegalStateException("This log contains a message larger than maximum allowable size of %s.".format(maxBufferSize))
     val newSize = math.min(this.readBuffer.capacity * 2, maxBufferSize)
-    info("Growing cleaner I/O buffers from " + readBuffer.capacity + "bytes to " + newSize + " bytes.")
+    info(s"Growing cleaner I/O buffers from ${readBuffer.capacity} bytes to $newSize bytes.")
     this.readBuffer = ByteBuffer.allocate(newSize)
     this.writeBuffer = ByteBuffer.allocate(newSize)
   }

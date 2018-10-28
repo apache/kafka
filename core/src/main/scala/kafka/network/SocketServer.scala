@@ -133,7 +133,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         }
       }
     )
-    info("Started " + acceptors.size + " acceptor threads")
+    info(s"Started ${acceptors.size} acceptor threads")
   }
 
   /**
@@ -335,7 +335,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    */
   def close(channel: SocketChannel): Unit = {
     if (channel != null) {
-      debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
+      debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress()}")
       connectionQuotas.dec(channel.socket.getInetAddress)
       CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
       CoreUtils.swallow(channel.close(), this, Level.ERROR)
@@ -627,7 +627,7 @@ private[kafka] class Processor(val id: Int,
         }
       }
     } finally {
-      debug("Closing selector - processor " + id)
+      debug(s"Closing selector - processor $id")
       CoreUtils.swallow(closeAll(), this, Level.ERROR)
       shutdownComplete()
     }
@@ -658,7 +658,7 @@ private[kafka] class Processor(val id: Int,
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
             updateRequestMetrics(response)
-            trace("Socket server received empty response to send, registering for read: " + response)
+            trace(s"Socket server received empty response to send, registering for read: $response")
             // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
             // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
             // throttling delay has already passed by now.

@@ -161,7 +161,7 @@ class DelegationTokenManager(val config: KafkaConfig,
                              val tokenCache: DelegationTokenCache,
                              val time: Time,
                              val zkClient: KafkaZkClient) extends Logging with KafkaMetricsGroup {
-  this.logIdent = "[Token Manager on Broker " + config.brokerId + "]: "
+  this.logIdent = s"[Token Manager on Broker ${config.brokerId}]: "
 
   import DelegationTokenManager._
 
@@ -201,7 +201,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   private def loadCache() {
     lock.synchronized {
       val tokens = zkClient.getChildren(DelegationTokensZNode.path)
-      info(s"Loading the token cache. Total token count : " + tokens.size)
+      info(s"Loading the token cache. Total token count : ${tokens.size}")
       for (tokenId <- tokens) {
         try {
           getTokenFromZk(tokenId) match {
@@ -317,7 +317,7 @@ class DelegationTokenManager(val config: KafkaConfig,
               tokenInfo.setExpiryTimestamp(expiryTimeStamp)
 
               updateToken(token)
-              info(s"Delegation token renewed for token : " + tokenInfo.tokenId + " for owner :" + tokenInfo.owner)
+              info(s"Delegation token renewed for token : ${tokenInfo.tokenId} for owner :${tokenInfo.owner}")
               renewCallback(Errors.NONE, expiryTimeStamp)
             }
           }
@@ -412,7 +412,7 @@ class DelegationTokenManager(val config: KafkaConfig,
               expireResponseCallback(Errors.DELEGATION_TOKEN_EXPIRED, -1)
             } else if (expireLifeTimeMs < 0) { //expire immediately
               removeToken(tokenInfo.tokenId)
-              info(s"Token expired for token : " + tokenInfo.tokenId + " for owner :" + tokenInfo.owner)
+              info(s"Token expired for token : ${tokenInfo.tokenId} for owner :${tokenInfo.owner}")
               expireResponseCallback(Errors.NONE, now)
             } else {
               //set expiry time stamp
@@ -420,7 +420,7 @@ class DelegationTokenManager(val config: KafkaConfig,
               tokenInfo.setExpiryTimestamp(expiryTimeStamp)
 
               updateToken(token)
-              info(s"Updated expiry time for token : " + tokenInfo.tokenId + " for owner :" + tokenInfo.owner)
+              info(s"Updated expiry time for token : ${tokenInfo.tokenId} for owner :${tokenInfo.owner}")
               expireResponseCallback(Errors.NONE, expiryTimeStamp)
             }
           }
@@ -457,7 +457,7 @@ class DelegationTokenManager(val config: KafkaConfig,
       for (tokenInfo <- getAllTokenInformation) {
         val now = time.milliseconds
         if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
-          info(s"Delegation token expired for token : " + tokenInfo.tokenId + " for owner :" + tokenInfo.owner)
+          info(s"Delegation token expired for token : ${tokenInfo.tokenId} for owner :${tokenInfo.owner}")
           removeToken(tokenInfo.tokenId)
         }
       }
