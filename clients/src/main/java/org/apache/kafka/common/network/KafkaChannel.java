@@ -19,7 +19,10 @@ package org.apache.kafka.common.network;
 import java.net.SocketAddress;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.IOException;
@@ -236,6 +239,10 @@ public class KafkaChannel {
 
     public SelectionKey selectionKey() {
         return transportLayer.selectionKey();
+    }
+
+    public RequestContext newRequestContext(RequestHeader header, ListenerName listenerName, SecurityProtocol protocol) {
+        return new RequestContext(header, id, socketAddress(), principal(), listenerName, protocol);
     }
 
     /**

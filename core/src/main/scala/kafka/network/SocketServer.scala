@@ -735,14 +735,12 @@ private[kafka] class Processor(val id: Int,
                 debug(s"Disconnected expired channel: $channel : $header")
                 expiredConnectionsKilledCount.record(null, 1, 0)
               } else {
-                val connectionId = receive.source
-                val context = new RequestContext(header, connectionId, channel.socketAddress,
-                  channel.principal, listenerName, securityProtocol)
+                val context = channel.newRequestContext(header, listenerName, securityProtocol)
                 val req = new RequestChannel.Request(processor = id, context = context,
                   startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
                 requestChannel.sendRequest(req)
-                selector.mute(connectionId)
-                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+                selector.mute(channel.id)
+                handleChannelMuteEvent(channel.id, ChannelMuteEvent.REQUEST_RECEIVED)
               }
             }
           case None =>
