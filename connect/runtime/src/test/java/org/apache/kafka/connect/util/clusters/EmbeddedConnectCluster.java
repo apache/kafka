@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,38 +57,20 @@ public class EmbeddedConnectCluster {
     private static final Logger log = LoggerFactory.getLogger(EmbeddedConnectCluster.class);
 
     private static final int DEFAULT_NUM_BROKERS = 1;
+    private static final int DEFAULT_NUM_WORKERS = 1;
     private static final Properties DEFAULT_BROKER_CONFIG = new Properties();
     private static final String REST_HOST_NAME = "localhost";
 
+    private final Connect[] connectCluster;
     private final EmbeddedKafkaCluster kafkaCluster;
-
     private final Map<String, String> workerProps;
-    private final String clusterName;
+    private final String connectClusterName;
 
-    private Connect connect;
-
-    public EmbeddedConnectCluster() {
-        this(UUID.randomUUID().toString());
-    }
-
-    public EmbeddedConnectCluster(Map<String, String> workerProps) {
-        // this empty map will be populated with defaults before starting Connect.
-        this(UUID.randomUUID().toString(), workerProps);
-    }
-
-    public EmbeddedConnectCluster(String name) {
-        // this empty map will be populated with defaults before starting Connect.
-        this(name, new HashMap<>());
-    }
-
-    public EmbeddedConnectCluster(String name, Map<String, String> workerProps) {
-        this(name, workerProps, DEFAULT_NUM_BROKERS, DEFAULT_BROKER_CONFIG);
-    }
-
-    public EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numBrokers, Properties brokerProps) {
+    private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers, int numBrokers, Properties brokerProps) {
         this.workerProps = workerProps;
-        this.clusterName = name;
-        kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
+        this.connectClusterName = name;
+        this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
+        this.connectCluster = new Connect[numWorkers];
     }
 
     /**
@@ -103,10 +86,12 @@ public class EmbeddedConnectCluster {
      * Clean up any temp directories created locally.
      */
     public void stop() {
-        try {
-            connect.stop();
-        } catch (Exception e) {
-            log.error("Could not stop connect", e);
+        for (Connect worker : this.connectCluster) {
+            try {
+                worker.stop();
+            } catch (Exception e) {
+                log.error("Could not stop connect", e);
+            }
         }
 
         try {
@@ -117,23 +102,25 @@ public class EmbeddedConnectCluster {
     }
 
     public void startConnect() {
-        log.info("Starting Connect cluster with one worker. clusterName=" + clusterName);
+        log.info("Starting Connect cluster with {} workers. clusterName {}", connectCluster.length, connectClusterName);
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
         workerProps.put(REST_PORT_CONFIG, "0"); // set this to zero so we pick a random port
 
-        putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + clusterName);
-        putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + clusterName);
+        putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
+        putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + connectClusterName);
         putIfAbsent(workerProps, OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        putIfAbsent(workerProps, CONFIG_TOPIC_CONFIG, "connect-config-topic-" + clusterName);
+        putIfAbsent(workerProps, CONFIG_TOPIC_CONFIG, "connect-config-topic-" + connectClusterName);
         putIfAbsent(workerProps, CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
-        putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + clusterName);
+        putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + connectClusterName);
         putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
 
-        connect = new ConnectDistributed().startConnect(workerProps);
+        for (int i = 0; i < connectCluster.length; i++) {
+            connectCluster[i] = new ConnectDistributed().startConnect(workerProps);
+        }
     }
 
     /**
@@ -175,8 +162,19 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    public ConnectorStateInfo getConnectorStatus(String connectorName) {
+        ObjectMapper mapper = new ObjectMapper();
+        String url = endpointForResource(String.format("connectors/%s/status", connectorName));
+        try {
+            return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
+        } catch (IOException e) {
+            log.error("Could not read connector state", e);
+            return null;
+        }
+    }
+
     public String endpointForResource(String resource) {
-        String url = String.valueOf(connect.restUrl());
+        String url = String.valueOf(connectCluster[0].restUrl());
         return url + resource;
     }
 
@@ -210,6 +208,22 @@ public class EmbeddedConnectCluster {
         return httpCon.getResponseCode();
     }
 
+    public String executeGet(String url) throws IOException {
+        log.debug("Executing GET request to URL={}.", url);
+        HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
+        httpCon.setDoOutput(true);
+        httpCon.setRequestMethod("GET");
+        try (InputStream is = httpCon.getInputStream()) {
+            int c;
+            StringBuilder response = new StringBuilder();
+            while ((c = is.read()) != -1) {
+                response.append((char) c);
+            }
+            log.debug("Get response for URL={} is {}", url, response);
+            return response.toString();
+        }
+    }
+
     public int executeDelete(String url) throws IOException {
         log.debug("Executing DELETE request to URL={}", url);
         HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
@@ -217,6 +231,43 @@ public class EmbeddedConnectCluster {
         httpCon.setRequestMethod("DELETE");
         httpCon.connect();
         return httpCon.getResponseCode();
+    }
+
+    public static class Builder {
+        private String name = UUID.randomUUID().toString();
+        private Map<String, String> workerProps = new HashMap<>();
+        private int numWorkers = DEFAULT_NUM_WORKERS;
+        private int numBrokers = DEFAULT_NUM_BROKERS;
+        private Properties brokerProps = DEFAULT_BROKER_CONFIG;
+
+        public Builder name(String name) {
+            this.name = name;
+            return this;
+        }
+
+        public Builder workerProps(Map<String, String> workerProps) {
+            this.workerProps = workerProps;
+            return this;
+        }
+
+        public Builder numWorkers(int numWorkers) {
+            this.numWorkers = numWorkers;
+            return this;
+        }
+
+        public Builder numBrokers(int numBrokers) {
+            this.numBrokers = numBrokers;
+            return this;
+        }
+
+        public Builder brokerProps(Properties brokerProps) {
+            this.brokerProps = brokerProps;
+            return this;
+        }
+
+        public EmbeddedConnectCluster build() {
+            return new EmbeddedConnectCluster(name, workerProps, numWorkers, numBrokers, brokerProps);
+        }
     }
 
 }

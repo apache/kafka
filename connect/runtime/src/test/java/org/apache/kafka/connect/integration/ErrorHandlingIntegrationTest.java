@@ -67,23 +67,29 @@ public class ErrorHandlingIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
 
     private static final String DLQ_TOPIC = "my-connector-errors";
+    private static final String CONNECTOR_NAME = "error-conn";
+    private static final String TASK_ID = "error-conn-0";
     private static final int NUM_RECORDS_PRODUCED = 20;
     private static final int EXPECTED_CORRECT_RECORDS = 19;
     private static final int EXPECTED_INCORRECT_RECORDS = 1;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
+    private ConnectorHandle connectorHandle;
 
     @Before
     public void setup() throws IOException {
         // clean up connector status before starting test.
-        MonitorableSinkConnector.cleanHandle("simple-conn-0");
-        connect = new EmbeddedConnectCluster();
+        connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
+        connectorHandle.deleteTask(TASK_ID);
+        connect = new EmbeddedConnectCluster.Builder().build();
         connect.start();
     }
 
     @After
     public void close() {
+        connectorHandle.deleteTask(TASK_ID);
+        RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
         connect.stop();
     }
 
@@ -113,8 +119,6 @@ public class ErrorHandlingIntegrationTest {
         props.put(TRANSFORMS_CONFIG, "failing_transform");
         props.put("transforms.failing_transform.type", FaultyPassthrough.class.getName());
 
-        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(EXPECTED_CORRECT_RECORDS));
-
         // log all errors, along with message metadata
         props.put(ERRORS_LOG_ENABLE_CONFIG, "true");
         props.put(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
@@ -130,9 +134,11 @@ public class ErrorHandlingIntegrationTest {
         // retry for up to one second
         props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
 
-        connect.configureConnector("simple-conn", props);
+        connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
 
-        MonitorableSinkConnector.task("simple-conn-0").awaitRecords(CONSUME_MAX_DURATION_MS);
+        connect.configureConnector("error-conn", props);
+
+        connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
@@ -146,7 +152,7 @@ public class ErrorHandlingIntegrationTest {
             assertValue("Error when value='value-7'", recs.headers(), ERROR_HEADER_EXCEPTION_MESSAGE);
         }
 
-        connect.deleteConnector("simple-conn");
+        connect.deleteConnector("error-conn");
     }
 
     private void assertValue(String expected, Headers headers, String headerKey) {

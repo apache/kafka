@@ -25,15 +25,18 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Properties;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_PORT_CONFIG;
+import static org.junit.Assert.assertEquals;
 
 /**
  * An example integration test that demonstrates how to setup an integration test for Connect.
@@ -47,21 +50,50 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 2;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
+    private static final String CONNECTOR_NAME = "simple-conn";
+    private static final String TASK_1_ID = "simple-conn-0";
+    private static final String TASK_2_ID = "simple-conn-1";
 
     private EmbeddedConnectCluster connect;
+    private ConnectorHandle connectorHandle;
 
     @Before
     public void setup() throws IOException {
-        // clean up task status before starting test.
-        MonitorableSinkConnector.cleanHandle("simple-conn-0");
-        MonitorableSinkConnector.cleanHandle("simple-conn-1");
+        // setup Connect worker properties
+        Map<String, String> exampleWorkerProps = new HashMap<>();
+        exampleWorkerProps.put(REST_ADVERTISED_HOST_NAME_CONFIG, "integration.test.host.io");
+        exampleWorkerProps.put(REST_ADVERTISED_PORT_CONFIG, "8083");
 
-        connect = new EmbeddedConnectCluster();
+        // setup Kafka broker properties
+        Properties exampleBrokerProps = new Properties();
+        exampleBrokerProps.put("auto.create.topics.enable", "false");
+
+        // build a Connect cluster backed by Kakfa and Zk
+        connect = new EmbeddedConnectCluster.Builder()
+                .name("example-cluster")
+                .numWorkers(1)
+                .numBrokers(1)
+                .workerProps(exampleWorkerProps)
+                .brokerProps(exampleBrokerProps)
+                .build();
+
+        // start the clusters
         connect.start();
+
+        // get a handle to the connector
+        connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
     @After
     public void close() {
+        // delete used tasks
+        connectorHandle.deleteTask(TASK_1_ID);
+        connectorHandle.deleteTask(TASK_2_ID);
+
+        // delete connector handle
+        RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
+
+        // stop all Connect, Kakfa and Zk threads.
         connect.stop();
     }
 
@@ -72,7 +104,29 @@ public class ExampleConnectIntegrationTest {
     @Test
     public void testProduceConsumeConnector() throws Exception {
         // create test topic
-        connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS, 1, Collections.emptyMap());
+        connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the sink connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
+        props.put(TASKS_MAX_CONFIG, "2");
+        props.put(TOPICS_CONFIG, "test-topic");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+
+        // start a sink connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        // expect equal number of records for both tasks
+        connectorHandle.taskHandle(TASK_1_ID).expectedRecords(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS);
+        connectorHandle.taskHandle(TASK_2_ID).expectedRecords(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS);
+
+        // wait for partition assignment
+        connectorHandle.taskHandle(TASK_1_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
+        connectorHandle.taskHandle(TASK_2_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
+
+        // check that the REST API returns two tasks
+        assertEquals("Incorrect task count in connector", 2, connect.getConnectorStatus(CONNECTOR_NAME).tasks().size());
 
         // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -82,23 +136,11 @@ public class ExampleConnectIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
-        // setup up props for the sink connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
-        props.put(TASKS_MAX_CONFIG, "2");
-        props.put(TOPICS_CONFIG, "test-topic");
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(MonitorableSinkConnector.EXPECTED_RECORDS, String.valueOf(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS));
-
-        // start a sink connector
-        connect.configureConnector("simple-conn", props);
-
         // wait for the connector tasks to consume desired number of records.
-        MonitorableSinkConnector.task("simple-conn-0").awaitRecords(CONSUME_MAX_DURATION_MS);
-        MonitorableSinkConnector.task("simple-conn-1").awaitRecords(CONSUME_MAX_DURATION_MS);
+        connectorHandle.taskHandle(TASK_1_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
+        connectorHandle.taskHandle(TASK_2_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // delete connector
-        connect.deleteConnector("simple-conn");
+        connect.deleteConnector(CONNECTOR_NAME);
     }
 }

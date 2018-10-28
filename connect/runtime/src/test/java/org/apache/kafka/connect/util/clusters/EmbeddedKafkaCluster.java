@@ -192,7 +192,16 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic) {
-        createTopic(topic, 1, 1, new HashMap<>());
+        createTopic(topic, 1);
+    }
+
+    /**
+     * Create a Kafka topic with given partition and a replication factor of 1.
+     *
+     * @param topic The name of the topic.
+     */
+    public void createTopic(String topic, int partitions) {
+        createTopic(topic, partitions, 1, new HashMap<>());
     }
 
     /**
