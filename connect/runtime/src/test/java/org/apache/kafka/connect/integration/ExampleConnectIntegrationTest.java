@@ -36,7 +36,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_C
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_PORT_CONFIG;
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * An example integration test that demonstrates how to setup an integration test for Connect.
@@ -71,7 +71,7 @@ public class ExampleConnectIntegrationTest {
         // build a Connect cluster backed by Kakfa and Zk
         connect = new EmbeddedConnectCluster.Builder()
                 .name("example-cluster")
-                .numWorkers(1)
+                .numWorkers(3)
                 .numBrokers(1)
                 .workerProps(exampleWorkerProps)
                 .brokerProps(exampleBrokerProps)
@@ -118,15 +118,7 @@ public class ExampleConnectIntegrationTest {
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // expect equal number of records for both tasks
-        connectorHandle.taskHandle(TASK_1_ID).expectedRecords(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS);
-        connectorHandle.taskHandle(TASK_2_ID).expectedRecords(NUM_RECORDS_PRODUCED / NUM_TOPIC_PARTITIONS);
-
-        // wait for partition assignment
-        connectorHandle.taskHandle(TASK_1_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
-        connectorHandle.taskHandle(TASK_2_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
-
-        // check that the REST API returns two tasks
-        assertEquals("Incorrect task count in connector", 2, connect.getConnectorStatus(CONNECTOR_NAME).tasks().size());
+        connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
 
         // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -136,9 +128,11 @@ public class ExampleConnectIntegrationTest {
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
 
-        // wait for the connector tasks to consume desired number of records.
-        connectorHandle.taskHandle(TASK_1_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
-        connectorHandle.taskHandle(TASK_2_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
+        // wait for the connector tasks to consume all records.
+        connectorHandle.awaitRecords(CONSUME_MAX_DURATION_MS);
+
+        // at least one task should have initalized and executed
+        assertTrue("Incorrect task count in connector", connect.getConnectorStatus(CONNECTOR_NAME).tasks().size() > 0);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);

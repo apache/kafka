@@ -98,18 +98,6 @@ public class ErrorHandlingIntegrationTest {
         // create test topic
         connect.kafka().createTopic("test-topic");
 
-        // produce some strings into test topic
-        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "key-" + i, "value-" + String.valueOf(i));
-        }
-
-        // consume all records from test topic
-        log.info("Consuming records from test topic");
-        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
-            log.debug("Consumed record (key='{}', value='{}') from topic {}",
-                    new String(recs.key()), new String(recs.value()), recs.topic());
-        }
-
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
         props.put(TASKS_MAX_CONFIG, "1");
@@ -137,6 +125,21 @@ public class ErrorHandlingIntegrationTest {
         connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
 
         connect.configureConnector("error-conn", props);
+
+        // wait for partition assignment
+        connectorHandle.taskHandle(TASK_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
+
+        // produce some strings into test topic
+        for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
+            connect.kafka().produce("test-topic", "key-" + i, "value-" + String.valueOf(i));
+        }
+
+        // consume all records from test topic
+        log.info("Consuming records from test topic");
+        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
+            log.debug("Consumed record (key='{}', value='{}') from topic {}",
+                    new String(recs.key()), new String(recs.value()), recs.topic());
+        }
 
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
 

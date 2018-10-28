@@ -33,22 +33,25 @@ public class TaskHandle {
 
     private final String taskId;
     private final CountDownLatch expectedPartitionsLatch;
+    private final ConnectorHandle connectorHandle;
 
     private CountDownLatch recordsRemainingLatch;
     private int expectedRecords = -1;
 
-    public TaskHandle(String taskId) {
+    public TaskHandle(ConnectorHandle connectorHandle, String taskId) {
         this.taskId = taskId;
+        this.connectorHandle = connectorHandle;
         this.expectedPartitionsLatch = new CountDownLatch(1);
     }
 
     /**
-     * Decrement the number of records seen by this task.
+     * Record a message arrival at the task.
      */
     public void record() {
         if (recordsRemainingLatch != null) {
             recordsRemainingLatch.countDown();
         }
+        connectorHandle.record();
     }
 
     /**
@@ -85,7 +88,7 @@ public class TaskHandle {
                     consumeMaxDurationMs);
             throw new DataException(msg);
         }
-        log.debug("Task {} saw {} records, expected {} records", taskId, expectedRecords - recordsRemainingLatch.getCount(), expectedRecords);
+        log.debug("Task {} was assigned partitions", taskId);
     }
 
     /**
