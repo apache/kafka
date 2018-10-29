@@ -47,6 +47,8 @@ import java.util.concurrent.TimeUnit;
  *     if the request was not completed in within the given {@link CreateTopicsOptions#timeoutMs()}</li>
  *     <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
  *     if the authenticated user is not authorized to alter the topic</li>
+ *     <li>{@link org.apache.kafka.common.errors.UnknownServerException}
+ *     indicates an internal problem on the server side</li>
  * </ul>
  *
  */
@@ -107,20 +109,16 @@ public abstract class AdminClient implements AutoCloseable {
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
      * {@link CreateTopicsResult#values() values()} method of the  returned {@code CreateTopicsResult}</p>
      * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *     if duplicate topics were present in the request</li>
-     *     <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
-     *     if cluster authorization failed for create operation</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidPartitionsException}
      *     if number of partitions is less than 1</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
-     *     if replication factor is less than 1 or should be large than number of available brokers</li>
+     *     if replication factor is less than 1 or larger than the number of available brokers</li>
      *     <li>{@link org.apache.kafka.common.errors.TopicExistsException}
      *     if topic name already exists</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
-     *     if topic name collides with other topic name</li>
+     *     if the topic name can't be represented in the request, or if it is not found</li>
      *     <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
-     *     if the proposed replica assignment is invalid. For example if some of the partitions have different number
+     *     if the proposed replica assignment is invalid. For example, if some of the partitions have different number
      *     of replicas or a duplicate replica assignment was found</li>
      *     <li>{@link org.apache.kafka.common.errors.PolicyViolationException}
      *     if the request parameters do not satisfy the policy configured on the broker</li>
@@ -165,8 +163,8 @@ public abstract class AdminClient implements AutoCloseable {
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
      *     if the topic does not exist</li>
-     *     <li>{@link org.apache.kafka.common.errors.NotControllerException}
-     *     if this is not the correct controller for the cluster</li>
+     *     <li>{@link org.apache.kafka.common.errors.TopicDeletionDisabledException}
+     *     if the topic deletion is disabled</li>
      * </ul>
      *
      * @param topics            The topic names to delete.
@@ -204,11 +202,6 @@ public abstract class AdminClient implements AutoCloseable {
      * This is a convenience method for #{@link AdminClient#listTopics(ListTopicsOptions)} with default options.
      * See the overload for more details.
      *
-     * <ul>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
-     *     if replica assignment is invalid</li>
-     * </ul>
-     *
      * @return                  The ListTopicsResult.
      */
     public ListTopicsResult listTopics() {
@@ -233,9 +226,7 @@ public abstract class AdminClient implements AutoCloseable {
      * {@link DescribeTopicsResult#values() values()} method of the  returned {@code DescribeTopicsResult}</p>
      * <ul>
      *     <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
-     *     if topic name collides with other topic name</li>
-     *     <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
-     *     if replica assignment is invalid</li>
+     *     if the topic name can't be represented in the request, or if it is not found</li>
      * </ul>
      *
      * @param topicNames        The names of the topics to describe.
