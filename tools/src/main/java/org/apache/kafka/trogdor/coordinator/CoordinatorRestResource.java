@@ -22,7 +22,9 @@ import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
@@ -35,6 +37,8 @@ import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
+import javax.ws.rs.PathParam;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.MediaType;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
@@ -99,6 +103,16 @@ public class CoordinatorRestResource {
             @DefaultValue("0") @QueryParam("firstEndMs") int firstEndMs,
             @DefaultValue("0") @QueryParam("lastEndMs") int lastEndMs) throws Throwable {
         return coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs));
+    }
+
+    @GET
+    @Path("/tasks/{taskId}")
+    public TaskState tasks(@PathParam("taskId") String taskId) throws Throwable {
+        TaskState response = coordinator().task(new TaskRequest(taskId));
+        if (response == null)
+            throw new NotFoundException(String.format("No task with ID \"%s\" exists.", taskId));
+
+        return response;
     }
 
     @PUT
