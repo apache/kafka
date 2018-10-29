@@ -61,6 +61,11 @@ import java.util.HashSet;
  * #{@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(Collection)}.
  * It will be assigned partitions dynamically from the consumer group.
  *
+ * This specification supports the spawning of multiple consumers in the single Trogdor worker agent.
+ * The "consumeCount" field denotes how many consumers should be spawned for this spec.
+ * It is worth nothing that the "targetMessagesPerSec" and "maxMessages" fields apply for every consumer individually,
+ * whereas "activeTopics" will get assigned to every consumer in a round-robin fashion
+ *
  * An example JSON representation which will result in a consumer that is part of the consumer group "cg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
  * #{@code
@@ -88,6 +93,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final List<String> activeTopics;
     private final String consumerGroup;
+    private final int consumerCount;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -100,6 +106,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+                            @JsonProperty("consumerCount") Integer consumerCount,
                             @JsonProperty("activeTopics") List<String> activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
@@ -111,6 +118,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
         this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
+        this.consumerCount = consumerCount == null ? 1 : consumerCount;
     }
 
     @JsonProperty
@@ -136,6 +144,11 @@ public class ConsumeBenchSpec extends TaskSpec {
     @JsonProperty
     public int maxMessages() {
         return maxMessages;
+    }
+
+    @JsonProperty
+    public int consumerCount() {
+        return consumerCount;
     }
 
     @JsonProperty

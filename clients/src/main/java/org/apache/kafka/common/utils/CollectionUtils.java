@@ -24,6 +24,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+import static java.util.stream.IntStream.range;
+
 public final class CollectionUtils {
 
     private CollectionUtils() {}
@@ -35,6 +37,23 @@ public final class CollectionUtils {
         return minuend.entrySet().stream()
                 .filter(entry -> !subtrahend.containsKey(entry.getKey()))
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+    }
+
+    /**
+     * Splits a #{@link List} into #{@code listsCount} #{@link List} instances,
+     * splitting the elements in a round-robin fashion.
+     *
+     * Example:
+     * splitListRoundRobin([1, 2, 3, 4, 5], 3)
+     *  -> [[1, 4], [2, 5], [3]]
+     *
+     */
+    public static <T> List<List<T>> splitListRoundRobin(List<T> collection, int listsCount) {
+        List<List<T>> splitLists = range(0, listsCount).mapToObj(i -> new ArrayList<T>()).collect(Collectors.toList());
+        for (int i = 0; i < collection.size(); i++) {
+            splitLists.get(i % listsCount).add(collection.get(i));
+        }
+        return splitLists;
     }
 
     /**
