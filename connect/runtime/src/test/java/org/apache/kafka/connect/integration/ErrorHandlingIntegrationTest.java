@@ -79,16 +79,18 @@ public class ErrorHandlingIntegrationTest {
 
     @Before
     public void setup() throws IOException {
-        // clean up connector status before starting test.
+        // get connector handles before starting test.
         connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
-        connectorHandle.deleteTask(TASK_ID);
+
+        // setup Connect cluster with defaults
         connect = new EmbeddedConnectCluster.Builder().build();
+
+        // start Connect cluster
         connect.start();
     }
 
     @After
     public void close() {
-        connectorHandle.deleteTask(TASK_ID);
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
         connect.stop();
     }

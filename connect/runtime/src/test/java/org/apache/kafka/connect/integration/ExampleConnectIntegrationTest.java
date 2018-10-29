@@ -51,8 +51,6 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_TOPIC_PARTITIONS = 2;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
     private static final String CONNECTOR_NAME = "simple-conn";
-    private static final String TASK_1_ID = "simple-conn-0";
-    private static final String TASK_2_ID = "simple-conn-1";
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
@@ -86,10 +84,6 @@ public class ExampleConnectIntegrationTest {
 
     @After
     public void close() {
-        // delete used tasks
-        connectorHandle.deleteTask(TASK_1_ID);
-        connectorHandle.deleteTask(TASK_2_ID);
-
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
@@ -117,7 +111,7 @@ public class ExampleConnectIntegrationTest {
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        // expect equal number of records for both tasks
+        // expect all records to be consumed by the connector
         connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
 
         // produce some messages into source topic partitions
