@@ -212,7 +212,7 @@ public class KafkaProducerTest {
 
     @Test
     public void shouldCloseProperlyAndThrowIfInterrupted() throws Exception {
-        Map<String, Object> configs = new HashMap();
+        Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.PARTITIONER_CLASS_CONFIG, MockPartitioner.class.getName());
         configs.put(ProducerConfig.BATCH_SIZE_CONFIG, "1");
@@ -220,9 +220,8 @@ public class KafkaProducerTest {
         Time time = new MockTime();
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-        metadata.update(initialUpdateResponse, time.milliseconds());
-
         MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
 
         final Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, client, null, time);
@@ -584,10 +583,10 @@ public class KafkaProducerTest {
     public void testInitTransactionTimeout() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
-        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10);
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5);
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
 
-        Time time = new MockTime(5);
+        Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
         metadata.update(initialUpdateResponse, time.milliseconds());

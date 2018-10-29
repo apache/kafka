@@ -164,7 +164,7 @@ public class FetcherTest {
 
     @Before
     public void setup() {
-        metadata.update(initialUpdateResponse, time.milliseconds());
+        client.updateMetadata(initialUpdateResponse);
         node = metadata.fetch().nodes().get(0);
         records = buildRecords(1L, 3, 1);
         nextRecords = buildRecords(4L, 2, 4);
@@ -1716,7 +1716,7 @@ public class FetcherTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
         partitionCounts.put(topic2, 1);
-        metadata.update(TestUtils.metadataUpdateWith(1, partitionCounts), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, partitionCounts));
 
         subscriptions.assignFromUser(Utils.mkSet(tp1, tp2));
 
@@ -1949,7 +1949,7 @@ public class FetcherTest {
 
         // Metadata initially has one topic
         MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(3, singletonMap(topicName, 2));
-        metadata.update(initialMetadata, time.milliseconds());
+        client.updateMetadata(initialMetadata);
 
         // The first metadata refresh should contain one topic
         client.prepareMetadataUpdate(initialMetadata, false);
@@ -2522,7 +2522,7 @@ public class FetcherTest {
 
         MetadataResponse initialMetadataResponse = TestUtils.metadataUpdateWith(1,
                 singletonMap(topicName, numPartitions));
-        metadata.update(initialMetadataResponse, time.milliseconds());
+        client.updateMetadata(initialMetadataResponse);
         node = metadata.fetch().nodes().get(0);
         fetchSize = 10000;
 
@@ -2786,7 +2786,7 @@ public class FetcherTest {
         client.reset();
         // Ensure metadata has both partition.
         MetadataResponse initialMetadataUpdate = TestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
-        metadata.update(initialMetadataUpdate, time.milliseconds());
+        client.updateMetadata(initialMetadataUpdate);
 
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         partitionData.put(tp0, new ListOffsetResponse.PartitionData(Errors.NONE,

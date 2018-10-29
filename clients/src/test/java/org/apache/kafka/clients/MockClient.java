@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.stream.Collectors;
 
 /**
  * A mock network client for use testing code
@@ -297,6 +298,7 @@ public class MockClient implements KafkaClient {
         return Math.max(0, currentTimeMs - startTimeMs);
     }
 
+
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
         while (request != null && elapsedTimeMs(nowMs, request.createdTimeMs()) > request.requestTimeoutMs()) {
@@ -459,6 +461,10 @@ public class MockClient implements KafkaClient {
         metadataUpdates.add(new MetadataUpdate(updateResponse, expectMatchMetadataTopics));
     }
 
+    public void updateMetadata(MetadataResponse updateResponse) {
+        metadataUpdater.update(time, new MetadataUpdate(updateResponse, false));
+    }
+
     @Override
     public int inFlightRequestCount() {
         return requests.size();
@@ -554,9 +560,9 @@ public class MockClient implements KafkaClient {
         }
 
         private Set<String> topics() {
-            Set<String> topics = new HashSet<>();
-            updateResponse.topicMetadata().forEach(topicMetadata -> topics.add(topicMetadata.topic()));
-            return topics;
+            return updateResponse.topicMetadata().stream()
+                    .map(MetadataResponse.TopicMetadata::topic)
+                    .collect(Collectors.toSet());
         }
     }
 
@@ -601,7 +607,7 @@ public class MockClient implements KafkaClient {
 
     /**
      * This is a dumbed down version of {@link MetadataUpdater} which is used to facilitate
-     * metadata tracking primarily in order to server {@link KafkaClient#leastLoadedNode(long)}
+     * metadata tracking primarily in order to serve {@link KafkaClient#leastLoadedNode(long)}
      * and bookkeeping through {@link Metadata}. The extensibility allows AdminClient, which does
      * not rely on {@link Metadata} to do its own thing.
      */
@@ -619,6 +625,7 @@ public class MockClient implements KafkaClient {
 
     private static class DefaultMockMetadataUpdater implements MockMetadataUpdater {
         private final Metadata metadata;
+        private MetadataUpdate lastUpdate;
 
         public DefaultMockMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
@@ -636,7 +643,9 @@ public class MockClient implements KafkaClient {
 
         @Override
         public void updateWithCurrentMetadata(Time time) {
-            metadata.updateWithCurrentMetadata(time.milliseconds());
+            if (lastUpdate == null)
+                throw new IllegalStateException("No previous metadata update to use");
+            update(time, lastUpdate);
         }
 
         @Override
@@ -647,6 +656,7 @@ public class MockClient implements KafkaClient {
                         + ", asked topics: " + metadata.topics());
             }
             metadata.update(update.updateResponse, time.milliseconds());
+            this.lastUpdate = update;
         }
 
         @Override

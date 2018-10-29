@@ -245,16 +245,6 @@ public class Metadata implements Closeable {
         this.cluster = Cluster.bootstrap(addresses);
     }
 
-    // For use in testing. This allows for no-op updates to metadata since metadata updates
-    // can be requested at several different layers in the code.
-    public synchronized void updateWithCurrentMetadata(long now) {
-        this.needUpdate = false;
-        this.lastRefreshMs = now;
-        this.lastSuccessfulRefreshMs = now;
-        this.version += 1;
-        fireListeners(cluster, unavailableTopics);
-    }
-
     /**
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
@@ -300,7 +290,6 @@ public class Metadata implements Closeable {
             this.cluster = metadataResponse.cluster(topics.keySet());
         }
 
-        // The bootstrap cluster is guaranteed not to have any useful information
         String newClusterId = cluster.clusterResource().clusterId();
         if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
             log.info("Cluster ID: {}", newClusterId);

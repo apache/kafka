@@ -361,10 +361,12 @@ public class KafkaConsumerTest {
     @Test
     public void verifyHeartbeatSent() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -392,10 +394,11 @@ public class KafkaConsumerTest {
     @Test
     public void verifyHeartbeatSentWhenFetchedDataReady() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
-
+        Metadata metadata = createMetadata();
         MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -424,10 +427,12 @@ public class KafkaConsumerTest {
     @Test
     public void verifyPollTimesOutDuringMetadataUpdate() {
         final Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        final MockClient client = new MockClient(time, metadata);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -444,10 +449,12 @@ public class KafkaConsumerTest {
     @Test
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
         final Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        final MockClient client = new MockClient(time, metadata);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -467,10 +474,10 @@ public class KafkaConsumerTest {
     @Test
     public void verifyNoCoordinatorLookupForManualAssignmentWithSeek() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
-
+        Metadata metadata = createMetadata();
         MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -494,10 +501,9 @@ public class KafkaConsumerTest {
         // a reset on another partition.
 
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 2));
-        Node node = metadata.fetch().nodes().get(0);
-
+        Metadata metadata = createMetadata();
         MockClient client = new MockClient(time, metadata);
+        initMetadata(client, Collections.singletonMap(topic, 2));
 
         KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(time, client, metadata);
         consumer.assign(Arrays.asList(tp0, tp1));
@@ -531,20 +537,20 @@ public class KafkaConsumerTest {
         assertEquals(singleton(tp0), records.partitions());
     }
 
-    private Metadata initMetadata(Time time, Map<String, Integer> partitionCounts) {
+    private void initMetadata(MockClient mockClient, Map<String, Integer> partitionCounts) {
         MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(1, partitionCounts);
-        Metadata metadata = createMetadata();
-        metadata.update(initialMetadata, time.milliseconds());
-        return metadata;
+        mockClient.updateMetadata(initialMetadata);
     }
 
     @Test(expected = NoOffsetForPartitionException.class)
     public void testMissingOffsetNoResetPolicy() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -562,10 +568,12 @@ public class KafkaConsumerTest {
     @Test
     public void testResetToCommittedOffset() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -584,10 +592,12 @@ public class KafkaConsumerTest {
     @Test
     public void testResetUsingAutoResetPolicy() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
@@ -611,10 +621,12 @@ public class KafkaConsumerTest {
         long offset2 = 20000;
 
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 2));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -646,10 +658,12 @@ public class KafkaConsumerTest {
     @Test
     public void testAutoCommitSentBeforePositionUpdate() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -680,15 +694,15 @@ public class KafkaConsumerTest {
     public void testRegexSubscription() {
         String unmatchedTopic = "unmatched";
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic, 1);
         partitionCounts.put(unmatchedTopic, 1);
-
-        Metadata metadata = initMetadata(time, partitionCounts);
+        initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -713,16 +727,14 @@ public class KafkaConsumerTest {
         TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
 
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic, 1);
         partitionCounts.put(otherTopic, 1);
-
-        Metadata metadata = initMetadata(time, partitionCounts);
+        initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
-
-        MockClient client = new MockClient(time, metadata);
-        client.prepareMetadataUpdate(TestUtils.metadataUpdateWith(1, partitionCounts));
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
 
@@ -747,10 +759,12 @@ public class KafkaConsumerTest {
     @Test
     public void testWakeupWithFetchDataAvailable() throws Exception {
         final Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -794,10 +808,12 @@ public class KafkaConsumerTest {
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() {
         final Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        final Metadata metadata = createMetadata();
+        final MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        final MockClient client = new MockClient(time, metadata);
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
@@ -822,10 +838,12 @@ public class KafkaConsumerTest {
     @Test
     public void fetchResponseWithUnexpectedPartitionIsIgnored() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -855,14 +873,16 @@ public class KafkaConsumerTest {
     @Test
     public void testSubscriptionChangesWithAutoCommitEnabled() {
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
         tpCounts.put(topic3, 1);
-        Metadata metadata = initMetadata(time, tpCounts);
+        initMetadata(client, tpCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -967,13 +987,15 @@ public class KafkaConsumerTest {
     @Test
     public void testSubscriptionChangesWithAutoCommitDisabled() {
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
-        Metadata metadata = initMetadata(time, tpCounts);
+        initMetadata(client, tpCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
@@ -1026,13 +1048,15 @@ public class KafkaConsumerTest {
     @Test
     public void testManualAssignmentChangeWithAutoCommitEnabled() {
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
-        Metadata metadata = initMetadata(time, tpCounts);
+        initMetadata(client, tpCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -1079,13 +1103,15 @@ public class KafkaConsumerTest {
     @Test
     public void testManualAssignmentChangeWithAutoCommitDisabled() {
         Time time = new MockTime();
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
         Map<String, Integer> tpCounts = new HashMap<>();
         tpCounts.put(topic, 1);
         tpCounts.put(topic2, 1);
-        Metadata metadata = initMetadata(time, tpCounts);
+        initMetadata(client, tpCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
@@ -1133,10 +1159,12 @@ public class KafkaConsumerTest {
     @Test
     public void testOffsetOfPausedPartitions() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 2));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
@@ -1260,10 +1288,12 @@ public class KafkaConsumerTest {
     @Test
     public void shouldAttemptToRejoinGroupAfterSyncGroupFailed() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
@@ -1326,10 +1356,12 @@ public class KafkaConsumerTest {
                                    long waitMs,
                                    boolean interrupt) throws Exception {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
@@ -1460,12 +1492,12 @@ public class KafkaConsumerTest {
 
     private KafkaConsumer<String, String> consumerWithPendingAuthentication() {
         Time time = new MockTime();
-        Map<String, Integer> tpCounts = new HashMap<>();
-        tpCounts.put(topic, 1);
-        Metadata metadata = initMetadata(time, tpCounts);
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RangeAssignor();
 
         client.createPendingAuthenticationError(node, 0);
@@ -1775,11 +1807,12 @@ public class KafkaConsumerTest {
     @Test(expected = InvalidTopicException.class)
     public void testSubscriptionOnInvalidTopic() {
         Time time = new MockTime();
-        Metadata metadata = initMetadata(time, Collections.singletonMap(topic, 1));
-        Node node = metadata.fetch().nodes().get(0);
+        Metadata metadata = createMetadata();
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
         Cluster cluster = metadata.fetch();
 
-        MockClient client = new MockClient(time, metadata);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
         String invalidTopicName = "topic abc";  // Invalid topic name due to space

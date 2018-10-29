@@ -81,9 +81,8 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
             }
         });
 
-        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, time);
-
         metadataManager.update(cluster, time.milliseconds());
+        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, time);
     }
 
     public Time time() {

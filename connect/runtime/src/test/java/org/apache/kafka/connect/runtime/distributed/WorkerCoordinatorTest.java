@@ -90,10 +90,9 @@ public class WorkerCoordinatorTest {
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
-        this.client = new MockClient(time);
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
-        this.metadata.update(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)),
-                time.milliseconds());
+        this.client = new MockClient(time, metadata);
+        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);

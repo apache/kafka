@@ -395,7 +395,7 @@ public class SenderTest {
                     senderMetrics, time, REQUEST_TIMEOUT, 50, null, apiVersions);
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap("test", 2));
-            metadata.update(metadataUpdate1, time.milliseconds());
+            client.prepareMetadataUpdate(metadataUpdate1);
 
             // Send the first message.
             TopicPartition tp2 = new TopicPartition("test", 1);
@@ -416,7 +416,7 @@ public class SenderTest {
 
             // Update metadata before sender receives response from broker 0. Now partition 2 moves to broker 0
             MetadataResponse metadataUpdate2 = TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2));
-            metadata.update(metadataUpdate2, time.milliseconds());
+            client.prepareMetadataUpdate(metadataUpdate2);
             // Sender should not send the second message to node 0.
             assertEquals(1, sender.inFlightBatches(tp2).size());
             sender.run(time.milliseconds());  // receive the response for the previous send, and send the new batch
@@ -483,12 +483,12 @@ public class SenderTest {
     @Test
     public void testMetadataTopicExpiry() throws Exception {
         long offset = 0;
-        metadata.update(TestUtils.metadataUpdateWith(1, Collections.emptyMap()), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.emptyMap()));
 
         Future<RecordMetadata> future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        metadata.update(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp0, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
@@ -500,12 +500,12 @@ public class SenderTest {
 
         assertTrue("Topic not retained in metadata list", metadata.containsTopic(tp0.topic()));
         time.sleep(Metadata.TOPIC_EXPIRY_MS);
-        metadata.update(TestUtils.metadataUpdateWith(1, Collections.emptyMap()), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.emptyMap()));
         assertFalse("Unused topic has not been expired", metadata.containsTopic(tp0.topic()));
         future = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         sender.run(time.milliseconds());
         assertTrue("Topic not added to metadata", metadata.containsTopic(tp0.topic()));
-        metadata.update(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
         sender.run(time.milliseconds());  // send produce request
         client.respond(produceResponse(tp0, offset++, Errors.NONE, 0));
         sender.run(time.milliseconds());
@@ -1842,7 +1842,7 @@ public class SenderTest {
                     senderMetrics, time, REQUEST_TIMEOUT, 1000L, txnManager, new ApiVersions());
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = TestUtils.metadataUpdateWith(2, Collections.singletonMap(topic, 2));
-            metadata.update(metadataUpdate1, time.milliseconds());
+            client.prepareMetadataUpdate(metadataUpdate1);
             // Send the first message.
             Future<RecordMetadata> f1 =
                     accumulator.append(tp, 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT).future;
@@ -2185,8 +2185,7 @@ public class SenderTest {
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,
                 Integer.MAX_VALUE, this.senderMetricsRegistry, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
 
-        this.metadata.update(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)),
-                time.milliseconds());
+        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("test", 2)));
     }
 
     private void assertSendFailure(Class<? extends RuntimeException> expectedError) throws Exception {
