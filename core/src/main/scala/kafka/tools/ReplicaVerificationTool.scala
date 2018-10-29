@@ -300,7 +300,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
     debug("Begin verification")
     maxLag = -1L
     for ((topicPartition, fetchResponsePerReplica) <- recordsCache) {
-      debug(s"Verifying ${topicPartition}")
+      debug(s"Verifying $topicPartition")
       assert(fetchResponsePerReplica.size == expectedReplicasPerTopicPartition(topicPartition),
         "fetched " + fetchResponsePerReplica.size + " replicas for " + topicPartition + ", but expected "
           + expectedReplicasPerTopicPartition(topicPartition) + " replicas")
