@@ -30,7 +30,6 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
-import org.apache.kafka.common.requests.IsolationLevel
 import org.junit.Assert._
 import org.junit.{After, Test}
 

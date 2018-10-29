@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
 import java.util.{Collections, Optional}
