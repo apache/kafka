@@ -35,13 +35,12 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
-import com.fasterxml.jackson.databind.node.NumericNode;
 
 /**
  * A simple unsecured JWS implementation. The '{@code nbf}' claim is ignored if
  * it is given because the related logic is not required for Kafka testing and
  * development purposes.
- * 
+ *
  * @see <a href="https://tools.ietf.org/html/rfc7515">RFC 7515</a>
  */
 public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
@@ -58,7 +57,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Constructor with the given principal and scope claim names
-     * 
+     *
      * @param compactSerialization
      *            the compact serialization to parse as an unsecured JWS
      * @param principalClaimName
@@ -118,7 +117,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Return the 3 or 5 dot-separated sections of the JWT compact serialization
-     * 
+     *
      * @return the 3 or 5 dot-separated sections of the JWT compact serialization
      */
     public List<String> splits() {
@@ -127,7 +126,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Return the JOSE Header as a {@code Map}
-     * 
+     *
      * @return the JOSE header
      */
     public Map<String, Object> header() {
@@ -156,7 +155,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Return the JWT Claim Set as a {@code Map}
-     * 
+     *
      * @return the (always non-null but possibly empty) claims
      */
     public Map<String, Object> claims() {
@@ -165,7 +164,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Return the (always non-null/non-empty) principal claim name
-     * 
+     *
      * @return the (always non-null/non-empty) principal claim name
      */
     public String principalClaimName() {
@@ -174,7 +173,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Return the (always non-null/non-empty) scope claim name
-     * 
+     *
      * @return the (always non-null/non-empty) scope claim name
      */
     public String scopeClaimName() {
@@ -183,7 +182,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Indicate if the claim exists and is the given type
-     * 
+     *
      * @param claimName
      *            the mandatory JWT claim name
      * @param type
@@ -205,7 +204,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Extract a claim of the given type
-     * 
+     *
      * @param claimName
      *            the mandatory JWT claim name
      * @param type
@@ -228,7 +227,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
 
     /**
      * Extract a claim in its raw form
-     * 
+     *
      * @param claimName
      *            the mandatory JWT claim name
      * @return the raw claim value, if it exists, otherwise null
@@ -241,7 +240,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * Return the
      * <a href="https://tools.ietf.org/html/rfc7519#section-4.1.4">Expiration
      * Time</a> claim
-     * 
+     *
      * @return the <a href=
      *         "https://tools.ietf.org/html/rfc7519#section-4.1.4">Expiration
      *         Time</a> claim if available, otherwise null
@@ -255,7 +254,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     /**
      * Return the <a href="https://tools.ietf.org/html/rfc7519#section-4.1.6">Issued
      * At</a> claim
-     * 
+     *
      * @return the
      *         <a href= "https://tools.ietf.org/html/rfc7519#section-4.1.6">Issued
      *         At</a> claim if available, otherwise null
@@ -269,7 +268,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     /**
      * Return the
      * <a href="https://tools.ietf.org/html/rfc7519#section-4.1.2">Subject</a> claim
-     * 
+     *
      * @return the <a href=
      *         "https://tools.ietf.org/html/rfc7519#section-4.1.2">Subject</a> claim
      *         if available, otherwise null
@@ -284,7 +283,7 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
      * Decode the given Base64URL-encoded value, parse the resulting JSON as a JSON
      * object, and return the map of member names to their values (each value being
      * represented as either a String, a Number, or a List of Strings).
-     * 
+     *
      * @param split
      *            the value to decode and parse
      * @return the map of JSON member names to their String, Number, or String List
@@ -326,12 +325,11 @@ public class OAuthBearerUnsecuredJws implements OAuthBearerToken {
     private static Object convert(JsonNode value) {
         if (value.isArray()) {
             List<String> retvalList = new ArrayList<>();
-            for (JsonNode arrayElement : value) {
+            for (JsonNode arrayElement : value)
                 retvalList.add(arrayElement.asText());
-            }
             return retvalList;
         }
-        return value.getNodeType() == JsonNodeType.NUMBER ? ((NumericNode) value).numberValue() : value.asText();
+        return value.getNodeType() == JsonNodeType.NUMBER ? value.numberValue() : value.asText();
     }
 
     private Long calculateStartTimeMs() throws OAuthBearerIllegalTokenException {

@@ -36,6 +36,7 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final boolean repartitionRequired;
+    private final String userName;
     private final Set<String> sourceNodes;
     private final String name;
     private final StreamsGraphNode streamsGraphNode;
@@ -47,33 +48,34 @@ class GroupedStreamAggregateBuilder<K, V> {
     final Initializer<V> reduceInitializer = () -> null;
 
     GroupedStreamAggregateBuilder(final InternalStreamsBuilder builder,
-                                  final Serde<K> keySerde,
-                                  final Serde<V> valueSerde,
+                                  final GroupedInternal<K, V> groupedInternal,
                                   final boolean repartitionRequired,
                                   final Set<String> sourceNodes,
                                   final String name,
                                   final StreamsGraphNode streamsGraphNode) {
 
         this.builder = builder;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        this.keySerde = groupedInternal.keySerde();
+        this.valueSerde = groupedInternal.valueSerde();
         this.repartitionRequired = repartitionRequired;
         this.sourceNodes = sourceNodes;
         this.name = name;
         this.streamsGraphNode = streamsGraphNode;
+        this.userName = groupedInternal.name();
     }
 
-
-    <KR, T> KTable<KR, T> build(final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
-                                final String functionName,
-                                final StoreBuilder<? extends StateStore> storeBuilder,
-                                final boolean isQueryable) {
+    <KR, VR> KTable<KR, VR> build(final String functionName,
+                                  final StoreBuilder<? extends StateStore> storeBuilder,
+                                  final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
+                                  final boolean isQueryable,
+                                  final Serde<KR> keySerde,
+                                  final Serde<VR> valSerde) {
 
         final String aggFunctionName = builder.newProcessorName(functionName);
 
         final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
 
-        final String sourceName = repartitionIfRequired(storeBuilder.name(), repartitionNodeBuilder);
+        final String sourceName = repartitionIfRequired(userName != null ? userName : storeBuilder.name(), repartitionNodeBuilder);
 
         StreamsGraphNode parentNode = streamsGraphNode;
 
@@ -82,39 +84,40 @@ class GroupedStreamAggregateBuilder<K, V> {
             builder.addGraphNode(parentNode, repartitionNode);
             parentNode = repartitionNode;
         }
-        final StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
 
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
-        statefulProcessorNodeBuilder
-            .withProcessorParameters(processorParameters)
-            .withNodeName(aggFunctionName)
-            .withRepartitionRequired(repartitionRequired)
-            .withStoreBuilder(storeBuilder);
-
-        final StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
+        final StatefulProcessorNode<K, V> statefulProcessorNode =
+            new StatefulProcessorNode<>(
+                aggFunctionName,
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
+                storeBuilder,
+                repartitionRequired
+            );
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 
-        return new KTableImpl<>(builder,
-                                aggFunctionName,
-                                aggregateSupplier,
+        return new KTableImpl<>(aggFunctionName,
+                                keySerde,
+                                valSerde,
                                 sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
                                 storeBuilder.name(),
                                 isQueryable,
-                                statefulProcessorNode);
+                                aggregateSupplier,
+                                statefulProcessorNode,
+                                builder);
+
     }
 
     /**
      * @return the new sourceName if repartitioned. Otherwise the name of this stream
      */
-    private String repartitionIfRequired(final String queryableStoreName,
+    private String repartitionIfRequired(final String repartitionTopicNamePrefix,
                                          final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
         if (!repartitionRequired) {
             return this.name;
         }
         // if repartition required the operation
         // captured needs to be set in the graph
-        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, queryableStoreName, name, optimizableRepartitionNodeBuilder);
+        return KStreamImpl.createRepartitionedSource(builder, keySerde, valueSerde, repartitionTopicNamePrefix, optimizableRepartitionNodeBuilder);
 
     }
 }

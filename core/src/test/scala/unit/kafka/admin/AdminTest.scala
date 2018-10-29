@@ -169,7 +169,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     zkUtils.updatePersistentPath(ConfigEntityZNode.path(ConfigType.Client, clientId), Json.encodeAsString(map.asJava))
 
     val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client)
-    assertEquals("Must have 1 overriden client config", 1, configInZk.size)
+    assertEquals("Must have 1 overridden client config", 1, configInZk.size)
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read

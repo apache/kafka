@@ -34,23 +34,22 @@
     </div>
 
     <p>
-        Upgrading from any older version to 2.0.0 is possible: (1) you need to make sure to update you code and config accordingly, because there are some minor non-compatible API changes since older
-        releases (the code changes are expected to be minimal, please see below for the details),
-        (2) upgrading to 2.0.0 in the online mode requires two rolling bounces.
-        For (2), in the first rolling bounce phase users need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
+        Upgrading from any older version to {{fullDotVersion}} is possible: (1) if you are upgrading from 2.0.x to {{fullDotVersion}} then a single rolling bounce is needed to swap in the new jar,
+        (2) if you are upgrading from older versions than 2.0.x in the online mode, you would need two rolling bounces where
+        the first rolling bounce phase you need to set config <code>upgrade.from="older version"</code> (possible values are <code>"0.10.0", "0.10.1", "0.10.2", "0.11.0", "1.0", and "1.1"</code>)
         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>):
     </p>
     <ul>
-        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade to new version 2.0.0</li>
+        <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to the version from which it is being upgrade.</li>
         <li> bounce each instance of your application once </li>
-        <li> prepare your newly deployed 2.0.0 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+        <li> prepare your newly deployed {{fullDotVersion}} application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
         <li> bounce each instance of your application once more to complete the upgrade </li>
     </ul>
-    <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to 2.0.0 in offline mode require the following steps: </p>
+    <p> As an alternative, an offline upgrade is also possible. Upgrading from any versions as old as 0.10.0.x to {{fullDotVersion}} in offline mode require the following steps: </p>
     <ul>
         <li> stop all old (e.g., 0.10.0.x) application instances </li>
         <li> update your code and swap old code and jar file with new code and new jar file </li>
-        <li> restart all new (2.0.0) application instances </li>
+        <li> restart all new ({{fullDotVersion}}) application instances </li>
     </ul>
 
     <p>
@@ -65,10 +64,104 @@
         accidentally: we still reuse the source topic as the changelog topic for restoring, but will also create a separate changelog topic to append the update records from source topic to. In the 2.0 release, we have fixed this issue and now users
         can choose whether or not to reuse the source topic based on the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>: if you are upgrading from the old <code>KStreamBuilder</code> class and hence you need to change your code to use
         the new <code>StreamsBuilder</code>, you should set this config value to <code>StreamsConfig#OPTIMIZE</code> to continue reusing the source topic; if you are upgrading from 1.0 or 1.1 where you are already using <code>StreamsBuilder</code> and hence have already
-        created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to 2.0.0 in order to use that changelog topic for restoring the state store.
+        created a separate changelog topic, you should set this config value to <code>StreamsConfig#NO_OPTIMIZATION</code> when upgrading to {{fullDotVersion}} in order to use that changelog topic for restoring the state store.
         More details about the new config <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> can be found in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-295%3A+Add+Streams+Configuration+Allowing+for+Optional+Topology+Optimization">KIP-295</a>.
     </p>
 
+    <h3><a id="streams_api_changes_210" href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
+    <p>
+        We updated <code>TopologyDescription</code> API to allow for better runtime checking.
+        Users are encouraged to use <code>#topicSet()</code> and <code>#topicPattern()</code> accordingly on <code>TopologyDescription.Source</code> nodes,
+        instead of using <code>#topics()</code>, which has since been deprecated. Similarly, use <code>#topic()</code> and <code>#topicNameExtractor()</code>
+        to get descriptions of <code>TopologyDescription.Sink</code> nodes. For more details, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-321%3A+Update+TopologyDescription+to+better+represent+Source+and+Sink+Nodes">KIP-321</a>.
+    </p>
+
+    <p>
+        We've added a new class <code>Grouped</code> and deprecated <code>Serialized</code>.  The intent of adding <code>Grouped</code> is the ability to
+        name repartition topics created when performing aggregation operations.  Users can name the potential repartition topic using the
+        <code>Grouped#as()</code> method which takes a <code>String</code> and is used as part of the repartition topic name.  The resulting repartition
+        topic name will still follow the pattern of <code>${application-id}-&gt;name&lt;-repartition</code>.  The <code>Grouped</code> class is now favored over
+        <code>Serialized</code> in <code>KStream#groupByKey()</code>, <code>KStream#groupBy()</code>, and <code>KTable#groupBy()</code>.
+        Note that Kafka Streams does not automatically create repartition topics for aggregation operations.
+
+        Additionally, we've updated the <code>Joined</code> class with a new method <code>Joined#withName</code>
+        enabling users to name any repartition topics required for performing Stream/Stream or Stream/Table join.  For more details repartition
+        topic naming, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-372%3A+Naming+Repartition+Topics+for+Joins+and+Grouping">KIP-372</a>.
+
+        As a result we've updated the Kafka Streams Scala API and removed the <code>Serialized</code> class in favor of adding <code>Grouped</code>.
+        If you just rely on the implicit <code>Serialized</code>, you just need to recompile; if you pass in <code>Serialized</code> explicitly, sorry you'll have to make code changes.
+    </p>
+
+    <p>
+        We've added a new config named <code>max.task.idle.ms</code> to allow users specify how to handle out-of-order data within a task that may be processing multiple
+        topic-partitions (see <a href="/{{version}}/documentation/streams/core-concepts.html#streams_out_of_ordering">Out-of-Order Handling</a> section for more details).
+        The default value is set to <code>0</code>, to favor minimized latency over synchronization between multiple input streams from topic-partitions.
+        If users would like to wait for longer time when some of the topic-partitions do not have data available to process and hence cannot determine its corresponding stream time,
+        they can override this config to a larger value.
+    </p>
+
+    <p>
+        We've added the missing <code>SessionBytesStoreSupplier#retentionPeriod()</code> to be consistent with the <code>WindowBytesStoreSupplier</code> which allows users to get the specified retention period for session-windowed stores.
+        We've also added the missing <code>StoreBuilder#withCachingDisabled()</code> to allow users to turn off caching for their customized stores.
+    </p>
+
+    <p>
+        We added a new serde for UUIDs (<code>Serdes.UUIDSerde</code>) that you can use via <code>Serdes.UUID()</code>
+	(cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-206%3A+Add+support+for+UUID+serialization+and+deserialization">KIP-206</a>).
+    </p>
+
+    <p>
+        We updated a list of methods that take <code>long</code> arguments as either timestamp (fix point) or duration (time period)
+        and replaced them with <code>Instant</code> and <code>Duration</code> parameters for improved semantics.
+        Some old methods base on <code>long</code> are deprecated and users are encouraged to update their code.
+        <br />
+        In particular, aggregation windows (hopping/tumbling/unlimited time windows and session windows) as well as join windows now take <code>Duration</code>
+        arguments to specify window size, hop, and gap parameters.
+        Also, window sizes and retention times are now specified as <code>Duration</code> type in <code>Stores</code> class.
+        The <code>Window</code> class has new methods <code>#startTime()</code> and <code>#endTime()</code> that return window start/end timestamp as <code>Instant</code>.
+        For interactive queries, there are new <code>#fetch(...)</code> overloads taking <code>Instant</code> arguments.
+        Additionally, punctuations are now registerd via <code>ProcessorContext#schedule(Duration interval, ...)</code>.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
+    </p>
+
+    <p>
+        We deprecated <code>KafkaStreams#close(...)</code> and replaced it with <code>KafkaStreams#close(Duration)</code> that accepts a single timeout argument
+        Note: the new <code>#close(Duration)</code> method has improved (but slightly different) semantics.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a>.
+    </p>
+
+    <p>
+        The newly exposed <code>AdminClient</code> metrics are now available when calling the <code>KafkaStream#metrics()</code> method.
+        For more details on exposing <code>AdminClients</code> metrics
+        see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-324%3A+Add+method+to+get+metrics%28%29+in+AdminClient">KIP-324</a>
+    </p>
+
+    <p>
+        We deprecated the notion of segments in window stores as those are intended to be an implementation details.
+        Thus, method <code>Windows#segments()</code> and variable <code>Windows#segments</code> were deprecated.
+        If you implement custom windows, you should update your code accordingly.
+        Similarly, <code>WindowBytesStoreSupplier#segments()</code> was deprecated and replaced with <code>WindowBytesStoreSupplier#segmentInterval()</code>.
+        If you implement custom window store, you need to update your code accordingly.
+	    Finally, <code>Stores#persistentWindowStore(...)</code> were deprecated and replaced with a new overload that does not allow to specify the number of segments any longer.
+        For more details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-319%3A+Replace+segments+with+segmentInterval+in+WindowBytesStoreSupplier">KIP-319</a>
+        (note: <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-328%3A+Ability+to+suppress+updates+for+KTables">KIP-328</a> and 
+	    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-358%3A+Migrate+Streams+API+to+Duration+instead+of+long+ms+times">KIP-358</a> 'overlap' with KIP-319).
+    </p>
+
+    <p>
+        We've added an overloaded <code>StreamsBuilder#build</code> method that accepts an instance of <code>java.util.Properties</code> with the intent of using the
+        <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code> config added in Kafka Streams 2.0. Before 2.1, when building a topology with
+        the DSL, Kafka Streams writes the physical plan as the user makes calls on the DSL.  Now by providing a <code>java.util.Properties</code> instance when
+        executing a <code>StreamsBuilder#build</code> call, Kafka Streams can optimize the physical plan of the topology, provided the <code>StreamsConfig#TOPOLOGY_OPTIMIZATION</code>
+        config is set to <code>StreamsConfig#OPTIMIZE</code>.  By setting <code>StreamsConfig#OPTIMIZE</code> in addition to the <code>KTable</code> optimization of
+        reusing the source topic as the changelog topic, the topology may be optimized to merge redundant repartition topics into one
+        repartition topic.  The original no parameter version of <code>StreamsBuilder#build</code> is still available for those who wish to not
+        optimize their topology.  Note that enabling optimization of the topology may require you to do an application reset when redeploying the application.  For more
+        details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-312%3A+Add+Overloaded+StreamsBuilder+Build+Method+to+Accept+java.util.Properties">KIP-312</a>
+    </p>
+
+    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
         If you have customized window store implementations that extends the <code>ReadOnlyWindowStore</code> interface you need to make code changes.
@@ -90,16 +183,6 @@
         We have also removed some public APIs that are deprecated prior to 1.0.x in 2.0.0.
         See below for a detailed list of removed APIs.
     </p>
-    <h3><a id="streams_api_changes_210" href="#streams_api_changes_210">Streams API changes in 2.1.0</a></h3>
-    <p>
-        We updated <code>TopologyDescription</code> API to allow for better runtime checking.
-        Users are encouraged to use <code>#topicSet()</code> and <code>#topicPattern()</code> accordingly on <code>TopologyDescription.Source</code> nodes,
-        instead of using <code>#topics()</code>, which has since been deprecated. Similarly, use <code>#topic()</code> and <code>#topicNameExtractor()</code>
-        to get descriptions of <code>TopologyDescription.Sink</code> nodes. For more details, see
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-321%3A+Update+TopologyDescription+to+better+represent+Source+and+Sink+Nodes">KIP-321</a>.
-    </p>
-
-    <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         We have removed the <code>skippedDueToDeserializationError-rate</code> and <code>skippedDueToDeserializationError-total</code> metrics.
         Deserialization errors, and all other causes of record skipping, are now accounted for in the pre-existing metrics
@@ -138,7 +221,7 @@
         put operation metrics would now be
         <code>kafka.streams:type=stream-rocksdb-window-state-metrics,client-id=([-.\w]+),task-id=([-.\w]+),rocksdb-window-state-id=([-.\w]+)</code>.
         Users need to update their metrics collecting and reporting systems for their time and session windowed stores accordingly.
-        For more details, please read the <a href="/{{version}}/documentation/ops.html#kafka_streams_store_monitoring">State Store Metrics</a> section.
+        For more details, please read the <a href="/{{version}}/documentation/#kafka_streams_store_monitoring">State Store Metrics</a> section.
     </p>
 
     <p>

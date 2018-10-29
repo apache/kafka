@@ -20,11 +20,10 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.common.utils.Bytes
 import org.apache.kafka.streams.kstream.{KTable => KTableJ, _}
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
 import org.apache.kafka.streams.state.KeyValueStore
 
 /**
@@ -47,7 +46,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KTable#filter`
    */
   def filter(predicate: (K, V) => Boolean): KTable[K, V] =
-    inner.filter(predicate(_, _))
+    inner.filter(predicate.asPredicate)
 
   /**
    * Create a new [[KTable]] that consists all records of this [[KTable]] which satisfies the given
@@ -71,7 +70,7 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
    * @see `org.apache.kafka.streams.kstream.KTable#filterNot`
    */
   def filterNot(predicate: (K, V) => Boolean): KTable[K, V] =
-    inner.filterNot(predicate(_, _))
+    inner.filterNot(predicate.asPredicate)
 
   /**
    * Create a new [[KTable]] that consists all records of this [[KTable]] which do <em>not</em> satisfy the given
@@ -213,15 +212,15 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
 
   /**
    * Re-groups the records of this [[KTable]] using the provided key/value mapper
-   * and `Serde`s as specified by `Serialized`.
+   * and `Serde`s as specified by `Grouped`.
    *
    * @param selector      a function that computes a new grouping key and value to be aggregated
-   * @param serialized    the `Serialized` instance used to specify `Serdes`
+   * @param grouped       the `Grouped` instance used to specify `Serdes`
    * @return a [[KGroupedTable]] that contains the re-grouped records of the original [[KTable]]
    * @see `org.apache.kafka.streams.kstream.KTable#groupBy`
    */
-  def groupBy[KR, VR](selector: (K, V) => (KR, VR))(implicit serialized: Serialized[KR, VR]): KGroupedTable[KR, VR] =
-    inner.groupBy(selector.asKeyValueMapper, serialized)
+  def groupBy[KR, VR](selector: (K, V) => (KR, VR))(implicit grouped: Grouped[KR, VR]): KGroupedTable[KR, VR] =
+    inner.groupBy(selector.asKeyValueMapper, grouped)
 
   /**
    * Join records of this [[KTable]] with another [[KTable]]'s records using non-windowed inner equi join.

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -56,7 +57,7 @@ public class EosTestClient extends SmokeTestUtil {
             @Override
             public void run() {
                 isRunning = false;
-                streams.close(TimeUnit.SECONDS.toMillis(300), TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(300));
 
                 // need to wait for callback to avoid race condition
                 // -> make sure the callback printout to stdout is there as it is expected test output
@@ -102,7 +103,7 @@ public class EosTestClient extends SmokeTestUtil {
                 streams.start();
             }
             if (uncaughtException) {
-                streams.close(TimeUnit.SECONDS.toMillis(60), TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(60_000L));
                 streams = null;
             }
             sleep(1000);

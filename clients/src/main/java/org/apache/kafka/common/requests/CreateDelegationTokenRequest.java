@@ -53,13 +53,13 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
     private final long maxLifeTime;
 
     private CreateDelegationTokenRequest(short version, List<KafkaPrincipal> renewers, long maxLifeTime) {
-        super(version);
+        super(ApiKeys.CREATE_DELEGATION_TOKEN, version);
         this.maxLifeTime = maxLifeTime;
         this.renewers = renewers;
     }
 
     public CreateDelegationTokenRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.CREATE_DELEGATION_TOKEN, version);
         maxLifeTime = struct.getLong(MAX_LIFE_TIME_KEY_NAME);
         Object[] renewerArray = struct.getArray(RENEWERS_KEY_NAME);
         renewers = new ArrayList<>();

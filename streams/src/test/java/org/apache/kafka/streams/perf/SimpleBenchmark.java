@@ -54,7 +54,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +61,10 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
+import static java.time.Instant.ofEpochMilli;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -332,7 +335,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -370,7 +373,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -470,10 +473,9 @@ public class SimpleBenchmark {
         final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 "store",
-                AGGREGATE_WINDOW_SIZE * 3,
-                AGGREGATE_WINDOW_SIZE,
-                false,
-                60_000L
+                ofMillis(AGGREGATE_WINDOW_SIZE * 3),
+                ofMillis(AGGREGATE_WINDOW_SIZE),
+                false
             ),
             INTEGER_SERDE,
             BYTE_SERDE
@@ -498,7 +500,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(final Integer key, final byte[] value) {
                         final long timestamp = context().timestamp();
-                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, timestamp - 1000L, timestamp + 1000L);
+                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, ofEpochMilli(timestamp - 1000L), ofEpochMilli(timestamp));
                         while (iter.hasNext()) {
                             iter.next();
                         }
@@ -550,7 +552,7 @@ public class SimpleBenchmark {
 
         input.peek(new CountDownAction(latch))
                 .groupByKey()
-                .windowedBy(TimeWindows.of(AGGREGATE_WINDOW_SIZE).advanceBy(AGGREGATE_WINDOW_ADVANCE))
+                .windowedBy(TimeWindows.of(ofMillis(AGGREGATE_WINDOW_SIZE)).advanceBy(ofMillis(AGGREGATE_WINDOW_ADVANCE)))
                 .count();
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
@@ -593,7 +595,7 @@ public class SimpleBenchmark {
         final KStream<Integer, byte[]> input1 = builder.stream(kStreamTopic1);
         final KStream<Integer, byte[]> input2 = builder.stream(kStreamTopic2);
 
-        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(STREAM_STREAM_JOIN_WINDOW)).foreach(new CountDownAction(latch));
+        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(ofMillis(STREAM_STREAM_JOIN_WINDOW))).foreach(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
 
@@ -677,7 +679,7 @@ public class SimpleBenchmark {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
 
-                streamsClient.close(30, TimeUnit.SECONDS);
+                streamsClient.close(ofSeconds(30));
             }
         });
 

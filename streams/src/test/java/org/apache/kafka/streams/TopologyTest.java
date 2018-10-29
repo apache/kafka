@@ -33,8 +33,8 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStateStore;
 import org.apache.kafka.test.TestUtils;
 import org.easymock.EasyMock;
 import org.junit.Assert;
@@ -47,6 +47,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -257,7 +258,7 @@ public class TopologyTest {
     public void shouldNotAllowToAddStateStoreToNonExistingProcessor() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
-        topology.addStateStore(storeBuilder, "no-such-processsor");
+        topology.addStateStore(storeBuilder, "no-such-processor");
     }
 
     @Test
@@ -311,7 +312,7 @@ public class TopologyTest {
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         config.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         mockStoreBuilder();
-        EasyMock.expect(storeBuilder.build()).andReturn(new MockStateStore("store", false));
+        EasyMock.expect(storeBuilder.build()).andReturn(new MockKeyValueStore("store", false));
         EasyMock.replay(storeBuilder);
         topology
             .addSource(sourceNodeName, "topic")
@@ -737,7 +738,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(TimeWindows.of(1))
+            .windowedBy(TimeWindows.of(ofMillis(1)))
             .count();
         final TopologyDescription describe = builder.build().describe();
         assertEquals(
@@ -757,7 +758,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(TimeWindows.of(1))
+            .windowedBy(TimeWindows.of(ofMillis(1)))
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
         assertEquals(
@@ -777,7 +778,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(TimeWindows.of(1))
+            .windowedBy(TimeWindows.of(ofMillis(1)))
             .count(Materialized.with(null, Serdes.Long()));
         final TopologyDescription describe = builder.build().describe();
         assertEquals(
@@ -797,7 +798,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(1))
+            .windowedBy(SessionWindows.with(ofMillis(1)))
             .count();
         final TopologyDescription describe = builder.build().describe();
         assertEquals(
@@ -817,7 +818,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(1))
+            .windowedBy(SessionWindows.with(ofMillis(1)))
             .count(Materialized.as("count-store"));
         final TopologyDescription describe = builder.build().describe();
         assertEquals(
@@ -837,7 +838,7 @@ public class TopologyTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .groupByKey()
-            .windowedBy(SessionWindows.with(1))
+            .windowedBy(SessionWindows.with(ofMillis(1)))
             .count(Materialized.with(null, Serdes.Long()));
         final TopologyDescription describe = builder.build().describe();
         assertEquals(

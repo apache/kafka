@@ -17,6 +17,9 @@
 
 package kafka.api
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.{Gauge, Metric, MetricName}
+
 import java.io.File
 import java.util.ArrayList
 import java.util.concurrent.ExecutionException
@@ -30,6 +33,7 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TimeoutException, TopicAuthorizationException}
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -169,6 +173,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
   this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
   this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
+  this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
 
   /**
@@ -203,6 +208,27 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeRecords(consumer, numRecords)
+    confirmReauthenticationMetrics
+  }
+
+  protected def confirmReauthenticationMetrics() : Unit = {
+    val expiredConnectionsKilledCountTotal = getGauge("ExpiredConnectionsKilledCount").value()
+    servers.foreach { s =>
+        val numExpiredKilled = TestUtils.totalMetricValue(s, "expired-connections-killed-count")
+        assertTrue("Should have been zero expired connections killed: " + numExpiredKilled + "(total=" + expiredConnectionsKilledCountTotal + ")", numExpiredKilled == 0)
+    }
+    assertEquals("Should have been zero expired connections killed total", 0, expiredConnectionsKilledCountTotal, 0.0)
+    servers.foreach { s =>
+      assertTrue("failed re-authentications not 0", TestUtils.totalMetricValue(s, "failed-reauthentication-total") == 0)
+    }
+  }
+  
+  private def getGauge(metricName: String) = {
+    Metrics.defaultRegistry.allMetrics.asScala
+           .filterKeys(k => k.getName == metricName)
+           .headOption
+           .getOrElse { fail( "Unable to find metric " + metricName ) }
+           ._2.asInstanceOf[Gauge[Double]]
   }
 
   @Test
@@ -211,6 +237,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
+    confirmReauthenticationMetrics
   }
 
   @Test
@@ -221,6 +248,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
+    confirmReauthenticationMetrics
   }
 
   @Test
@@ -231,6 +259,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeRecords(consumer, numRecords)
+    confirmReauthenticationMetrics
   }
 
   @Test
@@ -241,6 +270,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val consumer = createConsumer()
     consumer.assign(List(tp2).asJava)
     consumeRecords(consumer, numRecords, topic = tp2.topic)
+    confirmReauthenticationMetrics
   }
 
   private def setWildcardResourceAcls() {
@@ -263,7 +293,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(consumeAclArgs(tp.topic))
     servers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get, new Resource(Topic, tp.topic))
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.apis.authorizer.get,
+        new Resource(Topic, tp.topic, PatternType.LITERAL))
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
     val producer = createProducer()
@@ -278,6 +309,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   def testNoProduceWithoutDescribeAcl(): Unit = {
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
+    confirmReauthenticationMetrics
   }
 
   @Test
@@ -294,6 +326,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
+    confirmReauthenticationMetrics
   }
   
    /**
@@ -307,6 +340,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumer.assign(List(tp).asJava)
     // the exception is expected when the consumer attempts to lookup offsets
     consumeRecords(consumer)
+    confirmReauthenticationMetrics
   }
   
   @Test(expected = classOf[TopicAuthorizationException])
@@ -349,6 +383,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
+    confirmReauthenticationMetrics
   }
   
   @Test
@@ -364,6 +399,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: TopicAuthorizationException =>
         assertEquals(Set(topic).asJava, e.unauthorizedTopics())
     }
+    confirmReauthenticationMetrics
   }
   
   private def noConsumeWithDescribeAclSetup(): Unit = {
@@ -399,6 +435,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       case e: GroupAuthorizationException =>
         assertEquals(group, e.groupId())
     }
+    confirmReauthenticationMetrics
   }
 
   protected final def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],

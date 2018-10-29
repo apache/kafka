@@ -20,7 +20,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
+import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 import kafka.admin.ReplicationQuotaUtils._
@@ -99,12 +99,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       "broker 101 should be the new leader", pause = 1L
     )
 
-    assertEquals(100, newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
+    assertEquals(100, newLeaderServer.replicaManager.localReplicaOrException(topicPartition)
+      .highWatermark.messageOffset)
     val newFollowerServer = servers.find(_.config.brokerId == 102).get
-    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100,
+    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localReplicaOrException(topicPartition)
+      .highWatermark.messageOffset == 100,
       "partition follower's highWatermark should be 100")
   }
-
 
   @Test
   def shouldMoveSinglePartition(): Unit = {
@@ -613,7 +614,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     )
 
     // Set znode directly to avoid non-existent topic validation
-    zkClient.setOrCreatePartitionReassignment(firstMove)
+    zkClient.setOrCreatePartitionReassignment(firstMove, ZkVersion.MatchAnyVersion)
 
     servers.foreach(_.startup())
     waitForReassignmentToComplete()

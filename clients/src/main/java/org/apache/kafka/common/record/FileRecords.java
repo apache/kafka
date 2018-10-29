@@ -32,7 +32,6 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -374,12 +373,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return An iterator over batches starting from {@code start}
      */
     public Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
-        return new Iterable<FileChannelRecordBatch>() {
-            @Override
-            public Iterator<FileChannelRecordBatch> iterator() {
-                return batchIterator(start);
-            }
-        };
+        return () -> batchIterator(start);
     }
 
     @Override

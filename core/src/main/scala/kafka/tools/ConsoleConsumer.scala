@@ -65,6 +65,7 @@ object ConsoleConsumer extends Logging {
   def run(conf: ConsumerConfig) {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
+
     val consumerWrapper =
       if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
@@ -194,7 +195,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Whitelist of topics to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
@@ -355,7 +356,7 @@ object ConsoleConsumer extends Logging {
     val groupIdsProvided = Set(
       Option(options.valueOf(groupIdOpt)), // via --group
       Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
-      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
     if (groupIdsProvided.size > 1) {
@@ -375,6 +376,9 @@ object ConsoleConsumer extends Logging {
           consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
+
+    if (groupIdPassed && partitionArg.isDefined)
+      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
@@ -450,9 +454,6 @@ object ConsoleConsumer extends Logging {
       this.consumer.close()
     }
 
-    def commitSync() {
-      this.consumer.commitSync()
-    }
   }
 }
 

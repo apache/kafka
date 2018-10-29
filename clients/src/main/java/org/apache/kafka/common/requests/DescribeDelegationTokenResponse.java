@@ -82,7 +82,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error) {
-        this(throttleTimeMs, error, new ArrayList<DelegationToken>());
+        this(throttleTimeMs, error, new ArrayList<>());
     }
 
     public DescribeDelegationTokenResponse(Struct struct) {

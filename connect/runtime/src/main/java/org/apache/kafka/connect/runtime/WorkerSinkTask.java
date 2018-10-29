@@ -649,7 +649,7 @@ class WorkerSinkTask extends WorkerTask {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.debug("{} Assigned topic partition {} with offset {}", this, tp, pos);
+                log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
             }
             sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 

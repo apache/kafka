@@ -41,7 +41,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 public class BrokerCompatibilityTest {
 
@@ -108,7 +107,7 @@ public class BrokerCompatibilityTest {
                 System.err.println("FATAL: An unexpected exception " + cause);
                 e.printStackTrace(System.err);
                 System.err.flush();
-                streams.close(30, TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(30));
             }
         });
         System.out.println("start Kafka Streams");

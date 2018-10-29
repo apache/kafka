@@ -16,11 +16,14 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
+
+import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 
 /**
@@ -86,13 +89,27 @@ public final class SessionWindows {
      * @return a new window specification with default maintain duration of 1 day
      *
      * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative
+     * @deprecated User {@link #with(Duration)} instead.
      */
+    @Deprecated
     public static SessionWindows with(final long inactivityGapMs) {
         if (inactivityGapMs <= 0) {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
-        final long oneDayMs = 24 * 60 * 60_000L;
-        return new SessionWindows(inactivityGapMs, oneDayMs, null);
+        return new SessionWindows(inactivityGapMs, DEFAULT_RETENTION_MS, null);
+    }
+
+    /**
+     * Create a new window specification with the specified inactivity gap.
+     *
+     * @param inactivityGap the gap of inactivity between sessions
+     * @return a new window specification with default maintain duration of 1 day
+     *
+     * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
+     */
+    public static SessionWindows with(final Duration inactivityGap) {
+        ApiUtils.validateMillisecondDuration(inactivityGap, "inactivityGap");
+        return with(inactivityGap.toMillis());
     }
 
     /**
@@ -123,18 +140,20 @@ public final class SessionWindows {
      * close times can lead to surprising results in which a too-late event is rejected and then
      * a subsequent event moves the window boundary forward.
      *
-     * @param millisAfterWindowEnd The grace period to admit late-arriving events to a window.
+     * @param afterWindowEnd The grace period to admit late-arriving events to a window.
      * @return this updated builder
+     * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */
-    public SessionWindows grace(final long millisAfterWindowEnd) {
-        if (millisAfterWindowEnd < 0) {
+    public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        if (afterWindowEnd.toMillis() < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
         return new SessionWindows(
             gapMs,
             maintainDurationMs,
-            Duration.ofMillis(millisAfterWindowEnd)
+            afterWindowEnd
         );
     }
 

@@ -124,29 +124,29 @@ public class FrequenciesTest {
         for (int i = 0; i != 100; ++i) {
             frequencies.record(config, i % 4 + 1, time.milliseconds());
         }
-        assertEquals(0.25, metric1.value(), DELTA);
-        assertEquals(0.25, metric2.value(), DELTA);
-        assertEquals(0.25, metric3.value(), DELTA);
-        assertEquals(0.25, metric4.value(), DELTA);
+        assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
+        assertEquals(0.25, (Double) metric2.metricValue(), DELTA);
+        assertEquals(0.25, (Double) metric3.metricValue(), DELTA);
+        assertEquals(0.25, (Double) metric4.metricValue(), DELTA);
 
         // Record 2 windows worth of values
         for (int i = 0; i != 100; ++i) {
             frequencies.record(config, i % 2 + 1, time.milliseconds());
         }
-        assertEquals(0.50, metric1.value(), DELTA);
-        assertEquals(0.50, metric2.value(), DELTA);
-        assertEquals(0.00, metric3.value(), DELTA);
-        assertEquals(0.00, metric4.value(), DELTA);
+        assertEquals(0.50, (Double) metric1.metricValue(), DELTA);
+        assertEquals(0.50, (Double) metric2.metricValue(), DELTA);
+        assertEquals(0.00, (Double) metric3.metricValue(), DELTA);
+        assertEquals(0.00, (Double) metric4.metricValue(), DELTA);
 
         // Record 1 window worth of values to overlap with the last window
         // that is half 1.0 and half 2.0
         for (int i = 0; i != 50; ++i) {
             frequencies.record(config, 4.0, time.milliseconds());
         }
-        assertEquals(0.25, metric1.value(), DELTA);
-        assertEquals(0.25, metric2.value(), DELTA);
-        assertEquals(0.00, metric3.value(), DELTA);
-        assertEquals(0.50, metric4.value(), DELTA);
+        assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
+        assertEquals(0.25, (Double) metric2.metricValue(), DELTA);
+        assertEquals(0.00, (Double) metric3.metricValue(), DELTA);
+        assertEquals(0.50, (Double) metric4.metricValue(), DELTA);
     }
 
     protected MetricName name(String metricName) {

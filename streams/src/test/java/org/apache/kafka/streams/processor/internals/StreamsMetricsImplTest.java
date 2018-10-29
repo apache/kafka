@@ -17,10 +17,16 @@
 package org.apache.kafka.streams.processor.internals;
 
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 
@@ -95,5 +101,43 @@ public class StreamsMetricsImplTest {
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
+    }
+
+    @Test
+    public void testTotalMetricDoesntDecrease() {
+        final MockTime time = new MockTime(1);
+        final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
+        final Metrics metrics = new Metrics(config, time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
+
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "op";
+
+        final Sensor sensor = streamsMetrics.addLatencyAndThroughputSensor(
+                scope,
+                entity,
+                operation,
+                Sensor.RecordingLevel.INFO
+        );
+
+        final double latency = 100.0;
+        final MetricName totalMetricName = metrics.metricName(
+                "op-total",
+                "stream-scope-metrics",
+                "",
+                "client-id",
+                "",
+                "scope-id",
+                "entity"
+        );
+
+        final KafkaMetric totalMetric = metrics.metric(totalMetricName);
+
+        for (int i = 0; i < 10; i++) {
+            assertEquals(i, Math.round(totalMetric.measurable().measure(config, time.milliseconds())));
+            sensor.record(latency, time.milliseconds());
+        }
+
     }
 }

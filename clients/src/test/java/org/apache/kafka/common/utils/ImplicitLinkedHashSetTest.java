@@ -87,7 +87,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     @Test
-    public void testInsertDelete() throws Exception {
+    public void testInsertDelete() {
         ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(100);
         assertTrue(set.add(new TestElement(1)));
         TestElement second = new TestElement(2);
@@ -137,7 +137,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     @Test
-    public void testTraversal() throws Exception {
+    public void testTraversal() {
         ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(100);
         expectTraversal(set.iterator());
         assertTrue(set.add(new TestElement(2)));
@@ -168,7 +168,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     @Test
-    public void testCollisions() throws Exception {
+    public void testCollisions() {
         ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(5);
         assertEquals(11, set.numSlots());
         assertTrue(set.add(new TestElement(11)));
@@ -184,7 +184,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     @Test
-    public void testEnlargement() throws Exception {
+    public void testEnlargement() {
         ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(5);
         assertEquals(11, set.numSlots());
         for (int i = 0; i < 6; i++) {
@@ -203,7 +203,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     @Test
-    public void testManyInsertsAndDeletes() throws Exception {
+    public void testManyInsertsAndDeletes() {
         Random random = new Random(123);
         LinkedHashSet<Integer> existing = new LinkedHashSet<>();
         ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>();

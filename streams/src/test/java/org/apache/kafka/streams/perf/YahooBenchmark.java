@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.perf;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -334,7 +335,7 @@ public class YahooBenchmark {
         // calculate windowed counts
         keyedByCampaign
             .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(10 * 1000))
+            .windowedBy(TimeWindows.of(Duration.ofMillis(10 * 1000)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("time-windows"));
 
         return new KafkaStreams(builder.build(), streamConfig);

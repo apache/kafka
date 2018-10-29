@@ -18,10 +18,12 @@ package org.apache.kafka.common.network;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SslAuthenticationContext;
+import org.apache.kafka.common.security.ssl.SslPrincipalMapper;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -33,8 +35,10 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable {
     private static final Logger log = LoggerFactory.getLogger(SslChannelBuilder.class);
@@ -44,6 +48,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private SslFactory sslFactory;
     private Mode mode;
     private Map<String, ?> configs;
+    private SslPrincipalMapper sslPrincipalMapper;
 
     /**
      * Constructs a SSL channel builder. ListenerName is provided only
@@ -58,6 +63,10 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public void configure(Map<String, ?> configs) throws KafkaException {
         try {
             this.configs = configs;
+            @SuppressWarnings("unchecked")
+            List<String> sslPrincipalMappingRules = (List<String>) configs.get(BrokerSecurityConfigs.SSL_PRINCIPAL_MAPPING_RULES_CONFIG);
+            if (sslPrincipalMappingRules != null)
+                sslPrincipalMapper = SslPrincipalMapper.fromRules(sslPrincipalMappingRules);
             this.sslFactory = new SslFactory(mode, null, isInterBrokerListener);
             this.sslFactory.configure(this.configs);
         } catch (Exception e) {
@@ -89,8 +98,8 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize, MemoryPool memoryPool) throws KafkaException {
         try {
             SslTransportLayer transportLayer = buildTransportLayer(sslFactory, id, key, peerHost(key));
-            Authenticator authenticator = new SslAuthenticator(configs, transportLayer, listenerName);
-            return new KafkaChannel(id, transportLayer, authenticator, maxReceiveSize,
+            Supplier<Authenticator> authenticatorCreator = () -> new SslAuthenticator(configs, transportLayer, listenerName, sslPrincipalMapper);
+            return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
                     memoryPool != null ? memoryPool : MemoryPool.NONE);
         } catch (Exception e) {
             log.info("Failed to create channel due to ", e);
@@ -154,16 +163,16 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
         private final KafkaPrincipalBuilder principalBuilder;
         private final ListenerName listenerName;
 
-        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName) {
+        private SslAuthenticator(Map<String, ?> configs, SslTransportLayer transportLayer, ListenerName listenerName, SslPrincipalMapper sslPrincipalMapper) {
             this.transportLayer = transportLayer;
-            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null);
+            this.principalBuilder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, this, null, sslPrincipalMapper);
             this.listenerName = listenerName;
         }
         /**
          * No-Op for plaintext authenticator
          */
         @Override
-        public void authenticate() throws IOException {}
+        public void authenticate() {}
 
         /**
          * Constructs Principal using configured principalBuilder.

@@ -36,7 +36,7 @@ import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.{AdminZkClient, BrokerIdsZNode, BrokerInfo, KafkaZkClient}
+import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer._
@@ -150,7 +150,7 @@ object TestUtils extends Logging {
   def createBrokerConfigs(numConfigs: Int,
     zkConnect: String,
     enableControlledShutdown: Boolean = true,
-    enableDeleteTopic: Boolean = false,
+    enableDeleteTopic: Boolean = true,
     interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
     trustStoreFile: Option[File] = None,
     saslProperties: Option[Properties] = None,
@@ -202,7 +202,7 @@ object TestUtils extends Logging {
   def createBrokerConfig(nodeId: Int,
                          zkConnect: String,
                          enableControlledShutdown: Boolean = true,
-                         enableDeleteTopic: Boolean = false,
+                         enableDeleteTopic: Boolean = true,
                          port: Int = RandomPort,
                          interBrokerSecurityProtocol: Option[SecurityProtocol] = None,
                          trustStoreFile: Option[File] = None,
@@ -324,9 +324,9 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
+    adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
     // wait until the update metadata request for new topic reaches all servers
-    partitionReplicaAssignment.keySet.map { case i =>
+    partitionReplicaAssignment.keySet.map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap
@@ -373,10 +373,11 @@ object TestUtils extends Logging {
               producerId: Long = RecordBatch.NO_PRODUCER_ID,
               producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
               sequence: Int = RecordBatch.NO_SEQUENCE,
-              baseOffset: Long = 0L): MemoryRecords = {
+              baseOffset: Long = 0L,
+              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
-      System.currentTimeMillis, producerId, producerEpoch, sequence)
+      System.currentTimeMillis, producerId, producerEpoch, sequence, false, partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
   }
@@ -635,7 +636,7 @@ object TestUtils extends Logging {
         .getOrElse(LeaderAndIsr(leader, List(leader)))
       topicPartition -> LeaderIsrAndControllerEpoch(newLeaderAndIsr, controllerEpoch)
     }
-    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs)
+    zkClient.setTopicPartitionStatesRaw(newLeaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
   }
 
   /**
@@ -778,6 +779,28 @@ object TestUtils extends Logging {
     server.replicaManager.getPartition(new TopicPartition(topic, partitionId)).exists(_.leaderReplicaIfLocal.isDefined)
   }
 
+  def findLeaderEpoch(brokerId: Int,
+                      topicPartition: TopicPartition,
+                      servers: Iterable[KafkaServer]): Int = {
+    val leaderServer = servers.find(_.config.brokerId == brokerId)
+    val leaderPartition = leaderServer.flatMap(_.replicaManager.getPartition(topicPartition))
+      .getOrElse(fail(s"Failed to find expected replica on broker $brokerId"))
+    leaderPartition.getLeaderEpoch
+  }
+
+  def findFollowerId(topicPartition: TopicPartition,
+                     servers: Iterable[KafkaServer]): Int = {
+    val followerOpt = servers.find { server =>
+      server.replicaManager.getPartition(topicPartition) match {
+        case Some(partition) => !partition.leaderReplicaIdOpt.contains(server.config.brokerId)
+        case None => false
+      }
+    }
+    followerOpt
+      .map(_.config.brokerId)
+      .getOrElse(fail(s"Unable to locate follower for $topicPartition"))
+  }
+
   /**
     * Wait until all brokers know about each other.
     *
@@ -827,14 +850,36 @@ object TestUtils extends Logging {
     controllerId.getOrElse(fail(s"Controller not elected after $timeout ms"))
   }
 
-  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer], topic: String, partition: Int,
-                             timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
-    val tp = new TopicPartition(topic, partition)
-    TestUtils.waitUntilTrue(() =>
-      servers.exists { server =>
+  def awaitLeaderChange(servers: Seq[KafkaServer],
+                        tp: TopicPartition,
+                        oldLeader: Int,
+                        timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def newLeaderExists: Option[Int] = {
+      servers.find { server =>
+        server.config.brokerId != oldLeader &&
+          server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
+      }.map(_.config.brokerId)
+    }
+
+    TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
+      s"Did not observe leader change for partition $tp after $timeout ms", waitTime = timeout)
+
+    newLeaderExists.get
+  }
+
+  def waitUntilLeaderIsKnown(servers: Seq[KafkaServer],
+                             tp: TopicPartition,
+                             timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    def leaderIfExists: Option[Int] = {
+      servers.find { server =>
         server.replicaManager.getPartition(tp).exists(_.leaderReplicaIfLocal.isDefined)
-      }, s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout
-    )
+      }.map(_.config.brokerId)
+    }
+
+    TestUtils.waitUntilTrue(() => leaderIfExists.isDefined,
+      s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout)
+
+    leaderIfExists.get
   }
 
   def writeNonsenseToFile(fileName: File, position: Long, size: Int) {
@@ -916,10 +961,7 @@ object TestUtils extends Logging {
 
   def produceMessages(servers: Seq[KafkaServer],
                       records: Seq[ProducerRecord[Array[Byte], Array[Byte]]],
-                      acks: Int = -1,
-                      compressionType: CompressionType = CompressionType.NONE): Unit = {
-    val props = new Properties()
-    props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType.name)
+                      acks: Int = -1): Unit = {
     val producer = createProducer(TestUtils.getBrokerListStrFromServers(servers), acks = acks)
     try {
       val futures = records.map(producer.send)
@@ -935,11 +977,10 @@ object TestUtils extends Logging {
   def generateAndProduceMessages(servers: Seq[KafkaServer],
                                  topic: String,
                                  numMessages: Int,
-                                 acks: Int = -1,
-                                 compressionType: CompressionType = CompressionType.NONE): Seq[String] = {
+                                 acks: Int = -1): Seq[String] = {
     val values = (0 until numMessages).map(x =>  s"test-$x")
     val records = values.map(v => new ProducerRecord[Array[Byte], Array[Byte]](topic, v.getBytes))
-    produceMessages(servers, records, acks, compressionType)
+    produceMessages(servers, records, acks)
     values
   }
 

@@ -21,7 +21,10 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.network.NetworkReceive;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,6 +49,7 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.concurrent.Future;
+import java.util.function.Supplier;
 import java.util.concurrent.ExecutionException;
 
 import static java.util.Arrays.asList;
@@ -253,7 +257,14 @@ public class TestUtils {
      * uses default value of 15 seconds for timeout
      */
     public static void waitForCondition(final TestCondition testCondition, final String conditionDetails) throws InterruptedException {
-        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetails);
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, () -> conditionDetails);
+    }
+
+    /**
+     * uses default value of 15 seconds for timeout
+     */
+    public static void waitForCondition(final TestCondition testCondition, final Supplier<String> conditionDetailsSupplier) throws InterruptedException {
+        waitForCondition(testCondition, DEFAULT_MAX_WAIT_MS, conditionDetailsSupplier);
     }
 
     /**
@@ -263,6 +274,16 @@ public class TestUtils {
      * avoid transient failures due to slow or overloaded machines.
      */
     public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, String conditionDetails) throws InterruptedException {
+        waitForCondition(testCondition, maxWaitMs, () -> conditionDetails);
+    }
+    
+    /**
+     * Wait for condition to be met for at most {@code maxWaitMs} and throw assertion failure otherwise.
+     * This should be used instead of {@code Thread.sleep} whenever possible as it allows a longer timeout to be used
+     * without unnecessarily increasing test time (as the condition is checked frequently). The longer timeout is needed to
+     * avoid transient failures due to slow or overloaded machines.
+     */
+    public static void waitForCondition(final TestCondition testCondition, final long maxWaitMs, Supplier<String> conditionDetailsSupplier) throws InterruptedException {
         final long startTime = System.currentTimeMillis();
 
         boolean testConditionMet;
@@ -274,7 +295,8 @@ public class TestUtils {
         // could be avoided by making the implementations more robust, but we have a large number of such implementations
         // and it's easier to simply avoid the issue altogether)
         if (!testConditionMet) {
-            conditionDetails = conditionDetails != null ? conditionDetails : "";
+            String conditionDetailsSupplied = conditionDetailsSupplier != null ? conditionDetailsSupplier.get() : null;
+            String conditionDetails = conditionDetailsSupplied != null ? conditionDetailsSupplied : "";
             throw new AssertionError("Condition not met within timeout " + maxWaitMs + ". " + conditionDetails);
         }
     }
@@ -355,5 +377,9 @@ public class TestUtils {
                     cause.getClass().getSimpleName(),
                 exceptionClass, cause.getClass());
         }
+    }
+
+    public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
+        return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
     }
 }

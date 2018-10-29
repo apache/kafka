@@ -24,13 +24,13 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
-import org.apache.kafka.clients.admin.NewPartitions
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException, InvalidConfigurationException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, DescribeConfigsResponse}
@@ -104,7 +104,7 @@ class AdminManager(val config: KafkaConfig,
 
         createTopicPolicy match {
           case Some(policy) =>
-            adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
+            adminZkClient.validateTopicCreate(topic, assignments, configs)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
@@ -117,13 +117,13 @@ class AdminManager(val config: KafkaConfig,
               arguments.configs))
 
             if (!validateOnly)
-              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
 
           case None =>
             if (validateOnly)
-              adminZkClient.validateCreateOrUpdateTopic(topic, assignments, configs, update = false)
+              adminZkClient.validateTopicCreate(topic, assignments, configs)
             else
-              adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignments, configs, update = false)
+              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
         }
         CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
       } catch {
@@ -131,6 +131,9 @@ class AdminManager(val config: KafkaConfig,
         case e: ApiException =>
           info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
+        case e: ConfigException =>
+          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
+          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
           error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
           CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
@@ -201,7 +204,7 @@ class AdminManager(val config: KafkaConfig,
   }
 
   def createPartitions(timeout: Int,
-                       newPartitions: Map[String, NewPartitions],
+                       newPartitions: Map[String, PartitionDetails],
                        validateOnly: Boolean,
                        listenerName: ListenerName,
                        callback: Map[String, ApiError] => Unit): Unit = {
@@ -234,7 +237,7 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidPartitionsException(s"Topic already has $oldNumPartitions partitions.")
         }
 
-        val reassignment = Option(newPartition.assignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
+        val reassignment = Option(newPartition.newAssignments).map(_.asScala.map(_.asScala.map(_.toInt))).map { assignments =>
           val unknownBrokers = assignments.flatten.toSet -- allBrokerIds
           if (unknownBrokers.nonEmpty)
             throw new InvalidReplicaAssignmentException(
@@ -363,8 +366,10 @@ class AdminManager(val config: KafkaConfig,
 
             adminZkClient.validateTopicConfig(topic, properties)
             validateConfigPolicy(ConfigResource.Type.TOPIC)
-            if (!validateOnly)
+            if (!validateOnly) {
+              info(s"Updating topic $topic with new configuration $config")
               adminZkClient.changeTopicConfig(topic, properties)
+            }
 
             resource -> ApiError.NONE
 
@@ -386,6 +391,8 @@ class AdminManager(val config: KafkaConfig,
             this.config.dynamicConfig.validate(configProps, perBrokerConfig)
             validateConfigPolicy(ConfigResource.Type.BROKER)
             if (!validateOnly) {
+              if (perBrokerConfig)
+                this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
               adminZkClient.changeBrokerConfig(brokerId,
                 this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
             }

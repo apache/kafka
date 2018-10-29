@@ -255,7 +255,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         //
         // TODO this part of the logic should be removed once we allow regex on leader assign
         Set<String> addedTopics = new HashSet<>();
-        for (TopicPartition tp : subscriptions.assignedPartitions()) {
+        //this is a copy because its handed to listener below
+        Set<TopicPartition> assignedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        for (TopicPartition tp : assignedPartitions) {
             if (!joinedSubscription.contains(tp.topic()))
                 addedTopics.add(tp.topic());
         }
@@ -284,10 +286,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Setting newly assigned partitions {}", subscriptions.assignedPartitions());
+        log.info("Setting newly assigned partitions {}", assignedPartitions);
         try {
-            Set<TopicPartition> assigned = new HashSet<>(subscriptions.assignedPartitions());
-            listener.onPartitionsAssigned(assigned);
+            listener.onPartitionsAssigned(assignedPartitions);
         } catch (WakeupException | InterruptException e) {
             throw e;
         } catch (Exception e) {
@@ -452,9 +453,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Revoking previously assigned partitions {}", subscriptions.assignedPartitions());
+        // copy since about to be handed to user code
+        Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+        log.info("Revoking previously assigned partitions {}", revoked);
         try {
-            Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
             listener.onPartitionsRevoked(revoked);
         } catch (WakeupException | InterruptException e) {
             throw e;
@@ -760,8 +762,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (offsetAndMetadata.offset() < 0) {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
-            offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(
-                    offsetAndMetadata.offset(), offsetAndMetadata.metadata()));
+            offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(offsetAndMetadata.offset(),
+                    offsetAndMetadata.leaderEpoch(), offsetAndMetadata.metadata()));
         }
 
         final Generation generation;
@@ -913,7 +915,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
-                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.metadata));
+                    offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
                     log.debug("Found no committed offset for partition {}", tp);
                 }
