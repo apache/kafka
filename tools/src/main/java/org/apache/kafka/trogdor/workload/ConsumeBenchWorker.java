@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +52,8 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.utils.CollectionUtils.splitListRoundRobin;
 
 public class ConsumeBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ConsumeBenchWorker.class);
@@ -78,7 +81,8 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
         log.info("{}: Activating ConsumeBenchWorker with {}", id, spec);
         this.executor = Executors.newScheduledThreadPool(
-            2, ThreadUtils.createThreadFactory("ConsumeBenchWorkerThread%d", false));
+            spec.consumerCount() + 1, // 1 thread for the StatusUpdater
+            ThreadUtils.createThreadFactory("ConsumeBenchWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
         executor.submit(new Prepare());
@@ -88,25 +92,41 @@ public class ConsumeBenchWorker implements TaskWorker {
         @Override
         public void run() {
             try {
-                executor.submit(consumeTask());
+                for (ConsumeMessages task : consumeTasks()) {
+                    executor.submit(task);
+                }
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
             }
         }
 
-        private ConsumeMessages consumeTask() {
-            String consumerGroup = spec.consumerGroup();
+        private List<ConsumeMessages> consumeTasks() {
+            List<ConsumeMessages> tasks = new ArrayList<>();
+
             Map<String, List<TopicPartition>> partitionsByTopic = spec.materializeTopics();
             boolean toUseGroupPartitionAssignment = partitionsByTopic.values().isEmpty();
 
-            if (consumerGroup.equals(ConsumeBenchSpec.EMPTY_CONSUMER_GROUP)) // consumer group is undefined, the consumer should use a random group
-                consumerGroup = generateConsumerGroup();
-
-            consumer = consumer(consumerGroup);
+            consumer = consumer(consumerGroup());
             if (!toUseGroupPartitionAssignment)
                 partitionsByTopic = populatePartitionsByTopic(consumer, partitionsByTopic);
 
-            return new ConsumeMessages(consumer, partitionsByTopic, toUseGroupPartitionAssignment);
+            int consumerCount = spec.consumerCount();
+            if (toUseRandomConsumeGroup() && !toUseGroupPartitionAssignment) {
+                // split partitions by consumer as they will all use the same group
+                List<TopicPartition> allPartitions = partitionsByTopic.values().stream()
+                    .flatMap(List::stream).collect(Collectors.toList());
+                for (List<TopicPartition> partitionsSubset : splitListRoundRobin(allPartitions, consumerCount)) {
+                    tasks.add(new ConsumeMessages(consumer, partitionsSubset));
+                }
+            } else {
+                Set<String> topics = partitionsByTopic.keySet();
+
+                for (int i = 0; i < consumerCount; i++) {
+                    tasks.add(new ConsumeMessages(consumer, topics));
+                }
+            }
+
+            return tasks;
         }
 
         private KafkaConsumer<byte[], byte[]> consumer(String consumerGroup) {
@@ -121,8 +141,14 @@ public class ConsumeBenchWorker implements TaskWorker {
             return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         }
 
-        private String generateConsumerGroup() {
-            return "consume-bench-" + UUID.randomUUID().toString();
+        private String consumerGroup() {
+            return toUseRandomConsumeGroup()
+                ? "consume-bench-" + UUID.randomUUID().toString()
+                : spec.consumerGroup();
+        }
+
+        private boolean toUseRandomConsumeGroup() {
+            return spec.consumerGroup().equals(ConsumeBenchSpec.EMPTY_CONSUMER_GROUP);
         }
 
         private Map<String, List<TopicPartition>> populatePartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer,
@@ -153,27 +179,27 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final Throttle throttle;
         private final KafkaConsumer<byte[], byte[]> consumer;
 
-        ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, Map<String, List<TopicPartition>> topicPartitionsByTopic,
-                        boolean toUseGroupAssignment) {
+        private ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer) {
             this.latencyHistogram = new Histogram(5000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
                 new StatusUpdater(latencyHistogram, messageSizeHistogram), 1, 1, TimeUnit.MINUTES);
-            this.consumer = consumer;
-            if (toUseGroupAssignment) {
-                Set<String> topics = topicPartitionsByTopic.keySet();
-                log.info("Will consume from topics {} via dynamic group assignment.", topics);
-                this.consumer.subscribe(topics);
-            } else {
-                List<TopicPartition> partitions = topicPartitionsByTopic.values().stream()
-                    .flatMap(List::stream).collect(Collectors.toList());
-                log.info("Will consume from topic partitions {} via manual assignment.", partitions);
-                this.consumer.assign(partitions);
-            }
-
             int perPeriod = WorkerUtils.perSecToPerPeriod(
                 spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
+            this.consumer = consumer;
+        }
+
+        ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, Set<String> topics) {
+            this(consumer);
+            log.info("Will consume from topics {} via dynamic group assignment.", topics);
+            this.consumer.subscribe(topics);
+        }
+
+        ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, List<TopicPartition> partitions) {
+            this(consumer);
+            log.info("Will consume from topic partitions {} via manual assignment.", partitions);
+            this.consumer.assign(partitions);
         }
 
         @Override
