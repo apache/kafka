@@ -26,12 +26,7 @@ cat <<EOF
         "consumerNode": "node0",
         "bootstrapServers": "localhost:9092",
         "maxMessages": 100,
-        "activeTopics": {
-            "foo[1-3]": {
-                "numPartitions": 3,
-                "replicationFactor": 1
-            }
-        }
+        "activeTopics": ["foo[1-3]"]
     }
 }
 EOF
