@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, ListOffsetRequest}
@@ -365,6 +366,21 @@ class PartitionTest {
     assertFetchOffsetError(Errors.UNKNOWN_LEADER_EPOCH, Optional.of(leaderEpoch + 1), fetchOnlyLeader = true)
   }
 
+  @Test
+  def testFetchLatestOffsetIncludesLeaderEpoch(): Unit = {
+    val leaderEpoch = 5
+    val partition = setupPartitionWithMocks(leaderEpoch, isLeader = true)
+
+    val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+      isolationLevel = None,
+      currentLeaderEpoch = Optional.empty(),
+      fetchOnlyFromLeader = true)
+
+    assertTrue(timestampAndOffsetOpt.isDefined)
+
+    val timestampAndOffset = timestampAndOffsetOpt.get
+    assertEquals(Optional.of(leaderEpoch), timestampAndOffset.leaderEpoch)
+  }
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
@@ -503,18 +519,22 @@ class PartitionTest {
       baseOffset = 0L)
     partition.appendRecordsToLeader(records, isFromClient = true)
 
-    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampOffset = {
-      partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
+    def fetchLatestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
+      assertTrue(res.isDefined)
+      res.get
     }
 
-    def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampOffset = {
-      partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
+    def fetchEarliestOffset(isolationLevel: Option[IsolationLevel]): TimestampAndOffset = {
+      val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
         fetchOnlyFromLeader = true)
+      assertTrue(res.isDefined)
+      res.get
     }
 
     assertEquals(3L, fetchLatestOffset(isolationLevel = None).offset)

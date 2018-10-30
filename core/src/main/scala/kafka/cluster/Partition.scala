@@ -33,6 +33,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.Errors._
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
@@ -803,7 +804,7 @@ class Partition(val topicPartition: TopicPartition,
   def fetchOffsetForTimestamp(timestamp: Long,
                               isolationLevel: Option[IsolationLevel],
                               currentLeaderEpoch: Optional[Integer],
-                              fetchOnlyFromLeader: Boolean): TimestampOffset = inReadLock(leaderIsrUpdateLock) {
+                              fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
@@ -814,16 +815,16 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-      TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
+      Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))
     } else {
-      def allowed(timestampOffset: TimestampOffset): Boolean =
+      def allowed(timestampOffset: TimestampAndOffset): Boolean =
         timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
 
       val fetchedOffset = logManager.getLog(topicPartition).flatMap { log =>
-        log.fetchOffsetsByTimestamp(timestamp)
+        log.fetchOffsetByTimestamp(timestamp)
       }
 
-      fetchedOffset.filter(allowed).getOrElse(TimestampOffset.Unknown)
+      fetchedOffset.filter(allowed)
     }
   }
 

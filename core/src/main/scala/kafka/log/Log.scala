@@ -22,6 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
+import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
@@ -36,6 +37,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ListOffsetRequest
@@ -1263,7 +1265,14 @@ class Log(@volatile var dir: File,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
-  def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
+    def maybeLeaderEpoch(leaderEpoch: Int): Optional[Integer] = {
+      if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+        Optional.empty()
+      else
+        Optional.of(leaderEpoch)
+    }
+
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1279,9 +1288,11 @@ class Log(@volatile var dir: File,
       val segmentsCopy = logSegments.toBuffer
       // For the earliest and latest, we do not need to return the timestamp.
       if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logStartOffset))
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset,
+          maybeLeaderEpoch(leaderEpochCache.earliestEpoch)))
       else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logEndOffset))
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset,
+          maybeLeaderEpoch(leaderEpochCache.latestEpoch)))
 
       val targetSeg = {
         // Get all the segments whose largest timestamp is smaller than target timestamp
