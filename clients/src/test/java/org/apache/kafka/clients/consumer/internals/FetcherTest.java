@@ -113,6 +113,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -121,7 +122,6 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
-
 
 @SuppressWarnings("deprecation")
 public class FetcherTest {
@@ -140,12 +140,12 @@ public class FetcherTest {
     private long retryBackoffMs = 100;
     private long requestTimeoutMs = 30000;
     private MockTime time = new MockTime(1);
+    private MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topicName, 4));
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
     private MockClient client = new MockClient(time, metadata);
-    private Cluster cluster = TestUtils.singletonCluster(topicName, 4);
-    private Node node = cluster.nodes().get(0);
+    private Node node;
     private Metrics metrics = new Metrics(time);
-    FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry("consumer" + groupId);
+    private FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry("consumer" + groupId);
 
     private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
     private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
@@ -163,10 +163,9 @@ public class FetcherTest {
     private ExecutorService executorService;
 
     @Before
-    public void setup() throws Exception {
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
-        client.setNode(node);
-
+    public void setup() {
+        client.updateMetadata(initialUpdateResponse);
+        node = metadata.fetch().nodes().get(0);
         records = buildRecords(1L, 3, 1);
         nextRecords = buildRecords(4L, 2, 4);
         emptyRecords = buildRecords(0L, 0, 0);
@@ -1204,7 +1203,7 @@ public class FetcherTest {
         assertFalse(subscriptions.hasValidPosition(tp0));
 
         // Expect a metadata refresh
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        client.prepareMetadataUpdate(initialUpdateResponse);
         consumerClient.pollNoWakeup();
         assertFalse(client.hasPendingMetadataUpdates());
 
@@ -1233,7 +1232,7 @@ public class FetcherTest {
         assertFalse(subscriptions.hasValidPosition(tp0));
 
         // Expect a metadata refresh
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet());
+        client.prepareMetadataUpdate(initialUpdateResponse);
         consumerClient.pollNoWakeup();
         assertFalse(client.hasPendingMetadataUpdates());
 
@@ -1436,7 +1435,7 @@ public class FetcherTest {
 
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(time.timer(5000L));
 
-        assertEquals(cluster.topics().size(), allTopics.size());
+        assertEquals(initialUpdateResponse.topicMetadata().size(), allTopics.size());
     }
 
     @Test
@@ -1445,7 +1444,7 @@ public class FetcherTest {
         client.prepareResponse(null, true);
         client.prepareResponse(newMetadataResponse(topicName, Errors.NONE));
         Map<String, List<PartitionInfo>> allTopics = fetcher.getAllTopicMetadata(time.timer(5000L));
-        assertEquals(cluster.topics().size(), allTopics.size());
+        assertEquals(initialUpdateResponse.topicMetadata().size(), allTopics.size());
     }
 
     @Test(expected = TimeoutException.class)
@@ -1535,7 +1534,7 @@ public class FetcherTest {
         Assert.assertNotNull(topicMetadata);
         Assert.assertNotNull(topicMetadata.get(topicName));
         //noinspection ConstantConditions
-        Assert.assertEquals((int) cluster.partitionCountForTopic(topicName), topicMetadata.get(topicName).size());
+        Assert.assertEquals((int) metadata.fetch().partitionCountForTopic(topicName), topicMetadata.get(topicName).size());
     }
 
     /*
@@ -1717,8 +1716,7 @@ public class FetcherTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(topic1, 1);
         partitionCounts.put(topic2, 1);
-        Cluster cluster = TestUtils.clusterWith(1, partitionCounts);
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        client.updateMetadata(TestUtils.metadataUpdateWith(1, partitionCounts));
 
         subscriptions.assignFromUser(Utils.mkSet(tp1, tp2));
 
@@ -1950,21 +1948,24 @@ public class FetcherTest {
         client.reset();
 
         // Metadata initially has one topic
-        Cluster cluster = TestUtils.clusterWith(3, topicName, 2);
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        MetadataResponse initialMetadata = TestUtils.metadataUpdateWith(3, singletonMap(topicName, 2));
+        client.updateMetadata(initialMetadata);
 
         // The first metadata refresh should contain one topic
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet(), false);
-        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, 1000L, 11L), cluster.leaderFor(tp0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 1000L, 32L), cluster.leaderFor(tp1));
+        client.prepareMetadataUpdate(initialMetadata, false);
+        client.prepareResponseFrom(listOffsetResponse(tp0, Errors.NONE, 1000L, 11L),
+                metadata.fetch().leaderFor(tp0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, 1000L, 32L),
+                metadata.fetch().leaderFor(tp1));
 
         // Second metadata refresh should contain two topics
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);
         partitionNumByTopic.put(anotherTopic, 1);
-        Cluster updatedCluster = TestUtils.clusterWith(3, partitionNumByTopic);
-        client.prepareMetadataUpdate(updatedCluster, Collections.<String>emptySet(), false);
-        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, 1000L, 54L), cluster.leaderFor(t2p0));
+        MetadataResponse updatedMetadata = TestUtils.metadataUpdateWith(3, partitionNumByTopic);
+        client.prepareMetadataUpdate(updatedMetadata, false);
+        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, 1000L, 54L),
+                metadata.fetch().leaderFor(t2p0));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, ListOffsetRequest.LATEST_TIMESTAMP);
@@ -2518,9 +2519,11 @@ public class FetcherTest {
         Set<TopicPartition> topicPartitions = new HashSet<>();
         for (int i = 0; i < numPartitions; i++)
             topicPartitions.add(new TopicPartition(topicName, i));
-        cluster = TestUtils.singletonCluster(topicName, numPartitions);
-        metadata.update(cluster, Collections.emptySet(), time.milliseconds());
-        client.setNode(node);
+
+        MetadataResponse initialMetadataResponse = TestUtils.metadataUpdateWith(1,
+                singletonMap(topicName, numPartitions));
+        client.updateMetadata(initialMetadataResponse);
+        node = metadata.fetch().nodes().get(0);
         fetchSize = 10000;
 
         Fetcher<byte[], byte[]> fetcher = new Fetcher<byte[], byte[]>(
@@ -2735,23 +2738,28 @@ public class FetcherTest {
         String topicName2 = "topic2";
         TopicPartition t2p0 = new TopicPartition(topicName2, 0);
         // Expect a metadata refresh.
-        metadata.update(Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"), ClientDnsLookup.DEFAULT.toString())),
-                        Collections.<String>emptySet(),
-                        time.milliseconds());
+        metadata.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"),
+                ClientDnsLookup.DEFAULT), time.milliseconds());
 
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);
         partitionNumByTopic.put(topicName2, 1);
-        cluster = TestUtils.clusterWith(2, partitionNumByTopic);
+        MetadataResponse updateMetadataResponse = TestUtils.metadataUpdateWith(2, partitionNumByTopic);
+        Cluster updatedCluster = updateMetadataResponse.cluster();
+
         // The metadata refresh should contain all the topics.
-        client.prepareMetadataUpdate(cluster, Collections.<String>emptySet(), true);
+        client.prepareMetadataUpdate(updateMetadataResponse, true);
 
         // First try should fail due to metadata error.
-        client.prepareResponseFrom(listOffsetResponse(t2p0, errorForP0, offsetForP0, offsetForP0), cluster.leaderFor(t2p0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, errorForP1, offsetForP1, offsetForP1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(t2p0, errorForP0, offsetForP0, offsetForP0),
+                updatedCluster.leaderFor(t2p0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, errorForP1, offsetForP1, offsetForP1),
+                updatedCluster.leaderFor(tp1));
         // Second try should succeed.
-        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, offsetForP0, offsetForP0), cluster.leaderFor(t2p0));
-        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForP1, offsetForP1), cluster.leaderFor(tp1));
+        client.prepareResponseFrom(listOffsetResponse(t2p0, Errors.NONE, offsetForP0, offsetForP0),
+                updatedCluster.leaderFor(t2p0));
+        client.prepareResponseFrom(listOffsetResponse(tp1, Errors.NONE, offsetForP1, offsetForP1),
+                updatedCluster.leaderFor(tp1));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(t2p0, 0L);
@@ -2777,15 +2785,16 @@ public class FetcherTest {
     private void testGetOffsetsForTimesWithUnknownOffset() {
         client.reset();
         // Ensure metadata has both partition.
-        Cluster cluster = TestUtils.clusterWith(1, topicName, 1);
-        metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        MetadataResponse initialMetadataUpdate = TestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        client.updateMetadata(initialMetadataUpdate);
 
         Map<TopicPartition, ListOffsetResponse.PartitionData> partitionData = new HashMap<>();
         partitionData.put(tp0, new ListOffsetResponse.PartitionData(Errors.NONE,
                 ListOffsetResponse.UNKNOWN_TIMESTAMP, ListOffsetResponse.UNKNOWN_OFFSET,
                 Optional.empty()));
 
-        client.prepareResponseFrom(new ListOffsetResponse(0, partitionData), cluster.leaderFor(tp0));
+        client.prepareResponseFrom(new ListOffsetResponse(0, partitionData),
+                metadata.fetch().leaderFor(tp0));
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
@@ -2851,20 +2860,20 @@ public class FetcherTest {
     private MetadataResponse newMetadataResponse(String topic, Errors error) {
         List<MetadataResponse.PartitionMetadata> partitionsMetadata = new ArrayList<>();
         if (error == Errors.NONE) {
-            for (PartitionInfo partitionInfo : cluster.partitionsForTopic(topic)) {
-                partitionsMetadata.add(new MetadataResponse.PartitionMetadata(
-                        Errors.NONE,
-                        partitionInfo.partition(),
-                        partitionInfo.leader(),
-                        Optional.empty(),
-                        Arrays.asList(partitionInfo.replicas()),
-                        Arrays.asList(partitionInfo.inSyncReplicas()),
-                        Arrays.asList(partitionInfo.offlineReplicas())));
-            }
+            Optional<MetadataResponse.TopicMetadata> foundMetadata = initialUpdateResponse.topicMetadata()
+                    .stream()
+                    .filter(topicMetadata -> topicMetadata.topic().equals(topic))
+                    .findFirst();
+            foundMetadata.ifPresent(topicMetadata -> {
+                partitionsMetadata.addAll(topicMetadata.partitionMetadata());
+            });
         }
 
-        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false, partitionsMetadata);
-        return new MetadataResponse(cluster.nodes(), null, MetadataResponse.NO_CONTROLLER_ID, Arrays.asList(topicMetadata));
+        MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,
+                partitionsMetadata);
+        List<Node> brokers = new ArrayList<>(initialUpdateResponse.brokers());
+        return new MetadataResponse(brokers, initialUpdateResponse.clusterId(),
+                initialUpdateResponse.controller().id(), Collections.singletonList(topicMetadata));
     }
 
     private Fetcher<byte[], byte[]> createFetcher(SubscriptionState subscriptions,
