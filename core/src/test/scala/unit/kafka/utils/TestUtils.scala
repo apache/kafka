@@ -720,32 +720,51 @@ object TestUtils extends Logging {
     }
   }
 
+  def pollUntilTrue(consumer: Consumer[_, _],
+                    condition: () => Boolean,
+                    msg: => String,
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    waitUntilTrue(() => {
+      consumer.poll(Duration.ofMillis(50))
+      condition()
+    }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
+  def pollRecordsUntilTrue[K, V](consumer: Consumer[K, V],
+                                 condition: ConsumerRecords[K, V] => Boolean,
+                                 msg: => String,
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    waitUntilTrue(() => {
+      val records = consumer.poll(Duration.ofMillis(50))
+      condition(records)
+    }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
   /**
     *  Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
-    * @param waitTime maximum time to wait and retest the condition before failing the test
+    * @param waitTimeMs maximum time to wait and retest the condition before failing the test
     * @param pause delay between condition checks
     * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
     */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
     val startTime = System.currentTimeMillis()
     var retry = 0
     while (true) {
       try {
         if (condition())
           return
-        if (System.currentTimeMillis() > startTime + waitTime)
+        if (System.currentTimeMillis() > startTime + waitTimeMs)
           fail(msg)
-        Thread.sleep(waitTime.min(pause))
+        Thread.sleep(waitTimeMs.min(pause))
       }
       catch {
-        case e: RetriableException if retry < maxRetries => {
+        case e: RetriableException if retry < maxRetries =>
           debug("Retrying after error", e)
           retry += 1
-        }
         case e : Throwable => throw e
       }
     }
@@ -840,7 +859,7 @@ object TestUtils extends Logging {
           }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
-      waitTime = timeout)
+      waitTimeMs = timeout)
 
     leader
   }
@@ -862,7 +881,7 @@ object TestUtils extends Logging {
     }
 
     TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
-      s"Did not observe leader change for partition $tp after $timeout ms", waitTime = timeout)
+      s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
   }
@@ -877,7 +896,7 @@ object TestUtils extends Logging {
     }
 
     TestUtils.waitUntilTrue(() => leaderIfExists.isDefined,
-      s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout)
+      s"Partition $tp leaders not made yet after $timeout ms", waitTimeMs = timeout)
 
     leaderIfExists.get
   }
@@ -1086,7 +1105,7 @@ object TestUtils extends Logging {
 
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   /**
@@ -1212,13 +1231,16 @@ object TestUtils extends Logging {
     } finally consumer.close()
   }
 
-  def consumeRecords[K, V](consumer: KafkaConsumer[K, V], numMessages: Int,
+  def consumeRecords[K, V](consumer: KafkaConsumer[K, V],
+                           numMessages: Int,
                            waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
+    def pollCondition(polledRecords: ConsumerRecords[K, V]): Boolean = {
+      records ++= polledRecords.asScala
       records.size >= numMessages
-    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
+    }
+    pollRecordsUntilTrue(consumer, pollCondition,
+      s"Consumed ${records.size} records before timeout instead of the expected $numMessages records")
     assertEquals("Consumed more records than expected", numMessages, records.size)
     records
   }

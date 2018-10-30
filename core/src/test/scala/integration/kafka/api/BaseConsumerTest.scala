@@ -184,23 +184,22 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                      numRecords: Int,
                                      maxPollRecords: Int = Int.MaxValue): ArrayBuffer[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]
-    TestUtils.waitUntilTrue(() => {
-      val polledRecords = consumer.poll(Duration.ofMillis(50)).asScala
-      assertTrue(polledRecords.size <= maxPollRecords)
-      for (record <- polledRecords)
-        records += record
+    def pollCondition(polledRecords: ConsumerRecords[K, V]): Boolean = {
+      assertTrue(polledRecords.asScala.size <= maxPollRecords)
+      records ++= polledRecords.asScala
       records.size >= numRecords
-    }, pause = 0L, waitTime = 60000, msg = s"Timed out before consuming expected $numRecords records. " +
-      s"The number consumed was ${records.size}.")
+    }
+    TestUtils.pollRecordsUntilTrue(consumer, pollCondition, waitTimeMs = 60000,
+      msg = s"Timed out before consuming expected $numRecords records. " +
+        s"The number consumed was ${records.size}.")
     records
   }
 
   protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
                                           commitCallback: CountConsumerCommitCallback,
                                           count: Int = 1): Unit = {
-    val started = System.currentTimeMillis()
-    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
-      consumer.poll(Duration.ofMillis(50))
+    TestUtils.pollUntilTrue(consumer, () => commitCallback.successCount >= count,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
     assertEquals(count, commitCallback.successCount)
   }
 
