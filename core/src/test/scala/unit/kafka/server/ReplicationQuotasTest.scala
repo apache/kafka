@@ -194,7 +194,6 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Add data
     addData(msgCount, msg)
 
-
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
     brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
