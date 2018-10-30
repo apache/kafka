@@ -44,12 +44,6 @@ public class AssignmentInfoTest {
                 Utils.mkSet(new TopicPartition("t3", 0), new TopicPartition("t3", 0)));
         }
     };
-    private final Map<HostInfo, Set<TopicPartition>> globalAssignment = new HashMap<HostInfo, Set<TopicPartition>>() {
-        {
-            put(new HostInfo("localhost", 80),
-                Utils.mkSet(new TopicPartition("t1", 1), new TopicPartition("t3", 3)));
-        }
-    };
 
     private final Map<HostInfo, Set<TaskId>> globalTaskAssignment = new HashMap<HostInfo, Set<TaskId>>() {
         {
