@@ -532,15 +532,21 @@ public class Selector implements Selectable, AutoCloseable {
                     try {
                         channel.prepare();
                     } catch (AuthenticationException e) {
-                        if (channel.successfulAuthentications() == 0)
+                        boolean isReAuthentication = channel.successfulAuthentications() > 0;
+                        if (!isReAuthentication)
                             sensors.failedAuthentication.record();
                         else
                             sensors.failedReauthentication.record();
+                        log.debug("Address {} failed {}authentication ({})",
+                            channel.socketDescription(),
+                            isReAuthentication ? "re-" : "",
+                            e.getClass().getName());
                         throw e;
                     }
                     if (channel.ready()) {
                         long readyTimeMs = time.milliseconds();
-                        if (channel.successfulAuthentications() == 1) {
+                        boolean isReAuthentication = channel.successfulAuthentications() > 1;
+                        if (!isReAuthentication) {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
                             if (!channel.connectedClientSupportsReauthentication())
                                 sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
@@ -553,6 +559,8 @@ public class Selector implements Selectable, AutoCloseable {
                                 sensors.reauthenticationLatency
                                         .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
                         }
+                        log.debug("Address {} successfully {}authenticated",
+                            channel.socketDescription(), isReAuthentication ? "re-" : "");
                     }
                     List<NetworkReceive> responsesReceivedDuringReauthentication = channel
                             .getAndClearResponsesReceivedDuringReauthentication();
