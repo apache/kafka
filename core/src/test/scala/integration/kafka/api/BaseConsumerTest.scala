@@ -12,13 +12,14 @@
  */
 package kafka.api
 
+import java.time.Duration
 import java.util
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import kafka.utils.ShutdownableThread
+import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -183,17 +184,14 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                      numRecords: Int,
                                      maxPollRecords: Int = Int.MaxValue): ArrayBuffer[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]
-    val maxIters = numRecords * 300
-    var iters = 0
-    while (records.size < numRecords) {
-      val polledRecords = consumer.poll(50).asScala
+    TestUtils.waitUntilTrue(() => {
+      val polledRecords = consumer.poll(Duration.ofMillis(50)).asScala
       assertTrue(polledRecords.size <= maxPollRecords)
       for (record <- polledRecords)
         records += record
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
+      records.size >= numRecords
+    }, pause = 0L, waitTime = 60000, msg = s"Timed out before consuming expected $numRecords records. " +
+      s"The number consumed was ${records.size}.")
     records
   }
 
@@ -202,7 +200,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                           count: Int = 1): Unit = {
     val started = System.currentTimeMillis()
     while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
-      consumer.poll(50)
+      consumer.poll(Duration.ofMillis(50))
     assertEquals(count, commitCallback.successCount)
   }
 
@@ -274,7 +272,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
         subscriptionChanged = false
       }
       try {
-        consumer.poll(50)
+        consumer.poll(Duration.ofMillis(50))
       } catch {
         case _: WakeupException => // ignore for shutdown
       }
