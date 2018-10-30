@@ -21,7 +21,7 @@ import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
 import java.util.concurrent.TimeUnit
 
-import kafka.common.LogSegmentOffsetOverflowException
+import kafka.common.{LogSegmentInvalidOffsetException, LogSegmentOffsetOverflowException}
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{FetchDataInfo, LogOffsetMetadata}
@@ -132,7 +132,7 @@ class LogSegment private[log] (val log: FileRecords,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
 
-      ensureOffsetInRange(largestOffset)
+      ensureOffsetInRange(largestOffset, offsetIndex.lastOffset, timeIndex.lastEntry.offset)
 
       // append the messages
       val appendedBytes = log.append(records)
@@ -152,9 +152,11 @@ class LogSegment private[log] (val log: FileRecords,
     }
   }
 
-  private def ensureOffsetInRange(offset: Long): Unit = {
+  private def ensureOffsetInRange(offset: Long, offsetIndexMax: Long, timeIndexMax: Long): Unit = {
     if (!canConvertToRelativeOffset(offset))
       throw new LogSegmentOffsetOverflowException(this, offset)
+    if (offset < offsetIndexMax || offset < timeIndexMax)
+      throw new LogSegmentInvalidOffsetException(this, offset)
   }
 
   private def appendChunkFromFile(records: FileRecords, position: Int, bufferSupplier: BufferSupplier): Int = {
@@ -340,7 +342,7 @@ class LogSegment private[log] (val log: FileRecords,
     try {
       for (batch <- log.batches.asScala) {
         batch.ensureValid()
-        ensureOffsetInRange(batch.lastOffset)
+        ensureOffsetInRange(batch.lastOffset, offsetIndex.lastOffset, timeIndex.lastEntry.offset)
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
         if (batch.maxTimestamp > maxTimestampSoFar) {

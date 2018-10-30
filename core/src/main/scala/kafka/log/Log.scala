@@ -28,7 +28,7 @@ import java.util.regex.Pattern
 
 import com.yammer.metrics.core.Gauge
 import kafka.api.KAFKA_0_10_0_IV0
-import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
+import kafka.common.{LogSegmentInvalidOffsetException, LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
@@ -523,14 +523,14 @@ class Log(@volatile var dir: File,
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
-    retryOnOffsetOverflow {
+    retryOnOffsetOverflow(true, {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
       // loading of segments. In that case, we also need to close all segments that could have been left open in previous
       // call to loadSegmentFiles().
       logSegments.foreach(_.close())
       segments.clear()
       loadSegmentFiles()
-    }
+    })
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
@@ -548,9 +548,9 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = retryOnOffsetOverflow {
+      val nextOffset = retryOnOffsetOverflow(false, {
         recoverLog()
-      }
+      })
 
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
@@ -576,16 +576,7 @@ class Log(@volatile var dir: File,
       while (unflushed.hasNext) {
         val segment = unflushed.next
         info(s"Recovering unflushed segment ${segment.baseOffset}")
-        val truncatedBytes =
-          try {
-            recoverSegment(segment, Some(_leaderEpochCache))
-          } catch {
-            case _: InvalidOffsetException =>
-              val startOffset = segment.baseOffset
-              warn("Found invalid offset during recovery. Deleting the corrupt segment and " +
-                s"creating an empty one with starting offset $startOffset")
-              segment.truncateTo(startOffset)
-          }
+        val truncatedBytes = recoverSegment(segment, Some(_leaderEpochCache))
         if (truncatedBytes > 0) {
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}, truncating to offset ${segment.readNextOffset}")
@@ -1932,7 +1923,15 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def retryOnOffsetOverflow[T](fn: => T): T = {
+  private[log] def retryOnOffsetOverflow[T](loadingSegments: Boolean, fn: => T): T = {
+    def truncateSegmentsAbove(segment: LogSegment): Unit = {
+      for (file <- dir.listFiles.sortBy(_.getName) if file.isFile && isLogFile(file)) {
+        val baseOffset = offsetFromFile(file)
+        if (baseOffset >= segment.baseOffset)
+          file.delete()
+      }
+    }
+
     while (true) {
       try {
         return fn
@@ -1940,6 +1939,12 @@ class Log(@volatile var dir: File,
         case e: LogSegmentOffsetOverflowException =>
           info(s"Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
           splitOverflowedSegment(e.segment)
+        case e: LogSegmentInvalidOffsetException =>
+          info(s"Caught invalid offset error: ${e.getMessage}. Truncate segment and retry.")
+          if (loadingSegments)
+            truncateSegmentsAbove(e.segment)
+          else
+            truncateTo(e.segment.baseOffset)
       }
     }
     throw new IllegalStateException()

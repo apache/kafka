@@ -2199,6 +2199,32 @@ class LogTest {
     testDegenerateSplitSegmentWithOverflow(segmentBaseOffset = 0L, List(records))
   }
 
+  @Test
+  def testTruncateOnOutOfOrderOffsetsAboveRecoveryPoint(): Unit = {
+    // create a log such that one log segment has offsets that overflow, and call the split API on that segment
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
+    val (log, segmentWithOutOfOrderOffsets) = createLogWithOutOfOrderOffsets(logConfig)
+    log.close()
+    val reopenedLog = createLog(logDir, logConfig, recoveryPoint = 0)
+    assertFalse(LogTest.hasOutOfOrderOffsets(reopenedLog))
+    assertEquals(segmentWithOutOfOrderOffsets.baseOffset, reopenedLog.logEndOffset)
+  }
+
+  @Test
+  def testTruncateOnOutOfOrderOffsetsUnderRecoveryPoint(): Unit = {
+    // create a log such that one log segment has offsets that overflow, and call the split API on that segment
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
+    val (log, segmentWithOutOfOrderOffsets) = createLogWithOutOfOrderOffsets(logConfig)
+    val offsetIndexFiles = log.logSegments.map(_.offsetIndex.file)
+    log.close()
+    offsetIndexFiles.foreach { file =>
+      TestUtils.appendNonsenseToFile(file, TestUtils.random.nextInt(1024) + 1)
+    }
+    val reopenedLog = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    assertFalse(LogTest.hasOutOfOrderOffsets(reopenedLog))
+    assertEquals(segmentWithOutOfOrderOffsets.baseOffset, reopenedLog.logEndOffset)
+  }
+
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
     records.foreach(segment.append _)
@@ -3531,6 +3557,17 @@ class LogTest {
     (log, segmentWithOverflow)
   }
 
+  private def createLogWithOutOfOrderOffsets(logConfig: LogConfig): (Log, LogSegment) = {
+    LogTest.initializeLogDirWithOutOfOrderOffsets(logDir)
+
+    val log = createLog(logDir, logConfig, recoveryPoint = Long.MaxValue)
+    val segmentWithOutOfOrderOffsets = LogTest.firstSegmentWithOutOfOrderOffset(log).getOrElse {
+      Assertions.fail("Failed to create log with a segment which has overflowed offsets")
+    }
+
+    (log, segmentWithOutOfOrderOffsets)
+  }
+
   private def recoverAndCheck(config: LogConfig,
                               expectedKeys: Iterable[Long],
                               expectDeletedFiles: Boolean = true): Log = {
@@ -3614,6 +3651,23 @@ object LogTest {
     None
   }
 
+  def hasOutOfOrderOffsets(log: Log): Boolean = firstSegmentWithOutOfOrderOffset(log).isDefined
+
+  def firstSegmentWithOutOfOrderOffset(log: Log): Option[LogSegment] = {
+    def hasOutOfOrderBatches(batchOffsets: List[Long]): Boolean =
+      batchOffsets.sliding(2).map {
+        case List(left, right) if left > right => true
+        case _ => false
+      }.exists(_ == true)
+
+    for (segment <- log.logSegments) {
+      val offsets = segment.log.batches.asScala.map(_.baseOffset()).toList
+      if (hasOutOfOrderBatches(offsets))
+        return Some(segment)
+    }
+    None
+  }
+
   private def rawSegment(logDir: File, baseOffset: Long): FileRecords =
     FileRecords.open(Log.logFile(logDir, baseOffset))
 
@@ -3656,6 +3710,48 @@ object LogTest {
     var nextOffset = 0L
     nextOffset = writeNormalSegment(nextOffset)
     nextOffset = writeOverflowSegment(nextOffset)
+    writeNormalSegment(nextOffset)
+  }
+
+  /**
+   * Initialize the given log directory with a set of segments, one of which will have an
+   * offset which overflows the segment
+   */
+  def initializeLogDirWithOutOfOrderOffsets(logDir: File): Unit = {
+    def writeSampleBatches(baseOffset: Long, segment: FileRecords): Long = {
+      def record(offset: Long) = {
+        val data = offset.toString.getBytes
+        new SimpleRecord(data, data)
+      }
+
+      segment.append(MemoryRecords.withRecords(baseOffset, CompressionType.NONE, 0,
+        record(baseOffset)))
+      segment.append(MemoryRecords.withRecords(baseOffset + 1, CompressionType.NONE, 0,
+        record(baseOffset + 1),
+        record(baseOffset + 2)))
+      segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
+        record(baseOffset + Int.MaxValue - 1)))
+      baseOffset + Int.MaxValue
+    }
+
+    def writeNormalSegment(baseOffset: Long): Long = {
+      val segment = rawSegment(logDir, baseOffset)
+      try writeSampleBatches(baseOffset, segment)
+      finally segment.close()
+    }
+
+    def writeOutOfOrderSegment(baseOffset: Long): Long = {
+      val segment = rawSegment(logDir, baseOffset)
+      try {
+        writeSampleBatches(baseOffset, segment)
+        writeSampleBatches(baseOffset + 1, segment)
+      } finally segment.close()
+    }
+
+    // We create three segments, the second of which contains offsets which overflow
+    var nextOffset = 0L
+    nextOffset = writeNormalSegment(nextOffset)
+    nextOffset = writeOutOfOrderSegment(nextOffset)
     writeNormalSegment(nextOffset)
   }
 
