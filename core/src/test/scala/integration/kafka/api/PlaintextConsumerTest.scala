@@ -12,7 +12,6 @@
   */
 package kafka.api
 
-import java.time.Duration
 import java.util
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
@@ -353,7 +352,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern = Pattern.compile("t.*c")
     consumer.subscribe(pattern, new TestConsumerReassignmentListener)
-    consumer.poll(50)
 
     var assignment = Set(
       new TopicPartition(topic, 0),
@@ -404,7 +402,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this
     consumer.subscribe(pattern1, new TestConsumerReassignmentListener)
-    consumer.poll(50)
 
     var assignment = Set(
       new TopicPartition(topic, 0),
@@ -418,8 +415,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern2 = Pattern.compile("...") // only 'foo' and 'bar' match this
     consumer.subscribe(pattern2, new TestConsumerReassignmentListener)
-    consumer.poll(Duration.ofMillis(50))
-
     assignment --= Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1))
@@ -454,8 +449,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     consumer.subscribe(Pattern.compile("t.*c"), new TestConsumerReassignmentListener)
-    consumer.poll(Duration.ofMillis(50))
-
     val assignment = Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1),
@@ -494,7 +487,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testAsyncCommit() {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    consumer.poll(0)
 
     val callback = new CountConsumerCommitCallback
     val count = 5
@@ -1304,7 +1296,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp, tp2).asJava)
 
     // Need to poll to join the group
-    consumer.poll(50)
     val pos1 = consumer.position(tp)
     val pos2 = consumer.position(tp2)
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
