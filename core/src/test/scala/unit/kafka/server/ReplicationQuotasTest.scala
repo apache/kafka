@@ -194,11 +194,11 @@ class ReplicationQuotasTest extends ZooKeeperTestHarness {
     //Add data
     addData(msgCount, msg)
 
-    val start = System.currentTimeMillis()
-
     //Start the new broker (and hence start replicating)
     debug("Starting new broker")
     brokers = brokers :+ createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    val start = System.currentTimeMillis()
+
     waitForOffsetsToMatch(msgCount, 0, 101)
 
     val throttledTook = System.currentTimeMillis() - start
