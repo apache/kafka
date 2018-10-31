@@ -21,7 +21,7 @@
 
 <h4><a id="upgrade_2_1_0" href="#upgrade_2_1_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x, 0.10.1.x, 0.10.2.x, 0.11.0.x, 1.0.x, 1.1.x, or 2.0.0 to 2.1.0</a></h4>
 
-<p><b>Note that 2.1.x contains an incompatible change to the internal schema used to store consumer offsets. Once the upgrade is
+<p><b>Note that 2.1.x contains a change to the internal schema used to store consumer offsets. Once the upgrade is
   complete, it will not be possible to downgrade to previous versions. See the rolling upgrade notes below for more detail.</b></p>
 
 <p><b>For a rolling upgrade:</b></p>
@@ -46,17 +46,20 @@
         brokers will be running the latest version and you can verify that the cluster's behavior and performance meets expectations.
         It is still possible to downgrade at this point if there are any problems. 
     </li>
-    <li> Once the entire cluster is upgraded, bump the protocol version by editing <code>inter.broker.protocol.version</code>
-        and setting it to 2.1.
+    <li> Once the cluster's behavior and performance has been verified, bump the protocol version by editing
+        <code>inter.broker.protocol.version</code> and setting it to 2.1.
     </li>
     <li> Restart the brokers one by one for the new protocol version to take effect. Once the brokers begin using the latest
         protocol version, it will no longer be possible to downgrade the cluster to an older version.
     </li>
     <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
-        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
-        change log.message.format.version to 2.1 on each broker and restart them one by one. Note that the older Scala consumer
-        does not support the new message format introduced in 0.11, so to avoid the performance cost of down-conversion (or to
-        take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>), the newer Java consumer must be used.</li>
+        upgrade it to its latest version. To avoid message conversion costs, you can wait until most clients
+        (producers and consumers) have been upgraded to 0.11.0 or later before taking this step. Once they have,
+        change log.message.format.version to 2.1 on each broker and restart them one by one. Note that the older Scala clients
+        which are no longer maintained do not support the message format introduced in 0.11, so to avoid conversion costs 
+        (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
+        the newer Java clients must be used.
+    </li>
 </ol>
 
 <p><b>Additional Upgrade Notes:</b></p>
