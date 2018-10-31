@@ -177,7 +177,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to get the initial assignment
+    // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
@@ -218,7 +218,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to join the group and get the initial assignment
+    // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
     // force a rebalance to trigger an invocation of the revocation callback while in the group
@@ -246,7 +246,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to join the group and get the initial assignment
+    // rebalance to get the initial assignment
     awaitRebalance(consumer, listener)
 
     // We should still be in the group after this invocation
@@ -1300,7 +1300,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
     consumer.assign(List(tp, tp2).asJava)
 
-    // Need to poll to join the group
     val pos1 = consumer.position(tp)
     val pos2 = consumer.position(tp2)
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
