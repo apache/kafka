@@ -74,7 +74,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
             );
         }
         initTopology();
-        processorContext.initialized();
+        processorContext.initialize();
         return stateMgr.checkpointed();
     }
 

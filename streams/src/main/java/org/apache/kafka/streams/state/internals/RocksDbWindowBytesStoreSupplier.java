@@ -49,6 +49,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     public WindowStore<Bytes, byte[]> get() {
         final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 name,
+                metricsScope(),
                 retentionPeriod,
                 segmentInterval,
                 new WindowKeySchema()

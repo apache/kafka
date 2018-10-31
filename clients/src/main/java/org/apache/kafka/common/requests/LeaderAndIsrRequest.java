@@ -145,7 +145,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
 
     private LeaderAndIsrRequest(int controllerId, int controllerEpoch, Map<TopicPartition, PartitionState> partitionStates,
                                 Set<Node> liveLeaders, short version) {
-        super(version);
+        super(ApiKeys.LEADER_AND_ISR, version);
         this.controllerId = controllerId;
         this.controllerEpoch = controllerEpoch;
         this.partitionStates = partitionStates;
@@ -153,7 +153,7 @@ public class LeaderAndIsrRequest extends AbstractRequest {
     }
 
     public LeaderAndIsrRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.LEADER_AND_ISR, version);
 
         Map<TopicPartition, PartitionState> partitionStates = new HashMap<>();
         for (Object partitionStateDataObj : struct.getArray(PARTITION_STATES_KEY_NAME)) {

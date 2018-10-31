@@ -40,7 +40,7 @@ public class PlainSaslServerTest {
     private PlainSaslServer saslServer;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         TestJaasConfig jaasConfig = new TestJaasConfig();
         Map<String, Object> options = new HashMap<>();
         options.put("user_" + USER_A, PASSWORD_A);

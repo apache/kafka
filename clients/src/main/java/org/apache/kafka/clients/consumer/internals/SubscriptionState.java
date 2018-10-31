@@ -264,8 +264,19 @@ public class SubscriptionState {
         assignedState(tp).seek(offset);
     }
 
+    /**
+     * @return an unmodifiable view of the currently assigned partitions
+     */
     public Set<TopicPartition> assignedPartitions() {
         return this.assignment.partitionSet();
+    }
+
+    /**
+     * Provides the number of assigned partitions in a thread safe manner.
+     * @return the number of assigned partitions.
+     */
+    public int numAssignedPartitions() {
+        return this.assignment.size();
     }
 
     public List<TopicPartition> fetchablePartitions() {

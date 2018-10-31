@@ -29,8 +29,8 @@ import java.util.Map;
 
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
-import javax.security.auth.login.LoginException;
 
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.authenticator.TestJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback;
@@ -38,6 +38,39 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
 public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
+
+    @Test
+    public void addsExtensions() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        options.put("unsecuredLoginExtension_testId", "1");
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        SaslExtensionsCallback callback = new SaslExtensionsCallback();
+
+        callbackHandler.handle(new Callback[] {callback});
+
+        assertEquals("1", callback.extensions().map().get("testId"));
+    }
+
+    @Test(expected = IOException.class)
+    public void throwsErrorOnInvalidExtensionName() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        options.put("unsecuredLoginExtension_test.Id", "1");
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        SaslExtensionsCallback callback = new SaslExtensionsCallback();
+
+        callbackHandler.handle(new Callback[] {callback});
+    }
+
+    @Test(expected = IOException.class)
+    public void throwsErrorOnInvalidExtensionValue() throws IOException, UnsupportedCallbackException {
+        Map<String, String> options = new HashMap<>();
+        options.put("unsecuredLoginExtension_testId", "Çalifornia");
+        OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = createCallbackHandler(options, new MockTime());
+        SaslExtensionsCallback callback = new SaslExtensionsCallback();
+
+        callbackHandler.handle(new Callback[] {callback});
+    }
+
     @Test
     public void minimalToken() throws IOException, UnsupportedCallbackException {
         Map<String, String> options = new HashMap<>();
@@ -57,7 +90,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
     @SuppressWarnings("unchecked")
     @Test
     public void validOptionsWithExplicitOptionValues()
-            throws IOException, UnsupportedCallbackException, LoginException {
+            throws IOException, UnsupportedCallbackException {
         String explicitScope1 = "scope1";
         String explicitScope2 = "scope2";
         String explicitScopeClaimName = "putScopeInHere";
@@ -108,7 +141,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
                 (Map) options);
         OAuthBearerUnsecuredLoginCallbackHandler callbackHandler = new OAuthBearerUnsecuredLoginCallbackHandler();
         callbackHandler.time(mockTime);
-        callbackHandler.configure(Collections.<String, Object>emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
+        callbackHandler.configure(Collections.emptyMap(), OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 Arrays.asList(config.getAppConfigurationEntry("KafkaClient")[0]));
         return callbackHandler;
     }

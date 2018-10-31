@@ -23,7 +23,6 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,6 +43,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class FileRecordsTest {
 
@@ -59,6 +64,30 @@ public class FileRecordsTest {
     public void setup() throws IOException {
         this.fileRecords = createFileRecords(values);
         this.time = new MockTime();
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testAppendProtectsFromOverflow() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
+
+        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        append(records, values);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testOpenOversizeFile() throws Exception {
+        File fileMock = mock(File.class);
+        FileChannel fileChannelMock = mock(FileChannel.class);
+        when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
+
+        new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void testOutOfRangeSlice() throws Exception {
+        this.fileRecords.slice(fileRecords.sizeInBytes() + 1, 15).sizeInBytes();
     }
 
     /**
@@ -191,7 +220,7 @@ public class FileRecordsTest {
         position += message2Size + batches.get(2).sizeInBytes();
 
         int message4Size = batches.get(3).sizeInBytes();
-        assertEquals("Should be able to find fourth message from a non-existant offset",
+        assertEquals("Should be able to find fourth message from a non-existent offset",
                 new FileRecords.LogOffsetPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
         assertEquals("Should be able to find fourth message by correct offset",
@@ -232,16 +261,16 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncateNotCalledIfSizeIsSameAsTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null);
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
+        when(channelMock.position(42L)).thenReturn(null);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(42);
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
+        verify(channelMock, times(0)).truncate(anyLong());
     }
 
     /**
@@ -250,11 +279,9 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncateNotCalledIfSizeIsBiggerThanTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null);
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
 
@@ -265,7 +292,7 @@ public class FileRecordsTest {
             // expected
         }
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
     }
 
     /**
@@ -273,17 +300,16 @@ public class FileRecordsTest {
      */
     @Test
     public void testTruncateIfSizeIsDifferentToTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null).once();
-        EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once();
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
+        when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(23);
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
+        verify(channelMock).truncate(23);
     }
 
     /**

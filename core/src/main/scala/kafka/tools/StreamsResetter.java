@@ -47,6 +47,7 @@ import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Arrays;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,6 +58,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
@@ -313,10 +315,12 @@ public class StreamsResetter {
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
-            client.subscribe(topicsToSubscribe);
-            client.poll(1);
+            Collection<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
+                    .flatMap(Collection::stream)
+                    .map(info -> new TopicPartition(info.topic(), info.partition()))
+                    .collect(Collectors.toList());
+            client.assign(partitions);
 
-            final Set<TopicPartition> partitions = client.assignment();
             final Set<TopicPartition> inputTopicPartitions = new HashSet<>();
             final Set<TopicPartition> intermediateTopicPartitions = new HashSet<>();
 

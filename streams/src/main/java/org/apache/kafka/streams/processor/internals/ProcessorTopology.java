@@ -112,7 +112,7 @@ public class ProcessorTopology {
         return sourcesByTopic.keySet();
     }
 
-    public SourceNode source(String topic) {
+    public SourceNode source(final String topic) {
         return sourcesByTopic.get(topic);
     }
 
@@ -124,7 +124,7 @@ public class ProcessorTopology {
         return sinksByTopic.keySet();
     }
 
-    public SinkNode sink(String topic) {
+    public SinkNode sink(final String topic) {
         return sinksByTopic.get(topic);
     }
 
@@ -148,17 +148,17 @@ public class ProcessorTopology {
         return storeToChangelogTopic;
     }
 
-    boolean isRepartitionTopic(String topic) {
+    boolean isRepartitionTopic(final String topic) {
         return repartitionTopics.contains(topic);
     }
 
-    private String childrenToString(String indent, List<ProcessorNode<?, ?>> children) {
+    private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
-        StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (ProcessorNode child : children) {
+        final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
+        for (final ProcessorNode child : children) {
             sb.append(child.name());
             sb.append(", ");
         }
@@ -166,7 +166,7 @@ public class ProcessorTopology {
         sb.append("]\n");
 
         // recursively print children
-        for (ProcessorNode<?, ?> child : children) {
+        for (final ProcessorNode<?, ?> child : children) {
             sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
@@ -191,7 +191,7 @@ public class ProcessorTopology {
         final StringBuilder sb = new StringBuilder(indent + "ProcessorTopology:\n");
 
         // start from sources
-        for (SourceNode<?, ?> source : sourcesByTopic.values()) {
+        for (final SourceNode<?, ?> source : sourcesByTopic.values()) {
             sb.append(source.toString(indent + "\t")).append(childrenToString(indent + "\t", source.children()));
         }
         return sb.toString();

@@ -17,10 +17,16 @@
 package org.apache.kafka.streams.processor.internals;
 
 
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
 
@@ -40,7 +46,6 @@ public class StreamsMetricsImplTest {
     @Test
     public void testRemoveSensor() {
         final String sensorName = "sensor1";
-        final String taskName = "task";
         final String scope = "scope";
         final String entity = "entity";
         final String operation = "put";
@@ -52,10 +57,10 @@ public class StreamsMetricsImplTest {
         final Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
 
-        final Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
 
-        final Sensor sensor3 = streamsMetrics.addThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
     }
 
@@ -64,12 +69,11 @@ public class StreamsMetricsImplTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         final int defaultMetrics = streamsMetrics.metrics().size();
 
-        final String taskName = "task";
         final String scope = "scope";
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
         // 2 meters and 4 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
@@ -85,12 +89,11 @@ public class StreamsMetricsImplTest {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         final int defaultMetrics = streamsMetrics.metrics().size();
 
-        final String taskName = "task";
         final String scope = "scope";
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addThroughputSensor(taskName,  scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
         // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
@@ -98,5 +101,43 @@ public class StreamsMetricsImplTest {
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
+    }
+
+    @Test
+    public void testTotalMetricDoesntDecrease() {
+        final MockTime time = new MockTime(1);
+        final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
+        final Metrics metrics = new Metrics(config, time);
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
+
+        final String scope = "scope";
+        final String entity = "entity";
+        final String operation = "op";
+
+        final Sensor sensor = streamsMetrics.addLatencyAndThroughputSensor(
+                scope,
+                entity,
+                operation,
+                Sensor.RecordingLevel.INFO
+        );
+
+        final double latency = 100.0;
+        final MetricName totalMetricName = metrics.metricName(
+                "op-total",
+                "stream-scope-metrics",
+                "",
+                "client-id",
+                "",
+                "scope-id",
+                "entity"
+        );
+
+        final KafkaMetric totalMetric = metrics.metric(totalMetricName);
+
+        for (int i = 0; i < 10; i++) {
+            assertEquals(i, Math.round(totalMetric.measurable().measure(config, time.milliseconds())));
+            sensor.record(latency, time.milliseconds());
+        }
+
     }
 }

@@ -20,14 +20,13 @@ package kafka.server
 import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
-import kafka.cluster.Replica
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.{Log, TimestampOffset}
+import kafka.log.TimestampOffset
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
 import kafka.security.auth.Authorizer
@@ -118,7 +117,7 @@ class KafkaApisTest {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, "")
+      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, 23, "")
       val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder("groupId",
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
@@ -144,7 +143,7 @@ class KafkaApisTest {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "")
+      val partitionOffsetCommitData = new TxnOffsetCommitRequest.CommittedOffset(15L, "", Optional.empty())
       val (offsetCommitRequest, request) = buildRequest(new TxnOffsetCommitRequest.Builder("txnlId", "groupId",
         15L, 0.toShort, Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
@@ -351,84 +350,51 @@ class KafkaApisTest {
   }
 
   @Test
-  def testReadUncommittedConsumerListOffsetLimitedAtHighWatermark(): Unit = {
-    testConsumerListOffsetLimit(IsolationLevel.READ_UNCOMMITTED)
+  def testLeaderReplicaIfLocalRaisesFencedLeaderEpoch(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.FENCED_LEADER_EPOCH)
   }
 
   @Test
-  def testReadCommittedConsumerListOffsetLimitedAtLastStableOffset(): Unit = {
-    testConsumerListOffsetLimit(IsolationLevel.READ_COMMITTED)
+  def testLeaderReplicaIfLocalRaisesUnknownLeaderEpoch(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.UNKNOWN_LEADER_EPOCH)
   }
 
-  private def testConsumerListOffsetLimit(isolationLevel: IsolationLevel): Unit = {
+  @Test
+  def testLeaderReplicaIfLocalRaisesNotLeaderForPartition(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.NOT_LEADER_FOR_PARTITION)
+  }
+
+  @Test
+  def testLeaderReplicaIfLocalRaisesUnknownTopicOrPartition(): Unit = {
+    testListOffsetFailedGetLeaderReplica(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+  }
+
+  private def testListOffsetFailedGetLeaderReplica(error: Errors): Unit = {
     val tp = new TopicPartition("foo", 0)
-    val timestamp: JLong = time.milliseconds()
-    val limitOffset = 15L
+    val isolationLevel = IsolationLevel.READ_UNCOMMITTED
+    val currentLeaderEpoch = Optional.of[Integer](15)
 
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(timestamp)).andReturn(Some(TimestampOffset(timestamp = timestamp, offset = limitOffset)))
+    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(tp, ListOffsetRequest.EARLIEST_TIMESTAMP,
+      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true))
+      .andThrow(error.exception)
+
     val capturedResponse = expectNoThrottling()
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
 
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.EARLIEST_TIMESTAMP,
+      currentLeaderEpoch))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> timestamp).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
+    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse)
+      .asInstanceOf[ListOffsetResponse]
     assertTrue(response.responseData.containsKey(tp))
 
     val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
+    assertEquals(error, partitionData.error)
     assertEquals(ListOffsetResponse.UNKNOWN_OFFSET, partitionData.offset)
-    assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
-  }
-
-  @Test
-  def testReadUncommittedConsumerListOffsetEarliestOffsetEqualsHighWatermark(): Unit = {
-    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_UNCOMMITTED)
-  }
-
-  @Test
-  def testReadCommittedConsumerListOffsetEarliestOffsetEqualsLastStableOffset(): Unit = {
-    testConsumerListOffsetEarliestOffsetEqualsLimit(IsolationLevel.READ_COMMITTED)
-  }
-
-  private def testConsumerListOffsetEarliestOffsetEqualsLimit(isolationLevel: IsolationLevel): Unit = {
-    val tp = new TopicPartition("foo", 0)
-    val limitOffset = 15L
-
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = limitOffset))
-    EasyMock.expect(replicaManager.getLog(tp)).andReturn(Some(log))
-    EasyMock.expect(log.fetchOffsetsByTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP))
-      .andReturn(Some(TimestampOffset(timestamp = ListOffsetResponse.UNKNOWN_TIMESTAMP, offset = limitOffset)))
-    val capturedResponse = expectNoThrottling()
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
-
-    val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.EARLIEST_TIMESTAMP: JLong)).asJava)
-    val (listOffsetRequest, request) = buildRequest(builder)
-    createKafkaApis().handleListOffsetRequest(request)
-
-    val response = readResponse(ApiKeys.LIST_OFFSETS, listOffsetRequest, capturedResponse).asInstanceOf[ListOffsetResponse]
-    assertTrue(response.responseData.containsKey(tp))
-
-    val partitionData = response.responseData.get(tp)
-    assertEquals(Errors.NONE, partitionData.error)
-    assertEquals(limitOffset, partitionData.offset)
     assertEquals(ListOffsetResponse.UNKNOWN_TIMESTAMP, partitionData.timestamp)
   }
 
@@ -478,7 +444,7 @@ class KafkaApisTest {
     )
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, Map.empty[TopicPartition, UpdateMetadataRequest.PartitionState].asJava, brokers.asJava).build()
-    metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
     (plaintextListener, anotherListener)
   }
 
@@ -495,21 +461,19 @@ class KafkaApisTest {
   private def testConsumerListOffsetLatest(isolationLevel: IsolationLevel): Unit = {
     val tp = new TopicPartition("foo", 0)
     val latestOffset = 15L
+    val currentLeaderEpoch = Optional.empty[Integer]()
 
-    val replica = EasyMock.mock(classOf[Replica])
-    val log = EasyMock.mock(classOf[Log])
-    EasyMock.expect(replicaManager.getLeaderReplicaIfLocal(tp)).andReturn(replica)
-    if (isolationLevel == IsolationLevel.READ_UNCOMMITTED)
-      EasyMock.expect(replica.highWatermark).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
-    else
-      EasyMock.expect(replica.lastStableOffset).andReturn(LogOffsetMetadata(messageOffset = latestOffset))
+    EasyMock.expect(replicaManager.fetchOffsetForTimestamp(tp, ListOffsetRequest.LATEST_TIMESTAMP,
+      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true))
+      .andReturn(TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset))
 
     val capturedResponse = expectNoThrottling()
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
 
-    EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel, replica, log)
-
+    val targetTimes = Map(tp -> new ListOffsetRequest.PartitionData(ListOffsetRequest.LATEST_TIMESTAMP,
+      currentLeaderEpoch))
     val builder = ListOffsetRequest.Builder.forConsumer(true, isolationLevel)
-      .setTargetTimes(Map(tp -> (ListOffsetRequest.LATEST_TIMESTAMP: JLong)).asJava)
+      .setTargetTimes(targetTimes.asJava)
     val (listOffsetRequest, request) = buildRequest(builder)
     createKafkaApis().handleListOffsetRequest(request)
 
@@ -575,6 +539,6 @@ class KafkaApisTest {
     val partitions = (0 until numPartitions).map(new TopicPartition(topic, _) -> partitionState).toMap
     val updateMetadataRequest = new UpdateMetadataRequest.Builder(ApiKeys.UPDATE_METADATA.latestVersion, 0,
       0, partitions.asJava, Set(broker).asJava).build()
-    metadataCache.updateCache(correlationId = 0, updateMetadataRequest)
+    metadataCache.updateMetadata(correlationId = 0, updateMetadataRequest)
   }
 }

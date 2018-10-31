@@ -26,7 +26,7 @@ public class WindowedStreamPartitioner<K, V> implements StreamPartitioner<Window
 
     private final WindowedSerializer<K> serializer;
 
-    WindowedStreamPartitioner(final WindowedSerializer<K> serializer) {
+    public WindowedStreamPartitioner(final WindowedSerializer<K> serializer) {
         this.serializer = serializer;
     }
 

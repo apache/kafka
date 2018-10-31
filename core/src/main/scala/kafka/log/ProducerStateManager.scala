@@ -234,9 +234,13 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         RecordBatch.NO_SEQUENCE
 
       if (currentLastSeq == RecordBatch.NO_SEQUENCE && appendFirstSeq != 0) {
-        // the epoch was bumped by a control record, so we expect the sequence number to be reset
-        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: found $appendFirstSeq " +
-          s"(incoming seq. number), but expected 0")
+        // We have a matching epoch, but we do not know the next sequence number. This case can happen if
+        // only a transaction marker is left in the log for this producer. We treat this as an unknown
+        // producer id error, so that the producer can check the log start offset for truncation and reset
+        // the sequence number. Note that this check follows the fencing check, so the marker still fences
+        // old producers even if it cannot determine our next expected sequence number.
+        throw new UnknownProducerIdException(s"Local producer state matches expected epoch $producerEpoch " +
+          s"for producerId=$producerId, but next expected sequence number is not known.")
       } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
         throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $appendFirstSeq " +
           s"(incoming seq. number), $currentLastSeq (current end sequence number)")
@@ -250,10 +254,16 @@ private[log] class ProducerAppendInfo(val producerId: Long,
 
   def append(batch: RecordBatch): Option[CompletedTxn] = {
     if (batch.isControlBatch) {
-      val record = batch.iterator.next()
-      val endTxnMarker = EndTransactionMarker.deserialize(record)
-      val completedTxn = appendEndTxnMarker(endTxnMarker, batch.producerEpoch, batch.baseOffset, record.timestamp)
-      Some(completedTxn)
+      val recordIterator = batch.iterator
+      if (recordIterator.hasNext) {
+        val record = recordIterator.next()
+        val endTxnMarker = EndTransactionMarker.deserialize(record)
+        val completedTxn = appendEndTxnMarker(endTxnMarker, batch.producerEpoch, batch.baseOffset, record.timestamp)
+        Some(completedTxn)
+      } else {
+        // An empty control batch means the entire transaction has been cleaned from the log, so no need to append
+        None
+      }
     } else {
       append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
         batch.isTransactional)

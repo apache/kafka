@@ -33,6 +33,7 @@ import javax.security.sasl.SaslServerFactory;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramCredentialCallback;
 import org.apache.kafka.common.security.scram.ScramLoginModule;
@@ -62,7 +63,7 @@ public class ScramSaslServer implements SaslServer {
         RECEIVE_CLIENT_FINAL_MESSAGE,
         COMPLETE,
         FAILED
-    };
+    }
 
     private final ScramMechanism mechanism;
     private final ScramFormatter formatter;
@@ -74,6 +75,7 @@ public class ScramSaslServer implements SaslServer {
     private ScramExtensions scramExtensions;
     private ScramCredential scramCredential;
     private String authorizationId;
+    private Long tokenExpiryTimestamp;
 
     public ScramSaslServer(ScramMechanism mechanism, Map<String, ?> props, CallbackHandler callbackHandler) throws NoSuchAlgorithmException {
         this.mechanism = mechanism;
@@ -98,9 +100,9 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
                     this.clientFirstMessage = new ClientFirstMessage(response);
                     this.scramExtensions = clientFirstMessage.extensions();
-                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.extensionNames())) {
+                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.map().keySet())) {
                         log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
-                                SUPPORTED_EXTENSIONS, scramExtensions.extensionNames());
+                                SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
                     }
                     String serverNonce = formatter.secureRandomString();
                     try {
@@ -115,10 +117,12 @@ public class ScramSaslServer implements SaslServer {
                             if (tokenCallback.tokenOwner() == null)
                                 throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
                             this.authorizationId = tokenCallback.tokenOwner();
+                            this.tokenExpiryTimestamp = tokenCallback.tokenExpiryTimestamp();
                         } else {
                             credentialCallback = new ScramCredentialCallback();
                             callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
                             this.authorizationId = username;
+                            this.tokenExpiryTimestamp = null;
                         }
                         this.scramCredential = credentialCallback.scramCredential();
                         if (scramCredential == null)
@@ -181,9 +185,10 @@ public class ScramSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
-
+        if (SaslInternalConfigs.CREDENTIAL_LIFETIME_MS_SASL_NEGOTIATED_PROPERTY_KEY.equals(propName))
+            return tokenExpiryTimestamp; // will be null if token not used
         if (SUPPORTED_EXTENSIONS.contains(propName))
-            return scramExtensions.extensionValue(propName);
+            return scramExtensions.map().get(propName);
         else
             return null;
     }
@@ -194,21 +199,21 @@ public class ScramSaslServer implements SaslServer {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!isComplete())
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
     }
 
     private void setState(State state) {

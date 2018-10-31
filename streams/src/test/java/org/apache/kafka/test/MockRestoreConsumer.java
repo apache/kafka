@@ -57,20 +57,21 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     }
 
     // buffer a record (we cannot use addRecord because we need to add records before assigning a partition)
-    public void bufferRecord(ConsumerRecord<K, V> record) {
+    public void bufferRecord(final ConsumerRecord<K, V> record) {
         recordBuffer.add(
             new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), record.timestamp(),
                                  record.timestampType(), 0L, 0, 0,
-                                 keySerializer.serialize(record.topic(), record.key()),
-                                 valueSerializer.serialize(record.topic(), record.value())));
+                                 keySerializer.serialize(record.topic(), record.headers(), record.key()),
+                                 valueSerializer.serialize(record.topic(), record.headers(), record.value()),
+                                 record.headers()));
         endOffset = record.offset();
 
         super.updateEndOffsets(Collections.singletonMap(assignedPartition, endOffset));
     }
 
     @Override
-    public synchronized void assign(Collection<TopicPartition> partitions) {
-        int numPartitions = partitions.size();
+    public synchronized void assign(final Collection<TopicPartition> partitions) {
+        final int numPartitions = partitions.size();
         if (numPartitions > 1)
             throw new IllegalArgumentException("RestoreConsumer: more than one partition specified");
 
@@ -90,16 +91,16 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     @Override
     public ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
         // add buffered records to MockConsumer
-        for (ConsumerRecord<byte[], byte[]> record : recordBuffer) {
+        for (final ConsumerRecord<byte[], byte[]> record : recordBuffer) {
             super.addRecord(record);
         }
         recordBuffer.clear();
 
-        ConsumerRecords<byte[], byte[]> records = super.poll(timeout);
+        final ConsumerRecords<byte[], byte[]> records = super.poll(timeout);
 
         // set the current offset
-        Iterable<ConsumerRecord<byte[], byte[]>> partitionRecords = records.records(assignedPartition);
-        for (ConsumerRecord<byte[], byte[]> record : partitionRecords) {
+        final Iterable<ConsumerRecord<byte[], byte[]>> partitionRecords = records.records(assignedPartition);
+        for (final ConsumerRecord<byte[], byte[]> record : partitionRecords) {
             currentOffset = record.offset();
         }
 
@@ -107,7 +108,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     }
 
     @Override
-    public synchronized long position(TopicPartition partition) {
+    public synchronized long position(final TopicPartition partition) {
         if (!partition.equals(assignedPartition))
             throw new IllegalStateException("RestoreConsumer: unassigned partition");
 
@@ -115,7 +116,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     }
 
     @Override
-    public synchronized void seek(TopicPartition partition, long offset) {
+    public synchronized void seek(final TopicPartition partition, final long offset) {
         if (offset < 0)
             throw new IllegalArgumentException("RestoreConsumer: offset should not be negative");
 
@@ -128,11 +129,11 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
     }
 
     @Override
-    public synchronized void seekToBeginning(Collection<TopicPartition> partitions) {
+    public synchronized void seekToBeginning(final Collection<TopicPartition> partitions) {
         if (partitions.size() != 1)
             throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
-        for (TopicPartition partition : partitions) {
+        for (final TopicPartition partition : partitions) {
             if (!partition.equals(assignedPartition))
                 throw new IllegalStateException("RestoreConsumer: seek-to-end not on the assigned partition");
         }
@@ -146,7 +147,7 @@ public class MockRestoreConsumer<K, V> extends MockConsumer<byte[], byte[]> {
         if (partitions.size() != 1)
             throw new IllegalStateException("RestoreConsumer: other than one partition specified");
 
-        for (TopicPartition partition : partitions) {
+        for (final TopicPartition partition : partitions) {
             if (!partition.equals(assignedPartition))
                 throw new IllegalStateException("RestoreConsumer: seek-to-end not on the assigned partition");
         }

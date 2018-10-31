@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
@@ -51,6 +52,7 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -676,7 +678,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricsTags);
             List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class);
+                    MetricsReporter.class,
+                    Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
             reporters.add(new JmxReporter(JMX_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
@@ -706,11 +709,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer, valueDeserializer, reporters, interceptorList);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     true, false, clusterResourceListeners);
-            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
             ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
-            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config);
+            ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
 
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
@@ -728,6 +733,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.SEND_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+                    ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                     time,
                     true,
                     new ApiVersions(),
@@ -754,7 +760,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     groupId,
                     maxPollIntervalMs,
                     sessionTimeoutMs,
-                    new Heartbeat(sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
+                    new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
                     assignors,
                     this.metadata,
                     this.subscriptions,
@@ -917,7 +923,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 }
 
                 throwIfNoAssignorsConfigured();
-
+                fetcher.clearBufferedDataForUnassignedTopics(topics);
                 log.debug("Subscribed to topic(s): {}", Utils.join(topics, ", "));
                 this.subscriptions.subscribe(new HashSet<>(topics), listener);
                 metadata.setTopics(subscriptions.groupSubscription());
@@ -1018,10 +1024,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            log.debug("Unsubscribed all topics or patterns and assigned partitions");
+            fetcher.clearBufferedDataForUnassignedPartitions(Collections.EMPTY_SET);
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
             this.metadata.needMetadataForAllTopics(false);
+            log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();
         }
@@ -1062,6 +1069,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
                     topics.add(topic);
                 }
+                fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance
@@ -1085,7 +1093,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * offset for the subscribed list of partitions
      *
      *
-     * @param timeout The time, in milliseconds, spent waiting in poll if data is not available in the buffer.
+     * @param timeoutMs The time, in milliseconds, spent waiting in poll if data is not available in the buffer.
      *            If 0, returns immediately with any records that are available currently in the buffer, else returns empty.
      *            Must not be negative.
      * @return map of topic to records since the last fetch for the subscribed list of topics and partitions
@@ -1111,8 +1119,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Deprecated
     @Override
-    public ConsumerRecords<K, V> poll(final long timeout) {
-        return poll(timeout, false);
+    public ConsumerRecords<K, V> poll(final long timeoutMs) {
+        return poll(time.timer(timeoutMs), false);
     }
 
     /**
@@ -1148,44 +1156,36 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
      *             partitions to consume from
      * @throws java.lang.ArithmeticException if the timeout is greater than {@link Long#MAX_VALUE} milliseconds.
+     * @throws org.apache.kafka.common.errors.InvalidTopicException if the current subscription contains any invalid
+     *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
-        return poll(timeout.toMillis(), true);
+        return poll(time.timer(timeout), true);
     }
 
-    private ConsumerRecords<K, V> poll(final long timeoutMs, final boolean includeMetadataInTimeout) {
+    private ConsumerRecords<K, V> poll(final Timer timer, final boolean includeMetadataInTimeout) {
         acquireAndEnsureOpen();
         try {
-            if (timeoutMs < 0) throw new IllegalArgumentException("Timeout must not be negative");
-
             if (this.subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
 
             // poll for new data until the timeout expires
-            long elapsedTime = 0L;
             do {
-
                 client.maybeTriggerWakeup();
 
-                final long metadataEnd;
                 if (includeMetadataInTimeout) {
-                    final long metadataStart = time.milliseconds();
-                    if (!updateAssignmentMetadataIfNeeded(remainingTimeAtLeastZero(timeoutMs, elapsedTime))) {
+                    if (!updateAssignmentMetadataIfNeeded(timer)) {
                         return ConsumerRecords.empty();
                     }
-                    metadataEnd = time.milliseconds();
-                    elapsedTime += metadataEnd - metadataStart;
                 } else {
-                    while (!updateAssignmentMetadataIfNeeded(Long.MAX_VALUE)) {
+                    while (!updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE))) {
                         log.warn("Still waiting for metadata");
                     }
-                    metadataEnd = time.milliseconds();
                 }
 
-                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(remainingTimeAtLeastZero(timeoutMs, elapsedTime));
-
+                final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = pollForFetches(timer);
                 if (!records.isEmpty()) {
                     // before returning the fetched records, we can send off the next round of fetches
                     // and avoid block waiting for their responses to enable pipelining while the user
@@ -1199,10 +1199,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
                     return this.interceptors.onConsume(new ConsumerRecords<>(records));
                 }
-                final long fetchEnd = time.milliseconds();
-                elapsedTime += fetchEnd - metadataEnd;
-
-            } while (elapsedTime < timeoutMs);
+            } while (timer.notExpired());
 
             return ConsumerRecords.empty();
         } finally {
@@ -1213,18 +1210,16 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Visible for testing
      */
-    boolean updateAssignmentMetadataIfNeeded(final long timeoutMs) {
-        final long startMs = time.milliseconds();
-        if (!coordinator.poll(timeoutMs)) {
+    boolean updateAssignmentMetadataIfNeeded(final Timer timer) {
+        if (!coordinator.poll(timer)) {
             return false;
         }
 
-        return updateFetchPositions(remainingTimeAtLeastZero(timeoutMs, time.milliseconds() - startMs));
+        return updateFetchPositions(timer);
     }
 
-    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(final long timeoutMs) {
-        final long startMs = time.milliseconds();
-        long pollTimeout = Math.min(coordinator.timeToNextPoll(startMs), timeoutMs);
+    private Map<TopicPartition, List<ConsumerRecord<K, V>>> pollForFetches(Timer timer) {
+        long pollTimeout = Math.min(coordinator.timeToNextPoll(timer.currentTimeMs()), timer.remainingMs());
 
         // if data is available already, return it immediately
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> records = fetcher.fetchedRecords();
@@ -1244,11 +1239,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             pollTimeout = retryBackoffMs;
         }
 
-        client.poll(pollTimeout, startMs, () -> {
+        Timer pollTimer = time.timer(pollTimeout);
+        client.poll(pollTimer, () -> {
             // since a fetch might be completed by the background thread, we need this poll condition
             // to ensure that we do not block unnecessarily in poll()
             return !fetcher.hasCompletedFetches();
         });
+        timer.update(pollTimer.currentTimeMs());
 
         // after the long poll, we should check whether the group needs to rebalance
         // prior to returning data so that the group can stabilize faster
@@ -1257,10 +1254,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
 
         return fetcher.fetchedRecords();
-    }
-
-    private long remainingTimeAtLeastZero(final long timeoutMs, final long elapsedTime) {
-        return Math.max(0, timeoutMs - elapsedTime);
     }
 
     /**
@@ -1331,7 +1324,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), timeout.toMillis())) {
+            if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing the current consumed offsets");
             }
@@ -1413,7 +1406,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), timeout.toMillis())) {
+            if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
             }
@@ -1595,7 +1588,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Get the offset of the <i>next record</i> that will be fetched (if a record with that offset exists).
-     * This method may issue a remote call to the server if there is no current position 
+     * This method may issue a remote call to the server if there is no current position
      * for the given partition.
      * <p>
      * This call will block until the position can be determined, an unrecoverable error is
@@ -1620,30 +1613,23 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public long position(TopicPartition partition, final Duration timeout) {
-        final long timeoutMs = timeout.toMillis();
         acquireAndEnsureOpen();
         try {
             if (!this.subscriptions.isAssigned(partition))
                 throw new IllegalStateException("You can only check the position for partitions assigned to this consumer.");
-            Long offset = this.subscriptions.position(partition);
-            final long startMs = time.milliseconds();
-            long finishMs = startMs;
 
-            while (offset == null && finishMs - startMs < timeoutMs) {
-                // batch update fetch positions for any partitions without a valid position
-                if (!updateFetchPositions(remainingTimeAtLeastZero(timeoutMs, time.milliseconds() - startMs))) {
-                    break;
-                }
-                finishMs = time.milliseconds();
+            Timer timer = time.timer(timeout);
+            do {
+                Long offset = this.subscriptions.position(partition);
+                if (offset != null)
+                    return offset;
 
-                client.poll(remainingTimeAtLeastZero(timeoutMs, finishMs - startMs));
-                offset = this.subscriptions.position(partition);
-                finishMs = time.milliseconds();
-            }
-            if (offset == null)
-                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
-                        "for partition " + partition + " could be determined");
-            return offset;
+                updateFetchPositions(timer);
+                client.poll(timer);
+            } while (timer.notExpired());
+
+            throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
+                    "for partition " + partition + " could be determined");
         } finally {
             release();
         }
@@ -1701,7 +1687,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Map<TopicPartition, OffsetAndMetadata> offsets = coordinator.fetchCommittedOffsets(
-                    Collections.singleton(partition), timeout.toMillis());
+                    Collections.singleton(partition), time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
@@ -1764,15 +1750,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
         acquireAndEnsureOpen();
-        long timeoutMs = timeout.toMillis();
         try {
             Cluster cluster = this.metadata.fetch();
             List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
             if (!parts.isEmpty())
                 return parts;
 
+            Timer timer = time.timer(timeout);
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
-                    new MetadataRequest.Builder(Collections.singletonList(topic), true), timeoutMs);
+                    new MetadataRequest.Builder(Collections.singletonList(topic), true), timer);
             return topicMetadata.get(topic);
         } finally {
             release();
@@ -1817,7 +1803,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.getAllTopicMetadata(timeout.toMillis());
+            return fetcher.getAllTopicMetadata(time.timer(timeout));
         } finally {
             release();
         }
@@ -1938,7 +1924,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.offsetsByTimes(timestampsToSearch, timeout.toMillis());
+            return fetcher.offsetsByTimes(timestampsToSearch, time.timer(timeout));
         } finally {
             release();
         }
@@ -1983,7 +1969,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.beginningOffsets(partitions, timeout.toMillis());
+            return fetcher.beginningOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
@@ -2038,7 +2024,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions, Duration timeout) {
         acquireAndEnsureOpen();
         try {
-            return fetcher.endOffsets(partitions, timeout.toMillis());
+            return fetcher.endOffsets(partitions, time.timer(timeout));
         } finally {
             release();
         }
@@ -2137,7 +2123,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
         try {
             if (coordinator != null)
-                coordinator.close(Math.min(timeoutMs, requestTimeoutMs));
+                coordinator.close(time.timer(Math.min(timeoutMs, requestTimeoutMs)));
         } catch (Throwable t) {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
@@ -2168,7 +2154,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             defined
      * @return true iff the operation completed without timing out
      */
-    private boolean updateFetchPositions(final long timeoutMs) {
+    private boolean updateFetchPositions(final Timer timer) {
         cachedSubscriptionHashAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHashAllFetchPositions) return true;
 
@@ -2177,7 +2163,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // coordinator lookup if there are partitions which have missing positions, so
         // a consumer with manually assigned partitions can avoid a coordinator dependence
         // by always ensuring that assigned partitions have an initial position.
-        if (!coordinator.refreshCommittedOffsetsIfNeeded(timeoutMs)) return false;
+        if (!coordinator.refreshCommittedOffsetsIfNeeded(timer)) return false;
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
@@ -2230,4 +2216,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG + " configuration property");
     }
 
+    // Visible for testing
+    String getClientId() {
+        return clientId;
+    }
 }

@@ -79,7 +79,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractState
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, AGG> fetch(K from, K to) {
+    public KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to) {
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 

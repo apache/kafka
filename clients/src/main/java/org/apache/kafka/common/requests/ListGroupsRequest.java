@@ -59,11 +59,11 @@ public class ListGroupsRequest extends AbstractRequest {
     }
 
     public ListGroupsRequest(short version) {
-        super(version);
+        super(ApiKeys.LIST_GROUPS, version);
     }
 
     public ListGroupsRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.LIST_GROUPS, versionId);
     }
 
     @Override
@@ -71,10 +71,10 @@ public class ListGroupsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new ListGroupsResponse(Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
+                return new ListGroupsResponse(Errors.forException(e), Collections.emptyList());
             case 1:
             case 2:
-                return new ListGroupsResponse(throttleTimeMs, Errors.forException(e), Collections.<ListGroupsResponse.Group>emptyList());
+                return new ListGroupsResponse(throttleTimeMs, Errors.forException(e), Collections.emptyList());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.LIST_GROUPS.latestVersion()));
