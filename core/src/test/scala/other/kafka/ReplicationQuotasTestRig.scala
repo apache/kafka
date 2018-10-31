@@ -25,7 +25,7 @@ import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils._
-import kafka.utils.{Exit, Json, Logging, TestUtils}
+import kafka.utils._
 import kafka.zk.{ReassignPartitionsZNode, ZooKeeperTestHarness}
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
@@ -138,7 +138,7 @@ object ReplicationQuotasTestRig {
       val newAssignment = ReassignPartitionsCommand.generateAssignment(zkClient, brokers, json(topicName), true)._1
 
       val start = System.currentTimeMillis()
-      ReassignPartitionsCommand.executeAssignment(zkClient, None, getReassignmentJson(newAssignment), Throttle(config.throttle))
+      ReassignPartitionsCommand.executeAssignment(zkClient, None, ZkUtils.getReassignmentJson(newAssignment), Throttle(config.throttle))
 
       //Await completion
       waitForReassignmentToComplete()
@@ -152,19 +152,6 @@ object ReplicationQuotasTestRig {
       logOutput(config, replicas, newAssignment)
 
       println("Output can be found here: " + journal.path())
-    }
-
-    def getReassignmentJson(partitionsToBeReassigned: Map[TopicPartition, Seq[Int]]): String = {
-      Json.encodeAsString(Map(
-        "version" -> 1,
-        "partitions" -> partitionsToBeReassigned.map { case (tp, replicas) =>
-          Map(
-            "topic" -> tp.topic,
-            "partition" -> tp.partition,
-            "replicas" -> replicas.asJava
-          ).asJava
-        }.asJava
-      ).asJava)
     }
 
     def validateAllOffsetsMatch(config: ExperimentDef): Unit = {

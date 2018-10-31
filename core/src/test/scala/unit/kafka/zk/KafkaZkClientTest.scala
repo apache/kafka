@@ -1154,7 +1154,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testACLMethods(): Unit = {
+  def testAclMethods(): Unit = {
     val mockPath = "/foo"
 
     intercept[NoNodeException] {
