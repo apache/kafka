@@ -99,8 +99,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     consumer.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
-    consumer.poll(2000)
-
+    awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
 
     // get metadata for the topic
@@ -114,11 +113,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val coordinator = parts.head.leader().id()
     this.servers(coordinator).shutdown()
 
-    consumer.poll(5000)
-
     // the failover should not cause a rebalance
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
+    ensureNoRebalance(consumer, listener)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -201,6 +197,22 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     TestUtils.pollUntilTrue(consumer, () => commitCallback.successCount >= count,
       "Failed to observe commit callback before timeout", waitTimeMs = 10000)
     assertEquals(count, commitCallback.successCount)
+  }
+
+  protected def awaitRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    val numReassignments = rebalanceListener.callsToAssigned
+    TestUtils.pollUntilTrue(consumer, () => rebalanceListener.callsToAssigned > numReassignments,
+      "Timed out before expected rebalance completed")
+  }
+
+  protected def ensureNoRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    // The best way to verify that the current membership is still active is to commit offsets.
+    // This would fail if the group had rebalanced.
+    val initialRevokeCalls = rebalanceListener.callsToRevoked
+    val commitCallback = new CountConsumerCommitCallback
+    consumer.commitAsync(commitCallback)
+    awaitCommitCallback(consumer, commitCallback)
+    assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {

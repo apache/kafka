@@ -721,22 +721,22 @@ object TestUtils extends Logging {
   }
 
   def pollUntilTrue(consumer: Consumer[_, _],
-                    condition: () => Boolean,
+                    action: () => Boolean,
                     msg: => String,
                     waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(50))
-      condition()
+      action()
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
   def pollRecordsUntilTrue[K, V](consumer: Consumer[K, V],
-                                 condition: ConsumerRecords[K, V] => Boolean,
+                                 action: ConsumerRecords[K, V] => Boolean,
                                  msg: => String,
                                  waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
       val records = consumer.poll(Duration.ofMillis(50))
-      condition(records)
+      action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
@@ -1211,7 +1211,6 @@ object TestUtils extends Logging {
       threadPool.shutdownNow()
     }
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
-
   }
 
   def consumeTopicRecords[K, V](servers: Seq[KafkaServer],
@@ -1231,17 +1230,25 @@ object TestUtils extends Logging {
     } finally consumer.close()
   }
 
-  def consumeRecords[K, V](consumer: KafkaConsumer[K, V],
-                           numMessages: Int,
-                           waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+  def pollUntilAtLeastNumRecords[K, V](consumer: KafkaConsumer[K, V],
+                                       numRecords: Int,
+                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    def pollCondition(polledRecords: ConsumerRecords[K, V]): Boolean = {
+    def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
       records ++= polledRecords.asScala
-      records.size >= numMessages
+      records.size >= numRecords
     }
-    pollRecordsUntilTrue(consumer, pollCondition,
-      s"Consumed ${records.size} records before timeout instead of the expected $numMessages records")
-    assertEquals("Consumed more records than expected", numMessages, records.size)
+    pollRecordsUntilTrue(consumer, pollAction,
+      waitTimeMs = waitTimeMs,
+      msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    records
+  }
+
+  def consumeRecords[K, V](consumer: KafkaConsumer[K, V],
+                           numRecords: Int,
+                           waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+    val records = pollUntilAtLeastNumRecords(consumer, numRecords, waitTimeMs)
+    assertEquals("Consumed more records than expected", numRecords, records.size)
     records
   }
 
@@ -1338,15 +1345,6 @@ object TestUtils extends Logging {
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
-  }
-
-  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      records.size >= numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
-    records
   }
 
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {
