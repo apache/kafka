@@ -526,6 +526,16 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+    * @return the first batch timestamp if the timestamp is available and has been previously loaded. Otherwise return 0
+    */
+  def getFirstBatchTimestamp() : Long = {
+    rollingBasedTimestamp match {
+      case Some(t) if t >= 0 => t
+      case _ => 0L
+    }
+  }
+
+  /**
    * Search the message offset based on timestamp and offset.
    *
    * This method returns an option of TimestampOffset. The returned value is determined using the following ordered list of rules:
