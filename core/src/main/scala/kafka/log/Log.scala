@@ -1924,7 +1924,7 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def retryOnRecoverableLogException[T](fn: => T): T = {
+  private def retryOnRecoverableLogException[T](fn: => T): T = {
     // Truncate all segments with baseOffset greater than or equal to the given offset. This method should closely
     // follow the implementation in truncateTo, with the exception that it only updates on-disk state and `segments`
     // collection.
