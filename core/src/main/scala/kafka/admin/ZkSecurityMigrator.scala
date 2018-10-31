@@ -18,7 +18,7 @@
 package kafka.admin
 
 import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Logging}
-import kafka.zk.{KafkaZkClient, ZkData}
+import kafka.zk.{KafkaZkClient, ZkData, ZkSecurityMigratorUtils}
 import org.I0Itec.zkclient.exception.ZkException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -124,16 +124,17 @@ object ZkSecurityMigrator extends Logging {
 }
 
 class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
+  private val zkSecurityMigratorUtils = new ZkSecurityMigratorUtils(zkClient)
   private val futures = new Queue[Future[String]]
 
   private def setAcl(path: String, setPromise: Promise[String]) = {
     info("Setting ACL for path %s".format(path))
-    zkClient.currentZooKeeper.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, setPromise)
+    zkSecurityMigratorUtils.currentZooKeeper.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, setPromise)
   }
 
   private def getChildren(path: String, childrenPromise: Promise[String]) = {
     info("Getting children to set ACLs for path %s".format(path))
-    zkClient.currentZooKeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
+    zkSecurityMigratorUtils.currentZooKeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
   }
 
   private def setAclIndividually(path: String) = {
@@ -160,7 +161,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
                       path: String,
                       ctx: Object,
                       children: java.util.List[String]) {
-      val zkHandle = zkClient.currentZooKeeper
+      val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
       Code.get(rc) match {
         case Code.OK =>
@@ -194,7 +195,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
                       path: String,
                       ctx: Object,
                       stat: Stat) {
-      val zkHandle = zkClient.currentZooKeeper
+      val zkHandle = zkSecurityMigratorUtils.currentZooKeeper
       val promise = ctx.asInstanceOf[Promise[String]]
 
       Code.get(rc) match {

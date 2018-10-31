@@ -91,12 +91,12 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     for (path <- ZkData.PersistentZkPaths) {
       zkClient.makeSurePersistentPathExists(path)
       if (ZkData.sensitivePath(path)) {
-        val aclList = zkClient.getACL(path)
+        val aclList = zkClient.getAcl(path)
         assertEquals(s"Unexpected acl list size for $path", 1, aclList.size)
         for (acl <- aclList)
           assertTrue(TestUtils.isAclSecure(acl, sensitive = true))
       } else if (!path.equals(ConsumerPathZNode.path)) {
-        val aclList = zkClient.getACL(path)
+        val aclList = zkClient.getAcl(path)
         assertEquals(s"Unexpected acl list size for $path", 2, aclList.size)
         for (acl <- aclList)
           assertTrue(TestUtils.isAclSecure(acl, sensitive = false))
@@ -190,7 +190,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
       zkClient.makeSurePersistentPathExists(path)
       zkClient.createRecursive(s"$path/fpjwashere", "".getBytes(StandardCharsets.UTF_8))
     }
-    zkClient.setACL("/", zkClient.defaultAcls("/"), -1)
+    zkClient.setAcl("/", zkClient.defaultAcls("/"), -1)
     deleteAllUnsecure()
   }
 
@@ -240,15 +240,15 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     info("Done with migration")
     for (path <- ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths) {
       val sensitive = ZkData.sensitivePath(path)
-      val listParent = secondZk.getACL(path)
+      val listParent = secondZk.getAcl(path)
       assertTrue(path, isAclCorrect(listParent, secondZk.secure, sensitive))
 
       val childPath = path + "/fpjwashere"
-      val listChild = secondZk.getACL(childPath)
+      val listChild = secondZk.getAcl(childPath)
       assertTrue(childPath, isAclCorrect(listChild, secondZk.secure, sensitive))
     }
     // Check consumers path.
-    val consumersAcl = firstZk.getACL(ConsumerPathZNode.path)
+    val consumersAcl = firstZk.getAcl(ConsumerPathZNode.path)
     assertTrue(ConsumerPathZNode.path, isAclCorrect(consumersAcl, false, false))
   }
 
@@ -257,7 +257,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
    */
   private def verify(path: String): Boolean = {
     val sensitive = ZkData.sensitivePath(path)
-    val list = zkClient.getACL(path)
+    val list = zkClient.getAcl(path)
     list.forall(TestUtils.isAclSecure(_, sensitive))
   }
 

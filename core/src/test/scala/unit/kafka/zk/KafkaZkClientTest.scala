@@ -1158,18 +1158,18 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val mockPath = "/foo"
 
     intercept[NoNodeException] {
-      zkClient.getACL(mockPath)
+      zkClient.getAcl(mockPath)
     }
 
     intercept[NoNodeException] {
-      zkClient.setACL(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
+      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
     }
 
     zkClient.createRecursive(mockPath)
 
-    zkClient.setACL(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
+    zkClient.setAcl(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
 
-    assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getACL(mockPath))
+    assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getAcl(mockPath))
   }
 
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)

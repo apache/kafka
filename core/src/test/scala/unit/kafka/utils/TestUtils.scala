@@ -1153,7 +1153,7 @@ object TestUtils extends Logging {
         // usersWithAccess have ALL access to path. For paths that are
         // not sensitive, world has READ access.
         val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
-        val acls = zkClient.getACL(path)
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)
         acls.foreach(acl => isAclSecure(acl, sensitive))
       }
@@ -1167,7 +1167,7 @@ object TestUtils extends Logging {
   def verifyUnsecureZkAcls(zkClient: KafkaZkClient) {
     secureZkPaths(zkClient).foreach(path => {
       if (zkClient.pathExists(path)) {
-        val acls = zkClient.getACL(path)
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", 1, acls.size)
         acls.foreach(isAclUnsecure)
       }

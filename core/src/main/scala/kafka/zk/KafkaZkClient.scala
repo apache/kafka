@@ -1447,7 +1447,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * @param path the given path for the node
     * @return the ACL array of the given node.
     */
-  def getACL(path: String): Seq[ACL] = {
+  def getAcl(path: String): Seq[ACL] = {
     val getAclRequest = GetAclRequest(path)
     val getAclResponse = retryRequestUntilConnected(getAclRequest)
     getAclResponse.resultCode match {
@@ -1462,7 +1462,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * @param acl the given acl for the node
     * @param zkVersion the given zk version of the node
     */
-  def setACL(path: String, acl: Seq[ACL], zkVersion: Int): Unit = {
+  def setAcl(path: String, acl: Seq[ACL], zkVersion: Int): Unit = {
     val setAclRequest = SetAclRequest(path, acl, zkVersion)
     val setAclResponse = retryRequestUntilConnected(setAclRequest)
     setAclResponse.maybeThrow
