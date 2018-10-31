@@ -238,7 +238,7 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
-        this(topology.internalTopologyBuilder, new StreamsConfig(config), initialWallClockTimeMs);
+        this(topology.internalTopologyBuilder, new QuietStreamsConfig(config), initialWallClockTimeMs);
     }
 
     /**
