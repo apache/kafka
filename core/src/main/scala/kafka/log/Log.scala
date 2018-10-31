@@ -367,13 +367,13 @@ class Log(@volatile var dir: File,
       if (!file.canRead)
         throw new IOException(s"Could not read file $file")
       val filename = file.getName
-      if (filename.endsWith(DeletedFileSuffix)) {
+      if (Log.isDeletedFile(file)) {
         debug(s"Deleting stray temporary file ${file.getAbsolutePath}")
         Files.deleteIfExists(file.toPath)
-      } else if (filename.endsWith(CleanedFileSuffix)) {
+      } else if (Log.isCleanedFile(file)) {
         minCleanedFileOffset = Math.min(offsetFromFileName(filename), minCleanedFileOffset)
         cleanFiles += file
-      } else if (filename.endsWith(SwapFileSuffix)) {
+      } else if (Log.isSwapFile(file)) {
         // we crashed in the middle of a swap operation, to recover:
         // if a log, delete the index files, complete the swap operation later
         // if an index just delete the index files, they will be rebuilt
@@ -523,14 +523,14 @@ class Log(@volatile var dir: File,
     // Now do a second pass and load all the log and index files.
     // We might encounter legacy log segments with offset overflow (KAFKA-6264). We need to split such segments. When
     // this happens, restart loading segment files from scratch.
-    retryOnOffsetOverflow(true, {
+    retryOnRecoverableLogException {
       // In case we encounter a segment with offset overflow, the retry logic will split it after which we need to retry
       // loading of segments. In that case, we also need to close all segments that could have been left open in previous
       // call to loadSegmentFiles().
       logSegments.foreach(_.close())
       segments.clear()
       loadSegmentFiles()
-    })
+    }
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
@@ -548,14 +548,15 @@ class Log(@volatile var dir: File,
         preallocate = config.preallocate))
       0
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
-      val nextOffset = retryOnOffsetOverflow(false, {
+      val nextOffset = retryOnRecoverableLogException {
         recoverLog()
-      })
-
+      }
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
-    } else 0
+    } else {
+      0
+    }
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -1923,28 +1924,47 @@ class Log(@volatile var dir: File,
     }
   }
 
-  private[log] def retryOnOffsetOverflow[T](loadingSegments: Boolean, fn: => T): T = {
-    def truncateSegmentsAbove(segment: LogSegment): Unit = {
-      for (file <- dir.listFiles.sortBy(_.getName) if file.isFile && isLogFile(file)) {
-        val baseOffset = offsetFromFile(file)
-        if (baseOffset >= segment.baseOffset)
-          file.delete()
+  private[log] def retryOnRecoverableLogException[T](fn: => T): T = {
+    // Truncate all segments with baseOffset greater than or equal to the given offset. This method should closely
+    // follow the implementation in truncateTo, with the exception that it only updates on-disk state and `segments`
+    // collection.
+    def truncateSegmentsFrom(offset: Long): Unit = {
+      val logFiles =
+        for (file <- dir.listFiles.sortBy(_.getName) if file.isFile && isLogFile(file))
+          yield (offsetFromFile(file), file)
+      val (segmentsToRetain, segmentsToDelete) = logFiles.sortBy(_._1).partition(_._1 < offset)
+
+      for (segment <- segmentsToDelete) {
+        val baseOffset = segment._1
+        val segmentFile = segment._2
+        if (baseOffset >= offset) {
+          segmentFile.delete()
+          segments.remove(baseOffset)
+        }
       }
+      _leaderEpochCache.truncateFromEnd(offset)
+      loadProducerState(offset, reloadFromCleanShutdown = false)
+
+      if (segmentsToRetain.isEmpty)
+        addSegment(LogSegment.open(dir = dir,
+          baseOffset = segmentsToDelete.head._1,
+          config,
+          time = time,
+          fileAlreadyExists = false,
+          initFileSize = this.initFileSize,
+          preallocate = config.preallocate))
     }
 
     while (true) {
       try {
         return fn
       } catch {
-        case e: LogSegmentOffsetOverflowException =>
-          info(s"Caught segment overflow error: ${e.getMessage}. Split segment and retry.")
+        case e: LogSegmentOffsetOverflowException if isLogFile(e.segment.log.file()) =>
+          info(s"Caught segment overflow error. Split segment and retry.", e)
           splitOverflowedSegment(e.segment)
-        case e: LogSegmentInvalidOffsetException =>
-          info(s"Caught invalid offset error: ${e.getMessage}. Truncate segment and retry.")
-          if (loadingSegments)
-            truncateSegmentsAbove(e.segment)
-          else
-            truncateTo(e.segment.baseOffset)
+        case e: LogSegmentInvalidOffsetException if isLogFile(e.segment.log.file()) =>
+          warn(s"Out of order offsets detected, truncating log", e)
+          truncateSegmentsFrom(e.segment.baseOffset)
       }
     }
     throw new IllegalStateException()
@@ -2232,7 +2252,8 @@ object Log {
     filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix) || filename.endsWith(TxnIndexFileSuffix)
   }
 
-  private def isLogFile(file: File): Boolean =
-    file.getPath.endsWith(LogFileSuffix)
-
+  private def isLogFile(file: File): Boolean = file.getPath.endsWith(LogFileSuffix)
+  private def isSwapFile(file: File): Boolean = file.getPath.endsWith(SwapFileSuffix)
+  private def isDeletedFile(file: File): Boolean = file.getPath.endsWith(DeletedFileSuffix)
+  private def isCleanedFile(file: File): Boolean = file.getPath.endsWith(CleanedFileSuffix)
 }

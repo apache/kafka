@@ -2225,6 +2225,22 @@ class LogTest {
     assertEquals(segmentWithOutOfOrderOffsets.baseOffset, reopenedLog.logEndOffset)
   }
 
+  @Test
+  def testTruncateFirstSegmentOnOutOfOrderOffsets(): Unit = {
+    // create a log such that one log segment has offsets that overflow, and call the split API on that segment
+    val logConfig = LogTest.createLogConfig(indexIntervalBytes = 1, fileDeleteDelayMs = 1000)
+    val (log, segmentWithOutOfOrderOffsets) = createLogWithOutOfOrderOffsets(logConfig)
+    log.onHighWatermarkIncremented(segmentWithOutOfOrderOffsets.baseOffset)
+    log.maybeIncrementLogStartOffset(segmentWithOutOfOrderOffsets.baseOffset)
+    log.deleteOldSegments()
+    assertEquals(segmentWithOutOfOrderOffsets.baseOffset, log.logSegments.head.baseOffset)
+
+    val reopenedLog = createLog(logDir, logConfig, recoveryPoint = 0)
+    assertFalse(LogTest.hasOutOfOrderOffsets(reopenedLog))
+    assertEquals(segmentWithOutOfOrderOffsets.baseOffset, reopenedLog.logStartOffset)
+    assertEquals(segmentWithOutOfOrderOffsets.baseOffset, reopenedLog.logEndOffset)
+  }
+
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
     records.foreach(segment.append _)

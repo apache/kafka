@@ -132,7 +132,7 @@ class LogSegment private[log] (val log: FileRecords,
       if (physicalPosition == 0)
         rollingBasedTimestamp = Some(largestTimestamp)
 
-      ensureOffsetInRange(largestOffset, offsetIndex.lastOffset, timeIndex.lastEntry.offset)
+      ensureOffsetInRange(largestOffset)
 
       // append the messages
       val appendedBytes = log.append(records)
@@ -152,10 +152,12 @@ class LogSegment private[log] (val log: FileRecords,
     }
   }
 
-  private def ensureOffsetInRange(offset: Long, offsetIndexMax: Long, timeIndexMax: Long): Unit = {
+  private def ensureOffsetInRange(offset: Long): Unit = {
     if (!canConvertToRelativeOffset(offset))
       throw new LogSegmentOffsetOverflowException(this, offset)
-    if (offset < offsetIndexMax || offset < timeIndexMax)
+    if (offsetIndex.entries > 0 && offset <= offsetIndex.lastOffset)
+      throw new LogSegmentInvalidOffsetException(this, offset)
+    if (timeIndex.entries > 0 && offset <= timeIndex.lastEntry.offset)
       throw new LogSegmentInvalidOffsetException(this, offset)
   }
 
@@ -342,7 +344,7 @@ class LogSegment private[log] (val log: FileRecords,
     try {
       for (batch <- log.batches.asScala) {
         batch.ensureValid()
-        ensureOffsetInRange(batch.lastOffset, offsetIndex.lastOffset, timeIndex.lastEntry.offset)
+        ensureOffsetInRange(batch.lastOffset)
 
         // The max timestamp is exposed at the batch level, so no need to iterate the records
         if (batch.maxTimestamp > maxTimestampSoFar) {
