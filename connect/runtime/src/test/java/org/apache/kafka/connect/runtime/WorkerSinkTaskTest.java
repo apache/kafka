@@ -162,12 +162,11 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState) {
-        workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-                keyConverter, valueConverter, headerConverter,
-                transformationChain, pluginLoader, time,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        workerTask = new WorkerSinkTask(
+            taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
+            keyConverter, valueConverter, headerConverter,
+            transformationChain, consumer, pluginLoader, time,
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
     @After
@@ -1167,7 +1166,6 @@ public class WorkerSinkTaskTest {
 
         createTask(TargetState.PAUSED);
 
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -1255,7 +1253,6 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectInitializeTask() throws Exception {
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 

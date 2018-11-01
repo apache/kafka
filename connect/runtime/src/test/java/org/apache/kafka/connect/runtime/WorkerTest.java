@@ -17,7 +17,9 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
@@ -89,6 +91,33 @@ public class WorkerTest extends ThreadedTest {
 
     private WorkerConfig config;
     private Worker worker;
+
+    private final Map<String, String> defaultProducerConfigs = defaultProducerConfigs();
+
+    private Map<String, String> defaultProducerConfigs() {
+        Map<String, String> prodConfigs = new HashMap<>();
+        prodConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        prodConfigs.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        prodConfigs.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
+        prodConfigs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        prodConfigs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.toString(Long.MAX_VALUE));
+        prodConfigs.put(ProducerConfig.ACKS_CONFIG, "all");
+        prodConfigs.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
+        prodConfigs.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        return prodConfigs;
+    }
+
+    private final Map<String, String> defaultConsumerConfigs = defaultConsumerConfigs();
+
+    private Map<String, String> defaultConsumerConfigs() {
+        Map<String, String> consumerConfigs = new HashMap<>();
+        consumerConfigs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        consumerConfigs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
+        consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerConfigs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        consumerConfigs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
+        return consumerConfigs;
+    }
 
     @Mock
     private Plugins plugins;
@@ -804,6 +833,63 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.verifyAll();
     }
 
+    @Test
+    public void testProducerConfigsWithoutOverrides() {
+        expectConverters();
+        expectStartStorage();
+        PowerMock.replayAll();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
+        assertEquals(defaultProducerConfigs, worker.producerConfigs(EasyMock.mock(ConnectorConfig.class), new ConnectorTaskId("test", 1)));
+    }
+
+    @Test
+    public void testProducerConfigsWithOverrides() {
+        Map workerProps = config.originals();
+        workerProps.put("producer.acks", "-1");
+        workerProps.put("producer.linger.ms", "1000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(workerProps);
+
+        expectConverters(JsonConverter.class, false, configWithOverrides);
+        expectStartStorage();
+        PowerMock.replayAll();
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, configWithOverrides, offsetBackingStore);
+
+        Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
+        expectedConfigs.put("acks", "-1");
+        expectedConfigs.put("linger.ms", "1000");
+        assertEquals(expectedConfigs, worker.producerConfigs(EasyMock.mock(ConnectorConfig.class), new ConnectorTaskId("test", 1)));
+    }
+
+    @Test
+    public void testConsumerConfigsWithoutOverrides() {
+        expectConverters();
+        expectStartStorage();
+        PowerMock.replayAll();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore);
+        Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
+        expectedConfigs.put("group.id", "connect-test");
+        assertEquals(expectedConfigs, worker.consumerConfigs(EasyMock.mock(ConnectorConfig.class), new ConnectorTaskId("test", 1)));
+    }
+
+    @Test
+    public void testConsumerConfigsWithOverrides() {
+        Map workerProps = config.originals();
+        workerProps.put("consumer.auto.offset.reset", "latest");
+        workerProps.put("consumer.max.poll.records", "1000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(workerProps);
+
+        expectConverters(JsonConverter.class, false, configWithOverrides);
+        expectStartStorage();
+        PowerMock.replayAll();
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, configWithOverrides, offsetBackingStore);
+        Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
+        expectedConfigs.put("group.id", "connect-test");
+        expectedConfigs.put("auto.offset.reset", "latest");
+        expectedConfigs.put("max.poll.records", "1000");
+        assertEquals(expectedConfigs, worker.consumerConfigs(EasyMock.mock(ConnectorConfig.class), new ConnectorTaskId("test", 1)));
+    }
+
     private void assertStatistics(Worker worker, int connectors, int tasks) {
         MetricGroup workerMetrics = worker.workerMetricsGroup().metricGroup();
         assertEquals(connectors, MockConnectMetrics.currentMetricValueAsDouble(worker.metrics(), workerMetrics, "connector-count"), 0.0001d);
@@ -852,15 +938,12 @@ public class WorkerTest extends ThreadedTest {
     }
 
     private void expectConverters() {
-        expectConverters(JsonConverter.class, false);
+        expectConverters(JsonConverter.class, false, config);
     }
 
-    private void expectConverters(Boolean expectDefaultConverters) {
-        expectConverters(JsonConverter.class, expectDefaultConverters);
-    }
 
     @SuppressWarnings("deprecation")
-    private void expectConverters(Class<? extends Converter> converterClass, Boolean expectDefaultConverters) {
+    private void expectConverters(Class<? extends Converter> converterClass, Boolean expectDefaultConverters, WorkerConfig config) {
         // As default converters are instantiated when a task starts, they are expected only if the `startTask` method is called
         if (expectDefaultConverters) {
 

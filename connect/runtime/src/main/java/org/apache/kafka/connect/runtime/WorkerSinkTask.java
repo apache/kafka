@@ -102,10 +102,10 @@ class WorkerSinkTask extends WorkerTask {
                           Converter valueConverter,
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
+                          KafkaConsumer<byte[], byte[]> consumer,
                           ClassLoader loader,
                           Time time,
-                          RetryWithToleranceOperator retryWithToleranceOperator,
-                          KafkaConsumer<byte[], byte[]> consumer) {
+                          RetryWithToleranceOperator retryWithToleranceOperator) {
         super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
