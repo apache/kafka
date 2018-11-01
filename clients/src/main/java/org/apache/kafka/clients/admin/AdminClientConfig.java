@@ -185,6 +185,20 @@ public class AdminClientConfig extends AbstractConfig {
         return CONFIG.names();
     }
 
+    /**
+     * Return whether the given property name is a known configuration. This will consider valid any property that can be passed to
+     * instances of extensions, such as the {@link #METRIC_REPORTER_CLASSES_CONFIG metrics reporter}.
+     *
+     * @param name the property name
+     * @return true if the supplied name matches a known property, or false if it is unknown
+     */
+    public static boolean isKnownConfig(String name) {
+        if (name == null) {
+            return false;
+        }
+        return configNames().contains(name) || name.startsWith(METRIC_REPORTER_CLASSES_CONFIG);
+    }
+
     public static void main(String[] args) {
         System.out.println(CONFIG.toHtmlTable());
     }

@@ -80,7 +80,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                                                          ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
 
-        Map<String, Object> adminConfig = ConnectUtils.retainConfigs(workerConfig.originals(), AdminClientConfig.configNames());
+        Map<String, Object> adminConfig = ConnectUtils.retainConfigs(workerConfig.originals(), AdminClientConfig::isKnownConfig);
         try (AdminClient admin = AdminClient.create(adminConfig)) {
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
@@ -95,7 +95,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
             }
         }
 
-        ConnectUtils.retainConfigs(producerProps, ProducerConfig.configNames());
+        ConnectUtils.retainConfigs(producerProps, ProducerConfig::isKnownConfig);
         KafkaProducer<byte[], byte[]> dlqProducer = new KafkaProducer<>(producerProps);
         return new DeadLetterQueueReporter(dlqProducer, sinkConfig, id, errorHandlingMetrics);
     }

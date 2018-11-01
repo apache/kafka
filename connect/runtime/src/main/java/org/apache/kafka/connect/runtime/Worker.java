@@ -142,9 +142,6 @@ public class Worker {
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
-        // Prevent logging unused config warnings
-        ConnectUtils.retainConfigs(producerProps, ProducerConfig.configNames());
-
     }
 
     private WorkerConfigTransformer initConfigTransformer() {

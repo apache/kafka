@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -131,13 +132,13 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.RETRIES_CONFIG, 0); // we handle retries in this class
         // Prevent logging unused config warnings
-        ConnectUtils.retainConfigs(producerProps, ProducerConfig.configNames());
+        ConnectUtils.retainConfigs(producerProps, ProducerConfig::isKnownConfig);
 
         Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         // Prevent logging unused config warnings
-        ConnectUtils.retainConfigs(consumerProps, ConsumerConfig.configNames());
+        ConnectUtils.retainConfigs(consumerProps, ConsumerConfig::isKnownConfig);
 
         Map<String, Object> adminProps = new HashMap<>(originals);
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
@@ -146,12 +147,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
                 replicationFactor(config.getShort(DistributedConfig.STATUS_STORAGE_REPLICATION_FACTOR_CONFIG)).
                 build();
 
-        Callback<ConsumerRecord<String, byte[]>> readCallback = new Callback<ConsumerRecord<String, byte[]>>() {
-            @Override
-            public void onCompletion(Throwable error, ConsumerRecord<String, byte[]> record) {
-                read(record);
-            }
-        };
+        Callback<ConsumerRecord<String, byte[]>> readCallback = (error, record) -> read(record);
         this.kafkaLog = createKafkaBasedLog(topic, producerProps, consumerProps, readCallback, topicDescription, adminProps);
     }
 

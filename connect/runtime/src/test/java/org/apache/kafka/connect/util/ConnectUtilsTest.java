@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.runtime.MockConnectMetrics.MockMetricsReporter;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -72,9 +73,11 @@ public class ConnectUtilsTest {
         configs.put(AdminClientConfig.CLIENT_ID_CONFIG, "clientId");
         configs.put(AdminClientConfig.RETRIES_CONFIG, "1");
         configs.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100");
+        configs.put(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
+        configs.put(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG + ".custom", "customValue");
         configs.put("some.other.property", "value");
         configs.put("other.property", "value2");
-        Map<String, Object> filtered = ConnectUtils.retainConfigs(new HashMap<>(configs), AdminClientConfig.configNames());
+        Map<String, Object> filtered = ConnectUtils.retainConfigs(new HashMap<>(configs), AdminClientConfig::isKnownConfig);
         assertEquals(configs.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                      filtered.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG));
         assertEquals(configs.get(AdminClientConfig.CLIENT_ID_CONFIG),
@@ -83,6 +86,10 @@ public class ConnectUtilsTest {
                      filtered.get(AdminClientConfig.RETRIES_CONFIG));
         assertEquals(configs.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG),
                      filtered.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG));
+        assertEquals(configs.get(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG),
+                     filtered.get(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG));
+        assertEquals(configs.get(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG + ".custom"),
+                     filtered.get(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG + ".custom"));
         assertFalse(filtered.containsKey("some.other.property"));
         assertFalse(filtered.containsKey("other.property"));
         assertEquals(configs.size() - 2, filtered.size());
