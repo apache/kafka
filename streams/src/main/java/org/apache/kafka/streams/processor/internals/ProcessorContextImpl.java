@@ -20,12 +20,15 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
@@ -63,6 +66,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
      */
+    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
@@ -71,7 +75,65 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            return global;
+            return new KeyValueStore() {
+                private final KeyValueStore underlying = (KeyValueStore) global;
+
+                @Override public Object get(final Object key) {
+                    return underlying.get(key);
+                }
+
+                @Override public KeyValueIterator range(final Object from, final Object to) {
+                    return underlying.range(from, to);
+                }
+
+                @Override public KeyValueIterator all() {
+                    return underlying.all();
+                }
+
+                @Override public long approximateNumEntries() {
+                    return underlying.approximateNumEntries();
+                }
+
+                @Override public String name() {
+                    return underlying.name();
+                }
+
+                @Override public void init(final ProcessorContext context, final StateStore root) {
+                    underlying.init(context, root);
+                }
+
+                @Override public void flush() {
+                    underlying.flush();
+                }
+
+                @Override public void close() {
+                    underlying.close();
+                }
+
+                @Override public boolean persistent() {
+                    return underlying.persistent();
+                }
+
+                @Override public boolean isOpen() {
+                    return underlying.isOpen();
+                }
+
+                @Override public void put(final Object key, final Object value) {
+                    throw new UnsupportedOperationException("Global store is read only");
+                }
+
+                @Override public Object putIfAbsent(final Object key, final Object value) {
+                    throw new UnsupportedOperationException("Global store is read only");
+                }
+
+                @Override public void putAll(final List entries) {
+                    throw new UnsupportedOperationException("Global store is read only");
+                }
+
+                @Override public Object delete(final Object key) {
+                    throw new UnsupportedOperationException("Global store is read only");
+                }
+            };
         }
 
         if (!currentNode().stateStores.contains(name)) {
