@@ -22,6 +22,7 @@ import java.lang.{Long => JLong}
 import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
+import java.util.Optional
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentNavigableMap, ConcurrentSkipListMap, TimeUnit}
 import java.util.regex.Pattern
@@ -36,6 +37,7 @@ import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ListOffsetRequest
@@ -1263,7 +1265,7 @@ class Log(@volatile var dir: File,
    * @return The offset of the first message whose timestamp is greater than or equals to the given timestamp.
    *         None if no such message is found.
    */
-  def fetchOffsetsByTimestamp(targetTimestamp: Long): Option[TimestampOffset] = {
+  def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1278,10 +1280,24 @@ class Log(@volatile var dir: File,
       // constant time access while being safe to use with concurrent collections unlike `toArray`.
       val segmentsCopy = logSegments.toBuffer
       // For the earliest and latest, we do not need to return the timestamp.
-      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logStartOffset))
-      else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-        return Some(TimestampOffset(RecordBatch.NO_TIMESTAMP, logEndOffset))
+      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP) {
+        // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
+        // it may not be true following a message format version bump as the epoch will not be available for
+        // log entries written in the older format.
+        val earliestEpochEntry = leaderEpochCache.earliestEntry
+        val epochOpt = earliestEpochEntry match {
+          case Some(entry) if entry.startOffset <= logStartOffset => Optional.of[Integer](entry.epoch)
+          case _ => Optional.empty[Integer]()
+        }
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
+      } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
+        val latestEpoch = leaderEpochCache.latestEpoch
+        val epochOpt = if (latestEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+          Optional.empty[Integer]()
+        else
+          Optional.of[Integer](latestEpoch)
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOpt))
+      }
 
       val targetSeg = {
         // Get all the segments whose largest timestamp is smaller than target timestamp

@@ -1214,16 +1214,27 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     //  topic3Partition0 -> 80,
     //  topic3Partition1 -> 100)
     val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
-    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).offset())
-    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).timestamp())
-    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).offset())
-    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).timestamp())
+
+    val timestampTopic1P0 = timestampOffsets.get(new TopicPartition(topic1, 0))
+    assertEquals(0, timestampTopic1P0.offset)
+    assertEquals(0, timestampTopic1P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P0.leaderEpoch)
+
+    val timestampTopic1P1 = timestampOffsets.get(new TopicPartition(topic1, 1))
+    assertEquals(20, timestampTopic1P1.offset)
+    assertEquals(20, timestampTopic1P1.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
+
     assertEquals("null should be returned when message format is 0.9.0",
       null, timestampOffsets.get(new TopicPartition(topic2, 0)))
     assertEquals("null should be returned when message format is 0.9.0",
       null, timestampOffsets.get(new TopicPartition(topic2, 1)))
-    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).offset())
-    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).timestamp())
+
+    val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
+    assertEquals(80, timestampTopic3P0.offset)
+    assertEquals(80, timestampTopic3P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
+
     assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
