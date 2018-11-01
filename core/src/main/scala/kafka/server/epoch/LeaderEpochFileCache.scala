@@ -95,11 +95,11 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   /**
-   * Return the earliest epoch. This should be the epoch corresponding to the log start offset.
+   * Get the earliest cached entry if one exists.
    */
-  def earliestEpoch: Int = {
+  def earliestEntry: Option[EpochEntry] = {
     inReadLock(lock) {
-      if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.head.epoch
+      epochs.headOption
     }
   }
 

@@ -1266,13 +1266,6 @@ class Log(@volatile var dir: File,
    *         None if no such message is found.
    */
   def fetchOffsetByTimestamp(targetTimestamp: Long): Option[TimestampAndOffset] = {
-    def maybeLeaderEpoch(leaderEpoch: Int): Optional[Integer] = {
-      if (leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-        Optional.empty()
-      else
-        Optional.of(leaderEpoch)
-    }
-
     maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
@@ -1287,12 +1280,24 @@ class Log(@volatile var dir: File,
       // constant time access while being safe to use with concurrent collections unlike `toArray`.
       val segmentsCopy = logSegments.toBuffer
       // For the earliest and latest, we do not need to return the timestamp.
-      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset,
-          maybeLeaderEpoch(leaderEpochCache.earliestEpoch)))
-      else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset,
-          maybeLeaderEpoch(leaderEpochCache.latestEpoch)))
+      if (targetTimestamp == ListOffsetRequest.EARLIEST_TIMESTAMP) {
+        // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
+        // it may not be true following a message format version bump as the epoch will not be available for
+        // log entries written in the older format.
+        val earliestEpochEntry = leaderEpochCache.earliestEntry
+        val epochOpt = earliestEpochEntry match {
+          case Some(entry) if entry.startOffset <= logStartOffset => Optional.of[Integer](entry.epoch)
+          case _ => Optional.empty[Integer]()
+        }
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
+      } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
+        val latestEpoch = leaderEpochCache.latestEpoch
+        val epochOpt = if (latestEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
+          Optional.empty[Integer]()
+        else
+          Optional.of[Integer](latestEpoch)
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOpt))
+      }
 
       val targetSeg = {
         // Get all the segments whose largest timestamp is smaller than target timestamp
