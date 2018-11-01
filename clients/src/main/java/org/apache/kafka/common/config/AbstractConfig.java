@@ -284,7 +284,7 @@ public class AbstractConfig {
      */
     public void logUnused() {
         for (String key : unused())
-            log.warn("The configuration '{}' was supplied but isn't a known config.", key);
+            log.debug("The configuration '{}' was supplied but isn't a known config.", key);
     }
 
     /**
