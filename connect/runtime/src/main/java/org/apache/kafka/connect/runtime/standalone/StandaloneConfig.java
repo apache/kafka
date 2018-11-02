@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
+import java.util.Set;
 
 public class StandaloneConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
@@ -40,5 +41,9 @@ public class StandaloneConfig extends WorkerConfig {
 
     public StandaloneConfig(Map<String, String> props) {
         super(CONFIG, props);
+    }
+
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 }

@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -67,17 +68,17 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
 
         data = new HashMap<>();
 
-        Map<String, Object> originals = config.originals();
-        Map<String, Object> producerProps = new HashMap<>(originals);
+        Map<String, Object> producerProps = ConnectUtils.retainProducerConfigs(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
+        producerProps = ConnectUtils.retainProducerConfigs(producerProps);
 
-        Map<String, Object> consumerProps = new HashMap<>(originals);
+        Map<String, Object> consumerProps = ConnectUtils.retainConsumerConfigs(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        Map<String, Object> adminProps = new HashMap<>(originals);
+        Map<String, Object> adminProps = ConnectUtils.retainAdminClientConfigs(config.originals());
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).

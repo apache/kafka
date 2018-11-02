@@ -39,6 +39,7 @@ import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.KafkaBasedLog;
 import org.apache.kafka.connect.util.TopicAdmin;
@@ -411,16 +412,16 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
 
     // package private for testing
     KafkaBasedLog<String, byte[]> setupAndCreateKafkaBasedLog(String topic, final WorkerConfig config) {
-        Map<String, Object> originals = config.originals();
-        Map<String, Object> producerProps = new HashMap<>(originals);
+        Map<String, Object> producerProps = ConnectUtils.retainProducerConfigs(config.originals());
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
-        Map<String, Object> consumerProps = new HashMap<>(originals);
+
+        Map<String, Object> consumerProps = ConnectUtils.retainConsumerConfigs(config.originals());
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        Map<String, Object> adminProps = new HashMap<>(originals);
+        Map<String, Object> adminProps = ConnectUtils.retainAdminClientConfigs(config.originals());
         NewTopic topicDescription = TopicAdmin.defineTopic(topic).
                 compacted().
                 partitions(1).

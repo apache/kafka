@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
+import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +78,8 @@ public class DeadLetterQueueReporter implements ErrorReporter {
                                                          ErrorHandlingMetrics errorHandlingMetrics) {
         String topic = sinkConfig.dlqTopicName();
 
-        try (AdminClient admin = AdminClient.create(workerConfig.originals())) {
+        Map<String, Object> adminProps = ConnectUtils.retainProducerConfigs(workerConfig.originals());
+        try (AdminClient admin = AdminClient.create(adminProps)) {
             if (!admin.listTopics().names().get().contains(topic)) {
                 log.error("Topic {} doesn't exist. Will attempt to create topic.", topic);
                 NewTopic schemaTopicRequest = new NewTopic(topic, DLQ_NUM_DESIRED_PARTITIONS, sinkConfig.dlqTopicReplicationFactor());

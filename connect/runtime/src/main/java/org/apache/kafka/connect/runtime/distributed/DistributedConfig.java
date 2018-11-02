@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
+import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -270,6 +271,10 @@ public class DistributedConfig extends WorkerConfig {
 
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
+    }
+
+    public static Set<String> configNames() {
+        return CONFIG.names();
     }
 
     public static void main(String[] args) {
