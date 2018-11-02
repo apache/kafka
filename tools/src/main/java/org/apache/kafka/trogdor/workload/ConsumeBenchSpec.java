@@ -63,8 +63,9 @@ import java.util.HashSet;
  *
  * This specification supports the spawning of multiple consumers in the single Trogdor worker agent.
  * The "consumeCount" field denotes how many consumers should be spawned for this spec.
- * It is worth nothing that the "targetMessagesPerSec" and "maxMessages" fields apply for every consumer individually,
- * whereas "activeTopics" will get assigned to every consumer in a round-robin fashion
+ * It is worth nothing that the "targetMessagesPerSec", "maxMessages" and "activeTopics" fields apply for every consumer individually.
+ * If a consumer group is not specified, every consumer is assigned a different, random group. When specified, all consumers use the same group.
+ * Specifying partitions, a consumer group and multiple consumers will result in an Exception
  *
  * An example JSON representation which will result in a consumer that is part of the consumer group "cg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
