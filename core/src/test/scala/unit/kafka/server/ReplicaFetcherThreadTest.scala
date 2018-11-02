@@ -799,7 +799,8 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(props)
     val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
 
-    expect(mockBlockingSend.close()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.initiateShutdown()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
     replay(mockBlockingSend)
 
     val thread = new ReplicaFetcherThread(
@@ -812,6 +813,7 @@ class ReplicaFetcherThreadTest {
       time = new SystemTime(),
       quota = null,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
+    thread.start()
 
     val previousLevel = LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
     val logCaptureAppender = LogCaptureAppender.createAndRegister()
@@ -819,11 +821,18 @@ class ReplicaFetcherThreadTest {
     try {
       thread.initiateShutdown()
 
-      val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.DEBUG
-        && e.getRenderedMessage.contains(s"Fail to close leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
+      val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
+        && e.getRenderedMessage.contains(s"Failed to initiate shutdown of leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
         && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new IllegalArgumentException().getClass.getName))
+        && e.getThrowableInformation.getThrowable.getClass == classOf[IllegalArgumentException])
       assertTrue(event.isDefined)
+
+      thread.awaitShutdown()
+      val event2 = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
+        && e.getRenderedMessage.contains(s"Failed to close leader endpoint $mockBlockingSend after shutting down replica fetcher thread shutdown")
+        && e.getThrowableInformation != null
+        && e.getThrowableInformation.getThrowable.getClass == classOf[IllegalStateException])
+      assertTrue(event2.isDefined)
 
       verify(mockBlockingSend)
     } finally {

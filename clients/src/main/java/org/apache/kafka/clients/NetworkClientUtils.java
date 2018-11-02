@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * Provides additional utilities for {@link NetworkClient} (e.g. to implement blocking behaviour).
@@ -88,8 +89,23 @@ public final class NetworkClientUtils {
      * care.
      */
     public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time) throws IOException {
+        return sendAndReceive(client, request, time, () -> false);
+    }
+
+    /**
+     * Invokes `client.send` followed by 1 or more `client.poll` invocations until a response is received or a
+     * disconnection happens (which can happen for a number of reasons including a request timeout). The polling
+     * loop may be stopped from another thread by setting `shutdownInitiated` flag.
+     *
+     * In case of a disconnection, an `IOException` is thrown.
+     *
+     * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
+     * care.
+     */
+    public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time,
+                                                Supplier<Boolean> shutdownInitiated) throws IOException {
         client.send(request, time.milliseconds());
-        while (true) {
+        while (!shutdownInitiated.get()) {
             List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
             for (ClientResponse response : responses) {
                 if (response.requestHeader().correlationId() == request.correlationId()) {
@@ -103,5 +119,6 @@ public final class NetworkClientUtils {
                 }
             }
         }
+        return null;
     }
 }

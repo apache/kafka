@@ -17,6 +17,8 @@
 package kafka.server
 
 import java.net.SocketTimeoutException
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.function.Supplier
 
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients._
@@ -35,6 +37,8 @@ trait BlockingSend {
 
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
+  def initiateShutdown()
+
   def close()
 }
 
@@ -48,6 +52,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
+  private val shutdownInitiated = new AtomicBoolean
 
   private val networkClient = {
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
@@ -95,7 +100,10 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       else {
         val clientRequest = networkClient.newClientRequest(sourceBroker.id.toString, requestBuilder,
           time.milliseconds(), true)
-        NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
+        val shutdownSupplier = new Supplier[java.lang.Boolean] {
+          override def get(): java.lang.Boolean = shutdownInitiated.get()
+        }
+        NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time, shutdownSupplier)
       }
     }
     catch {
@@ -103,6 +111,11 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
         networkClient.close(sourceBroker.id.toString)
         throw e
     }
+  }
+
+  override def initiateShutdown(): Unit = {
+    shutdownInitiated.set(true)
+    networkClient.wakeup()
   }
 
   def close(): Unit = {
