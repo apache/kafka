@@ -895,7 +895,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
                     this.fetchSize, Optional.empty()));
 
-                log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
+                log.warn("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
             }
         }
