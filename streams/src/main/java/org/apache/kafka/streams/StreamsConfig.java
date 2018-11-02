@@ -893,20 +893,20 @@ public class StreamsConfig extends AbstractConfig {
 
             if (maxInFlightRequests != null) {
                 final int maxInFlightRequestsAsInteger;
-                if (maxInFlightRequests instanceof String) {
+                if (maxInFlightRequests instanceof Integer) {
+                    maxInFlightRequestsAsInteger = (Integer) maxInFlightRequests;
+                } else if (maxInFlightRequests instanceof String) {
                     try {
-                        maxInFlightRequestsAsInteger = Integer.parseInt((String) maxInFlightRequests);
+                        maxInFlightRequestsAsInteger = Integer.parseInt(((String) maxInFlightRequests).trim());
                     } catch (final NumberFormatException e) {
-                        throw new ConfigException("Config value for " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " could not be parsed into an integer");
+                        throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "String value could not be parsed as 32-bit integer");
                     }
-                } else if (maxInFlightRequests instanceof Number) {
-                    maxInFlightRequestsAsInteger = ((Number) maxInFlightRequests).intValue();
                 } else {
-                    throw new ConfigException("Config value (with type " + maxInFlightRequests.getClass().getName() + " for " + ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " could not be converted into an int.");
+                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
                 }
 
                 if (5 < maxInFlightRequestsAsInteger) {
-                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + " can't exceed 5 when using the idempotent producer");
+                    throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
                 }
             }
         }

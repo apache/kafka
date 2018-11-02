@@ -589,7 +589,7 @@ public class StreamsConfigTest {
             streamsConfig.getProducerConfigs("clientId");
             fail("Should throw ConfigException when ESO is enabled and maxInFlight requests exceeds 5");
         } catch (final ConfigException e) {
-            assertEquals("max.in.flight.requests.per.connection can't exceed 5 when using the idempotent producer", e.getMessage());
+            assertEquals("Invalid value 7 for configuration max.in.flight.requests.per.connection: Can't exceed 5 when exactly-once processing is enabled", e.getMessage());
         }
     }
 
@@ -610,7 +610,7 @@ public class StreamsConfigTest {
             new StreamsConfig(props).getProducerConfigs("clientId");
             fail("Should throw ConfigException when EOS is enabled and maxInFlight cannot be paresed into an integer");
         } catch (final ConfigException e) {
-            assertEquals("Config value for max.in.flight.requests.per.connection could not be parsed into an integer", e.getMessage());
+            assertEquals("Invalid value not-a-number for configuration max.in.flight.requests.per.connection: String value could not be parsed as 32-bit integer", e.getMessage());
         }
     }
 
