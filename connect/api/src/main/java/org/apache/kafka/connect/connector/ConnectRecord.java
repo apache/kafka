@@ -26,7 +26,7 @@ import java.util.Objects;
 /**
  * <p>
  * Base class for records containing data to be copied to/from Kafka. This corresponds closely to
- * Kafka's ProducerRecord and ConsumerRecord classes, and holds the data that may be used by both
+ * Kafka's {@link org.apache.kafka.clients.producer.ProducerRecord ProducerRecord} and {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} classes, and holds the data that may be used by both
  * sources and sinks (topic, kafkaPartition, key, value). Although both implementations include a
  * notion of offset, it is not included here because they differ in type.
  * </p>
