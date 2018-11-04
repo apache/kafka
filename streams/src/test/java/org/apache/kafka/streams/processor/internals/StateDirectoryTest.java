@@ -258,7 +258,7 @@ public class StateDirectoryTest {
                     put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
                 }
             }),
-            time);
+            time, true);
         final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
@@ -361,9 +361,7 @@ public class StateDirectoryTest {
     public void shouldNotCreateBaseDirectory() {
         initializeStateDirectory(false);
         assertFalse(stateDir.exists());
-        assertFalse(stateDir.isDirectory());
         assertFalse(appDir.exists());
-        assertFalse(appDir.isDirectory());
     }
 
     @Test
@@ -372,7 +370,6 @@ public class StateDirectoryTest {
         final TaskId taskId = new TaskId(0, 0);
         final File taskDirectory = directory.directoryForTask(taskId);
         assertFalse(taskDirectory.exists());
-        assertFalse(taskDirectory.isDirectory());
     }
 
     @Test
@@ -380,7 +377,6 @@ public class StateDirectoryTest {
         initializeStateDirectory(false);
         final File globalStateDir = directory.globalStateDir();
         assertFalse(globalStateDir.exists());
-        assertFalse(globalStateDir.isDirectory());
     }
 
     @Test

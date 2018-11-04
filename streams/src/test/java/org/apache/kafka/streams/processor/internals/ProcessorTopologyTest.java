@@ -39,6 +39,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -54,8 +55,10 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ProcessorTopologyTest {
 
@@ -365,6 +368,49 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, 10L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, 20L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, 30L);
+    }
+
+    @Test
+    public void testHasPersistentLocalStore() {
+        final String applicationId = "X";
+        final TopologyWrapper topology = new TopologyWrapper();
+        ProcessorTopology processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertFalse(processorTopology.hasPersistentLocalStore());
+
+        final String processor = "processor";
+        final StoreBuilder<KeyValueStore<String, String>> inMemoryStoreBuilder = Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("my-store"), Serdes.String(), Serdes.String());
+        topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
+                .addProcessor(processor, () -> new StatefulProcessor("my-store"), "source")
+                .addStateStore(inMemoryStoreBuilder, processor);
+        processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertFalse(processorTopology.hasPersistentLocalStore());
+
+        final StoreBuilder<KeyValueStore<String, String>> persistentStoreBuilder = Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore("my-store-1"), Serdes.String(), Serdes.String());
+        topology.addStateStore(persistentStoreBuilder, processor);
+        processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertTrue(processorTopology.hasPersistentLocalStore());
+    }
+
+    @Test
+    public void testHasPersistentGlobalStore() {
+        final String applicationId = "X";
+        final TopologyWrapper topology = new TopologyWrapper();
+        ProcessorTopology processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertFalse(processorTopology.hasPersistentGlobalStore());
+
+        String storeName = "my-store";
+        topology.addGlobalStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String()).withLoggingDisabled(),
+                "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor", define(new StatefulProcessor(storeName)));
+        processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertFalse(processorTopology.hasPersistentGlobalStore());
+
+        storeName = "my-store-1";
+        topology.addGlobalStore(Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.String(), Serdes.String()).withLoggingDisabled(),
+                "global-1", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic-1", "processor-1", define(new StatefulProcessor(storeName)));
+        processorTopology = topology.getInternalBuilder(applicationId).build();
+        assertTrue(processorTopology.hasPersistentGlobalStore());
     }
 
     private void assertNextOutputRecord(final String topic,

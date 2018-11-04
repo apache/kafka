@@ -152,7 +152,7 @@ public class AbstractTaskTest {
         expect(store4.name()).andReturn(storeName4).anyTimes();
         EasyMock.replay(store4);
 
-        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, new MockTime());
+        final StateDirectory stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
         final AbstractTask task = createTask(
             consumer,
             new HashMap<StateStore, String>() {

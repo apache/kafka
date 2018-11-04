@@ -67,16 +67,11 @@ public class StateDirectory {
         }
     }
 
-    public StateDirectory(final StreamsConfig config,
-                          final Time time) {
-        this(config, time, true);
-    }
-
     /**
      * Ensures that the state base directory as well as the application's sub-directory are created.
      *
      * @throws ProcessorStateException if the base state directory or application state directory does not exist
-     *                                 and could not be created
+     *                                 and could not be created when createStateDirectory is enabled.
      */
     public StateDirectory(final StreamsConfig config,
                           final Time time,

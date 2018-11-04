@@ -66,12 +66,13 @@ public class TopologyDiskAccessTest {
     public void setUp() {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
-        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, "kafka-" + TestUtils.randomString(5));
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG,
+                TestUtils.IO_TMP_DIR + File.separator + "kafka-" + TestUtils.randomString(5));
     }
 
     @Test
     public void statelessTopologiesShouldNotCreateDirectories() {
-        createTopicsAndUpdateStreamConfiguration();
+        updateStreamsAppId();
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> input = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
@@ -85,7 +86,7 @@ public class TopologyDiskAccessTest {
 
     @Test
     public void statelessPAPITopologiesShouldNotCreateDirectories() {
-        createTopicsAndUpdateStreamConfiguration();
+        updateStreamsAppId();
 
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
@@ -114,7 +115,7 @@ public class TopologyDiskAccessTest {
 
     @Test
     public void inMemoryStatefulTopologiesShouldNotCreateDirectories() {
-        createTopicsAndUpdateStreamConfiguration();
+        updateStreamsAppId();
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> input = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
@@ -135,7 +136,7 @@ public class TopologyDiskAccessTest {
 
     @Test
     public void inMemoryStatefulPAPITopologiesShouldNotCreateDirectories() {
-        createTopicsAndUpdateStreamConfiguration();
+        updateStreamsAppId();
 
         final String storeName = "counts";
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
@@ -159,12 +160,12 @@ public class TopologyDiskAccessTest {
         startStreamsAndCheckDirExistence(topology, Arrays.asList(inputTopic, globalSourceTopicName));
     }
 
-    private void createTopicsAndUpdateStreamConfiguration() {
+    private void updateStreamsAppId() {
         final String applicationId = UUID.randomUUID().toString();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         inputTopic = "input" + applicationId;
         outputTopic = "output" + applicationId;
         globalSourceTopicName = "global" + applicationId;
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
     }
 
     @SuppressWarnings("unchecked")

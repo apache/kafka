@@ -1084,8 +1084,6 @@ public class TopologyTestDriverTest {
         setup();
         final String stateDir = config.getProperty(StreamsConfig.STATE_DIR_CONFIG);
         final File appDir = new File(stateDir, config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
-
-        assertFalse(appDir.exists());
         assertFalse(appDir.exists());
     }
 
@@ -1096,7 +1094,7 @@ public class TopologyTestDriverTest {
         final File appDir = new File(stateDir, config.getProperty(StreamsConfig.APPLICATION_ID_CONFIG));
 
         assertTrue(appDir.exists());
-        assertTrue(appDir.exists());
+        assertTrue(appDir.isDirectory());
 
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(new File(appDir, taskId.toString()).exists());
