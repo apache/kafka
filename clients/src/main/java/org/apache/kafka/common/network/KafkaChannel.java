@@ -66,7 +66,6 @@ import java.util.function.Supplier;
 public class KafkaChannel implements AutoCloseable {
     private static final long MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS = 1000 * 1000 * 1000;
 
-
     /**
      * Mute States for KafkaChannel:
      * <ul>
