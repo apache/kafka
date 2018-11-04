@@ -38,6 +38,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -227,6 +228,10 @@ public class StreamThread extends Thread {
     public boolean isRunningAndNotRebalancing() {
         // we do not need to grab stateLock since it is a single read
         return state == State.RUNNING;
+    }
+
+    public void globalThreadIsRunning() {
+        globalThreadRunning = true;
     }
 
     public boolean isRunning() {
@@ -571,6 +576,7 @@ public class StreamThread extends Thread {
     private Throwable rebalanceException = null;
     private boolean processStandbyRecords = false;
     private volatile State state = State.CREATED;
+    private volatile boolean globalThreadRunning = false;
     private volatile ThreadMetadata threadMetadata;
     private StreamThread.StateListener stateListener;
     private Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords;
@@ -761,13 +767,10 @@ public class StreamThread extends Thread {
     private void runLoop() {
         long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
-        boolean firstInitialized = true;
         while (isRunning()) {
-            if (firstInitialized) {
-                firstInitialized = false;
-                try {
-                    Thread.currentThread().wait();
-                } catch (final InterruptedException exception) { }
+            if (!globalThreadRunning) {
+                Utils.sleep(1);
+                continue;
             }
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);

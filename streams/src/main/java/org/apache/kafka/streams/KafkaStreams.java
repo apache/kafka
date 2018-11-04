@@ -797,19 +797,19 @@ public class KafkaStreams {
             for (final StreamThread thread : threads) {
                 thread.start();
             }
-
             final Thread wakeupThread = new Thread(new Runnable() {
-                @SuppressWarnings("deprecation")
                 @Override
                 public void run() {
-                    while (!globalStreamThread.stillRunning()) {
-                        Utils.sleep(1);
-                        if (globalStreamThread.startUpException() != null) {
-                            throwException(globalStreamThread.startUpException());
+                    if (globalStreamThread != null) {
+                        while (!globalStreamThread.stillRunning()) {
+                            Utils.sleep(1);
+                            if (globalStreamThread.startUpException() != null) {
+                                return;
+                            }
                         }
                     }
                     for (final StreamThread thread : threads) {
-                        thread.resume();
+                        thread.globalThreadIsRunning();
                     }
                 }
             });
