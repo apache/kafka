@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -760,6 +761,11 @@ public class KafkaStreams {
         return new HostInfo(host, port);
     }
 
+    //Intended to stop progress in KafkaStreams and notify the user about a problem
+    private void throwException(final StreamsException exception) throws StreamsException {
+        throw exception;
+    }
+
     /**
      * Start the {@code KafkaStreams} instance by starting all its threads.
      * This function is expected to be called only once during the life cycle of the client.
@@ -792,6 +798,22 @@ public class KafkaStreams {
                 thread.start();
             }
 
+            final Thread wakeupThread = new Thread(new Runnable() {
+                @SuppressWarnings("deprecation")
+                @Override
+                public void run() {
+                    while (!globalStreamThread.stillRunning()) {
+                        Utils.sleep(1);
+                        if (globalStreamThread.startUpException() != null) {
+                            throwException(globalStreamThread.startUpException());
+                        }
+                    }
+                    for (final StreamThread thread : threads) {
+                        thread.resume();
+                    }
+                }
+            });
+            wakeupThread.start();
             final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
             stateDirCleaner.scheduleAtFixedRate(new Runnable() {
                 @Override

@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -34,6 +33,7 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
+
 
 import java.io.IOException;
 import java.time.Duration;
@@ -126,6 +126,13 @@ public class GlobalStreamThread extends Thread {
      */
     public void setStateListener(final StreamThread.StateListener listener) {
         stateListener = listener;
+    }
+
+    /**
+     * @return the exception if there is one
+     */
+    public StreamsException startUpException() {
+        return startupException;
     }
 
     /**
@@ -356,17 +363,6 @@ public class GlobalStreamThread extends Thread {
             startupException = new StreamsException("Exception caught during initialization of GlobalStreamThread", fatalException);
         }
         return null;
-    }
-
-    @Override
-    public synchronized void start() {
-        super.start();
-        while (!stillRunning()) {
-            Utils.sleep(1);
-            if (startupException != null) {
-                throw startupException;
-            }
-        }
     }
 
     public void shutdown() {

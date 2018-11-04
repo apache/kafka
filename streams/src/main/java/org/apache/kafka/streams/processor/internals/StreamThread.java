@@ -761,8 +761,14 @@ public class StreamThread extends Thread {
     private void runLoop() {
         long recordsProcessedBeforeCommit = UNLIMITED_RECORDS;
         consumer.subscribe(builder.sourceTopicPattern(), rebalanceListener);
-
+        boolean firstInitialized = true;
         while (isRunning()) {
+            if (firstInitialized) {
+                firstInitialized = false;
+                try {
+                    Thread.currentThread().wait();
+                } catch (final InterruptedException exception) { }
+            }
             try {
                 recordsProcessedBeforeCommit = runOnce(recordsProcessedBeforeCommit);
                 if (versionProbingFlag.get()) {
