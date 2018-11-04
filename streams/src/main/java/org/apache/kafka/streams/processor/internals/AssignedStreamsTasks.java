@@ -46,7 +46,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return restoringByPartition.get(partition);
     }
 
-    void updateRestored(final Collection<TopicPartition> restored) {
+    @Override
+    public void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
             return;
         }
@@ -76,7 +77,8 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
-    void addToRestoring(final StreamTask task) {
+    @Override
+    public void addToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
@@ -86,7 +88,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
-
+    @Override
     boolean allTasksRunning() {
         return super.allTasksRunning() && restoring.isEmpty();
     }
@@ -225,20 +227,18 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return builder.toString();
     }
 
+    @Override
     List<StreamTask> allTasks() {
         final List<StreamTask> tasks = super.allTasks();
         tasks.addAll(restoring.values());
         return tasks;
     }
 
+    @Override
     Set<TaskId> allAssignedTaskIds() {
         final Set<TaskId> taskIds = super.allAssignedTaskIds();
         taskIds.addAll(restoring.keySet());
         return taskIds;
-    }
-
-    Collection<StreamTask> restoringTasks() {
-        return Collections.unmodifiableCollection(restoring.values());
     }
 
     void clear() {
@@ -246,6 +246,12 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         restoring.clear();
         restoringByPartition.clear();
         restoredPartitions.clear();
+    }
+
+    // for testing only
+
+    Collection<StreamTask> restoringTasks() {
+        return Collections.unmodifiableCollection(restoring.values());
     }
 
 }
