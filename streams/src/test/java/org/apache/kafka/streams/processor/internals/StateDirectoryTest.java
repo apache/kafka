@@ -89,6 +89,26 @@ public class StateDirectoryTest {
     }
 
     @Test
+    public void shouldLockTaskStateDirectory() throws IOException {
+        final TaskId taskId = new TaskId(0, 0);
+
+        directory.lock(taskId);
+
+        try (
+            final FileChannel channel = FileChannel.open(
+                new File(appDir, taskId+StateDirectory.LOCK_FILE_NAME).toPath(),
+                StandardOpenOption.CREATE, StandardOpenOption.WRITE)
+        ) {
+            channel.tryLock();
+            fail("shouldn't be able to lock already locked directory");
+        } catch (final OverlappingFileLockException e) {
+            // pass
+        } finally {
+            directory.unlock(taskId);
+        }
+    }
+
+    @Test
     public void shouldBeTrueIfAlreadyHoldsLock() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         directory.directoryForTask(taskId);
@@ -176,14 +196,14 @@ public class StateDirectoryTest {
             directory.directoryForTask(new TaskId(2, 0));
 
             List<File> files = Arrays.asList(appDir.listFiles());
-            assertEquals(1, files.size());
+            assertEquals(3, files.size());
 
             time.sleep(1000);
             directory.cleanRemovedTasks(0);
 
             files = Arrays.asList(directory.stateDir().listFiles());
             // lock files have been cleaned
-            assertEquals(0, files.size());
+            assertEquals(2, files.size());
         } finally {
             directory.unlock(task0);
             directory.unlock(task1);

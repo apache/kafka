@@ -226,6 +226,10 @@ public class StateDirectory {
             final FileChannel fileChannel = channels.remove(taskId);
             if (fileChannel != null) {
                 fileChannel.close();
+                final File lockFile = new File(stateDir, taskId + LOCK_FILE_NAME);
+                if (!lockFile.delete()) {
+                  log.debug("{} was not deleted", lockFile.toString());
+                }
             }
         }
     }
@@ -336,7 +340,7 @@ public class StateDirectory {
                                                final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
             channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE,
-                StandardOpenOption.WRITE, StandardOpenOption.DELETE_ON_CLOSE));
+                StandardOpenOption.WRITE));
         }
         return channels.get(taskId);
     }
