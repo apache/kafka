@@ -905,7 +905,7 @@ public class StreamsConfig extends AbstractConfig {
                     throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequests, "Expected value to be a 32-bit integer, but it was a " + maxInFlightRequests.getClass().getName());
                 }
 
-                if (5 < maxInFlightRequestsAsInteger) {
+                if (maxInFlightRequestsAsInteger > 5) {
                     throw new ConfigException(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, maxInFlightRequestsAsInteger, "Can't exceed 5 when exactly-once processing is enabled");
                 }
             }
