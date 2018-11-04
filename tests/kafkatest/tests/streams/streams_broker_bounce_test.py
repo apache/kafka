@@ -174,6 +174,9 @@ class StreamsBrokerBounceTest(Test):
 
         return self.collect_results(sleep_time_secs)
 
+    # This test is flaky because of the sleeps and also because of the race between
+    # stopping the broker and starting Streams
+    @ignore
     @cluster(num_nodes=7)
     @matrix(failure_mode=["clean_shutdown"],
             broker_type=["controller"],
