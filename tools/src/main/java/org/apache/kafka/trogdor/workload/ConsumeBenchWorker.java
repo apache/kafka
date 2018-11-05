@@ -209,8 +209,12 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.clientId = consumer.clientId();
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
                 new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer), 1, 1, TimeUnit.MINUTES);
-            int perPeriod = WorkerUtils.perSecToPerPeriod(
-                spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
+            int perPeriod;
+            if (spec.targetMessagesPerSec() == 0)
+                perPeriod = Integer.MAX_VALUE;
+            else
+                perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
+
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
             this.consumer = consumer;
         }
