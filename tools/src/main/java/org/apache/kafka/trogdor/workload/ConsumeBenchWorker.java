@@ -229,8 +229,9 @@ public class ConsumeBenchWorker implements TaskWorker {
             long bytesConsumed = 0;
             long startTimeMs = Time.SYSTEM.milliseconds();
             long startBatchMs = startTimeMs;
+            int maxMessages = spec.maxMessages();
             try {
-                while (messagesConsumed < spec.maxMessages()) {
+                while (messagesConsumed < maxMessages) {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
                     if (records.isEmpty()) {
                         continue;
@@ -249,6 +250,9 @@ public class ConsumeBenchWorker implements TaskWorker {
                         latencyHistogram.add(elapsedBatchMs);
                         messageSizeHistogram.add(messageBytes);
                         bytesConsumed += messageBytes;
+                        if (messagesConsumed >= maxMessages)
+                            break;
+
                         throttle.increment();
                     }
                     startBatchMs = Time.SYSTEM.milliseconds();
@@ -264,6 +268,8 @@ public class ConsumeBenchWorker implements TaskWorker {
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
             doneFuture.complete("");
+            consumer.unsubscribe();
+            consumer.close();
             return null;
         }
     }
