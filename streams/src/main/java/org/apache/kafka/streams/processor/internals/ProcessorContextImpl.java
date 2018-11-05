@@ -103,7 +103,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 }
 
                 @Override public void flush() {
-                    underlying.flush();
+                    throw new UnsupportedOperationException("Global store is read only");
                 }
 
                 @Override public void close() {
