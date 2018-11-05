@@ -71,7 +71,7 @@ public class ConsumeBenchWorker implements TaskWorker {
     private StatusUpdater statusUpdater;
     private Future<?> statusUpdaterFuture;
     private KafkaFutureImpl<String> doneFuture;
-    private KafkaConsumer<byte[], byte[]> consumer;
+    private Consumer consumer;
     public ConsumeBenchWorker(String id, ConsumeBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -121,21 +121,21 @@ public class ConsumeBenchWorker implements TaskWorker {
             String clientId = clientId(0);
             consumer = consumer(consumerGroup, clientId);
             if (!toUseGroupPartitionAssignment) {
-                List<TopicPartition> partitions = populatePartitionsByTopic(consumer, partitionsByTopic)
+                List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
                     .values().stream().flatMap(List::stream).collect(Collectors.toList());
-                tasks.add(new ConsumeMessages(consumer, clientId, partitions));
+                tasks.add(new ConsumeMessages(consumer, partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
                     clientId = clientId(i + 1);
-                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), clientId, partitions));
+                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), partitions));
                 }
             } else {
                 Set<String> topics = partitionsByTopic.keySet();
-                tasks.add(new ConsumeMessages(consumer, clientId, topics));
+                tasks.add(new ConsumeMessages(consumer, topics));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
                     clientId = clientId(i + 1);
-                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), clientId, topics));
+                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), topics));
                 }
             }
 
@@ -149,16 +149,17 @@ public class ConsumeBenchWorker implements TaskWorker {
         /**
          * Creates a new KafkaConsumer instance
          */
-        private KafkaConsumer<byte[], byte[]> consumer(String consumerGroup, String idx) {
+        private Consumer consumer(String consumerGroup, String idx) {
             Properties props = new Properties();
+            String clientId = String.format("consumer.%s-%s", id, idx);
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            props.put(ConsumerConfig.CLIENT_ID_CONFIG, String.format("consumer.%s-%s", id, idx));
+            props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
             props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
             // these defaults maybe over-written by the user-specified commonClientConf or consumerConf
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
-            return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            return new Consumer(new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), clientId);
         }
 
         private String consumerGroup() {
@@ -200,26 +201,26 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final String clientId;
         private final KafkaConsumer<byte[], byte[]> consumer;
 
-        private ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
+        private ConsumeMessages(Consumer consumer) {
             this.latencyHistogram = new Histogram(5000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
-            this.clientId = clientId;
+            this.clientId = consumer.clientId();
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
-                new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, clientId), 1, 1, TimeUnit.MINUTES);
+                new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer), 1, 1, TimeUnit.MINUTES);
             int perPeriod = WorkerUtils.perSecToPerPeriod(
                 spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            this.consumer = consumer;
+            this.consumer = consumer.consumer();
         }
 
-        ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, String clientId, Set<String> topics) {
-            this(consumer, clientId);
+        ConsumeMessages(Consumer consumer, Set<String> topics) {
+            this(consumer);
             log.info("Will consume from topics {} via dynamic group assignment.", topics);
             this.consumer.subscribe(topics);
         }
 
-        ConsumeMessages(KafkaConsumer<byte[], byte[]> consumer, String clientId, List<TopicPartition> partitions) {
-            this(consumer, clientId);
+        ConsumeMessages(Consumer consumer, List<TopicPartition> partitions) {
+            this(consumer);
             log.info("Will consume from topic partitions {} via manual assignment.", partitions);
             this.consumer.assign(partitions);
         }
@@ -264,7 +265,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
-                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, clientId).update();
+                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, new Consumer(consumer, clientId)).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
@@ -346,12 +347,12 @@ public class ConsumeBenchWorker implements TaskWorker {
     public class ConsumeStatusUpdater implements Runnable {
         private final Histogram latencyHistogram;
         private final Histogram messageSizeHistogram;
-        private final String clientId;
+        private final Consumer consumer;
 
-        ConsumeStatusUpdater(Histogram latencyHistogram, Histogram messageSizeHistogram, String clientId) {
+        ConsumeStatusUpdater(Histogram latencyHistogram, Histogram messageSizeHistogram, Consumer consumer) {
             this.latencyHistogram = latencyHistogram;
             this.messageSizeHistogram = messageSizeHistogram;
-            this.clientId = clientId;
+            this.consumer = consumer;
         }
 
         @Override
@@ -360,7 +361,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 update();
             } catch (Exception e) {
                 log.warn("ConsumeStatusUpdater caught an exception: ", e);
-                statusUpdater.failStatus(clientId);
+                statusUpdater.failStatus(consumer.clientId());
                 throw new KafkaException(e);
             }
         }
@@ -369,6 +370,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             Histogram.Summary latSummary = latencyHistogram.summarize(StatusData.PERCENTILES);
             Histogram.Summary msgSummary = messageSizeHistogram.summarize(StatusData.PERCENTILES);
             StatusData statusData = new StatusData(
+                consumer.consumer().assignment().stream().map(TopicPartition::toString).collect(Collectors.toList()),
                 latSummary.numSamples(),
                 (long) (msgSummary.numSamples() * msgSummary.average()),
                 (long) msgSummary.average(),
@@ -376,7 +378,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 latSummary.percentiles().get(0).value(),
                 latSummary.percentiles().get(1).value(),
                 latSummary.percentiles().get(2).value());
-            statusUpdater.updateConsumeStatus(clientId, statusData);
+            statusUpdater.updateConsumeStatus(consumer.clientId(), statusData);
             log.info("Status={}", JsonUtil.toJsonString(statusData));
             return statusData;
         }
@@ -384,6 +386,7 @@ public class ConsumeBenchWorker implements TaskWorker {
 
     public static class StatusData {
         private final long totalMessagesReceived;
+        private final List<String> assignedPartitions;
         private final long totalBytesReceived;
         private final long averageMessageSizeBytes;
         private final float averageLatencyMs;
@@ -396,15 +399,16 @@ public class ConsumeBenchWorker implements TaskWorker {
          * These should match up with the p50LatencyMs, p95LatencyMs, etc. fields.
          */
         final static float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
-
         @JsonCreator
-        StatusData(@JsonProperty("totalMessagesReceived") long totalMessagesReceived,
+        StatusData(@JsonProperty("assignedPartitions") List<String> assignedPartitions,
+                   @JsonProperty("totalMessagesReceived") long totalMessagesReceived,
                    @JsonProperty("totalBytesReceived") long totalBytesReceived,
                    @JsonProperty("averageMessageSizeBytes") long averageMessageSizeBytes,
                    @JsonProperty("averageLatencyMs") float averageLatencyMs,
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
                    @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs) {
+            this.assignedPartitions = assignedPartitions;
             this.totalMessagesReceived = totalMessagesReceived;
             this.totalBytesReceived = totalBytesReceived;
             this.averageMessageSizeBytes = averageMessageSizeBytes;
@@ -412,6 +416,11 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.p50LatencyMs = p50latencyMs;
             this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
+        }
+
+        @JsonProperty
+        public List<String> assignedPartitions() {
+            return assignedPartitions;
         }
 
         @JsonProperty
@@ -459,7 +468,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         doneFuture.complete("");
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.DAYS);
-        Utils.closeQuietly(consumer, "consumer");
+        Utils.closeQuietly(consumer.consumer(), "consumer");
         this.consumer = null;
         this.executor = null;
         this.statusUpdater = null;
@@ -468,4 +477,22 @@ public class ConsumeBenchWorker implements TaskWorker {
         this.doneFuture = null;
     }
 
+    private class Consumer {
+        // TODO: Should we just make `KafkaConsumer#getClientId()` public?
+        private final KafkaConsumer<byte[], byte[]> consumer;
+        private final String clientId;
+
+        public Consumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
+            this.consumer = consumer;
+            this.clientId = clientId;
+        }
+
+        public String clientId() {
+            return clientId;
+        }
+
+        public KafkaConsumer<byte[], byte[]> consumer() {
+            return consumer;
+        }
+    }
 }
