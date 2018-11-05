@@ -256,8 +256,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
 
-    def __init__(self, context, kafka, files):
-        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files)
+    def __init__(self, context, kafka, files, startup_timeout_sec = 60):
+        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files, startup_timeout_sec)
 
     # For convenience since this service only makes sense with a single node
     @property
@@ -305,8 +305,8 @@ class ConnectDistributedService(ConnectServiceBase):
     """Runs Kafka Connect in distributed mode."""
 
     def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
-                 configs_topic="connect-configs", status_topic="connect-status"):
-        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files)
+                 configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec = 60):
+        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec)
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
         self.status_topic = status_topic
