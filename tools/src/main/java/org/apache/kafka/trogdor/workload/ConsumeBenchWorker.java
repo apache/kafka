@@ -240,7 +240,6 @@ public class ConsumeBenchWorker implements TaskWorker {
             int maxMessages = spec.maxMessages();
             try {
                 while (messagesConsumed < maxMessages) {
-
                     ConsumerRecords<byte[], byte[]> records = consumer.poll();
                     if (records.isEmpty()) {
                         continue;
@@ -267,7 +266,6 @@ public class ConsumeBenchWorker implements TaskWorker {
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }
             } catch (Exception e) {
-                // TODO: Should we close task on consumer failure?
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
