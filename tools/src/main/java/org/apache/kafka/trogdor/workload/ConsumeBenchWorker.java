@@ -486,6 +486,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final KafkaConsumer<byte[], byte[]> consumer;
         private final String clientId;
         private final ReentrantLock consumerLock;
+        private boolean closed = false;
 
         Consumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
             this.consumer = consumer;
@@ -503,10 +504,13 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
 
         void close() {
+            if (closed)
+                return;
             this.consumerLock.lock();
             try {
                 consumer.unsubscribe();
                 Utils.closeQuietly(consumer, "consumer");
+                closed = true;
             } finally {
                 this.consumerLock.unlock();
             }
@@ -534,7 +538,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumerLock.lock();
             try {
                 return consumer.assignment().stream()
-                    .map(TopicPartition::toString).collect(Collectors.toList())
+                    .map(TopicPartition::toString).collect(Collectors.toList());
             } finally {
                 this.consumerLock.unlock();
             }
