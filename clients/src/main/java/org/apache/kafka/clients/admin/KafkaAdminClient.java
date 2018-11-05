@@ -339,6 +339,10 @@ public class KafkaAdminClient extends AdminClient {
             AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
                 config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+            List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
+                    config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
+                    config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
+            metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
                 Collections.singletonMap(AdminClientConfig.CLIENT_ID_CONFIG, clientId));
@@ -375,25 +379,25 @@ public class KafkaAdminClient extends AdminClient {
             closeQuietly(networkClient, "NetworkClient");
             closeQuietly(selector, "Selector");
             closeQuietly(channelBuilder, "ChannelBuilder");
-            throw new KafkaException("Failed create new KafkaAdminClient", exc);
+            throw new KafkaException("Failed to create new KafkaAdminClient", exc);
         }
     }
 
-    static KafkaAdminClient createInternal(AdminClientConfig config, KafkaClient client, Time time) {
+    static KafkaAdminClient createInternal(AdminClientConfig config,
+                                           AdminMetadataManager metadataManager,
+                                           KafkaClient client,
+                                           Time time) {
         Metrics metrics = null;
         String clientId = generateClientId(config);
 
         try {
             metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
             LogContext logContext = createLogContext(clientId);
-            AdminMetadataManager metadataManager = new AdminMetadataManager(logContext,
-                config.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                config.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
                 client, null, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
-            throw new KafkaException("Failed create new KafkaAdminClient", exc);
+            throw new KafkaException("Failed to create new KafkaAdminClient", exc);
         }
     }
 
@@ -414,10 +418,6 @@ public class KafkaAdminClient extends AdminClient {
         this.log = logContext.logger(KafkaAdminClient.class);
         this.time = time;
         this.metadataManager = metadataManager;
-        List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
-            config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
-            config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
-        metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
         this.metrics = metrics;
         this.client = client;
         this.runnable = new AdminClientRunnable();
@@ -1399,12 +1399,12 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse response = (MetadataResponse) abstractResponse;
-                Cluster cluster = response.cluster();
                 Map<String, TopicListing> topicListing = new HashMap<>();
-                for (String topicName : cluster.topics()) {
-                    boolean internal = cluster.internalTopics().contains(topicName);
-                    if (!internal || options.shouldListInternal())
-                        topicListing.put(topicName, new TopicListing(topicName, internal));
+                for (MetadataResponse.TopicMetadata topicMetadata : response.topicMetadata()) {
+                    String topicName = topicMetadata.topic();
+                    boolean isInternal = topicMetadata.isInternal();
+                    if (!topicMetadata.isInternal() || options.shouldListInternal())
+                        topicListing.put(topicName, new TopicListing(topicName, isInternal));
                 }
                 topicListingFuture.complete(topicListing);
             }
@@ -2551,12 +2551,11 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 MetadataResponse metadataResponse = (MetadataResponse) abstractResponse;
-                Cluster cluster = metadataResponse.cluster();
-
-                if (cluster.nodes().isEmpty())
+                Collection<Node> nodes = metadataResponse.brokers();
+                if (nodes.isEmpty())
                     throw new StaleMetadataException("Metadata fetch failed due to missing broker list");
 
-                HashSet<Node> allNodes = new HashSet<>(cluster.nodes());
+                HashSet<Node> allNodes = new HashSet<>(nodes);
                 final ListConsumerGroupsResults results = new ListConsumerGroupsResults(allNodes, all);
 
                 for (final Node node : allNodes) {

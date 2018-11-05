@@ -50,10 +50,10 @@ public class ConsumerNetworkClientTest {
 
     private String topicName = "test";
     private MockTime time = new MockTime(1);
-    private MockClient client = new MockClient(time);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
     private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+    private MockClient client = new MockClient(time, metadata);
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
             client, metadata, time, 100, 1000, Integer.MAX_VALUE);
 
@@ -273,7 +273,7 @@ public class ConsumerNetworkClientTest {
         int requestTimeoutMs = 10;
         final AtomicBoolean isReady = new AtomicBoolean();
         final AtomicBoolean disconnected = new AtomicBoolean();
-        client = new MockClient(time) {
+        client = new MockClient(time, metadata) {
             @Override
             public boolean ready(Node node, long now) {
                 if (isReady.get())

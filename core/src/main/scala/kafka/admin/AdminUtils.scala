@@ -473,10 +473,10 @@ object AdminUtils extends Logging with AdminUtilities {
       val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
 
       if (!update) {
-        info("Topic creation " + jsonPartitionData.toString)
+        info(s"Topic creation $jsonPartitionData")
         zkUtils.createPersistentPath(zkPath, jsonPartitionData)
       } else {
-        info("Topic update " + jsonPartitionData.toString)
+        info(s"Topic update $jsonPartitionData")
         zkUtils.updatePersistentPath(zkPath, jsonPartitionData)
       }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
