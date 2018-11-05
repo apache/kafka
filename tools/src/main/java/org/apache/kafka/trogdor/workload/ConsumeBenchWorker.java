@@ -43,6 +43,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -55,6 +56,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
 
 
@@ -199,7 +201,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final Future<?> statusUpdaterFuture;
         private final Throttle throttle;
         private final String clientId;
-        private final KafkaConsumer<byte[], byte[]> consumer;
+        private final Consumer consumer;
 
         private ConsumeMessages(Consumer consumer) {
             this.latencyHistogram = new Histogram(5000);
@@ -210,7 +212,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             int perPeriod = WorkerUtils.perSecToPerPeriod(
                 spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.throttle = new Throttle(perPeriod, THROTTLE_PERIOD_MS);
-            this.consumer = consumer.consumer();
+            this.consumer = consumer;
         }
 
         ConsumeMessages(Consumer consumer, Set<String> topics) {
@@ -234,7 +236,8 @@ public class ConsumeBenchWorker implements TaskWorker {
             int maxMessages = spec.maxMessages();
             try {
                 while (messagesConsumed < maxMessages) {
-                    ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
+
+                    ConsumerRecords<byte[], byte[]> records = consumer.poll();
                     if (records.isEmpty()) {
                         continue;
                     }
@@ -265,13 +268,12 @@ public class ConsumeBenchWorker implements TaskWorker {
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
-                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, new Consumer(consumer, clientId)).update();
+                    new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
             doneFuture.complete("");
-            consumer.unsubscribe();
             consumer.close();
             return null;
         }
@@ -322,10 +324,10 @@ public class ConsumeBenchWorker implements TaskWorker {
          */
         synchronized void failStatus(String clientId) throws KafkaException {
             statusesFailed.put(clientId, true);
-            if (!statusesFailed.values().contains(false)) {
+            if (statusesFailed.keySet().size() == spec.consumerCount() && !statusesFailed.values().contains(false)) {
                 // all statuses have failed, abort the worker
                 WorkerUtils.abort(log, "StatusUpdater",
-                    new KafkaException("All consumer's status updaters have failed"), doneFuture);
+                    new KafkaException("All consumers' status updaters have failed"), doneFuture);
             }
         }
 
@@ -370,7 +372,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             Histogram.Summary latSummary = latencyHistogram.summarize(StatusData.PERCENTILES);
             Histogram.Summary msgSummary = messageSizeHistogram.summarize(StatusData.PERCENTILES);
             StatusData statusData = new StatusData(
-                consumer.consumer().assignment().stream().map(TopicPartition::toString).collect(Collectors.toList()),
+                consumer.assignedPartitions(),
                 latSummary.numSamples(),
                 (long) (msgSummary.numSamples() * msgSummary.average()),
                 (long) msgSummary.average(),
@@ -468,7 +470,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         doneFuture.complete("");
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.DAYS);
-        Utils.closeQuietly(consumer.consumer(), "consumer");
+        consumer.close();
         this.consumer = null;
         this.executor = null;
         this.statusUpdater = null;
@@ -477,21 +479,72 @@ public class ConsumeBenchWorker implements TaskWorker {
         this.doneFuture = null;
     }
 
+    /**
+     * A thread-safe KafkaConsumer wrapper
+     */
     private class Consumer {
-        // TODO: Should we just make `KafkaConsumer#getClientId()` public?
         private final KafkaConsumer<byte[], byte[]> consumer;
         private final String clientId;
+        private final ReentrantLock consumerLock;
 
-        public Consumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
+        Consumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
             this.consumer = consumer;
             this.clientId = clientId;
+            this.consumerLock = new ReentrantLock();
         }
 
-        public String clientId() {
+        ConsumerRecords<byte[], byte[]> poll() {
+            this.consumerLock.lock();
+            try {
+                return consumer.poll(Duration.ofMillis(50));
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void close() {
+            this.consumerLock.lock();
+            try {
+                consumer.unsubscribe();
+                Utils.closeQuietly(consumer, "consumer");
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void subscribe(Set<String> topics) {
+            this.consumerLock.lock();
+            try {
+                consumer.subscribe(topics);
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        void assign(Collection<TopicPartition> partitions) {
+            this.consumerLock.lock();
+            try {
+                consumer.assign(partitions);
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        List<String> assignedPartitions() {
+            this.consumerLock.lock();
+            try {
+                return consumer.assignment().stream()
+                    .map(TopicPartition::toString).collect(Collectors.toList())
+            } finally {
+                this.consumerLock.unlock();
+            }
+        }
+
+        String clientId() {
             return clientId;
         }
 
-        public KafkaConsumer<byte[], byte[]> consumer() {
+        KafkaConsumer<byte[], byte[]> consumer() {
             return consumer;
         }
     }
