@@ -96,7 +96,7 @@ public class StateDirectoryTest {
 
         try (
             final FileChannel channel = FileChannel.open(
-                new File(appDir, taskId+StateDirectory.LOCK_FILE_NAME).toPath(),
+                new File(appDir, taskId + StateDirectory.LOCK_FILE_NAME).toPath(),
                 StandardOpenOption.CREATE, StandardOpenOption.WRITE)
         ) {
             channel.tryLock();
