@@ -19,7 +19,6 @@ package org.apache.kafka.streams;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -729,7 +728,9 @@ public class KafkaStreamsTest {
                                                final boolean shouldFilesExist) throws Exception {
         final File baseDir = new File(TestUtils.IO_TMP_DIR + File.separator + "kafka-" + TestUtils.randomString(5));
         final Path basePath = baseDir.toPath();
-        Files.createDirectory(basePath);
+        if (!baseDir.exists()) {
+            Files.createDirectory(basePath);
+        }
         // changing the path of state directory to make sure that it should not clash with other test cases.
         final Properties localProps = new Properties();
         localProps.putAll(props);
