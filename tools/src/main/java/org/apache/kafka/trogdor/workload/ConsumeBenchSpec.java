@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.trogdor.common.StringExpander;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
@@ -65,7 +66,7 @@ import java.util.HashSet;
  * The "consumeCount" field denotes how many consumers should be spawned for this spec.
  * It is worth nothing that the "targetMessagesPerSec", "maxMessages" and "activeTopics" fields apply for every consumer individually.
  * If a consumer group is not specified, every consumer is assigned a different, random group. When specified, all consumers use the same group.
- * Specifying partitions, a consumer group and multiple consumers will result in an Exception
+ * Specifying partitions, a consumer group and multiple consumers will result in an #{@link ConfigException} and the task will abort.
  *
  * An example JSON representation which will result in a consumer that is part of the consumer group "cg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
