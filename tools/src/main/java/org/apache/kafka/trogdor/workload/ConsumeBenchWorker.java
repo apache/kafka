@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -258,6 +259,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }
             } catch (Exception e) {
+                // TODO: Should we close task on consumer failure?
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
@@ -298,9 +300,11 @@ public class ConsumeBenchWorker implements TaskWorker {
 
     class StatusUpdater implements Runnable {
         final Map<String, JsonNode> statuses;
+        final Map<String, Boolean> statusesFailed;
 
         StatusUpdater() {
             statuses = new HashMap<>();
+            statusesFailed = new HashMap<>();
         }
 
         @Override
@@ -312,11 +316,26 @@ public class ConsumeBenchWorker implements TaskWorker {
             }
         }
 
+        /**
+         * Fails a single status updater. If all have failed, the worker is aborted
+         */
+        synchronized void failStatus(String clientId) throws KafkaException {
+            statusesFailed.put(clientId, true);
+            if (!statusesFailed.values().contains(false)) {
+                // all statuses have failed, abort the worker
+                WorkerUtils.abort(log, "StatusUpdater",
+                    new KafkaException("All consumer's status updaters have failed"), doneFuture);
+            }
+        }
+
         synchronized void update() {
             workerStatus.update(JsonUtil.JSON_SERDE.valueToTree(statuses));
         }
 
         synchronized void updateConsumeStatus(String clientId, StatusData status) {
+            if (!statusesFailed.containsKey(clientId))
+                statusesFailed.put(clientId, false);
+
             statuses.put(clientId, JsonUtil.JSON_SERDE.valueToTree(status));
         }
     }
@@ -340,8 +359,9 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                // TODO: Shouldn't use doneFuture here :O
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                log.warn("ConsumeStatusUpdater caught an exception: ", e);
+                statusUpdater.failStatus(clientId);
+                throw new KafkaException(e);
             }
         }
 
