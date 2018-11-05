@@ -38,16 +38,14 @@ Let's confirm that all of the daemons are running:
 Now, we can submit a test job to Trogdor.  Here's an example of a short bash script which makes it easier.
 
     > ./tests/bin/trogdor-run-produce-bench.sh
-    [2018-04-12 10:32:04,055] DEBUG Sending POST with input {"id":"produce_bench_22137","spec":{"class":"org.apache.kafka.trogdor.workload.ProduceBenchSpec","startMs":0,"durationMs":10000000,"producerNode":"node0","bootstrapServers":"localhost:9092","targetMessagesPerSec":10,"maxMessages":100,"keyGenerator":{"type":"sequential","size":4,"startOffset":0},"valueGenerator":{"type":"constant","size":512,"value":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="},"totalTopics":10,"activeTopics":5,"topicPrefix":"foo","replicationFactor":1,"classLoader":{},"numPartitions":1}} to http://localhost:8889/coordinator/task/create (org.apache.kafka.trogdor.coordinator.CoordinatorClient)
-    Created task.
-    $TASK_ID = produce_bench_20462
+    Sent CreateTaskRequest for task produce_bench_21634.$TASK_ID = produce_bench_21634
 
 To get the test results, we run --show-tasks:
 
     ./bin/trogdor.sh client --show-tasks localhost:8889
     Got coordinator tasks: {
       "tasks" : {
-        "produce_bench_20462" : {
+        "produce_bench_21634" : {
           "state" : "DONE",
           "spec" : {
             "class" : "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
@@ -55,8 +53,8 @@ To get the test results, we run --show-tasks:
             "durationMs" : 10000000,
             "producerNode" : "node0",
             "bootstrapServers" : "localhost:9092",
-            "targetMessagesPerSec" : 10,
-            "maxMessages" : 100,
+            "targetMessagesPerSec" : 10000,
+            "maxMessages" : 50000,
             "keyGenerator" : {
               "type" : "sequential",
               "size" : 4,
@@ -67,22 +65,28 @@ To get the test results, we run --show-tasks:
               "size" : 512,
               "value" : "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
             },
-            "totalTopics" : 10,
-            "activeTopics" : 5,
-            "topicPrefix" : "foo",
-            "replicationFactor" : 1,
-            "classLoader" : { },
-            "numPartitions" : 1
+            "activeTopics" : {
+              "foo[1-3]" : {
+                "numPartitions" : 10,
+                "replicationFactor" : 1
+              }
+            },
+            "inactiveTopics" : {
+              "foo[4-5]" : {
+                "numPartitions" : 10,
+                "replicationFactor" : 1
+              }
+            }
           },
-          "startedMs" : 1523552769850,
-          "doneMs" : 1523552780878,
+          "startedMs" : 1541435949784,
+          "doneMs" : 1541435955803,
           "cancelled" : false,
           "status" : {
-            "totalSent" : 500,
-            "averageLatencyMs" : 4.972,
-            "p50LatencyMs" : 4,
-            "p95LatencyMs" : 6,
-            "p99LatencyMs" : 12
+            "totalSent" : 50000,
+            "averageLatencyMs" : 11.0293,
+            "p50LatencyMs" : 9,
+            "p95LatencyMs" : 27,
+            "p99LatencyMs" : 39
           }
         }
       }
