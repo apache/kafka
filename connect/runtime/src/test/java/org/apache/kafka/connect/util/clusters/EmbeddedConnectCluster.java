@@ -140,7 +140,7 @@ public class EmbeddedConnectCluster {
             String content = mapper.writeValueAsString(connConfig);
             status = executePut(url, content);
         } catch (IOException e) {
-            log.error("Could not serialize config", e);
+            log.error("Could not execute PUT request to " + url, e);
             throw e;
         }
         if (status >= HttpServletResponse.SC_BAD_REQUEST) {
