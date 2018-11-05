@@ -34,8 +34,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLA
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG;
-import static org.apache.kafka.connect.runtime.WorkerConfig.REST_ADVERTISED_PORT_CONFIG;
+import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -59,8 +58,7 @@ public class ExampleConnectIntegrationTest {
     public void setup() throws IOException {
         // setup Connect worker properties
         Map<String, String> exampleWorkerProps = new HashMap<>();
-        exampleWorkerProps.put(REST_ADVERTISED_HOST_NAME_CONFIG, "integration.test.host.io");
-        exampleWorkerProps.put(REST_ADVERTISED_PORT_CONFIG, "8083");
+        exampleWorkerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, "30000");
 
         // setup Kafka broker properties
         Properties exampleBrokerProps = new Properties();
