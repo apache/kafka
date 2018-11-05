@@ -63,8 +63,8 @@ import java.util.HashSet;
  * It will be assigned partitions dynamically from the consumer group.
  *
  * This specification supports the spawning of multiple consumers in the single Trogdor worker agent.
- * The "consumeCount" field denotes how many consumers should be spawned for this spec.
- * It is worth nothing that the "targetMessagesPerSec", "maxMessages" and "activeTopics" fields apply for every consumer individually.
+ * The "threadCount" field denotes how many consumers should be spawned for this spec.
+ * It is worth noting that the "targetMessagesPerSec", "maxMessages" and "activeTopics" fields apply for every consumer individually.
  * If a consumer group is not specified, every consumer is assigned a different, random group. When specified, all consumers use the same group.
  * Specifying partitions, a consumer group and multiple consumers will result in an #{@link ConfigException} and the task will abort.
  *
@@ -108,7 +108,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                            @JsonProperty("consumerCount") Integer consumerCount,
+                            @JsonProperty("threadCount") Integer threadCount,
                             @JsonProperty("activeTopics") List<String> activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
@@ -120,7 +120,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
         this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
-        this.consumerCount = consumerCount == null ? 1 : consumerCount;
+        this.consumerCount = threadCount == null ? 1 : threadCount;
     }
 
     @JsonProperty

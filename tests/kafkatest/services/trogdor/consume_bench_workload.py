@@ -32,7 +32,7 @@ class ConsumeBenchWorkloadSpec(TaskSpec):
         self.message["adminClientConf"] = admin_client_conf
         self.message["commonClientConf"] = common_client_conf
         self.message["activeTopics"] = active_topics
-        self.message["consumerCount"] = consumer_count
+        self.message["threadCount"] = consumer_count
         if consumer_group is not None:
             self.message["consumerGroup"] = consumer_group
 
