@@ -121,12 +121,16 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     // Startup the broker
     testBroker.startup()
-    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
     TestUtils.waitUntilTrue( () => {
       !servers.exists { server =>
         assignment.exists { case (partitionId, replicas) =>
-          val partitionInfo = server.metadataCache.getPartitionInfo(topic, partitionId).get
-          !partitionInfo.offlineReplicas.isEmpty || !partitionInfo.basePartitionState.replicas.asScala.equals(replicas)
+          val partitionInfoOpt = server.metadataCache.getPartitionInfo(topic, partitionId)
+          if (partitionInfoOpt.isDefined) {
+            val partitionInfo = partitionInfoOpt.get
+            !partitionInfo.offlineReplicas.isEmpty || !partitionInfo.basePartitionState.replicas.asScala.equals(replicas)
+          } else {
+            true
+          }
         }
       }
     }, "Inconsistent metadata after broker startup")
