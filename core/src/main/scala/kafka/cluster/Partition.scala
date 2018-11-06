@@ -351,7 +351,8 @@ class Partition(val topicPartition: TopicPartition,
       leaderEpochStartOffsetOpt = None
       removePartitionMetrics()
       logManager.asyncDelete(topicPartition)
-      logManager.asyncDelete(topicPartition, isFuture = true)
+      if (logManager.getLog(topicPartition, isFuture = true).isDefined)
+        logManager.asyncDelete(topicPartition, isFuture = true)
     }
   }
 
