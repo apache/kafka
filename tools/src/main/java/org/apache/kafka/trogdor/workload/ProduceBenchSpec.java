@@ -30,12 +30,41 @@ import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
+ *
+ * If the "messagesPerTransaction" field is present, the producer will group and produce messages as separate transactions using the producer transactional API.
+ *
+ * An example JSON representation which will result in a producer that creates three topics (foo1, foo2, foo3)
+ * with three partitions each and produces to them:
+ * #{@code
+ *   {
+ *      "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+ *      "durationMs": 10000000,
+ *      "producerNode": "node0",
+ *      "bootstrapServers": "localhost:9092",
+ *      "targetMessagesPerSec": 10,
+ *      "maxMessages": 100,
+ *      "activeTopics": {
+ *        "foo[1-3]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      },
+ *      "inactiveTopics": {
+ *        "foo[4-5]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      }
+ *   }
+ * }
  */
 public class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
+    private final int messagesPerTransaction;
     private final int maxMessages;
+    private final boolean useTransactions;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Map<String, String> producerConf;
@@ -50,6 +79,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("producerNode") String producerNode,
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+                         @JsonProperty("messagesPerTransaction") int messagesPerTransaction,
                          @JsonProperty("maxMessages") int maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
@@ -62,6 +92,8 @@ public class ProduceBenchSpec extends TaskSpec {
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
+        this.useTransactions = messagesPerTransaction != 0;
+        this.messagesPerTransaction = messagesPerTransaction;
         this.maxMessages = maxMessages;
         this.keyGenerator = keyGenerator == null ?
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
@@ -89,6 +121,15 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public int targetMessagesPerSec() {
         return targetMessagesPerSec;
+    }
+
+    @JsonProperty
+    public int messagesPerTransaction() {
+        return messagesPerTransaction;
+    }
+
+    public boolean useTransactions() {
+        return useTransactions;
     }
 
     @JsonProperty
