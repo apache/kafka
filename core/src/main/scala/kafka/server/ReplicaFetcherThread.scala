@@ -119,7 +119,7 @@ class ReplicaFetcherThread(name: String,
       // to avoid failing the caller, especially during shutdown. We will attempt to close
       // leaderEndpoint after the thread terminates.
       try {
-        leaderEndpoint.initiateShutdown()
+        leaderEndpoint.initiateClose()
       } catch {
         case t: Throwable =>
           error(s"Failed to initiate shutdown of leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
@@ -130,8 +130,8 @@ class ReplicaFetcherThread(name: String,
 
   override def awaitShutdown(): Unit = {
     super.awaitShutdown()
-    // This may fail if the endpoint was already closed, for example, if the broker is shutdown while
-    // processing a dynamic update. It is safe to catch the exception here without causing correctness
+    // We don't expect any exceptions here, but catch and log any errors to avoid failing the caller,
+    // especially during shutdown. It is safe to catch the exception here without causing correctness
     // issue because we are going to shutdown the thread and will not re-use the leaderEndpoint anyway.
     try {
       leaderEndpoint.close()

@@ -799,7 +799,7 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(props)
     val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
 
-    expect(mockBlockingSend.initiateShutdown()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.initiateClose()).andThrow(new IllegalArgumentException()).once()
     expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
     replay(mockBlockingSend)
 
