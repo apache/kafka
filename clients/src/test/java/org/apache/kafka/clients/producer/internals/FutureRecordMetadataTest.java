@@ -16,56 +16,73 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
 public class FutureRecordMetadataTest {
 
-  @Test(expected = ExecutionException.class)
-  public void testFutureGetWithSeconds() throws ExecutionException, InterruptedException, TimeoutException {
-    FutureRecordMetadata future = getFutureRecordMetadata(10L);
-    future.chain(getFutureRecordMetadata(1000L));
+    private MockTime time = new MockTime();
 
-    future.get(5, TimeUnit.SECONDS);
-  }
+    @Test
+    public void testFutureGetWithSeconds() throws ExecutionException, InterruptedException, TimeoutException {
+        // given
+        ProduceRequestResult produceRequestResult = mockProduceRequestResult();
+        FutureRecordMetadata future = getFutureRecordMetadata(produceRequestResult);
 
-  @Test(expected = ExecutionException.class)
-  public void testFutureGetWithMilliSeconds() throws ExecutionException, InterruptedException, TimeoutException {
-    FutureRecordMetadata future = getFutureRecordMetadata(10L);
-    future.chain(getFutureRecordMetadata(1000L));
+        ProduceRequestResult chainedProduceRequestResult = mockProduceRequestResult();
+        future.chain(getFutureRecordMetadata(chainedProduceRequestResult));
 
-    future.get(5000, TimeUnit.MILLISECONDS);
-  }
+        // when
+        future.get(1L, TimeUnit.SECONDS);
 
-  private FutureRecordMetadata getFutureRecordMetadata(final long timeout) {
-    return new FutureRecordMetadata(
-        asyncRequest(timeout),
-        0,
-        RecordBatch.NO_TIMESTAMP,
-        0L,
-        0,
-        0
-    );
-  }
+        // then
+        verify(produceRequestResult).await(1L, TimeUnit.SECONDS);
+        verify(chainedProduceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
+    }
 
-  private ProduceRequestResult asyncRequest(final long timeout) {
-    final ProduceRequestResult request = new ProduceRequestResult(new TopicPartition("topic", 0));
-    Thread thread = new Thread(() -> {
-      try {
-        Thread.sleep(timeout);
-        request.set(5L, RecordBatch.NO_TIMESTAMP, new CorruptRecordException());
-        request.done();
-      } catch (InterruptedException e) {
-        // nothing to do
-      }
-    });
-    thread.start();
-    return request;
-  }
+    @Test
+    public void testFutureGetWithMilliSeconds() throws ExecutionException, InterruptedException, TimeoutException {
+        // given
+        ProduceRequestResult produceRequestResult = mockProduceRequestResult();
+        FutureRecordMetadata future = getFutureRecordMetadata(produceRequestResult);
+
+        ProduceRequestResult chainedProduceRequestResult = mockProduceRequestResult();
+        future.chain(getFutureRecordMetadata(chainedProduceRequestResult));
+
+        // when
+        future.get(1000L, TimeUnit.MILLISECONDS);
+
+        // then
+        verify(produceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
+        verify(chainedProduceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
+    }
+
+    private FutureRecordMetadata getFutureRecordMetadata(ProduceRequestResult produceRequestResult) {
+        return new FutureRecordMetadata(
+                produceRequestResult,
+                0,
+                RecordBatch.NO_TIMESTAMP,
+                0L,
+                0,
+                0,
+                time
+        );
+    }
+
+    private ProduceRequestResult mockProduceRequestResult() throws InterruptedException {
+        ProduceRequestResult mockProduceRequestResult = mock(ProduceRequestResult.class);
+        when(mockProduceRequestResult.await(anyLong(), any(TimeUnit.class))).thenReturn(true);
+        return mockProduceRequestResult;
+    }
 }

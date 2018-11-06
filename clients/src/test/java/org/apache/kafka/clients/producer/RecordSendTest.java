@@ -16,28 +16,30 @@
  */
 package org.apache.kafka.clients.producer;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
-
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
-
-
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
 import org.apache.kafka.clients.producer.internals.ProduceRequestResult;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
+
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class RecordSendTest {
 
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private final long baseOffset = 45;
     private final long relOffset = 5;
+    private Time time = new MockTime();
 
     /**
      * Test that waiting on a request that never completes times out
@@ -46,7 +48,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
         assertFalse("Request is not completed", future.isDone());
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -65,8 +67,8 @@ public class RecordSendTest {
      */
     @Test(expected = ExecutionException.class)
     public void testError() throws Exception {
-        FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, new CorruptRecordException(), 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
+        FutureRecordMetadata future = new FutureRecordMetadata(produceRequestResult(baseOffset, new CorruptRecordException()),
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
         future.get();
     }
 
@@ -75,24 +77,17 @@ public class RecordSendTest {
      */
     @Test
     public void testBlocking() throws Exception {
-        FutureRecordMetadata future = new FutureRecordMetadata(asyncRequest(baseOffset, null, 50L),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0);
+        time = Time.SYSTEM;
+        FutureRecordMetadata future = new FutureRecordMetadata(produceRequestResult(baseOffset, null),
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
     /* create a new request result that will be completed after the given timeout */
-    public ProduceRequestResult asyncRequest(final long baseOffset, final RuntimeException error, final long timeout) {
+    private ProduceRequestResult produceRequestResult(final long baseOffset, final RuntimeException error) {
         final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    sleep(timeout);
-                    request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
-                    request.done();
-                } catch (InterruptedException e) { }
-            }
-        };
-        thread.start();
+        request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);
+        request.done();
         return request;
     }
 
