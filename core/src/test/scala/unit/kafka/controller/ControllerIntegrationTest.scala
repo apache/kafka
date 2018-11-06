@@ -116,6 +116,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       assertEquals(Seq(remainingBrokers.head.config.brokerId).asJava, offlineReplicaPartitionInfo.basePartitionState.isr)
       val onlinePartitionInfo = server.metadataCache.getPartitionInfo(topic, 1).get
       assertEquals(assignment(1).asJava, onlinePartitionInfo.basePartitionState.replicas)
+      assertTrue(onlinePartitionInfo.offlineReplicas.isEmpty)
     }
 
     // Startup the broker
