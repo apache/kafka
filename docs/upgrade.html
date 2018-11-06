@@ -53,10 +53,9 @@
         protocol version, it will no longer be possible to downgrade the cluster to an older version.
     </li>
     <li> If you have overridden the message format version as instructed above, then you need to do one more rolling restart to
-        upgrade it to its latest version. To avoid message conversion costs, you can wait until most clients
-        (producers and consumers) have been upgraded to 0.11.0 or later before taking this step. Once they have,
-        change log.message.format.version to 2.1 on each broker and restart them one by one. Note that the older Scala clients
-        which are no longer maintained do not support the message format introduced in 0.11, so to avoid conversion costs 
+        upgrade it to its latest version. Once all (or most) consumers have been upgraded to 0.11.0 or later,
+        change log.message.format.version to 2.1 on each broker and restart them one by one. Note that the older Scala clients,
+        which are no longer maintained, do not support the message format introduced in 0.11, so to avoid conversion costs 
         (or to take advantage of <a href="#upgrade_11_exactly_once_semantics">exactly once semantics</a>),
         the newer Java clients must be used.
     </li>
