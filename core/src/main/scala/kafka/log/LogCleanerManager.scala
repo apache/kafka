@@ -184,9 +184,9 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           val (firstDirtyOffset, firstUncleanableDirtyOffset) =
             LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, now)
 
-          val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
-          val needCompactionNow = LogCleanerManager.reachMaxCompactionLag(log, firstDirtyOffset, now - maxCompactionLagMs)
-          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, needCompactionNow)
+          val firstDirtySegmentCreateTime = LogCleanerManager.getFirstDirtySegmentEstimatedCreateTime(log, firstDirtyOffset)
+          val needCompactionNow = LogCleanerManager.reachMaxCompactionLag(log, firstDirtySegmentCreateTime, now)
+          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, needCompactionNow, firstDirtySegmentCreateTime)
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0
@@ -485,9 +485,9 @@ private[log] object LogCleanerManager extends Logging {
   }
 
   /**
-    * return whether there is any dirty log that is created before cleanUtilTime
+    * return first dirty segment estimated createTime
     */
-  def reachMaxCompactionLag(log: Log, firstDirtyOffset: Long, cleanUtilTime: Long) : Boolean = {
+  def getFirstDirtySegmentEstimatedCreateTime(log: Log, firstDirtyOffset: Long) : Long = {
     val largestCleanTimestamp = log.logSegments(-1, firstDirtyOffset).lastOption.map(_.largestTimestamp).getOrElse(0L)
     val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
 
@@ -501,7 +501,15 @@ private[log] object LogCleanerManager extends Logging {
           math.max(largestCleanTimestamp, segment.largestTimestamp - log.config.maxSegmentMs)
         }
     }
+    firstDirtySegmentCreateTime
+  }
 
+  /**
+    * return whether the given log creation time has reached max Compaction Lag
+    */
+  def reachMaxCompactionLag(log: Log, firstDirtySegmentCreateTime: Long, now: Long) : Boolean = {
+    val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
+    val cleanUtilTime = now - maxCompactionLagMs
     if (firstDirtySegmentCreateTime <= cleanUtilTime && firstDirtySegmentCreateTime >= 0) true else false
   }
 
