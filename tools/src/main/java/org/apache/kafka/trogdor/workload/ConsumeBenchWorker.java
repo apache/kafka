@@ -87,9 +87,9 @@ public class ConsumeBenchWorker implements TaskWorker {
         log.info("{}: Activating ConsumeBenchWorker with {}", id, spec);
         this.statusUpdater = new StatusUpdater();
         this.executor = Executors.newScheduledThreadPool(
-            spec.consumerCount() + 2, // 1 thread for all the ConsumeStatusUpdater and 1 for the StatusUpdater
+            spec.threadsPerWorker() + 2, // 1 thread for all the ConsumeStatusUpdater and 1 for the StatusUpdater
             ThreadUtils.createThreadFactory("ConsumeBenchWorkerThread%d", false));
-        this.statusUpdaterFuture = executor.scheduleAtFixedRate(this.statusUpdater, 2, 1, TimeUnit.MINUTES);
+        this.statusUpdaterFuture = executor.scheduleAtFixedRate(this.statusUpdater, 1, 1, TimeUnit.MINUTES);
         this.workerStatus = status;
         this.doneFuture = doneFuture;
         executor.submit(new Prepare());
@@ -112,31 +112,29 @@ public class ConsumeBenchWorker implements TaskWorker {
         private List<ConsumeMessages> consumeTasks() {
             List<ConsumeMessages> tasks = new ArrayList<>();
             String consumerGroup = consumerGroup();
-            int consumerCount = spec.consumerCount();
+            int consumerCount = spec.threadsPerWorker();
             Map<String, List<TopicPartition>> partitionsByTopic = spec.materializeTopics();
             boolean toUseGroupPartitionAssignment = partitionsByTopic.values().stream().allMatch(List::isEmpty);
 
             if (!toUseGroupPartitionAssignment && !toUseRandomConsumeGroup() && consumerCount > 1)
-                throw new ConfigException(String.format("Will not split partitions across consumers from the %s group", consumerGroup));
+                throw new ConfigException("You may not specify an explicit partition assignment when using multiple consumers in the same group."
+                    + "Please leave the consumer group unset, specify topics instead of partitions or use a single consumer.");
 
-            String clientId = clientId(0);
-            consumer = consumer(consumerGroup, clientId);
-            if (!toUseGroupPartitionAssignment) {
+            consumer = consumer(consumerGroup, clientId(0));
+            if (toUseGroupPartitionAssignment) {
+                Set<String> topics = partitionsByTopic.keySet();
+                tasks.add(new ConsumeMessages(consumer, topics));
+
+                for (int i = 0; i < consumerCount - 1; i++) {
+                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId(i + 1)), topics));
+                }
+            } else {
                 List<TopicPartition> partitions = populatePartitionsByTopic(consumer.consumer(), partitionsByTopic)
                     .values().stream().flatMap(List::stream).collect(Collectors.toList());
                 tasks.add(new ConsumeMessages(consumer, partitions));
 
                 for (int i = 0; i < consumerCount - 1; i++) {
-                    clientId = clientId(i + 1);
-                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), partitions));
-                }
-            } else {
-                Set<String> topics = partitionsByTopic.keySet();
-                tasks.add(new ConsumeMessages(consumer, topics));
-
-                for (int i = 0; i < consumerCount - 1; i++) {
-                    clientId = clientId(i + 1);
-                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId), topics));
+                    tasks.add(new ConsumeMessages(consumer(consumerGroup(), clientId(i + 1)), partitions));
                 }
             }
 
@@ -150,9 +148,8 @@ public class ConsumeBenchWorker implements TaskWorker {
         /**
          * Creates a new KafkaConsumer instance
          */
-        private ThreadSafeConsumer consumer(String consumerGroup, String idx) {
+        private ThreadSafeConsumer consumer(String consumerGroup, String clientId) {
             Properties props = new Properties();
-            String clientId = String.format("consumer.%s-%s", id, idx);
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
             props.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
             props.put(ConsumerConfig.GROUP_ID_CONFIG, consumerGroup);
@@ -170,7 +167,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         }
 
         private boolean toUseRandomConsumeGroup() {
-            return spec.consumerGroup().equals(ConsumeBenchSpec.EMPTY_CONSUMER_GROUP);
+            return spec.consumerGroup().isEmpty();
         }
 
         private Map<String, List<TopicPartition>> populatePartitionsByTopic(KafkaConsumer<byte[], byte[]> consumer,
@@ -209,7 +206,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.statusUpdaterFuture = executor.scheduleAtFixedRate(
                 new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer), 1, 1, TimeUnit.MINUTES);
             int perPeriod;
-            if (spec.targetMessagesPerSec() == 0)
+            if (spec.targetMessagesPerSec() <= 0)
                 perPeriod = Integer.MAX_VALUE;
             else
                 perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
