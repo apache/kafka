@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.InterruptException;
@@ -24,12 +23,12 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -38,6 +37,7 @@ import java.util.Map;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.stream.Collectors;
 
 /**
  * A mock network client for use testing code
@@ -73,10 +73,7 @@ public class MockClient implements KafkaClient {
 
     private int correlation;
     private final Time time;
-    private final Metadata metadata;
-    private Set<String> unavailableTopics;
-    private Cluster cluster;
-    private Node node = null;
+    private final MockMetadataUpdater metadataUpdater;
     private final Set<String> ready = new HashSet<>();
 
     // Nodes awaiting reconnect backoff, will not be chosen by leastLoadedNode
@@ -97,14 +94,13 @@ public class MockClient implements KafkaClient {
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
     private volatile int numBlockingWakeups = 0;
 
-    public MockClient(Time time) {
-        this(time, null);
+    public MockClient(Time time, Metadata metadata) {
+        this(time, new DefaultMockMetadataUpdater(metadata));
     }
 
-    public MockClient(Time time, Metadata metadata) {
+    public MockClient(Time time, MockMetadataUpdater metadataUpdater) {
         this.time = time;
-        this.metadata = metadata;
-        this.unavailableTopics = Collections.emptySet();
+        this.metadataUpdater = metadataUpdater;
         this.blackedOut = new TransientSet<>(time);
         this.unreachable = new TransientSet<>(time);
         this.delayedReady = new TransientSet<>(time);
@@ -280,21 +276,13 @@ public class MockClient implements KafkaClient {
         checkTimeoutOfPendingRequests(now);
 
         List<ClientResponse> copy = new ArrayList<>(this.responses);
-        if (metadata != null && metadata.updateRequested()) {
+        // We skip metadata updates if all nodes are currently blacked out
+        if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
-            if (cluster != null)
-                metadata.update(cluster, this.unavailableTopics, time.milliseconds());
-            if (metadataUpdate == null)
-                metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
-            else {
-                if (metadataUpdate.expectMatchRefreshTopics
-                    && !metadata.topics().equals(metadataUpdate.cluster.topics())) {
-                    throw new IllegalStateException("The metadata topics does not match expectation. "
-                                                        + "Expected topics: " + metadataUpdate.cluster.topics()
-                                                        + ", asked topics: " + metadata.topics());
-                }
-                this.unavailableTopics = metadataUpdate.unavailableTopics;
-                metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
+            if (metadataUpdate != null) {
+                metadataUpdater.update(time, metadataUpdate);
+            } else {
+                metadataUpdater.updateWithCurrentMetadata(time);
             }
         }
 
@@ -309,6 +297,7 @@ public class MockClient implements KafkaClient {
     private long elapsedTimeMs(long currentTimeMs, long startTimeMs) {
         return Math.max(0, currentTimeMs - startTimeMs);
     }
+
 
     private void checkTimeoutOfPendingRequests(long nowMs) {
         ClientRequest request = requests.peek();
@@ -350,9 +339,9 @@ public class MockClient implements KafkaClient {
 
 
     public void respond(AbstractResponse response, boolean disconnected) {
-        ClientRequest request = null;
-        if (requests.size() > 0)
-            request = requests.remove();
+        if (requests.isEmpty())
+            throw new IllegalStateException("No requests pending for inbound response " + response);
+        ClientRequest request = requests.poll();
         short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
                 request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
@@ -463,22 +452,17 @@ public class MockClient implements KafkaClient {
         return futureResponses.size();
     }
 
-    public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
-        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, false));
+    public void prepareMetadataUpdate(MetadataResponse updateResponse) {
+        prepareMetadataUpdate(updateResponse, false);
     }
 
-    public void prepareMetadataUpdate(Cluster cluster,
-                                      Set<String> unavailableTopics,
+    public void prepareMetadataUpdate(MetadataResponse updateResponse,
                                       boolean expectMatchMetadataTopics) {
-        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics, expectMatchMetadataTopics));
+        metadataUpdates.add(new MetadataUpdate(updateResponse, expectMatchMetadataTopics));
     }
 
-    public void setNode(Node node) {
-        this.node = node;
-    }
-
-    public void cluster(Cluster cluster) {
-        this.cluster = cluster;
+    public void updateMetadata(MetadataResponse updateResponse) {
+        metadataUpdater.update(time, new MetadataUpdate(updateResponse, false));
     }
 
     @Override
@@ -534,7 +518,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void close() {
-        metadata.close();
+        metadataUpdater.close();
     }
 
     @Override
@@ -545,9 +529,11 @@ public class MockClient implements KafkaClient {
     @Override
     public Node leastLoadedNode(long now) {
         // Consistent with NetworkClient, we do not return nodes awaiting reconnect backoff
-        if (blackedOut.contains(node, now))
-            return null;
-        return this.node;
+        for (Node node : metadataUpdater.fetchNodes()) {
+            if (!blackedOut.contains(node, now))
+                return node;
+        }
+        return null;
     }
 
     /**
@@ -564,14 +550,19 @@ public class MockClient implements KafkaClient {
         this.nodeApiVersions = nodeApiVersions;
     }
 
-    private static class MetadataUpdate {
-        final Cluster cluster;
-        final Set<String> unavailableTopics;
+    public static class MetadataUpdate {
+        final MetadataResponse updateResponse;
         final boolean expectMatchRefreshTopics;
-        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics, boolean expectMatchRefreshTopics) {
-            this.cluster = cluster;
-            this.unavailableTopics = unavailableTopics;
+
+        MetadataUpdate(MetadataResponse updateResponse, boolean expectMatchRefreshTopics) {
+            this.updateResponse = updateResponse;
             this.expectMatchRefreshTopics = expectMatchRefreshTopics;
+        }
+
+        private Set<String> topics() {
+            return updateResponse.topicMetadata().stream()
+                    .map(MetadataResponse.TopicMetadata::topic)
+                    .collect(Collectors.toSet());
         }
     }
 
@@ -612,6 +603,66 @@ public class MockClient implements KafkaClient {
             elements.clear();
         }
 
+    }
+
+    /**
+     * This is a dumbed down version of {@link MetadataUpdater} which is used to facilitate
+     * metadata tracking primarily in order to serve {@link KafkaClient#leastLoadedNode(long)}
+     * and bookkeeping through {@link Metadata}. The extensibility allows AdminClient, which does
+     * not rely on {@link Metadata} to do its own thing.
+     */
+    public interface MockMetadataUpdater {
+        List<Node> fetchNodes();
+
+        boolean isUpdateNeeded();
+
+        void update(Time time, MetadataUpdate update);
+
+        default void updateWithCurrentMetadata(Time time) {}
+
+        default void close() {}
+    }
+
+    private static class DefaultMockMetadataUpdater implements MockMetadataUpdater {
+        private final Metadata metadata;
+        private MetadataUpdate lastUpdate;
+
+        public DefaultMockMetadataUpdater(Metadata metadata) {
+            this.metadata = metadata;
+        }
+
+        @Override
+        public List<Node> fetchNodes() {
+            return metadata.fetch().nodes();
+        }
+
+        @Override
+        public boolean isUpdateNeeded() {
+            return metadata.updateRequested();
+        }
+
+        @Override
+        public void updateWithCurrentMetadata(Time time) {
+            if (lastUpdate == null)
+                throw new IllegalStateException("No previous metadata update to use");
+            update(time, lastUpdate);
+        }
+
+        @Override
+        public void update(Time time, MetadataUpdate update) {
+            if (update.expectMatchRefreshTopics && !metadata.topics().equals(update.topics())) {
+                throw new IllegalStateException("The metadata topics does not match expectation. "
+                        + "Expected topics: " + update.topics()
+                        + ", asked topics: " + metadata.topics());
+            }
+            metadata.update(update.updateResponse, time.milliseconds());
+            this.lastUpdate = update;
+        }
+
+        @Override
+        public void close() {
+            metadata.close();
+        }
     }
 
 }

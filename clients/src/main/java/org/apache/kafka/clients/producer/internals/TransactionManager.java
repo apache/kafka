@@ -196,7 +196,7 @@ public class TransactionManager {
     }
 
     TransactionManager() {
-        this(new LogContext(), null, 0, 100);
+        this(new LogContext(), null, 0, 100L);
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {

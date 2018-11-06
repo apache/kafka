@@ -18,7 +18,7 @@
 package kafka.api
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Gauge, Metric, MetricName}
+import com.yammer.metrics.core.Gauge
 
 import java.io.File
 import java.util.ArrayList

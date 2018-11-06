@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -41,6 +42,8 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -318,12 +321,12 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateTrue() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         long position = fileRecords.channel().position();
         int size = fileRecords.sizeInBytes();
         assertEquals(0, position);
         assertEquals(0, size);
-        assertEquals(512 * 1024 * 1024, temp.length());
+        assertEquals(1024 * 1024, temp.length());
     }
 
     /**
@@ -332,7 +335,7 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateFalse() throws IOException {
         File temp = tempFile();
-        FileRecords set = FileRecords.open(temp, false, 512 * 1024 * 1024, false);
+        FileRecords set = FileRecords.open(temp, false, 1024 * 1024, false);
         long position = set.channel().position();
         int size = set.sizeInBytes();
         assertEquals(0, position);
@@ -346,7 +349,7 @@ public class FileRecordsTest {
     @Test
     public void testPreallocateClearShutdown() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         append(fileRecords, values);
 
         int oldPosition = (int) fileRecords.channel().position();
@@ -356,7 +359,7 @@ public class FileRecordsTest {
         fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());
-        FileRecords setReopen = FileRecords.open(tempReopen, true, 512 * 1024 * 1024, true);
+        FileRecords setReopen = FileRecords.open(tempReopen, true, 1024 * 1024, true);
         int position = (int) setReopen.channel().position();
         int size = setReopen.sizeInBytes();
 
@@ -380,6 +383,55 @@ public class FileRecordsTest {
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
         Iterator<ConvertedRecords> it = lazyRecords.iterator(16 * 1024L);
         assertTrue("No messages should be returned", !it.hasNext());
+    }
+
+    @Test
+    public void testSearchForTimestamp() throws IOException {
+        for (RecordVersion version : RecordVersion.values()) {
+            testSearchForTimestamp(version);
+        }
+    }
+
+    private void testSearchForTimestamp(RecordVersion version) throws IOException {
+        File temp = tempFile();
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
+        appendWithOffsetAndTimestamp(fileRecords, version, 10L, 5, 0);
+        appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
+
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
+                fileRecords.searchForTimestamp(9L, 0, 0L), version);
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
+                fileRecords.searchForTimestamp(10L, 0, 0L), version);
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(11L, 6, Optional.of(1)),
+                fileRecords.searchForTimestamp(11L, 0, 0L), version);
+        assertNull(fileRecords.searchForTimestamp(12L, 0, 0L));
+    }
+
+    private void assertFoundTimestamp(FileRecords.TimestampAndOffset expected,
+                                      FileRecords.TimestampAndOffset actual,
+                                      RecordVersion version) {
+        if (version == RecordVersion.V0) {
+            assertNull("Expected no match for message format v0", actual);
+        } else {
+            assertNotNull("Expected to find timestamp for message format " + version, actual);
+            assertEquals("Expected matching timestamps for message format" + version, expected.timestamp, actual.timestamp);
+            assertEquals("Expected matching offsets for message format " + version, expected.offset, actual.offset);
+            Optional<Integer> expectedLeaderEpoch = version.value >= RecordVersion.V2.value ?
+                    expected.leaderEpoch : Optional.empty();
+            assertEquals("Non-matching leader epoch for version " + version, expectedLeaderEpoch, actual.leaderEpoch);
+        }
+    }
+
+    private void appendWithOffsetAndTimestamp(FileRecords fileRecords,
+                                              RecordVersion recordVersion,
+                                              long timestamp,
+                                              long offset,
+                                              int leaderEpoch) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
+                CompressionType.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+        builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
+        fileRecords.append(builder.build());
     }
 
     @Test
