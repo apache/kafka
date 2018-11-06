@@ -83,6 +83,59 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitUntilControllerEpoch(firstControllerEpoch + 1, "controller epoch was not incremented after controller move")
   }
 
+  // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
+  // UpdateMetadataRequest to all brokers in the cluster
+  @Test
+  def testMetadataPropagationOnBrokerChange(): Unit = {
+    servers = makeServers(3)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    // Need to make sure the broker we shutdown and startup are not the controller. Otherwise we will send out
+    // full UpdateMetadataReuqest to all brokers during controller failover.
+    val testBroker = servers.filter(e => e.config.brokerId != controllerId).head
+    val remainingBrokers = servers.filter(_.config.brokerId != testBroker.config.brokerId)
+    val topic = "topic1"
+    // Make sure shutdown the test broker will not require any leadership change to test avoid sending out full
+    // UpdateMetadataRequest on broker failure
+    val assignment = Map(
+      0 -> Seq(remainingBrokers(0).config.brokerId, testBroker.config.brokerId),
+      1 -> remainingBrokers.map(_.config.brokerId))
+
+    // Create topic
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
+    // Shutdown the broker
+    testBroker.shutdown()
+    testBroker.awaitShutdown()
+    TestUtils.waitUntilBrokerMetadataIsPropagated(remainingBrokers)
+    remainingBrokers.foreach { server =>
+      val offlineReplicaPartitionInfo = server.metadataCache.getPartitionInfo(topic, 0).get
+      assertEquals(1, offlineReplicaPartitionInfo.offlineReplicas.size())
+      assertEquals(testBroker.config.brokerId, offlineReplicaPartitionInfo.offlineReplicas.get(0))
+      assertEquals(assignment(0).asJava, offlineReplicaPartitionInfo.basePartitionState.replicas)
+      assertEquals(Seq(remainingBrokers.head.config.brokerId).asJava, offlineReplicaPartitionInfo.basePartitionState.isr)
+      val onlinePartitionInfo = server.metadataCache.getPartitionInfo(topic, 1).get
+      assertEquals(assignment(1).asJava, onlinePartitionInfo.basePartitionState.replicas)
+      assertTrue(onlinePartitionInfo.offlineReplicas.isEmpty)
+    }
+
+    // Startup the broker
+    testBroker.startup()
+    TestUtils.waitUntilTrue( () => {
+      !servers.exists { server =>
+        assignment.exists { case (partitionId, replicas) =>
+          val partitionInfoOpt = server.metadataCache.getPartitionInfo(topic, partitionId)
+          if (partitionInfoOpt.isDefined) {
+            val partitionInfo = partitionInfoOpt.get
+            !partitionInfo.offlineReplicas.isEmpty || !partitionInfo.basePartitionState.replicas.asScala.equals(replicas)
+          } else {
+            true
+          }
+        }
+      }
+    }, "Inconsistent metadata after broker startup")
+  }
+
   @Test
   def testTopicCreation(): Unit = {
     servers = makeServers(1)
