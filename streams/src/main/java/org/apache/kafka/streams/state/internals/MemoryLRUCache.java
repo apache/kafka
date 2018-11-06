@@ -36,7 +36,7 @@ import java.util.Objects;
  *
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
- * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
+ * i.e. use {@code MemoryLRUCache<Bytes, ...>} rather than {@code MemoryLRUCache<byte[], ...>}.
  *
  * @param <K> The key type
  * @param <V> The value type
