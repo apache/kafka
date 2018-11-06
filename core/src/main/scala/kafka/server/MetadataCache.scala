@@ -214,7 +214,6 @@ class MetadataCache(brokerId: Int) extends Logging {
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
 
-      //since kafka may do partial metadata updates, we start by copying the previous state
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
       val controllerId = updateMetadataRequest.controllerId match {
@@ -245,6 +244,7 @@ class MetadataCache(brokerId: Int) extends Logging {
       if (updateMetadataRequest.partitionStates().isEmpty) {
         metadataSnapshot = MetadataSnapshot(metadataSnapshot.partitionStates, controllerId, aliveBrokers, aliveNodes)
       } else {
+        //since kafka may do partial metadata updates, we start by copying the previous state
         val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]](metadataSnapshot.partitionStates.size)
         metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
           val copy = new mutable.LongMap[UpdateMetadataRequest.PartitionState](oldPartitionStates.size)
