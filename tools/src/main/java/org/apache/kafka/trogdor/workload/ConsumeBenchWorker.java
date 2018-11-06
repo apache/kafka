@@ -72,7 +72,7 @@ public class ConsumeBenchWorker implements TaskWorker {
     private StatusUpdater statusUpdater;
     private Future<?> statusUpdaterFuture;
     private KafkaFutureImpl<String> doneFuture;
-    private Consumer consumer;
+    private ThreadSafeConsumer consumer;
     public ConsumeBenchWorker(String id, ConsumeBenchSpec spec) {
         this.id = id;
         this.spec = spec;
@@ -150,7 +150,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         /**
          * Creates a new KafkaConsumer instance
          */
-        private Consumer consumer(String consumerGroup, String idx) {
+        private ThreadSafeConsumer consumer(String consumerGroup, String idx) {
             Properties props = new Properties();
             String clientId = String.format("consumer.%s-%s", id, idx);
             props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
@@ -160,7 +160,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             props.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 100000);
             // these defaults maybe over-written by the user-specified commonClientConf or consumerConf
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.consumerConf());
-            return new Consumer(new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), clientId);
+            return new ThreadSafeConsumer(new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), clientId);
         }
 
         private String consumerGroup() {
@@ -200,9 +200,9 @@ public class ConsumeBenchWorker implements TaskWorker {
         private final Future<?> statusUpdaterFuture;
         private final Throttle throttle;
         private final String clientId;
-        private final Consumer consumer;
+        private final ThreadSafeConsumer consumer;
 
-        private ConsumeMessages(Consumer consumer) {
+        private ConsumeMessages(ThreadSafeConsumer consumer) {
             this.latencyHistogram = new Histogram(5000);
             this.messageSizeHistogram = new Histogram(2 * 1024 * 1024);
             this.clientId = consumer.clientId();
@@ -218,13 +218,13 @@ public class ConsumeBenchWorker implements TaskWorker {
             this.consumer = consumer;
         }
 
-        ConsumeMessages(Consumer consumer, Set<String> topics) {
+        ConsumeMessages(ThreadSafeConsumer consumer, Set<String> topics) {
             this(consumer);
             log.info("Will consume from topics {} via dynamic group assignment.", topics);
             this.consumer.subscribe(topics);
         }
 
-        ConsumeMessages(Consumer consumer, List<TopicPartition> partitions) {
+        ConsumeMessages(ThreadSafeConsumer consumer, List<TopicPartition> partitions) {
             this(consumer);
             log.info("Will consume from topic partitions {} via manual assignment.", partitions);
             this.consumer.assign(partitions);
@@ -333,9 +333,9 @@ public class ConsumeBenchWorker implements TaskWorker {
     public class ConsumeStatusUpdater implements Runnable {
         private final Histogram latencyHistogram;
         private final Histogram messageSizeHistogram;
-        private final Consumer consumer;
+        private final ThreadSafeConsumer consumer;
 
-        ConsumeStatusUpdater(Histogram latencyHistogram, Histogram messageSizeHistogram, Consumer consumer) {
+        ConsumeStatusUpdater(Histogram latencyHistogram, Histogram messageSizeHistogram, ThreadSafeConsumer consumer) {
             this.latencyHistogram = latencyHistogram;
             this.messageSizeHistogram = messageSizeHistogram;
             this.consumer = consumer;
@@ -464,13 +464,13 @@ public class ConsumeBenchWorker implements TaskWorker {
     /**
      * A thread-safe KafkaConsumer wrapper
      */
-    private class Consumer {
+    private static class ThreadSafeConsumer {
         private final KafkaConsumer<byte[], byte[]> consumer;
         private final String clientId;
         private final ReentrantLock consumerLock;
         private boolean closed = false;
 
-        Consumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
+        ThreadSafeConsumer(KafkaConsumer<byte[], byte[]> consumer, String clientId) {
             this.consumer = consumer;
             this.clientId = clientId;
             this.consumerLock = new ReentrantLock();
