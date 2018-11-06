@@ -47,7 +47,7 @@ class ConnectStandaloneFileTest(Test):
 
     OFFSETS_FILE = "/mnt/connect.offsets"
 
-    TOPIC = "${file:/mnt/connect/connect-file-external.properties:topic.external}"
+    TOPIC = "${file:/mnt/connect/connect-external-configs.properties:topic.external}"
     TOPIC_TEST = "test"
 
     FIRST_INPUT_LIST = ["foo", "bar", "baz"]
