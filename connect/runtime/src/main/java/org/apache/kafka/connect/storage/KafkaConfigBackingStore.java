@@ -514,7 +514,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                 synchronized (lock) {
                     if (value.value() == null) {
                         // Connector deletion will be written as a null value
-                        log.info("Removed connector '{}' due to null configuration. This is usually intentional and does not indicate an issue.", connectorName);
+                        log.info("Successfully processed removal of connector '{}'", connectorName);
                         connectorConfigs.remove(connectorName);
                         removed = true;
                     } else {
@@ -556,13 +556,13 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
                         return;
                     }
                     if (!(value.value() instanceof Map)) {
-                        log.error("Ignoring task configuration for task {} because the value is not a Map", taskId, value.value().getClass());
+                        log.error("Ignoring task configuration for task {} because the value is not a Map but is {}", taskId, value.value().getClass());
                         return;
                     }
 
                     Object newTaskConfig = ((Map<String, Object>) value.value()).get("properties");
                     if (!(newTaskConfig instanceof Map)) {
-                        log.error("Invalid data for config of task {} 'properties' field should be a Map but is ", taskId, newTaskConfig.getClass());
+                        log.error("Invalid data for config of task {} 'properties' field should be a Map but is {}", taskId, newTaskConfig.getClass());
                         return;
                     }
 
