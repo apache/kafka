@@ -59,8 +59,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
                                      val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
-  import LogCleanerManager._
-
   protected override def loggerName = classOf[LogCleaner].getName
 
   // package-private for testing

@@ -359,7 +359,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         record.headers)
 
     override def run() {
-      info("Starting mirror maker thread " + threadName)
+      info(s"Starting mirror maker thread $threadName")
       try {
         consumerWrapper.init()
 
@@ -425,7 +425,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     def shutdown() {
       try {
-        info(threadName + " shutting down")
+        info(s"$threadName shutting down")
         shuttingDown = true
         consumerWrapper.wakeup()
       }

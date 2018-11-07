@@ -18,15 +18,15 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.internals.ClusterResourceListeners;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -64,6 +64,7 @@ public class Metadata implements Closeable {
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
     private Cluster cluster;
+    private Set<String> unavailableTopics = Collections.emptySet();
     private boolean needUpdate;
     /* Topics with expiry time */
     private final Map<String, Long> topics;
@@ -74,7 +75,9 @@ public class Metadata implements Closeable {
     private final boolean topicExpiryEnabled;
     private boolean isClosed;
 
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean allowAutoTopicCreation) {
+    public Metadata(long refreshBackoffMs,
+                    long metadataExpireMs,
+                    boolean allowAutoTopicCreation) {
         this(refreshBackoffMs, metadataExpireMs, allowAutoTopicCreation, false, new ClusterResourceListeners());
     }
 
@@ -88,8 +91,11 @@ public class Metadata implements Closeable {
      * @param topicExpiryEnabled If true, enable expiry of unused topics
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
-    public Metadata(long refreshBackoffMs, long metadataExpireMs, boolean allowAutoTopicCreation,
-                    boolean topicExpiryEnabled, ClusterResourceListeners clusterResourceListeners) {
+    public Metadata(long refreshBackoffMs,
+                    long metadataExpireMs,
+                    boolean allowAutoTopicCreation,
+                    boolean topicExpiryEnabled,
+                    ClusterResourceListeners clusterResourceListeners) {
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
         this.allowAutoTopicCreation = allowAutoTopicCreation;
@@ -231,17 +237,23 @@ public class Metadata implements Closeable {
         return this.topics.containsKey(topic);
     }
 
+    public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
+        this.needUpdate = true;
+        this.lastRefreshMs = now;
+        this.lastSuccessfulRefreshMs = now;
+        this.version += 1;
+        this.cluster = Cluster.bootstrap(addresses);
+    }
+
     /**
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *
-     * @param newCluster the cluster containing metadata for topics with valid metadata
-     * @param unavailableTopics topics which are non-existent or have one or more partitions whose
-     *        leader is not known
+     * @param metadataResponse metadata response received from the broker
      * @param now current time in milliseconds
      */
-    public synchronized void update(Cluster newCluster, Set<String> unavailableTopics, long now) {
-        Objects.requireNonNull(newCluster, "cluster should not be null");
+    public synchronized void update(MetadataResponse metadataResponse, long now) {
+        Objects.requireNonNull(metadataResponse, "Metadata response cannot be null");
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
@@ -264,30 +276,32 @@ public class Metadata implements Closeable {
             }
         }
 
-        for (Listener listener: listeners)
-            listener.onMetadataUpdate(newCluster, unavailableTopics);
-
         String previousClusterId = cluster.clusterResource().clusterId();
+
+        this.cluster = metadataResponse.cluster();
+        this.unavailableTopics = metadataResponse.unavailableTopics();
+
+        fireListeners(cluster, unavailableTopics);
 
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = getClusterForCurrentTopics(newCluster);
-        } else {
-            this.cluster = newCluster;
+            this.cluster = metadataResponse.cluster(topics.keySet());
         }
 
-        // The bootstrap cluster is guaranteed not to have any useful information
-        if (!newCluster.isBootstrapConfigured()) {
-            String newClusterId = newCluster.clusterResource().clusterId();
-            if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
-                log.info("Cluster ID: {}", newClusterId);
-            clusterResourceListeners.onUpdate(newCluster.clusterResource());
-        }
+        String newClusterId = cluster.clusterResource().clusterId();
+        if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
+            log.info("Cluster ID: {}", newClusterId);
+        clusterResourceListeners.onUpdate(cluster.clusterResource());
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
+    }
+
+    private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {
+        for (Listener listener: listeners)
+            listener.onMetadataUpdate(newCluster, unavailableTopics);
     }
 
     /**
@@ -390,32 +404,4 @@ public class Metadata implements Closeable {
         requestUpdate();
     }
 
-    private Cluster getClusterForCurrentTopics(Cluster cluster) {
-        Set<String> unauthorizedTopics = new HashSet<>();
-        Set<String> invalidTopics = new HashSet<>();
-        Collection<PartitionInfo> partitionInfos = new ArrayList<>();
-        List<Node> nodes = Collections.emptyList();
-        Set<String> internalTopics = Collections.emptySet();
-        Node controller = null;
-        String clusterId = null;
-        if (cluster != null) {
-            clusterId = cluster.clusterResource().clusterId();
-            internalTopics = cluster.internalTopics();
-            unauthorizedTopics.addAll(cluster.unauthorizedTopics());
-            unauthorizedTopics.retainAll(this.topics.keySet());
-
-            invalidTopics.addAll(cluster.invalidTopics());
-            invalidTopics.addAll(this.cluster.invalidTopics());
-
-            for (String topic : this.topics.keySet()) {
-                List<PartitionInfo> partitionInfoList = cluster.partitionsForTopic(topic);
-                if (!partitionInfoList.isEmpty()) {
-                    partitionInfos.addAll(partitionInfoList);
-                }
-            }
-            nodes = cluster.nodes();
-            controller  = cluster.controller();
-        }
-        return new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, invalidTopics, internalTopics, controller);
-    }
 }

@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -52,6 +51,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Collections.emptyMap;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
@@ -87,18 +87,15 @@ public class AbstractCoordinatorTest {
 
     private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs) {
         this.mockTime = new MockTime();
-        this.mockClient = new MockClient(mockTime);
-
         Metadata metadata = new Metadata(retryBackoffMs, 60 * 60 * 1000L, true);
+
+        this.mockClient = new MockClient(mockTime, metadata);
         this.consumerClient = new ConsumerNetworkClient(new LogContext(), mockClient, metadata, mockTime,
                 retryBackoffMs, REQUEST_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS);
         Metrics metrics = new Metrics();
 
-        Cluster cluster = TestUtils.singletonCluster("topic", 1);
-        metadata.update(cluster, Collections.emptySet(), mockTime.milliseconds());
-        this.node = cluster.nodes().get(0);
-        mockClient.setNode(node);
-
+        mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
+        this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
         this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs);
     }
@@ -244,11 +241,11 @@ public class AbstractCoordinatorTest {
     public void testLookupCoordinator() {
         setupCoordinator();
 
-        mockClient.setNode(null);
+        mockClient.blackout(node, 50);
         RequestFuture<Void> noBrokersAvailableFuture = coordinator.lookupCoordinator();
         assertTrue("Failed future expected", noBrokersAvailableFuture.failed());
+        mockTime.sleep(50);
 
-        mockClient.setNode(node);
         RequestFuture<Void> future = coordinator.lookupCoordinator();
         assertFalse("Request not sent", future.isDone());
         assertSame("New request sent while one is in progress", future, coordinator.lookupCoordinator());

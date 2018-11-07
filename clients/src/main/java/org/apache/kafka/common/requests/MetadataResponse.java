@@ -368,9 +368,16 @@ public class MetadataResponse extends AbstractResponse {
      * @return the cluster snapshot
      */
     public Cluster cluster() {
+        return cluster(null);
+    }
+
+    public Cluster cluster(Set<String> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
+            if (topicsToRetain != null && !topicsToRetain.contains(metadata.topic))
+                continue;
+
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);

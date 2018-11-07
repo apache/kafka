@@ -141,7 +141,8 @@ ProduceBench starts a Kafka producer on a single agent node, producing to severa
 RoundTripWorkload tests both production and consumption.  The workload starts a Kafka producer and consumer on a single node.  The consumer will read back the messages that were produced by the producer.
 
 ### ConsumeBench
-ConsumeBench starts a Kafka consumer on a single agent node.  The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
+ConsumeBench starts a Kafka consumer on a single agent node. Depending on the passed in configuration (see ConsumeBenchSpec), the consumer either subscribes to a set of topics (leveraging consumer group functionality) or manually assigns partitions to itself.
+The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
 
 Faults
 ========================================

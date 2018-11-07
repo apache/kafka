@@ -439,8 +439,7 @@ object AdminClient {
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
-    val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, Collections.emptySet(), 0)
+    metadata.bootstrap(brokerAddresses, time.milliseconds())
 
     val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
 
@@ -482,6 +481,6 @@ object AdminClient {
       requestTimeoutMs,
       retryBackoffMs,
       highLevelClient,
-      bootstrapCluster.nodes.asScala.toList)
+      metadata.fetch.nodes.asScala.toList)
   }
 }

@@ -45,9 +45,12 @@ public final class ClientUtils {
     private ClientUtils() {
     }
 
-    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookup) {
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, String clientDnsLookupConfig) {
+        return parseAndValidateAddresses(urls, ClientDnsLookup.forConfig(clientDnsLookupConfig));
+    }
+
+    public static List<InetSocketAddress> parseAndValidateAddresses(List<String> urls, ClientDnsLookup clientDnsLookup) {
         List<InetSocketAddress> addresses = new ArrayList<>();
-        ClientDnsLookup clientDnsLookupBehaviour = ClientDnsLookup.forConfig(clientDnsLookup);
         for (String url : urls) {
             if (url != null && !url.isEmpty()) {
                 try {
@@ -56,7 +59,7 @@ public final class ClientUtils {
                     if (host == null || port == null)
                         throw new ConfigException("Invalid url in " + CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG + ": " + url);
 
-                    if (clientDnsLookupBehaviour == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
+                    if (clientDnsLookup == ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY) {
                         InetAddress[] inetAddresses = InetAddress.getAllByName(host);
                         for (InetAddress inetAddress : inetAddresses) {
                             String resolvedCanonicalName = inetAddress.getCanonicalHostName();

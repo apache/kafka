@@ -566,7 +566,7 @@ class LogManager(logDirs: Seq[File],
    * Write out the current recovery point for all logs to a text file in the log directory
    * to avoid recovering the whole log on startup.
    */
-  def checkpointLogRecoveryOffsets(): Unit = {
+  def checkpointLogRecoveryOffsets() {
     liveLogDirs.foreach(f => checkpointLogRecoveryOffsetsInDir(f))
   }
 
