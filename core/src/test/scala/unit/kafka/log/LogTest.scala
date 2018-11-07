@@ -2832,7 +2832,124 @@ class LogTest {
     //Then leader epoch should be set on messages
     for (i <- records.indices) {
       val read = readLog(log, i, 100, Some(i+1)).records.batches.iterator.next()
-      assertEquals("Should have set leader epoch", 72, read.partitionLeaderEpoch)
+      assertEquals("Should have set leader epoch", epoch, read.partitionLeaderEpoch)
+    }
+  }
+
+  @Test
+  def testAppendAsLeaderWithGivenOffsets() {
+    val records = (0 until 50).toArray.map(id => new SimpleRecord(id.toString.getBytes))
+
+    val epoch = 72
+    val log = createLog(logDir, LogConfig())
+    log.leaderEpochCache.assign(epoch, records.size)
+
+    //appending messages one by one as a leader with given offsets starting at 1000 by 10
+    var offset = 1000L
+    for (record <- records) {
+      log.appendAsLeader(
+        MemoryRecords.withRecords(offset, CompressionType.NONE, record),
+        leaderEpoch = epoch,
+        isFromClient = true,
+        assignOffsets = false)
+      offset += 10L
+    }
+
+    //reading one by one
+    for (i <- (1000 until 1500 by 10)) {
+      val batchesIter = readLog(log, i, 100000, Some(i+10)).records.batches.iterator
+      val read = batchesIter.next()
+      assertEquals("Should have set leader epoch", epoch, read.partitionLeaderEpoch)
+      assertEquals(i, read.baseOffset)
+      assertFalse(batchesIter.hasNext())
+    }
+
+    //reading all at once
+    var recordsIter = readLog(log, 1000, 100000, Some(1500)).records.records.iterator
+    for (i <- (1000 until 1500 by 10)) {
+      assertEquals(i, recordsIter.next.offset)
+    }
+    assertFalse(recordsIter.hasNext())
+
+    //appending a batch of messages as a leader with given offsets starting at 2000
+    val offsets = (2000L until 2050L).toArray
+    val memoryRecords = TestUtils.recordsWithOffset(records, offsets, baseOffset = 2000L)
+    log.appendAsLeader(memoryRecords,
+        leaderEpoch = epoch,
+        isFromClient = true,
+        assignOffsets = false)
+
+    // read all at once
+    val read = readLog(log, 2000, 100000, Some(2050)).records
+
+    // check batch base offset and epoch
+    val batchesIter = read.batches.asScala
+    assertEquals(1, batchesIter.size)
+    for (b <- batchesIter) {
+      assertEquals("Should have set leader epoch", epoch, b.partitionLeaderEpoch)
+      assertEquals(2000, b.baseOffset)
+    }
+
+    // check each record's offset
+    recordsIter = read.records.iterator
+    for (i <- offsets) {
+      assertEquals(i, recordsIter.next.offset)
+    }
+    assertFalse(recordsIter.hasNext())
+
+    // check failure on append on bad offset
+    try {
+      log.appendAsLeader(
+        MemoryRecords.withRecords(2000, CompressionType.NONE, records.iterator.next),
+        leaderEpoch = epoch,
+        isFromClient = true,
+        assignOffsets = false)
+        fail("InvalidProduceOffsetException should be thrown")
+    } catch {
+      case _: InvalidProduceOffsetException => // this is good
+    }
+
+    // check failure on append batch with offsets gaps
+    try {
+      val offsets = (3000L until 3050L by 10).toArray
+      val memoryRecords = TestUtils.recordsWithOffset(records, offsets, baseOffset = 3000L)
+      log.appendAsLeader(memoryRecords,
+        leaderEpoch = epoch,
+        isFromClient = true,
+        assignOffsets = false)
+    } catch {
+      case _: CorruptRecordException => //expected
+    }
+  }
+
+  @Test
+  def testAppendAsLeaderAssignsOffsetsRejectsRecordsWithOffsets() {
+    val records = (0 until 50).toArray.map(id => new SimpleRecord(id.toString.getBytes))
+
+    val epoch = 72
+    val log = createLog(logDir, LogConfig())
+    log.leaderEpochCache.assign(epoch, records.size)
+    val offsets = (2000L until 2500L by 10L).toArray
+
+    // Try appending an invalid batch with correct start offset
+    try {
+      log.appendAsLeader(TestUtils.recordsWithOffset(records, offsets, baseOffset = 0L),
+          leaderEpoch = epoch,
+          isFromClient = true,
+          assignOffsets = true)
+    } catch {
+      case _: InvalidRecordException => // expected
+    }
+
+    // Try appending a valid batch with incorrect start offset
+    try {
+      log.appendAsLeader(
+          MemoryRecords.withRecords(2000L, CompressionType.NONE, new SimpleRecord("value".getBytes)),
+          leaderEpoch = epoch,
+          isFromClient = true,
+          assignOffsets = true)
+    } catch {
+      case _: InvalidRecordException => // expected
     }
   }
 

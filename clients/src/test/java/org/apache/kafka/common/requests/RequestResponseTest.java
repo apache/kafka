@@ -432,39 +432,43 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void produceResponseV5Test() {
+    public void produceResponseV5toV8Test() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         TopicPartition tp0 = new TopicPartition("test", 0);
         responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
+                10000, RecordBatch.NO_TIMESTAMP, 100, 200));
 
         ProduceResponse v5Response = new ProduceResponse(responseData, 10);
-        short version = 5;
 
-        ByteBuffer buffer = v5Response.serialize(version, new ResponseHeader(0));
-        buffer.rewind();
+        for (short version = 5; version <= 8; version++) {
+            ByteBuffer buffer = v5Response.serialize(version, new ResponseHeader(0));
+            buffer.rewind();
 
-        ResponseHeader.parse(buffer); // throw away.
+            ResponseHeader.parse(buffer); // throw away.
 
-        Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
+            Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
-        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                deserializedStruct);
+            ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
+                    deserializedStruct);
 
-        assertEquals(1, v5FromBytes.responses().size());
-        assertTrue(v5FromBytes.responses().containsKey(tp0));
-        ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
-        assertEquals(100, partitionResponse.logStartOffset);
-        assertEquals(10000, partitionResponse.baseOffset);
-        assertEquals(10, v5FromBytes.throttleTimeMs());
-        assertEquals(responseData, v5Response.responses());
+            assertEquals(1, v5FromBytes.responses().size());
+            assertTrue(v5FromBytes.responses().containsKey(tp0));
+            ProduceResponse.PartitionResponse partitionResponse = v5FromBytes.responses().get(tp0);
+            assertEquals(100, partitionResponse.logStartOffset);
+
+            long expectedLEO = version < 8 ? ProduceResponse.INVALID_OFFSET : 200;
+            assertEquals(expectedLEO, partitionResponse.logEndOffset);
+            assertEquals(10000, partitionResponse.baseOffset);
+            assertEquals(10, v5FromBytes.throttleTimeMs());
+            assertEquals(responseData, v5Response.responses());
+        }
     }
 
     @Test
     public void produceResponseVersionTest() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
+                10000, RecordBatch.NO_TIMESTAMP, 100, 200));
         ProduceResponse v0Response = new ProduceResponse(responseData);
         ProduceResponse v1Response = new ProduceResponse(responseData, 10);
         ProduceResponse v2Response = new ProduceResponse(responseData, 10);
@@ -880,14 +884,14 @@ public class RequestResponseTest {
         byte magic = version == 2 ? RecordBatch.MAGIC_VALUE_V1 : RecordBatch.MAGIC_VALUE_V2;
         MemoryRecords records = MemoryRecords.withRecords(magic, CompressionType.NONE, new SimpleRecord("woot".getBytes()));
         Map<TopicPartition, MemoryRecords> produceData = Collections.singletonMap(new TopicPartition("test", 0), records);
-        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId")
+        return ProduceRequest.Builder.forMagic(magic, (short) 1, 5000, produceData, "transactionalId", false)
                 .build((short) version);
     }
 
     private ProduceResponse createProduceResponse() {
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
         responseData.put(new TopicPartition("test", 0), new ProduceResponse.PartitionResponse(Errors.NONE,
-                10000, RecordBatch.NO_TIMESTAMP, 100));
+                10000, RecordBatch.NO_TIMESTAMP, 100, 200));
         return new ProduceResponse(responseData, 0);
     }
 

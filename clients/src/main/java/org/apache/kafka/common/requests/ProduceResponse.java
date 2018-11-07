@@ -67,14 +67,20 @@ public class ProduceResponse extends AbstractResponse {
      * INVALID_PRODUCER_EPOCH (47)
      * CLUSTER_AUTHORIZATION_FAILED (31)
      * TRANSACTIONAL_ID_AUTHORIZATION_FAILED (53)
+     * INVALID_PRODUCE_OFFSET (77)
      */
 
     private static final String BASE_OFFSET_KEY_NAME = "base_offset";
     private static final String LOG_APPEND_TIME_KEY_NAME = "log_append_time";
     private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
+    private static final String LOG_END_OFFSET_KEY_NAME = "log_end_offset";
 
     private static final Field.Int64 LOG_START_OFFSET_FIELD = new Field.Int64(LOG_START_OFFSET_KEY_NAME,
             "The start offset of the log at the time this produce response was created", INVALID_OFFSET);
+    private static final Field.Int64 LOG_END_OFFSET_FIELD = new Field.Int64(LOG_END_OFFSET_KEY_NAME,
+            "The end offset of the log (the offset of the next message that will be appended to the log) at the time this produce response was created", 
+            INVALID_OFFSET);
+
 
     private static final Schema PRODUCE_RESPONSE_V0 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
@@ -125,7 +131,7 @@ public class ProduceResponse extends AbstractResponse {
      * Add in the log_start_offset field to the partition response to filter out spurious OutOfOrderSequencExceptions
      * on the client.
      */
-    public static final Schema PRODUCE_RESPONSE_V5 = new Schema(
+    private static final Schema PRODUCE_RESPONSE_V5 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
                     TOPIC_NAME,
                     new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
@@ -149,9 +155,27 @@ public class ProduceResponse extends AbstractResponse {
      */
     private static final Schema PRODUCE_RESPONSE_V7 = PRODUCE_RESPONSE_V6;
 
+    /**
+     * V8 introduces producer offsets
+     */
+    private static final Schema PRODUCE_RESPONSE_V8 = new Schema(
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                    TOPIC_NAME,
+                    new Field(PARTITION_RESPONSES_KEY_NAME, new ArrayOf(new Schema(
+                            PARTITION_ID,
+                            ERROR_CODE,
+                            new Field(BASE_OFFSET_KEY_NAME, INT64),
+                            new Field(LOG_APPEND_TIME_KEY_NAME, INT64, "The timestamp returned by broker after appending " +
+                                    "the messages. If CreateTime is used for the topic, the timestamp will be -1. " +
+                                    "If LogAppendTime is used for the topic, the timestamp will be the broker local " +
+                                    "time when the messages are appended."),
+                            LOG_START_OFFSET_FIELD,
+                            LOG_END_OFFSET_FIELD)))))),
+            THROTTLE_TIME_MS);
+
     public static Schema[] schemaVersions() {
         return new Schema[]{PRODUCE_RESPONSE_V0, PRODUCE_RESPONSE_V1, PRODUCE_RESPONSE_V2, PRODUCE_RESPONSE_V3,
-            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5, PRODUCE_RESPONSE_V6, PRODUCE_RESPONSE_V7};
+            PRODUCE_RESPONSE_V4, PRODUCE_RESPONSE_V5, PRODUCE_RESPONSE_V6, PRODUCE_RESPONSE_V7, PRODUCE_RESPONSE_V8};
     }
 
     private final Map<TopicPartition, PartitionResponse> responses;
@@ -190,8 +214,9 @@ public class ProduceResponse extends AbstractResponse {
                 long offset = partRespStruct.getLong(BASE_OFFSET_KEY_NAME);
                 long logAppendTime = partRespStruct.getLong(LOG_APPEND_TIME_KEY_NAME);
                 long logStartOffset = partRespStruct.getOrElse(LOG_START_OFFSET_FIELD, INVALID_OFFSET);
+                long logEndOffset = partRespStruct.getOrElse(LOG_END_OFFSET_FIELD, INVALID_OFFSET);
                 TopicPartition tp = new TopicPartition(topic, partition);
-                responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset));
+                responses.put(tp, new PartitionResponse(error, offset, logAppendTime, logStartOffset, logEndOffset));
             }
         }
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
@@ -223,6 +248,7 @@ public class ProduceResponse extends AbstractResponse {
                 if (partStruct.hasField(LOG_APPEND_TIME_KEY_NAME))
                     partStruct.set(LOG_APPEND_TIME_KEY_NAME, part.logAppendTime);
                 partStruct.setIfExists(LOG_START_OFFSET_FIELD, part.logStartOffset);
+                partStruct.setIfExists(LOG_END_OFFSET_FIELD, part.logEndOffset);
                 partitionArray.add(partStruct);
             }
             topicData.set(PARTITION_RESPONSES_KEY_NAME, partitionArray.toArray());
@@ -256,16 +282,18 @@ public class ProduceResponse extends AbstractResponse {
         public long baseOffset;
         public long logAppendTime;
         public long logStartOffset;
+        public long logEndOffset;
 
         public PartitionResponse(Errors error) {
-            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET);
+            this(error, INVALID_OFFSET, RecordBatch.NO_TIMESTAMP, INVALID_OFFSET, INVALID_OFFSET);
         }
 
-        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset) {
+        public PartitionResponse(Errors error, long baseOffset, long logAppendTime, long logStartOffset, long logEndOffset) {
             this.error = error;
             this.baseOffset = baseOffset;
             this.logAppendTime = logAppendTime;
             this.logStartOffset = logStartOffset;
+            this.logEndOffset = logEndOffset;
         }
 
         @Override
@@ -280,6 +308,8 @@ public class ProduceResponse extends AbstractResponse {
             b.append(logAppendTime);
             b.append(", logStartOffset: ");
             b.append(logStartOffset);
+            b.append(", logEndOffset: ");
+            b.append(logEndOffset);
             b.append('}');
             return b.toString();
         }

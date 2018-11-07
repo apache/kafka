@@ -59,9 +59,9 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
     TopicResources -> (Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs),
       Array("--operation", "Read" , "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
         "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
-    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite),
+    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, ReplicatorWrite),
       Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
-        "--operation", "AlterConfigs", "--operation", "IdempotentWrite")),
+        "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "ReplicatorWrite")),
     GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
     TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write")),
     TokenResources -> (Set(Describe), Array("--operation", "Describe"))

@@ -53,6 +53,7 @@ import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
@@ -723,7 +724,7 @@ public class RecordAccumulatorTest {
         // Create a big batch
         ByteBuffer buffer = ByteBuffer.allocate(4096);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        ProducerBatch batch = new ProducerBatch(tp1, builder, now, true);
+        ProducerBatch batch = new ProducerBatch(tp1, builder, now, false, true);
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
@@ -792,6 +793,40 @@ public class RecordAccumulatorTest {
                 accum.ready(cluster, time.milliseconds()).readyNodes.isEmpty());
         assertEquals("The split batches should be allocated off the accumulator",
                 bufferCapacity, accum.bufferPoolAvailableMemory());
+    }
+
+    @Test
+    public void testSplitBatchOffAccumulatorWithOffsets() throws InterruptedException {
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 3 * 1024, CompressionType.NONE, 0L);
+
+        byte[] value = new byte[1025];
+        accum.append(tp1, 0L, null, value, Record.EMPTY_HEADERS, OptionalLong.of(1001), null, 0);
+        accum.append(tp1, 0L, null, value, Record.EMPTY_HEADERS, OptionalLong.of(1101), null, 0);
+
+        RecordAccumulator.ReadyCheckResult result1 = accum.ready(cluster, time.milliseconds());
+        assertFalse(result1.readyNodes.isEmpty());
+        Map<Integer, List<ProducerBatch>> batches = accum.drain(cluster, result1.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        assertEquals(1, batches.size());
+        assertEquals(1, batches.values().iterator().next().size());
+        ProducerBatch batch = batches.values().iterator().next().get(0);
+        assertEquals(1001, batch.records().batchIterator().peek().baseOffset());
+
+        accum.splitAndReenqueue(batch);
+        accum.deallocate(batch);
+
+        RecordAccumulator.ReadyCheckResult result = accum.ready(cluster, time.milliseconds());
+        Map<Integer, List<ProducerBatch>> drained1 =
+                accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        List<ProducerBatch> batches1 = drained1.values().iterator().next();
+        Map<Integer, List<ProducerBatch>> drained2 =
+                accum.drain(cluster, result.readyNodes, Integer.MAX_VALUE, time.milliseconds());
+        List<ProducerBatch> batches2 = drained2.values().iterator().next();
+
+        assertEquals(1, batches1.size());
+        assertEquals(1, batches2.size());
+
+        assertEquals(1001, batches1.get(0).records().batchIterator().peek().baseOffset());
+        assertEquals(1101, batches2.get(0).records().batchIterator().peek().baseOffset());
     }
 
     @Test
@@ -895,6 +930,64 @@ public class RecordAccumulatorTest {
             expiredBatches = accum.expiredBatches(time.milliseconds());
             assertEquals("RecordAccumulator has expired batches if the partition is not muted", mute  ? 1 : 0, expiredBatches.size());
         }
+    }
+
+    @Test
+    public void testAppendWithOffsets() throws Exception {
+        int batchSize = 512;
+        byte[] value = new byte[10];
+        RecordAccumulator accum = createTestRecordAccumulator(
+                batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0L);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.of(1000L), null, maxBlockTimeMs);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.of(1001L), null, maxBlockTimeMs);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.of(1100L), null, maxBlockTimeMs);
+
+        Deque<ProducerBatch> batches = accum.batches().get(tp1);
+        assertEquals(2, batches.size());
+        ProducerBatch producerBatch1 = batches.removeFirst();
+        List<MutableRecordBatch> recordBatches1 = TestUtils.toList(producerBatch1.records().batches());
+        assertEquals(1, recordBatches1.size());
+        MutableRecordBatch recordBatch1 = recordBatches1.get(0);
+        assertEquals(1000L, recordBatch1.baseOffset());
+        List<Record> records1 = TestUtils.toList(recordBatch1);
+        assertEquals(2, records1.size());
+        assertEquals(1000L, records1.get(0).offset());
+        assertEquals(1001L, records1.get(1).offset());
+
+        ProducerBatch producerBatch2 = batches.removeFirst();
+        List<MutableRecordBatch> recordBatches2 = TestUtils.toList(producerBatch2.records().batches());
+        assertEquals(1, recordBatches2.size());
+        MutableRecordBatch recordBatch2 = recordBatches2.get(0);
+        assertEquals(1100L, recordBatch2.baseOffset());
+        List<Record> records2 = TestUtils.toList(recordBatch2);
+        assertEquals(1, records2.size());
+        assertEquals(1100L, records2.get(0).offset());
+    }
+
+    @Test
+    public void testAppendWithOffsetsCannotMix1() throws Exception {
+        int batchSize = 512;
+        byte[] value = new byte[10];
+        RecordAccumulator accum = createTestRecordAccumulator(
+                batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0L);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.empty(), null, maxBlockTimeMs);
+        try {
+            accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.of(1100L), null, maxBlockTimeMs);
+            fail("IllegalArgumentException Expected");
+        } catch (IllegalArgumentException expected) { }
+    }
+
+    @Test
+    public void testAppendWithOffsetsCannotMix2() throws Exception {
+        int batchSize = 512;
+        byte[] value = new byte[10];
+        RecordAccumulator accum = createTestRecordAccumulator(
+                batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0L);
+        accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.of(1100L), null, maxBlockTimeMs);
+        try {
+            accum.append(tp1, 0L, key, value, Record.EMPTY_HEADERS, OptionalLong.empty(), null, maxBlockTimeMs);
+            fail("IllegalArgumentException Expected");
+        } catch (IllegalArgumentException expected) { }
     }
 
     private int prepareSplitBatches(RecordAccumulator accum, long seed, int recordSize, int numRecords)

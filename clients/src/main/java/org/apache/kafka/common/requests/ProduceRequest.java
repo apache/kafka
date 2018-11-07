@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
@@ -59,6 +60,7 @@ public class ProduceRequest extends AbstractRequest {
     // partition level field names
     private static final String RECORD_SET_KEY_NAME = "record_set";
 
+    private static final Field.Bool USE_OFFSETS = new Field.Bool("use_offsets", "Indicate if producer offsets are to be used.");
 
     private static final Schema TOPIC_PRODUCE_DATA_V0 = new Schema(
             TOPIC_NAME,
@@ -119,9 +121,22 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
 
+    /**
+     * V8 adds producer-specified offsets
+     */
+    private static final Schema PRODUCE_REQUEST_V8 = new Schema(
+            CommonFields.NULLABLE_TRANSACTIONAL_ID,
+            new Field(ACKS_KEY_NAME, INT16, "The number of acknowledgments the producer requires the leader to have " +
+                    "received before considering a request complete. Allowed values: 0 for no acknowledgments, 1 " +
+                    "for only the leader and -1 for the full ISR."),
+            new Field(TIMEOUT_KEY_NAME, INT32, "The time to await a response in ms."),
+            new Field(TOPIC_DATA_KEY_NAME, new ArrayOf(TOPIC_PRODUCE_DATA_V0)),
+            USE_OFFSETS);
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7, PRODUCE_REQUEST_V8};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -129,18 +144,20 @@ public class ProduceRequest extends AbstractRequest {
         private final int timeout;
         private final Map<TopicPartition, MemoryRecords> partitionRecords;
         private final String transactionalId;
+        private boolean useOffsets;
 
         public static Builder forCurrentMagic(short acks,
                                               int timeout,
                                               Map<TopicPartition, MemoryRecords> partitionRecords) {
-            return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, acks, timeout, partitionRecords, null);
+            return forMagic(RecordBatch.CURRENT_MAGIC_VALUE, acks, timeout, partitionRecords, null, false);
         }
 
         public static Builder forMagic(byte magic,
                                        short acks,
                                        int timeout,
                                        Map<TopicPartition, MemoryRecords> partitionRecords,
-                                       String transactionalId) {
+                                       String transactionalId,
+                                       boolean useOffsets) {
             // Message format upgrades correspond with a bump in the produce request version. Older
             // message format versions are generally not supported by the produce request versions
             // following the bump.
@@ -151,10 +168,10 @@ public class ProduceRequest extends AbstractRequest {
                 minVersion = 2;
                 maxVersion = 2;
             } else {
-                minVersion = 3;
+                minVersion = useOffsets ? (short) 8 : (short) 3;
                 maxVersion = ApiKeys.PRODUCE.latestVersion();
             }
-            return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId);
+            return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId, useOffsets);
         }
 
         public Builder(short minVersion,
@@ -162,17 +179,22 @@ public class ProduceRequest extends AbstractRequest {
                        short acks,
                        int timeout,
                        Map<TopicPartition, MemoryRecords> partitionRecords,
-                       String transactionalId) {
+                       String transactionalId,
+                       boolean useOffsets) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.acks = acks;
             this.timeout = timeout;
             this.partitionRecords = partitionRecords;
             this.transactionalId = transactionalId;
+            this.useOffsets = useOffsets;
         }
 
         @Override
         public ProduceRequest build(short version) {
-            return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId);
+            if (useOffsets && version < 8)
+                throw new UnsupportedVersionException("ProduceRequest versions older than 8 don't support the " +
+                        "useOffsets field");
+            return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId, useOffsets);
         }
 
         @Override
@@ -183,6 +205,7 @@ public class ProduceRequest extends AbstractRequest {
                     .append(", timeout=").append(timeout)
                     .append(", partitionRecords=(").append(partitionRecords)
                     .append("), transactionalId='").append(transactionalId != null ? transactionalId : "")
+                    .append(", useOffsets=").append(useOffsets)
                     .append("'");
             return bld.toString();
         }
@@ -191,6 +214,7 @@ public class ProduceRequest extends AbstractRequest {
     private final short acks;
     private final int timeout;
     private final String transactionalId;
+    private final boolean useOffsets;
 
     private final Map<TopicPartition, Integer> partitionSizes;
 
@@ -201,7 +225,7 @@ public class ProduceRequest extends AbstractRequest {
     private boolean transactional = false;
     private boolean idempotent = false;
 
-    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
+    private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId, boolean useOffsets) {
         super(ApiKeys.PRODUCE, version);
         this.acks = acks;
         this.timeout = timeout;
@@ -209,6 +233,7 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = transactionalId;
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
+        this.useOffsets = useOffsets;
 
         for (MemoryRecords records : partitionRecords.values())
             validateRecords(version, records);
@@ -239,6 +264,7 @@ public class ProduceRequest extends AbstractRequest {
         acks = struct.getShort(ACKS_KEY_NAME);
         timeout = struct.getInt(TIMEOUT_KEY_NAME);
         transactionalId = struct.getOrElse(NULLABLE_TRANSACTIONAL_ID, null);
+        useOffsets = struct.getOrElse(USE_OFFSETS, false);
     }
 
     private void validateRecords(short version, MemoryRecords records) {
@@ -299,6 +325,7 @@ public class ProduceRequest extends AbstractRequest {
             topicDatas.add(topicData);
         }
         struct.set(TOPIC_DATA_KEY_NAME, topicDatas.toArray());
+        struct.setIfExists(USE_OFFSETS, useOffsets);
         return struct;
     }
 
@@ -341,6 +368,7 @@ public class ProduceRequest extends AbstractRequest {
             case 5:
             case 6:
             case 7:
+            case 8:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -378,6 +406,10 @@ public class ProduceRequest extends AbstractRequest {
         return idempotent;
     }
 
+    public boolean useOffsets() {
+        return useOffsets;
+    }
+
     /**
      * Returns the partition records or throws IllegalStateException if clearPartitionRecords() has been invoked.
      */
@@ -412,6 +444,7 @@ public class ProduceRequest extends AbstractRequest {
             case 5:
             case 6:
             case 7:
+            case 8:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

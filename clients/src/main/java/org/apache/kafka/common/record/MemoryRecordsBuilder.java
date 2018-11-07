@@ -401,9 +401,7 @@ public class MemoryRecordsBuilder {
             if (isControlRecord != isControlBatch)
                 throw new IllegalArgumentException("Control records can only be appended to control batches");
 
-            if (lastOffset != null && offset <= lastOffset)
-                throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
-                        "(Offsets must increase monotonically).", offset, lastOffset));
+            validateOffset(offset);
 
             if (timestamp < 0 && timestamp != RecordBatch.NO_TIMESTAMP)
                 throw new IllegalArgumentException("Invalid negative timestamp " + timestamp);
@@ -423,6 +421,16 @@ public class MemoryRecordsBuilder {
         } catch (IOException e) {
             throw new KafkaException("I/O exception when writing to the append stream, closing", e);
         }
+    }
+
+    private void validateOffset(long offset) {
+        if (offset < baseOffset)
+            throw new IllegalArgumentException(String.format("Illegal offset %s < baseOffset %s " +
+                    "(Offsets must increase monotonically).", offset, baseOffset));
+
+        if (lastOffset != null && offset <= lastOffset)
+            throw new IllegalArgumentException(String.format("Illegal offset %s following previous offset %s " +
+                    "(Offsets must increase monotonically).", offset, lastOffset));
     }
 
     /**
@@ -762,7 +770,7 @@ public class MemoryRecordsBuilder {
         return magic;
     }
 
-    private long nextSequentialOffset() {
+    public long nextSequentialOffset() {
         return lastOffset == null ? baseOffset : lastOffset + 1;
     }
 

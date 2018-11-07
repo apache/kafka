@@ -467,9 +467,9 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   @Test
   def testAclInheritance(): Unit = {
     testImplicationsOfAllow(All, Set(Read, Write, Create, Delete, Alter, Describe,
-      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, ReplicatorWrite))
     testImplicationsOfDeny(All, Set(Read, Write, Create, Delete, Alter, Describe,
-      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite))
+      ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, ReplicatorWrite))
     testImplicationsOfAllow(Read, Set(Describe))
     testImplicationsOfAllow(Write, Set(Describe))
     testImplicationsOfAllow(Delete, Set(Describe))

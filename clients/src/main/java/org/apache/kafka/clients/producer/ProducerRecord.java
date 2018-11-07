@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer;
 
+import java.util.OptionalLong;
+
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -174,6 +176,10 @@ public class ProducerRecord<K, V> {
      */
     public Long timestamp() {
         return timestamp;
+    }
+
+    public OptionalLong offset() {
+        return OptionalLong.empty();
     }
 
     /**

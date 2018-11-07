@@ -106,7 +106,12 @@ public enum AclOperation {
     /**
      * IDEMPOTENT_WRITE operation.
      */
-    IDEMPOTENT_WRITE((byte) 12);
+    IDEMPOTENT_WRITE((byte) 12),
+
+    /**
+     * REPLICATOR_WRITE operation (Produce with offsets).
+     */
+    REPLICATOR_WRITE((byte) 13);
 
     private final static HashMap<Byte, AclOperation> CODE_TO_VALUE = new HashMap<>();
 

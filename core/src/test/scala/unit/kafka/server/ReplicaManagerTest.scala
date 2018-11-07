@@ -724,6 +724,7 @@ class ReplicaManagerTest {
                             partition: TopicPartition,
                             records: MemoryRecords,
                             isFromClient: Boolean = true,
+                            assignOffsets: Boolean = true,
                             requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
@@ -737,6 +738,7 @@ class ReplicaManagerTest {
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       isFromClient = isFromClient,
+      assignOffsets = assignOffsets,
       entriesPerPartition = Map(partition -> records),
       responseCallback = appendCallback)
 

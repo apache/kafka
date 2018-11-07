@@ -583,6 +583,7 @@ class AbstractFetcherThreadTest {
         offsetOfMaxTimestamp = offsetOfMaxTimestamp,
         logAppendTime = Time.SYSTEM.milliseconds(),
         logStartOffset = state.logStartOffset,
+        logEndOffset = state.logEndOffset,
         recordConversionStats = RecordConversionStats.EMPTY,
         sourceCodec = NoCompressionCodec,
         targetCodec = NoCompressionCodec,
