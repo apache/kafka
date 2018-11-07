@@ -36,11 +36,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -603,22 +598,6 @@ public class KafkaStreamsTest {
         final String outputTopic = testName.getMethodName() + "-output";
         CLUSTER.createTopics(inputTopic, outputTopic);
 
-        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> input = builder.stream(inputTopic, consumed);
-        input.filter((k, s) -> s.length() % 2 == 0)
-                .map((k, v) -> new KeyValue<>(k, k + v))
-                .to(outputTopic, produced);
-        startStreamsAndCheckDirExists(builder.build(), Collections.singleton(inputTopic), outputTopic, false);
-    }
-
-    @Test
-    public void statelessPAPITopologyShouldNotCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        CLUSTER.createTopics(inputTopic, outputTopic);
-
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
@@ -640,21 +619,32 @@ public class KafkaStreamsTest {
         final String globalTopicName = testName.getMethodName() + "-global";
         final String storeName = testName.getMethodName() + "-counts";
         final String globalStoreName = testName.getMethodName() + "-globalStore";
-        final Topology topology = getCountTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
+        final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
         startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, false);
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    public void inMemoryStatefulPAPITopologyShouldNotCreateStateDirectory() throws Exception {
+    public void statefulTopologyShouldCreateStateDirectory() throws Exception {
         final String inputTopic = testName.getMethodName() + "-input";
         final String outputTopic = testName.getMethodName() + "-output";
         final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = "counts";
-        CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
+        final String storeName = testName.getMethodName() + "-counts";
+        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
+        startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, true);
+    }
 
-        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.Long());
+    @SuppressWarnings("unchecked")
+    private Topology getStatefulTopology(final String inputTopic,
+                                         final String outputTopic,
+                                         final String globalTopicName,
+                                         final String storeName,
+                                         final String globalStoreName,
+                                         final boolean isPersistentStore) throws Exception {
+        CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
+        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(isPersistentStore ?
+                Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName), 
+                Serdes.String(), Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
@@ -672,7 +662,8 @@ public class KafkaStreamsTest {
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore("globalStore"), Serdes.String(), Serdes.String()).withLoggingDisabled();
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
                 "global",
                 Serdes.String().deserializer(),
@@ -680,48 +671,9 @@ public class KafkaStreamsTest {
                 globalTopicName,
                 globalTopicName + "-processor",
                 new MockProcessorSupplier());
-        startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, false);
+        return topology;
     }
 
-    @Test
-    public void statefulTopologyShouldCreateStateDirectory() throws Exception {
-        final String inputTopic = testName.getMethodName() + "-input";
-        final String outputTopic = testName.getMethodName() + "-output";
-        final String globalTopicName = testName.getMethodName() + "-global";
-        final String storeName = testName.getMethodName() + "-counts";
-        final String globalStoreName = testName.getMethodName() + "-globalStore";
-        final Topology topology = getCountTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
-        startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, true);
-    }
-
-    private Topology getCountTopology(final String inputTopic,
-                                      final String outputTopic,
-                                      final String globalTopicName,
-                                      final String storeName,
-                                      final String globalStoreName,
-                                      final boolean isPersistentStore) throws Exception {
-        CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
-
-        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
-
-        final StreamsBuilder builder = new StreamsBuilder();
-        final KStream<String, String> input = builder.stream(inputTopic, consumed);
-        final KTable<String, Long> counts = input.filter((k, s) -> s.length() % 2 == 0)
-                .map((k, v) -> new KeyValue<>(k, k + v))
-                .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .count(Materialized.as(isPersistentStore ?
-                        Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName)));
-        counts.toStream()
-                .map((key, value) -> new KeyValue<>(key, value.toString()))
-                .to(outputTopic, produced);
-
-        builder.globalTable(globalTopicName, consumed, Materialized.as(isPersistentStore ?
-                Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName)));
-        return builder.build();
-    }
-
-    @SuppressWarnings("unchecked")
     private void startStreamsAndCheckDirExists(final Topology topology,
                                                final Collection<String> inputTopics,
                                                final String outputTopic,
