@@ -111,7 +111,7 @@ public class KafkaOffsetBackingStoreTest {
 
     @Before
     public void setUp() throws Exception {
-        store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, new String[]{"createKafkaBasedLog"});
+        store = PowerMock.createPartialMockAndInvokeDefaultConstructor(KafkaOffsetBackingStore.class, "createKafkaBasedLog");
     }
 
     @Test

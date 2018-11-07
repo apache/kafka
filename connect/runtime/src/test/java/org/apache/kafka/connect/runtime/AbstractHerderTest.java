@@ -300,7 +300,7 @@ public class AbstractHerderTest {
     }
 
     @Test
-    public void testReverseTransformConfigs() throws Exception {
+    public void testReverseTransformConfigs() {
         // Construct a task config with constant values for TEST_KEY and TEST_KEY2
         Map<String, String> newTaskConfig = new HashMap<>();
         newTaskConfig.put(TaskConfig.TASK_CLASS_CONFIG, BogusSourceTask.class.getName());

@@ -761,7 +761,7 @@ public class KafkaConfigBackingStoreTest {
 
     // If non-empty, deserializations should be a LinkedHashMap
     private void expectStart(final List<ConsumerRecord<String, byte[]>> preexistingRecords,
-                             final Map<byte[], Struct> deserializations) throws Exception {
+                             final Map<byte[], Struct> deserializations) {
         storeLog.start();
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
