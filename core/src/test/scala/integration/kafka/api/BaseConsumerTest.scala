@@ -194,8 +194,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
                                           commitCallback: CountConsumerCommitCallback,
                                           count: Int = 1): Unit = {
-    TestUtils.pollUntilTrue(consumer, () => commitCallback.successCount >= count,
-      "Failed to observe commit callback before timeout", waitTimeMs = 20000)
+    val numFailuresBeforePoll = commitCallback.failCount
+    TestUtils.pollUntilTrue(consumer, () => commitCallback.successCount >= count || commitCallback.failCount > numFailuresBeforePoll,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+    assertEquals("Unexpected async commit failure", numFailuresBeforePoll, commitCallback.failCount)
     assertEquals(count, commitCallback.successCount)
   }
 
