@@ -310,7 +310,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
             final StreamsGraphNode keyChangingNode = entry.getKey();
 
-            if (entry.getValue().isEmpty()) {
+            if (entry.getValue().size() <= 1) {
                 continue;
             }
 
