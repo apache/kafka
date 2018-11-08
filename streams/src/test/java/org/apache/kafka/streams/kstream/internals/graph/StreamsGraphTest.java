@@ -91,6 +91,14 @@ public class StreamsGraphTest {
 
     }
 
+    @Test
+    public void shouldNotOptimizeWithOnlyOneRepartitionTopic() {
+        final String notOptimized = getTopologyWithOnlyOneRepartionTopic(StreamsConfig.NO_OPTIMIZATION).describe().toString();
+        final String optimized = getTopologyWithOnlyOneRepartionTopic(StreamsConfig.OPTIMIZE).describe().toString();
+
+        assertEquals(notOptimized, optimized);
+    }
+
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -102,6 +110,19 @@ public class StreamsGraphTest {
 
         mappedKeyStream.mapValues(v -> v.toUpperCase(Locale.getDefault())).groupByKey().count().toStream().to("output");
         mappedKeyStream.flatMapValues(v -> Arrays.asList(v.split("\\s"))).groupByKey().windowedBy(TimeWindows.of(ofMillis(5000))).count().toStream().to("windowed-output");
+
+        return builder.build(properties);
+
+    }
+
+    private Topology getTopologyWithOnlyOneRepartionTopic(final String optimizeConfig) {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
+
+        final KStream<String, String> inputStream = builder.stream("input");
+        final KStream<String, String> mappedKeyStream = inputStream.selectKey((k, v) -> k + v);
+        mappedKeyStream.groupByKey().count().toStream().to("output");
 
         return builder.build(properties);
 
