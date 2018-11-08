@@ -195,7 +195,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                           commitCallback: CountConsumerCommitCallback,
                                           count: Int = 1): Unit = {
     TestUtils.pollUntilTrue(consumer, () => commitCallback.successCount >= count,
-      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+      "Failed to observe commit callback before timeout", waitTimeMs = 20000)
     assertEquals(count, commitCallback.successCount)
   }
 
