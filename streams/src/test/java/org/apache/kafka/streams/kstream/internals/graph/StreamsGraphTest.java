@@ -93,8 +93,8 @@ public class StreamsGraphTest {
 
     @Test
     public void shouldNotOptimizeWithOnlyOneRepartitionTopic() {
-        final String notOptimized = getTopologyWithOnlyOneRepartionTopic(StreamsConfig.NO_OPTIMIZATION).describe().toString();
-        final String optimized = getTopologyWithOnlyOneRepartionTopic(StreamsConfig.OPTIMIZE).describe().toString();
+        final String notOptimized = getTopologyWithOnlyOneRepartitionTopic(StreamsConfig.NO_OPTIMIZATION).describe().toString();
+        final String optimized = getTopologyWithOnlyOneRepartitionTopic(StreamsConfig.OPTIMIZE).describe().toString();
 
         assertEquals(notOptimized, optimized);
     }
@@ -115,7 +115,7 @@ public class StreamsGraphTest {
 
     }
 
-    private Topology getTopologyWithOnlyOneRepartionTopic(final String optimizeConfig) {
+    private Topology getTopologyWithOnlyOneRepartitionTopic(final String optimizeConfig) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizeConfig);
