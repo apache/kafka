@@ -424,6 +424,32 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 
+class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsOptimizedUpgradeTestService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsOptimizedTest",
+                                                                 "")
+        self.OPTIMIZED_CONFIG = 'none'
+        self.INPUT_TOPIC = None
+        self.AGGREGATION_TOPIC = None
+        self.REDUCE_TOPIC = None
+        self.JOIN_TOPIC = None
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        properties['topology.optimization'] = self.OPTIMIZED_CONFIG
+        properties['input.topic'] = self.INPUT_TOPIC
+        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
+        properties['reduce.topic'] = self.REDUCE_TOPIC
+        properties['join.topic'] = self.JOIN_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
 class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,
