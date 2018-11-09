@@ -26,7 +26,7 @@ cat <<EOF
         "consumerNode": "node0",
         "bootstrapServers": "localhost:9092",
         "targetMessagesPerSec": 1000,
-        "threadCount": 5,
+        "threadsPerWorker": 5,
         "consumerGroup": "cg",
         "maxMessages": 10000,
         "activeTopics": ["foo[1-3]"]

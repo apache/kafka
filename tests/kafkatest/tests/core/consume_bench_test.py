@@ -121,7 +121,7 @@ class ConsumeBenchTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
-                                                consumer_count=5,
+                                                threads_per_worker=5,
                                                 active_topics=["consume_bench_topic[0-5]"])
         consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=360)
@@ -143,7 +143,7 @@ class ConsumeBenchTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
-                                                consumer_count=2,
+                                                threads_per_worker=2,
                                                 consumer_group="testGroup",
                                                 active_topics=["consume_bench_topic[0-5]"])
         consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
@@ -167,7 +167,7 @@ class ConsumeBenchTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
-                                                consumer_count=4,
+                                                threads_per_worker=4,
                                                 active_topics=["consume_bench_topic1:[0-4]"])
         consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
         consume_workload.wait_for_done(timeout_sec=360)
@@ -190,7 +190,7 @@ class ConsumeBenchTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
-                                                consumer_count=4,
+                                                threads_per_worker=4,
                                                 consumer_group="fail_group",
                                                 active_topics=["consume_bench_topic1:[0-4]"])
         consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
