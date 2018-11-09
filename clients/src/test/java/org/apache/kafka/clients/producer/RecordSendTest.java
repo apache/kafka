@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CorruptRecordException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.junit.Test;
 
 import java.util.concurrent.ExecutionException;
@@ -39,7 +38,6 @@ public class RecordSendTest {
     private final TopicPartition topicPartition = new TopicPartition("test", 0);
     private final long baseOffset = 45;
     private final long relOffset = 5;
-    private Time time = new MockTime();
 
     /**
      * Test that waiting on a request that never completes times out
@@ -48,7 +46,7 @@ public class RecordSendTest {
     public void testTimeout() throws Exception {
         ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         FutureRecordMetadata future = new FutureRecordMetadata(request, relOffset,
-                RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0, new MockTime());
         assertFalse("Request is not completed", future.isDone());
         try {
             future.get(5, TimeUnit.MILLISECONDS);
@@ -63,27 +61,26 @@ public class RecordSendTest {
     }
 
     /**
-     * Test that an asynchronous request will eventually throw the right exception
+     * Test that a request will throw the right exception
      */
     @Test(expected = ExecutionException.class)
     public void testError() throws Exception {
         FutureRecordMetadata future = new FutureRecordMetadata(produceRequestResult(baseOffset, new CorruptRecordException()),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, new MockTime());
         future.get();
     }
 
     /**
-     * Test that an asynchronous request will eventually return the right offset
+     * Test that a request will return the right offset
      */
     @Test
     public void testBlocking() throws Exception {
-        time = Time.SYSTEM;
         FutureRecordMetadata future = new FutureRecordMetadata(produceRequestResult(baseOffset, null),
-                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, time);
+                relOffset, RecordBatch.NO_TIMESTAMP, 0L, 0, 0, new MockTime());
         assertEquals(baseOffset + relOffset, future.get().offset());
     }
 
-    /* create a new request result that will be completed after the given timeout */
+    /* create a new completed request result */
     private ProduceRequestResult produceRequestResult(final long baseOffset, final RuntimeException error) {
         final ProduceRequestResult request = new ProduceRequestResult(topicPartition);
         request.set(baseOffset, RecordBatch.NO_TIMESTAMP, error);

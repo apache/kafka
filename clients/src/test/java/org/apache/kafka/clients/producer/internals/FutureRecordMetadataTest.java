@@ -32,43 +32,37 @@ import static org.mockito.Mockito.when;
 
 public class FutureRecordMetadataTest {
 
-    private MockTime time = new MockTime();
+    private final MockTime time = new MockTime();
 
     @Test
     public void testFutureGetWithSeconds() throws ExecutionException, InterruptedException, TimeoutException {
-        // given
         ProduceRequestResult produceRequestResult = mockProduceRequestResult();
-        FutureRecordMetadata future = getFutureRecordMetadata(produceRequestResult);
+        FutureRecordMetadata future = futureRecordMetadata(produceRequestResult);
 
         ProduceRequestResult chainedProduceRequestResult = mockProduceRequestResult();
-        future.chain(getFutureRecordMetadata(chainedProduceRequestResult));
+        future.chain(futureRecordMetadata(chainedProduceRequestResult));
 
-        // when
         future.get(1L, TimeUnit.SECONDS);
 
-        // then
         verify(produceRequestResult).await(1L, TimeUnit.SECONDS);
         verify(chainedProduceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
     }
 
     @Test
     public void testFutureGetWithMilliSeconds() throws ExecutionException, InterruptedException, TimeoutException {
-        // given
         ProduceRequestResult produceRequestResult = mockProduceRequestResult();
-        FutureRecordMetadata future = getFutureRecordMetadata(produceRequestResult);
+        FutureRecordMetadata future = futureRecordMetadata(produceRequestResult);
 
         ProduceRequestResult chainedProduceRequestResult = mockProduceRequestResult();
-        future.chain(getFutureRecordMetadata(chainedProduceRequestResult));
+        future.chain(futureRecordMetadata(chainedProduceRequestResult));
 
-        // when
         future.get(1000L, TimeUnit.MILLISECONDS);
 
-        // then
         verify(produceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
         verify(chainedProduceRequestResult).await(1000L, TimeUnit.MILLISECONDS);
     }
 
-    private FutureRecordMetadata getFutureRecordMetadata(ProduceRequestResult produceRequestResult) {
+    private FutureRecordMetadata futureRecordMetadata(ProduceRequestResult produceRequestResult) {
         return new FutureRecordMetadata(
                 produceRequestResult,
                 0,
