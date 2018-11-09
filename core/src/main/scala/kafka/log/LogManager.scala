@@ -817,7 +817,7 @@ class LogManager(logDirs: Seq[File],
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
-        checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
+        checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.dir.getParentFile, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
         addLogToBeDeleted(sourceLog)
       } catch {
@@ -855,7 +855,7 @@ class LogManager(logDirs: Seq[File],
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
-      checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
+      checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
