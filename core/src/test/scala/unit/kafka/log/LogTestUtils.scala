@@ -55,7 +55,8 @@ object LogTestUtils {
                       maxMessageBytes: Int = Defaults.MaxMessageSize,
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      producerBatchDecompressionEnable: Boolean = Defaults.ProducerBatchDecompressionEnable): LogConfig = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
     logProps.put(LogConfig.SegmentBytesProp, segmentBytes: Integer)
@@ -67,6 +68,7 @@ object LogTestUtils {
     logProps.put(LogConfig.IndexIntervalBytesProp, indexIntervalBytes: Integer)
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(LogConfig.ProducerBatchDecompressionEnableProp, producerBatchDecompressionEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 

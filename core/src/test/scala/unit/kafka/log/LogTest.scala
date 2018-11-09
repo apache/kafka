@@ -1647,6 +1647,60 @@ class LogTest {
   }
 
   /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * and appends them to a log.  Verifies decompression was not performed by checking the size
+    * of buffer used to validate batch header.
+    */
+  @Test
+  def testAvoidDecompression() {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig, logStartOffset = 1000)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      0, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    for(value <- values) {
+      builder.append(new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+    }
+
+    val records = builder.build()
+    val logAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
+
+    assertEquals(
+      DefaultRecordBatch.RECORD_BATCH_OVERHEAD, logAppendInfo.recordConversionStats.temporaryMemoryBytes,
+      "Size of buffer used to validate batch should be equal to the size of record format version V2 batch header."
+    )
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * with non-monotonically increasing relative offset and appends them to a log.
+    */
+  @Test
+  def testAppendBatchWithoutMonotonicallyIncreasingRelativeOffset() {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      10, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    var count = 0
+    for(value <- values) {
+      builder.appendWithOffset(10 + (count * 2), new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+      count = count + 1
+    }
+
+    val records = builder.build()
+    assertThrows(classOf[InvalidRecordException], ()=> log.appendAsLeader(records, leaderEpoch = 0))
+  }
+
+  /**
    * This test covers an odd case where we have a gap in the offsets that falls at the end of a log segment.
    * Specifically we create a log where the last message in the first segment has offset 0. If we
    * then read offset 1, we should expect this read to come from the second segment, even though the

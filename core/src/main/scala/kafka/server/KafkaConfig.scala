@@ -80,6 +80,8 @@ object Defaults {
   val BrokerSessionTimeoutMs = 9000
   val MetadataSnapshotMaxNewRecordBytes = 20 * 1024 * 1024
 
+  val ProducerBatchDecompressionEnable = true
+
   /** KRaft mode configs */
   val EmptyNodeId: Int = -1
 
@@ -402,6 +404,7 @@ object KafkaConfig {
 
   val HeapDumpFolderProp = "heap.dump.folder"
   val HeapDumpTimeoutProp = "heap.dump.timeout"
+  val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
   /** ********* Socket Server Configuration ***********/
@@ -712,6 +715,7 @@ object KafkaConfig {
 
   val HeapDumpFolderDoc = "The Folder under which heap dumps will be written by the watchdog"
   val HeapDumpTimeoutDoc = "The max amount of time (in millis) to wait for heap dump to complete before halting regardless"
+  val ProducerBatchDecompressionEnableDoc = "Decompress batch sent by producer to perform verification of individual records inside the batch"
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameDoc = s"The fully qualified name of a class that implements s${classOf[Authorizer].getName}" +
   " interface, which is used by the broker for authorization."
@@ -1114,6 +1118,7 @@ object KafkaConfig {
       .define(MetadataMaxRetentionMillisProp, LONG, Defaults.LogRetentionHours * 60 * 60 * 1000L, null, HIGH, MetadataMaxRetentionMillisDoc)
       .define(HeapDumpFolderProp, STRING, Defaults.HeapDumpFolder, LOW, HeapDumpFolderDoc)
       .define(HeapDumpTimeoutProp, LONG, Defaults.HeapDumpTimeout, LOW, HeapDumpTimeoutDoc)
+      .define(ProducerBatchDecompressionEnableProp, BOOLEAN, Defaults.ProducerBatchDecompressionEnable, LOW, ProducerBatchDecompressionEnableDoc)
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
@@ -1595,6 +1600,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val connectionSetupTimeoutMaxMs = getLong(KafkaConfig.ConnectionSetupTimeoutMaxMsProp)
   val heapDumpFolder = new File(getString(KafkaConfig.HeapDumpFolderProp))
   val heapDumpTimeout = getLong(KafkaConfig.HeapDumpTimeoutProp)
+  val producerBatchDecompressionEnable = getBoolean(KafkaConfig.ProducerBatchDecompressionEnableProp)
 
   def getNumReplicaAlterLogDirsThreads: Int = {
     val numThreads: Integer = Option(getInt(KafkaConfig.NumReplicaAlterLogDirsThreadsProp)).getOrElse(logDirs.size)

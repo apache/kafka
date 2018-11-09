@@ -823,7 +823,8 @@ class Log(@volatile private var _dir: File,
                 interBrokerProtocolVersion,
                 brokerTopicStats,
                 requestLocal.getOrElse(throw new IllegalArgumentException(
-                  "requestLocal should be defined if assignOffsets is true")))
+                  "requestLocal should be defined if assignOffsets is true")),
+                config.producerBatchDecompressionEnable)
             } catch {
               case e: IOException =>
                 throw new KafkaException(s"Error validating messages while appending to log $name", e)

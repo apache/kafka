@@ -60,6 +60,6 @@ public class CompressedRecordBatchValidationBenchmark extends BaseRecordBatchBen
                 new AppendOrigin.Client$(),
                 ApiVersion.latestVersion(),
                 brokerTopicStats,
-                requestLocal);
+                requestLocal, true);
     }
 }
