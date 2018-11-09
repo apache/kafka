@@ -89,7 +89,8 @@ private[log] object LogValidator extends Logging {
                                                     partitionLeaderEpoch: Int,
                                                     origin: AppendOrigin,
                                                     interBrokerProtocolVersion: ApiVersion,
-                                                    brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
+                                                    brokerTopicStats: BrokerTopicStats,
+                                                    decompressionEnable: Boolean = true): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
@@ -101,7 +102,7 @@ private[log] object LogValidator extends Logging {
           partitionLeaderEpoch, origin, magic, brokerTopicStats)
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, topicPartition, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats)
+        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, origin, interBrokerProtocolVersion, brokerTopicStats, decompressionEnable)
     }
   }
 
@@ -341,7 +342,8 @@ private[log] object LogValidator extends Logging {
                                                  partitionLeaderEpoch: Int,
                                                  origin: AppendOrigin,
                                                  interBrokerProtocolVersion: ApiVersion,
-                                                 brokerTopicStats: BrokerTopicStats): ValidationAndOffsetAssignResult = {
+                                                 brokerTopicStats: BrokerTopicStats,
+                                                 decompressionEnable: Boolean): ValidationAndOffsetAssignResult = {
 
     if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
       throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
@@ -360,6 +362,11 @@ private[log] object LogValidator extends Logging {
     // One exception though is that with format smaller than v2, if sourceCodec is noCompression, then each batch is actually
     // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
     val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, sourceCodec)
+    // Check is made in {@link LogValidator#validateBatch} that the relative offset(s) of the record(s) in the record
+    // version V2 batch is monotonically increasing by 1, which is one of the requirement to avoid decompression.
+    val decompressBatch = decompressionEnable ||
+      !records.hasMatchingMagic(toMagic) ||
+      (firstBatch.magic < RecordBatch.MAGIC_VALUE_V2)
 
     // No in place assignment situation 2 and 3: we only need to check for the first batch because:
     //  1. For most cases (compressed records, v2, for example), there's only one batch anyways.
@@ -376,6 +383,8 @@ private[log] object LogValidator extends Logging {
       validateBatch(topicPartition, firstBatch, batch, origin, toMagic, brokerTopicStats)
       uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
+      // The following inner block are not indented to make the hotfix cherry-picking easier
+      if (decompressBatch || !inPlaceAssignment) {
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
       // then we can optimize the iterator to skip key / value / headers since they would not be used at all
       val recordsIterator = if (inPlaceAssignment && firstBatch.magic >= RecordBatch.MAGIC_VALUE_V2)
@@ -411,6 +420,7 @@ private[log] object LogValidator extends Logging {
       } finally {
         recordsIterator.close()
       }
+      }
     }
 
     if (!inPlaceAssignment) {
@@ -428,12 +438,21 @@ private[log] object LogValidator extends Logging {
       // we can update the batch only and write the compressed payload as is;
       // again we assume only one record batch within the compressed set
       val batch = records.batches.iterator.next()
-      val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
+      val lastOffset = if (decompressBatch)
+        offsetCounter.addAndGet(validatedRecords.size) - 1
+      else {
+        // batch.countOrNull() will never be null as the following line is execteud
+        // for record format version V2.
+        offsetCounter.addAndGet(batch.countOrNull().longValue()) - 1
+      }
 
       batch.setLastOffset(lastOffset)
 
       if (timestampType == TimestampType.LOG_APPEND_TIME)
         maxTimestamp = now
+      else if (!decompressBatch)
+        maxTimestamp = batch.maxTimestamp
+
 
       if (toMagic >= RecordBatch.MAGIC_VALUE_V1)
         batch.setMaxTimestamp(timestampType, maxTimestamp)

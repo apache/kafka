@@ -65,6 +65,7 @@ object Defaults {
   val FollowerReplicationThrottledReplicas = Collections.emptyList[String]()
   val MaxIdMapSnapshots = kafka.server.Defaults.MaxIdMapSnapshots
   val MessageDownConversionEnable = kafka.server.Defaults.MessageDownConversionEnable
+  val ProducerBatchDecompressionEnable = kafka.server.Defaults.ProducerBatchDecompressionEnable
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
@@ -100,6 +101,7 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
+  val producerBatchDecompressionEnable = getBoolean(LogConfig.ProducerBatchDecompressionEnableProp)
 
   def randomSegmentJitter: Long =
     if (segmentJitterMs == 0) 0 else Utils.abs(scala.util.Random.nextInt()) % math.min(segmentJitterMs, segmentMs)
@@ -172,6 +174,8 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsDoc = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC
   val MessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
 
+  val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
+
   val LeaderReplicationThrottledReplicasDoc = "A list of replicas for which log replication should be throttled on " +
     "the leader side. The list should describe a set of replicas in the form " +
     "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
@@ -180,6 +184,13 @@ object LogConfig {
     "the follower side. The list should describe a set of " + "replicas in the form " +
     "[PartitionId]:[BrokerId],[PartitionId]:[BrokerId]:... or alternatively the wildcard '*' can be used to throttle " +
     "all replicas for this topic."
+
+  val ProducerBatchDecompressionEnableDoc = "This configuration controls whether a compressed batch sent by a producer " +
+    "will be decompressed to perform validation of individual records in the batch. The default policy is to decompress " +
+    "all batches.  When set to <code>false</code>, decompression will be skipped if the following three conditions are met : " +
+    "i) Batch sent by producer is greater than record format version V1  ii) Record format version of batch sent by producer " +
+    "is the same as the broker message format version. iii) The relative offsets of the records in the compressed batch are " +
+    "monotonically increasing by 1 starting from 0"
 
   private[log] val ServerDefaultHeaderName = "Server Default Property"
 
@@ -291,6 +302,8 @@ object LogConfig {
         FollowerReplicationThrottledReplicasDoc, FollowerReplicationThrottledReplicasProp)
       .define(MessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW,
         MessageDownConversionEnableDoc, KafkaConfig.LogMessageDownConversionEnableProp)
+      .define(ProducerBatchDecompressionEnableProp, BOOLEAN, Defaults.ProducerBatchDecompressionEnable, LOW,
+        ProducerBatchDecompressionEnableDoc, KafkaConfig.ProducerBatchDecompressionEnableProp)
   }
 
   def apply(): LogConfig = LogConfig(new Properties())

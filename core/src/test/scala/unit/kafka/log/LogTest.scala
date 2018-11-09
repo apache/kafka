@@ -32,7 +32,7 @@ import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, FetchHighWatermark, FetchIsolation, FetchLogEnd, FetchTxnCommitted, KafkaConfig, LogDirFailureChannel, LogOffsetMetadata}
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
@@ -1771,6 +1771,58 @@ class LogTest {
       assertEquals("Offset read should match message id.", messageIds(idx), read.offset)
       assertEquals("Message should match appended.", records(idx), new SimpleRecord(read))
     }
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * and appends them to a log.  Verifies decompression was not performed by checking the size
+    * of buffer used to validate batch header.
+    */
+  @Test
+  def testAvoidDecompression() {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig, logStartOffset = 1000)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      0, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    for(value <- values) {
+      builder.append(new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+    }
+
+    val records = builder.build()
+    val logAppendInfo = log.appendAsLeader(records, leaderEpoch = 0)
+
+    assertEquals("Size of buffer used to validate batch should be equal to the size of record format version V2 batch header.",
+      DefaultRecordBatch.RECORD_BATCH_OVERHEAD, logAppendInfo.recordConversionStats.temporaryMemoryBytes)
+  }
+
+  /**
+    * This test generates a single record set that is a concatenation of many valid record sets,
+    * with non-monotonically increasing relative offset and appends them to a log.
+    */
+  @Test(expected = classOf[InvalidRecordException])
+  def testAppendBatchWithoutMonotonicallyIncreasingRelativeOffset() {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 5000, producerBatchDecompressionEnable = false)
+    val log = createLog(TestUtils.randomPartitionLogDir(tmpDir), logConfig)
+    val values = (0 until 5).map(id => TestUtils.randomBytes(10)).toArray
+
+    // Build a single buffer with all record appended
+    val recordBuffer = ByteBuffer.allocate(5000)
+    val builder = MemoryRecords.builder(recordBuffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, TimestampType.CREATE_TIME,
+      10, System.currentTimeMillis, RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH,
+      RecordBatch.NO_SEQUENCE)
+    var count = 0
+    for(value <- values) {
+      builder.appendWithOffset(10 + (count * 2), new SimpleRecord(RecordBatch.NO_TIMESTAMP, null, value))
+      count = count + 1
+    }
+
+    val records = builder.build()
+    log.appendAsLeader(records, leaderEpoch = 0)
   }
 
   /**
@@ -4454,7 +4506,8 @@ object LogTest {
                       indexIntervalBytes: Int = Defaults.IndexInterval,
                       segmentIndexBytes: Int = Defaults.MaxIndexSize,
                       messageFormatVersion: String = Defaults.MessageFormatVersion,
-                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs): LogConfig = {
+                      fileDeleteDelayMs: Long = Defaults.FileDeleteDelayMs,
+                      producerBatchDecompressionEnable: Boolean = Defaults.ProducerBatchDecompressionEnable): LogConfig = {
     val logProps = new Properties()
 
     logProps.put(LogConfig.SegmentMsProp, segmentMs: java.lang.Long)
@@ -4468,6 +4521,7 @@ object LogTest {
     logProps.put(LogConfig.SegmentIndexBytesProp, segmentIndexBytes: Integer)
     logProps.put(LogConfig.MessageFormatVersionProp, messageFormatVersion)
     logProps.put(LogConfig.FileDeleteDelayMsProp, fileDeleteDelayMs: java.lang.Long)
+    logProps.put(LogConfig.ProducerBatchDecompressionEnableProp, producerBatchDecompressionEnable: java.lang.Boolean)
     LogConfig(logProps)
   }
 
