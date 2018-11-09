@@ -440,6 +440,8 @@ class LogManager(logDirs: Seq[File],
       CoreUtils.swallow(cleaner.shutdown(), this)
     }
 
+    val localLogsByDir = logsByDir
+
     // close logs in each dir
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
@@ -447,7 +449,7 @@ class LogManager(logDirs: Seq[File],
       val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
-      val logsInDir = logsByDir.getOrElse(dir.toString, Map()).values
+      val logsInDir = localLogsByDir.getOrElse(dir.toString, Map()).values
 
       val jobsForDir = logsInDir map { log =>
         CoreUtils.runnable {
@@ -466,7 +468,7 @@ class LogManager(logDirs: Seq[File],
 
         // update the last flush point
         debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsAndCleanSnapshot(dir, allLogs.filter(_.dir.getParentFile.getAbsolutePath.equals(dir.getAbsolutePath)).toSeq)
+        checkpointRecoveryOffsetsAndCleanSnapshot(dir, localLogsByDir.getOrElse(dir.toString, Map()).values.toSeq)
 
         debug(s"Updating log start offsets at $dir")
         checkpointLogStartOffsetsInDir(dir)
@@ -495,7 +497,7 @@ class LogManager(logDirs: Seq[File],
    * @param isFuture True iff the truncation should be performed on the future log of the specified partitions
    */
   def truncateTo(partitionOffsets: Map[TopicPartition, Long], isFuture: Boolean) {
-    var affectedLogs: Seq[Log] = Seq()
+    val affectedLogs = ArrayBuffer.empty[Log]
     for ((topicPartition, truncateOffset) <- partitionOffsets) {
       val log = {
         if (isFuture)
@@ -511,7 +513,7 @@ class LogManager(logDirs: Seq[File],
           cleaner.abortAndPauseCleaning(topicPartition)
         try {
           if (log.truncateTo(truncateOffset))
-            affectedLogs +:= log
+            affectedLogs += log
           if (needToStopCleaner && !isFuture)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
@@ -567,8 +569,10 @@ class LogManager(logDirs: Seq[File],
    * to avoid recovering the whole log on startup.
    */
   def checkpointLogRecoveryOffsets() {
-    liveLogDirs.foreach { f =>
-      checkpointRecoveryOffsetsAndCleanSnapshot(f, allLogs.filter(_.dir.getParentFile.getAbsolutePath.equals(f.getAbsolutePath)).toSeq)
+    logsByDir.foreach { case (dir, partitionToLogMap) =>
+      liveLogDirs.find(_.getAbsolutePath.equals(dir)).foreach { f =>
+        checkpointRecoveryOffsetsAndCleanSnapshot(f, partitionToLogMap.values.toSeq)
+      }
     }
   }
 
@@ -581,7 +585,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-    * Make a checkpoint for all logs in provided directory and clean older snapshots for provided logs.
+    * Write the recovery checkpoint file for all logs in provided directory and clean older snapshots for provided logs.
     *
     * @param dir the directory in which logs are checkpointed
     * @param logsToCleanSnapshot logs whose snapshots need to be cleaned
