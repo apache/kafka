@@ -41,7 +41,7 @@ public class Throttle {
                 count++;
                 return throttled;
             }
-            lastTimeMs = time().milliseconds();
+            lastTimeMs = time().absoluteMilliseconds();
             long curPeriod = lastTimeMs / periodMs;
             if (curPeriod <= prevPeriod) {
                 long nextPeriodMs = (curPeriod + 1) * periodMs;

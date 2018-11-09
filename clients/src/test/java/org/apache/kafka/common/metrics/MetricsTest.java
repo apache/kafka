@@ -319,24 +319,24 @@ public class MetricsTest {
     public void testEventWindowing() {
         Count count = new Count();
         MetricConfig config = new MetricConfig().eventWindow(1).samples(2);
-        count.record(config, 1.0, time.milliseconds());
-        count.record(config, 1.0, time.milliseconds());
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
-        count.record(config, 1.0, time.milliseconds()); // first event times out
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
+        count.record(config, 1.0, time.absoluteMilliseconds());
+        count.record(config, 1.0, time.absoluteMilliseconds());
+        assertEquals(2.0, count.measure(config, time.absoluteMilliseconds()), EPS);
+        count.record(config, 1.0, time.absoluteMilliseconds()); // first event times out
+        assertEquals(2.0, count.measure(config, time.absoluteMilliseconds()), EPS);
     }
 
     @Test
     public void testTimeWindowing() {
         Count count = new Count();
         MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS).samples(2);
-        count.record(config, 1.0, time.milliseconds());
+        count.record(config, 1.0, time.absoluteMilliseconds());
         time.sleep(1);
-        count.record(config, 1.0, time.milliseconds());
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
+        count.record(config, 1.0, time.absoluteMilliseconds());
+        assertEquals(2.0, count.measure(config, time.absoluteMilliseconds()), EPS);
         time.sleep(1);
-        count.record(config, 1.0, time.milliseconds()); // oldest event times out
-        assertEquals(2.0, count.measure(config, time.milliseconds()), EPS);
+        count.record(config, 1.0, time.absoluteMilliseconds()); // oldest event times out
+        assertEquals(2.0, count.measure(config, time.absoluteMilliseconds()), EPS);
     }
 
     @Test
@@ -345,9 +345,9 @@ public class MetricsTest {
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
-        max.record(config, 50, time.milliseconds());
+        max.record(config, 50, time.absoluteMilliseconds());
         time.sleep(samples * windowMs);
-        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.absoluteMilliseconds()), EPS);
     }
 
     /**
@@ -364,15 +364,15 @@ public class MetricsTest {
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
-        max.record(config, 50, time.milliseconds());
-        min.record(config, 50, time.milliseconds());
-        avg.record(config, 50, time.milliseconds());
+        max.record(config, 50, time.absoluteMilliseconds());
+        min.record(config, 50, time.absoluteMilliseconds());
+        avg.record(config, 50, time.absoluteMilliseconds());
 
         time.sleep(samples * windowMs);
 
-        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
-        assertEquals(Double.NaN, min.measure(config, time.milliseconds()), EPS);
-        assertEquals(Double.NaN, avg.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.absoluteMilliseconds()), EPS);
+        assertEquals(Double.NaN, min.measure(config, time.absoluteMilliseconds()), EPS);
+        assertEquals(Double.NaN, avg.measure(config, time.absoluteMilliseconds()), EPS);
     }
 
     /**
@@ -387,13 +387,13 @@ public class MetricsTest {
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
 
-        count.record(config, 50, time.milliseconds());
-        sampledTotal.record(config, 50, time.milliseconds());
+        count.record(config, 50, time.absoluteMilliseconds());
+        sampledTotal.record(config, 50, time.absoluteMilliseconds());
 
         time.sleep(samples * windowMs);
 
-        assertEquals(0, count.measure(config, time.milliseconds()), EPS);
-        assertEquals(0.0, sampledTotal.measure(config, time.milliseconds()), EPS);
+        assertEquals(0, count.measure(config, time.absoluteMilliseconds()), EPS);
+        assertEquals(0.0, sampledTotal.measure(config, time.absoluteMilliseconds()), EPS);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -512,7 +512,7 @@ public class MetricsTest {
         assertEquals("Rate(0...2) = 2.666", sum / elapsedSecs, (Double) rateMetric.metricValue(), EPS);
         assertEquals("Count rate(0...2) = 0.02666", count / elapsedSecs, (Double) countRateMetric.metricValue(), EPS);
         assertEquals("Elapsed Time = 75 seconds", elapsedSecs,
-                ((Rate) rateMetric.measurable()).windowSize(cfg, time.milliseconds()) / 1000, EPS);
+                ((Rate) rateMetric.measurable()).windowSize(cfg, time.absoluteMilliseconds()) / 1000, EPS);
         assertEquals(sum, (Double) totalMetric.metricValue(), EPS);
         assertEquals(count, (Double) countTotalMetric.metricValue(), EPS);
 
@@ -586,11 +586,11 @@ public class MetricsTest {
     }
 
     private void record(Rate rate, MetricConfig config, int value) {
-        rate.record(config, value, time.milliseconds());
+        rate.record(config, value, time.absoluteMilliseconds());
     }
 
     private Double measure(Measurable rate, MetricConfig config) {
-        return rate.measure(config, time.milliseconds());
+        return rate.measure(config, time.absoluteMilliseconds());
     }
     
     @Test

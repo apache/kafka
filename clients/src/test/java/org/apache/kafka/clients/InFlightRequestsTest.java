@@ -72,18 +72,18 @@ public class InFlightRequestsTest {
     public void testTimedOutNodes() {
         Time time = new MockTime();
 
-        addRequest("A", time.milliseconds(), 50);
-        addRequest("B", time.milliseconds(), 200);
-        addRequest("B", time.milliseconds(), 100);
+        addRequest("A", time.absoluteMilliseconds(), 50);
+        addRequest("B", time.absoluteMilliseconds(), 200);
+        addRequest("B", time.absoluteMilliseconds(), 100);
 
         time.sleep(50);
-        assertEquals(Collections.emptyList(), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+        assertEquals(Collections.emptyList(), inFlightRequests.nodesWithTimedOutRequests(time.absoluteMilliseconds()));
 
         time.sleep(25);
-        assertEquals(Collections.singletonList("A"), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+        assertEquals(Collections.singletonList("A"), inFlightRequests.nodesWithTimedOutRequests(time.absoluteMilliseconds()));
 
         time.sleep(50);
-        assertEquals(Arrays.asList("A", "B"), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+        assertEquals(Arrays.asList("A", "B"), inFlightRequests.nodesWithTimedOutRequests(time.absoluteMilliseconds()));
     }
 
     @Test

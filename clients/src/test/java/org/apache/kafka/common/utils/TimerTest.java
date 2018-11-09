@@ -40,7 +40,7 @@ public class TimerTest {
         assertEquals(100, timer.elapsedMs());
 
         time.sleep(400);
-        timer.update(time.milliseconds());
+        timer.update(time.absoluteMilliseconds());
 
         assertEquals(0, timer.remainingMs());
         assertEquals(500, timer.elapsedMs());
@@ -49,7 +49,7 @@ public class TimerTest {
         // Going over the expiration is fine and the elapsed time can exceed
         // the initial timeout. However, remaining time should be stuck at 0.
         time.sleep(200);
-        timer.update(time.milliseconds());
+        timer.update(time.absoluteMilliseconds());
         assertTrue(timer.isExpired());
         assertEquals(0, timer.remainingMs());
         assertEquals(700, timer.elapsedMs());
@@ -115,11 +115,11 @@ public class TimerTest {
         long currentTimeMs = timer.currentTimeMs();
 
         timer.sleep(200);
-        assertEquals(time.milliseconds(), timer.currentTimeMs());
+        assertEquals(time.absoluteMilliseconds(), timer.currentTimeMs());
         assertEquals(currentTimeMs + 200, timer.currentTimeMs());
 
         timer.sleep(1000);
-        assertEquals(time.milliseconds(), timer.currentTimeMs());
+        assertEquals(time.absoluteMilliseconds(), timer.currentTimeMs());
         assertEquals(currentTimeMs + 500, timer.currentTimeMs());
         assertTrue(timer.isExpired());
     }

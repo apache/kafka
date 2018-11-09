@@ -466,10 +466,10 @@ class ReplicaManager(val config: KafkaConfig,
                     delayedProduceLock: Option[Lock] = None,
                     recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => ()) {
     if (isValidRequiredAcks(requiredAcks)) {
-      val sTime = time.milliseconds
+      val sTime = time.absoluteMilliseconds
       val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
         isFromClient = isFromClient, entriesPerPartition, requiredAcks)
-      debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+      debug("Produce to local log in %d ms".format(time.absoluteMilliseconds - sTime))
 
       val produceStatus = localProduceResults.map { case (topicPartition, result) =>
         topicPartition ->
@@ -667,9 +667,9 @@ class ReplicaManager(val config: KafkaConfig,
   def deleteRecords(timeout: Long,
                     offsetPerPartition: Map[TopicPartition, Long],
                     responseCallback: Map[TopicPartition, DeleteRecordsResponse.PartitionResponse] => Unit) {
-    val timeBeforeLocalDeleteRecords = time.milliseconds
+    val timeBeforeLocalDeleteRecords = time.absoluteMilliseconds
     val localDeleteRecordsResults = deleteRecordsOnLocalLog(offsetPerPartition)
-    debug("Delete records on local log in %d ms".format(time.milliseconds - timeBeforeLocalDeleteRecords))
+    debug("Delete records on local log in %d ms".format(time.absoluteMilliseconds - timeBeforeLocalDeleteRecords))
 
     val deleteRecordsStatus = localDeleteRecordsResults.map { case (topicPartition, result) =>
       topicPartition ->
@@ -893,7 +893,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         val partition = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader)
         val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
-        val fetchTimeMs = time.milliseconds
+        val fetchTimeMs = time.absoluteMilliseconds
 
         // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
         val readInfo = partition.readRecords(

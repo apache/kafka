@@ -716,7 +716,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     true, false, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
-            this.metadata.bootstrap(addresses, time.milliseconds());
+            this.metadata.bootstrap(addresses, time.absoluteMilliseconds());
             String metricGrpPrefix = "consumer";
             ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
@@ -1081,7 +1081,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 // make sure the offsets of topic partitions the consumer is unsubscribing from
                 // are committed since there will be no following rebalance
                 if (coordinator != null)
-                    this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+                    this.coordinator.maybeAutoCommitOffsetsAsync(time.absoluteMilliseconds());
 
                 log.debug("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
                 this.subscriptions.assignFromUser(new HashSet<>(partitions));

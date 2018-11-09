@@ -1469,10 +1469,10 @@ public class SaslAuthenticatorTest {
         server.verifyReauthenticationMetrics(0, 0);
         double successfulReauthentications = 0;
         int desiredNumReauthentications = 5;
-        long startMs = Time.SYSTEM.milliseconds();
+        long startMs = Time.SYSTEM.absoluteMilliseconds();
         long timeoutMs = startMs + 1000 * 15; // stop after 15 seconds
         while (successfulReauthentications < desiredNumReauthentications
-                && Time.SYSTEM.milliseconds() < timeoutMs) {
+                && Time.SYSTEM.absoluteMilliseconds() < timeoutMs) {
             checkClientConnection(node);
             successfulReauthentications = server.metricValue("successful-reauthentication-total");
         }
@@ -2094,7 +2094,7 @@ public class SaslAuthenticatorTest {
                             try {
                                 claimsJson = String.format("{%s,%s,%s}",
                                         expClaimText(Long.parseLong(lifetimeSecondsValueToUse)),
-                                        claimOrHeaderJsonText("iat", time.milliseconds() / 1000.0),
+                                        claimOrHeaderJsonText("iat", time.absoluteMilliseconds() / 1000.0),
                                         claimOrHeaderJsonText("sub", changedPrincipalNameToUse));
                             } catch (NumberFormatException e) {
                                 throw new OAuthBearerConfigException(e.getMessage());
@@ -2125,7 +2125,7 @@ public class SaslAuthenticatorTest {
         }
 
         private static String expClaimText(long lifetimeSeconds) {
-            return claimOrHeaderJsonText("exp", time.milliseconds() / 1000.0 + lifetimeSeconds);
+            return claimOrHeaderJsonText("exp", time.absoluteMilliseconds() / 1000.0 + lifetimeSeconds);
         }
 
         @Override

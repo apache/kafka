@@ -52,7 +52,7 @@ abstract class InterBrokerSendThread(name: String,
   }
 
   override def doWork() {
-    var now = time.milliseconds()
+    var now = time.absoluteMilliseconds()
 
     generateRequests().foreach { request =>
       val completionHandler = request.handler
@@ -64,7 +64,7 @@ abstract class InterBrokerSendThread(name: String,
     try {
       val timeout = sendRequests(now)
       networkClient.poll(timeout, now)
-      now = time.milliseconds()
+      now = time.absoluteMilliseconds()
       checkDisconnects(now)
       failExpiredRequests(now)
       unsentRequests.clean()

@@ -230,7 +230,7 @@ public class Sender implements Runnable {
         // main loop, runs until close is called
         while (running) {
             try {
-                run(time.milliseconds());
+                run(time.absoluteMilliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
@@ -243,7 +243,7 @@ public class Sender implements Runnable {
         // wait until these are completed.
         while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
             try {
-                run(time.milliseconds());
+                run(time.absoluteMilliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
@@ -479,12 +479,12 @@ public class Sender implements Runnable {
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
         InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
-        ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, requestTimeoutMs, null);
+        ClientRequest request = client.newClientRequest(nodeId, builder, time.absoluteMilliseconds(), true, requestTimeoutMs, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
 
     private Node awaitLeastLoadedNodeReady(long remainingTimeMs) throws IOException {
-        Node node = client.leastLoadedNode(time.milliseconds());
+        Node node = client.leastLoadedNode(time.absoluteMilliseconds());
         if (node != null && NetworkClientUtils.awaitReady(client, node, time, remainingTimeMs)) {
             return node;
         }
@@ -781,7 +781,7 @@ public class Sender implements Runnable {
                 produceRecordsByPartition, transactionalId);
         RequestCompletionHandler callback = new RequestCompletionHandler() {
             public void onComplete(ClientResponse response) {
-                handleProduceResponse(response, recordsByPartition, time.milliseconds());
+                handleProduceResponse(response, recordsByPartition, time.absoluteMilliseconds());
             }
         };
 
@@ -902,7 +902,7 @@ public class Sender implements Runnable {
         }
 
         public void updateProduceRequestMetrics(Map<Integer, List<ProducerBatch>> batches) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             for (List<ProducerBatch> nodeBatch : batches.values()) {
                 int records = 0;
                 for (ProducerBatch batch : nodeBatch) {
@@ -937,7 +937,7 @@ public class Sender implements Runnable {
         }
 
         public void recordRetries(String topic, int count) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             this.retrySensor.record(count, now);
             String topicRetryName = "topic." + topic + ".record-retries";
             Sensor topicRetrySensor = this.metrics.getSensor(topicRetryName);
@@ -946,7 +946,7 @@ public class Sender implements Runnable {
         }
 
         public void recordErrors(String topic, int count) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             this.errorSensor.record(count, now);
             String topicErrorName = "topic." + topic + ".record-errors";
             Sensor topicErrorSensor = this.metrics.getSensor(topicErrorName);
@@ -955,7 +955,7 @@ public class Sender implements Runnable {
         }
 
         public void recordLatency(String node, long latency) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             this.requestTimeSensor.record(latency, now);
             if (!node.isEmpty()) {
                 String nodeTimeName = "node-" + node + ".latency";

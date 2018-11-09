@@ -177,7 +177,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private[group] val lock = new ReentrantLock
 
   private var state: GroupState = initialState
-  var currentStateTimestamp: Option[Long] = Some(time.milliseconds())
+  var currentStateTimestamp: Option[Long] = Some(time.absoluteMilliseconds())
   var protocolType: Option[String] = None
   var generationId = 0
   private var leaderId: Option[String] = None
@@ -261,7 +261,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
     state = groupState
-    currentStateTimestamp = Some(time.milliseconds())
+    currentStateTimestamp = Some(time.absoluteMilliseconds())
   }
 
   def selectProtocol: String = {

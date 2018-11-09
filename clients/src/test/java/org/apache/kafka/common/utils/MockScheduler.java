@@ -54,7 +54,7 @@ public class MockScheduler implements Scheduler, MockTime.MockTimeListener {
 
     @Override
     public synchronized void tick() {
-        long timeMs = time.milliseconds();
+        long timeMs = time.absoluteMilliseconds();
         while (true) {
             Map.Entry<Long, List<KafkaFutureImpl<Long>>> entry = waiters.firstEntry();
             if ((entry == null) || (entry.getKey() > timeMs)) {
@@ -68,7 +68,7 @@ public class MockScheduler implements Scheduler, MockTime.MockTimeListener {
     }
 
     public synchronized void addWaiter(long delayMs, KafkaFutureImpl<Long> waiter) {
-        long timeMs = time.milliseconds();
+        long timeMs = time.absoluteMilliseconds();
         if (delayMs <= 0) {
             waiter.complete(timeMs);
         } else {

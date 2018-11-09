@@ -209,7 +209,7 @@ public class ClientCompatibilityTest {
 
     ClientCompatibilityTest(TestConfig testConfig) {
         this.testConfig = testConfig;
-        long curTime = Time.SYSTEM.milliseconds();
+        long curTime = Time.SYSTEM.absoluteMilliseconds();
 
         ByteBuffer buf = ByteBuffer.allocate(8);
         buf.putLong(curTime);
@@ -223,7 +223,7 @@ public class ClientCompatibilityTest {
     }
 
     void run() throws Throwable {
-        long prodTimeMs = Time.SYSTEM.milliseconds();
+        long prodTimeMs = Time.SYSTEM.absoluteMilliseconds();
         testAdminClient();
         testProduce();
         testConsume(prodTimeMs);
@@ -410,7 +410,7 @@ public class ClientCompatibilityTest {
 
                 private byte[] fetchNext() {
                     while (true) {
-                        long curTime = Time.SYSTEM.milliseconds();
+                        long curTime = Time.SYSTEM.absoluteMilliseconds();
                         if (curTime - prodTimeMs > TIMEOUT_MS)
                             throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                         if (recordIter == null) {

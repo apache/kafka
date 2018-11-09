@@ -32,19 +32,19 @@ public class MockTimeTest {
     @Test
     public void testAdvanceClock() {
         MockTime time = new MockTime(0, 100, 200);
-        Assert.assertEquals(100, time.milliseconds());
-        Assert.assertEquals(200, time.nanoseconds());
+        Assert.assertEquals(100, time.absoluteMilliseconds());
+        Assert.assertEquals(200, time.relativeNanoseconds());
         time.sleep(1);
-        Assert.assertEquals(101, time.milliseconds());
-        Assert.assertEquals(1000200, time.nanoseconds());
+        Assert.assertEquals(101, time.absoluteMilliseconds());
+        Assert.assertEquals(1000200, time.relativeNanoseconds());
     }
 
     @Test
     public void testAutoTickMs() {
         MockTime time = new MockTime(1, 100, 200);
-        Assert.assertEquals(101, time.milliseconds());
-        Assert.assertEquals(2000200, time.nanoseconds());
-        Assert.assertEquals(103, time.milliseconds());
-        Assert.assertEquals(104, time.milliseconds());
+        Assert.assertEquals(101, time.absoluteMilliseconds());
+        Assert.assertEquals(2000200, time.relativeNanoseconds());
+        Assert.assertEquals(103, time.absoluteMilliseconds());
+        Assert.assertEquals(104, time.absoluteMilliseconds());
     }
 }

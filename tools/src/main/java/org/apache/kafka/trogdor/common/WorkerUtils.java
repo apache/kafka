@@ -193,7 +193,7 @@ public final class WorkerUtils {
      */
     private static Collection<String> createTopics(Logger log, AdminClient adminClient,
                                                    Collection<NewTopic> topics) throws Throwable {
-        long startMs = Time.SYSTEM.milliseconds();
+        long startMs = Time.SYSTEM.absoluteMilliseconds();
         int tries = 0;
         List<String> existingTopics = new ArrayList<>();
 
@@ -240,7 +240,7 @@ public final class WorkerUtils {
             if (topicsToCreate.isEmpty()) {
                 break;
             }
-            if (Time.SYSTEM.milliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
+            if (Time.SYSTEM.absoluteMilliseconds() > startMs + CREATE_TOPICS_CALL_TIMEOUT) {
                 String str = "Unable to create topic(s): " +
                              Utils.join(topicsToCreate, ", ") + "after " + tries + " attempt(s)";
                 log.warn(str);

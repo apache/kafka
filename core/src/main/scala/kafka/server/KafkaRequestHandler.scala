@@ -49,10 +49,10 @@ class KafkaRequestHandler(id: Int,
       // Since meter is calculated as total_recorded_value / time_window and
       // time_window is independent of the number of threads, each recorded idle
       // time should be discounted by # threads.
-      val startSelectTime = time.nanoseconds
+      val startSelectTime = time.relativeNanoseconds
 
       val req = requestChannel.receiveRequest(300)
-      val endTime = time.nanoseconds
+      val endTime = time.relativeNanoseconds
       val idleTime = endTime - startSelectTime
       aggregateIdleMeter.mark(idleTime / totalHandlerThreads.get)
 

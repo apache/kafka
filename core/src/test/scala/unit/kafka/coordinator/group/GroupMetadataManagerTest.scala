@@ -544,10 +544,10 @@ class GroupMetadataManagerTest {
   private def completeTransactionalOffsetCommit(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, baseOffset: Long,
                                                 isCommit: Boolean): Int = {
     val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, baseOffset, time.milliseconds(), producerId, producerEpoch, 0, true, true,
+      TimestampType.LOG_APPEND_TIME, baseOffset, time.absoluteMilliseconds(), producerId, producerEpoch, 0, true, true,
       RecordBatch.NO_PARTITION_LEADER_EPOCH)
     val controlRecordType = if (isCommit) ControlRecordType.COMMIT else ControlRecordType.ABORT
-    builder.appendEndTxnMarker(time.milliseconds(), new EndTransactionMarker(controlRecordType, 0))
+    builder.appendEndTxnMarker(time.absoluteMilliseconds(), new EndTransactionMarker(controlRecordType, 0))
     builder.build()
     1
   }
@@ -934,7 +934,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.absoluteMilliseconds()))
 
     expectAppendMessage(Errors.NONE)
     EasyMock.replay(replicaManager)
@@ -976,7 +976,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsetAndMetadata = OffsetAndMetadata(offset, "", time.milliseconds())
+    val offsetAndMetadata = OffsetAndMetadata(offset, "", time.absoluteMilliseconds())
     val offsets = immutable.Map(topicPartition -> offsetAndMetadata)
 
     val capturedResponseCallback = appendAndCaptureCallback()
@@ -1017,7 +1017,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.absoluteMilliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1056,7 +1056,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.absoluteMilliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1094,7 +1094,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.absoluteMilliseconds()))
 
     EasyMock.replay(replicaManager)
 
@@ -1136,7 +1136,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
+    val offsets = immutable.Map(topicPartition -> OffsetAndMetadata(offset, "", time.absoluteMilliseconds()))
 
     val capturedResponseCallback = appendAndCaptureCallback()
     EasyMock.replay(replicaManager)
@@ -1175,7 +1175,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 millisecond
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     val offsets = immutable.Map(
       topicPartition1 -> OffsetAndMetadata(offset, "", startMs, startMs + 1),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
@@ -1330,7 +1330,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 millisecond
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     val offsets = immutable.Map(
       topicPartition1 -> OffsetAndMetadata(offset, Optional.empty(), "", startMs, Some(startMs + 1)),
       topicPartition2 -> OffsetAndMetadata(offset, "", startMs, startMs + 3))
@@ -1409,7 +1409,7 @@ class GroupMetadataManagerTest {
     group.transitionTo(PreparingRebalance)
     group.initNextGeneration()
 
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     // old clients, expiry timestamp is explicitly set
     val tp1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, startMs + 1)
     val tp2OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs, startMs + 3)
@@ -1503,7 +1503,7 @@ class GroupMetadataManagerTest {
     EasyMock.verify(replicaManager)
 
     // advance time to just before the offset of last partition is to be expired, no offset should expire
-    time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.milliseconds() - 1)
+    time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.absoluteMilliseconds() - 1)
 
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1561,7 +1561,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     // expire the offset after 1 and 3 milliseconds (old clients) and after default retention (new clients)
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     // old clients, expiry timestamp is explicitly set
     val tp1OffsetAndMetadata = OffsetAndMetadata(offset, "", startMs)
     // new clients, no per-partition expiry timestamp, offsets of group expire together
@@ -1585,7 +1585,7 @@ class GroupMetadataManagerTest {
 
     // do not expire offsets while within retention period since commit timestamp
     val expiryTimestamp = offsets.get(topicPartition1).get.commitTimestamp + defaultOffsetRetentionMs
-    time.sleep(expiryTimestamp - time.milliseconds() - 1)
+    time.sleep(expiryTimestamp - time.absoluteMilliseconds() - 1)
 
     groupMetadataManager.cleanupGroupMetadata()
 
@@ -1709,7 +1709,7 @@ class GroupMetadataManagerTest {
       offset = 537L,
       leaderEpoch = Optional.of(15),
       metadata = "metadata",
-      commitTimestamp = time.milliseconds(),
+      commitTimestamp = time.absoluteMilliseconds(),
       expireTimestamp = None)
 
     def verifySerde(apiVersion: ApiVersion, expectedOffsetCommitValueVersion: Int): Unit = {
@@ -1751,8 +1751,8 @@ class GroupMetadataManagerTest {
       offset = 537L,
       leaderEpoch = Optional.empty(),
       metadata = "metadata",
-      commitTimestamp = time.milliseconds(),
-      expireTimestamp = Some(time.milliseconds() + 1000))
+      commitTimestamp = time.absoluteMilliseconds(),
+      expireTimestamp = Some(time.absoluteMilliseconds() + 1000))
 
     def verifySerde(apiVersion: ApiVersion): Unit = {
       val bytes = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, apiVersion)
@@ -1870,7 +1870,7 @@ class GroupMetadataManagerTest {
     val memberProtocols = List((protocol, Array.emptyByteArray))
     val member = new MemberMetadata(memberId, groupId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
-      if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)
+      if (apiVersion >= KAFKA_2_1_IV0) Some(time.absoluteMilliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
     val groupMetadataValue = GroupMetadataManager.groupMetadataValue(group, Map(memberId -> new Array[Byte](assignmentSize)), apiVersion)
     new SimpleRecord(groupMetadataKey, groupMetadataValue)
@@ -1934,7 +1934,7 @@ class GroupMetadataManagerTest {
                                            apiVersion: ApiVersion = ApiVersion.latestVersion,
                                            retentionTimeOpt: Option[Long] = None): Seq[SimpleRecord] = {
     committedOffsets.map { case (topicPartition, offset) =>
-      val commitTimestamp = time.milliseconds()
+      val commitTimestamp = time.absoluteMilliseconds()
       val offsetAndMetadata = retentionTimeOpt match {
         case Some(retentionTimeMs) =>
           val expirationTime = commitTimestamp + retentionTimeMs

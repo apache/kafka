@@ -184,7 +184,7 @@ public class Worker {
     public void stop() {
         log.info("Worker stopping");
 
-        long started = time.milliseconds();
+        long started = time.absoluteMilliseconds();
         long limit = started + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
 
         if (!connectors.isEmpty()) {
@@ -197,7 +197,7 @@ public class Worker {
             stopAndAwaitTasks();
         }
 
-        long timeoutMs = limit - time.milliseconds();
+        long timeoutMs = limit - time.absoluteMilliseconds();
         sourceTaskOffsetCommitter.close(timeoutMs);
 
         offsetBackingStore.stop();
@@ -588,10 +588,10 @@ public class Worker {
     }
 
     private void awaitStopTasks(Collection<ConnectorTaskId> ids) {
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         long deadline = now + config.getLong(WorkerConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         for (ConnectorTaskId id : ids) {
-            long remaining = Math.max(0, deadline - time.milliseconds());
+            long remaining = Math.max(0, deadline - time.absoluteMilliseconds());
             awaitStopTask(id, remaining);
         }
     }

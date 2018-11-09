@@ -130,7 +130,7 @@ private[kafka] object LogValidator extends Logging {
                                                    toMagicValue: Byte,
                                                    partitionLeaderEpoch: Int,
                                                    isFromClient: Boolean): ValidationAndOffsetAssignResult = {
-    val startNanos = time.nanoseconds
+    val startNanos = time.relativeNanoseconds
     val sizeInBytesAfterConversion = AbstractRecords.estimateSizeInBytes(toMagicValue, offsetCounter.value,
       CompressionType.NONE, records.records)
 
@@ -156,7 +156,7 @@ private[kafka] object LogValidator extends Logging {
 
     val info = builder.info
     val recordConversionStats = new RecordConversionStats(builder.uncompressedBytesWritten,
-      builder.numRecords, time.nanoseconds - startNanos)
+      builder.numRecords, time.relativeNanoseconds - startNanos)
     ValidationAndOffsetAssignResult(
       validatedRecords = convertedRecords,
       maxTimestamp = info.maxTimestamp,
@@ -338,7 +338,7 @@ private[kafka] object LogValidator extends Logging {
                                            partitionLeaderEpoch: Int,
                                            isFromClient: Boolean,
                                            uncompresssedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
-    val startNanos = time.nanoseconds
+    val startNanos = time.relativeNanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
     val buffer = ByteBuffer.allocate(estimatedSize)
@@ -359,7 +359,7 @@ private[kafka] object LogValidator extends Logging {
     // to rebuild the records (including recompression if enabled).
     val conversionCount = builder.numRecords
     val recordConversionStats = new RecordConversionStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
-      conversionCount, time.nanoseconds - startNanos)
+      conversionCount, time.relativeNanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(
       validatedRecords = records,

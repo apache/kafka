@@ -372,7 +372,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     override def run(): Unit = {
       transactions.foreach { txn =>
         transactionMetadata(txn).foreach { txnMetadata =>
-          txnMetadata.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
+          txnMetadata.txnLastUpdateTimestamp = time.absoluteMilliseconds() - txnConfig.transactionalIdExpirationMs
         }
       }
       txnStateManager.enableTransactionalIdExpiration()

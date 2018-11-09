@@ -49,14 +49,14 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request): Int = {
     if (request.apiRemoteCompleteTimeNanos == -1) {
       // When this callback is triggered, the remote API call has completed
-      request.apiRemoteCompleteTimeNanos = time.nanoseconds
+      request.apiRemoteCompleteTimeNanos = time.relativeNanoseconds
     }
 
     if (quotasEnabled) {
       request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
         getOrCreateQuotaSensors(request.session, request.header.clientId), nanosToPercentage(timeNanos)))
       recordAndGetThrottleTimeMs(request.session, request.header.clientId,
-        nanosToPercentage(request.requestThreadTimeNanos), time.milliseconds())
+        nanosToPercentage(request.requestThreadTimeNanos), time.absoluteMilliseconds())
     } else {
       0
     }

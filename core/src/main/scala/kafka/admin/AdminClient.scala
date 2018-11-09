@@ -112,11 +112,11 @@ class AdminClient(val time: Time,
     def sendRequest: Try[FindCoordinatorResponse] =
       Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])
 
-    val startTime = time.milliseconds
+    val startTime = time.absoluteMilliseconds
     var response = sendRequest
 
     while ((response.isFailure || response.get.error == Errors.COORDINATOR_NOT_AVAILABLE) &&
-      (time.milliseconds - startTime < timeoutMs)) {
+      (time.absoluteMilliseconds - startTime < timeoutMs)) {
 
       Thread.sleep(retryBackoffMs)
       response = sendRequest
@@ -248,11 +248,11 @@ class AdminClient(val time: Time,
     def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
       metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
 
-    val startTime = time.milliseconds
+    val startTime = time.absoluteMilliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
     var metadata = describeConsumerGroupHandler(coordinator, groupId)
 
-    while (!isValidConsumerGroupResponse(metadata) && time.milliseconds - startTime < timeoutMs) {
+    while (!isValidConsumerGroupResponse(metadata) && time.absoluteMilliseconds - startTime < timeoutMs) {
       debug(s"The consumer group response for group '$groupId' is invalid. Retrying the request as the group is initializing ...")
       Thread.sleep(retryBackoffMs)
       metadata = describeConsumerGroupHandler(coordinator, groupId)
@@ -346,12 +346,12 @@ class CompositeFuture[T](time: Time,
   }
 
   override def get(timeout: Long, unit: TimeUnit): Map[TopicPartition, T] = {
-    val start: Long = time.milliseconds()
+    val start: Long = time.absoluteMilliseconds()
     val timeoutMs = unit.toMillis(timeout)
     var remaining: Long = timeoutMs
 
     val observedResults = futures.flatMap{ future =>
-      val elapsed = time.milliseconds() - start
+      val elapsed = time.absoluteMilliseconds() - start
       remaining = if (timeoutMs - elapsed > 0) timeoutMs - elapsed else 0L
 
       if (future.awaitDone(remaining, TimeUnit.MILLISECONDS)) future.value()
@@ -439,7 +439,7 @@ object AdminClient {
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
-    metadata.bootstrap(brokerAddresses, time.milliseconds())
+    metadata.bootstrap(brokerAddresses, time.absoluteMilliseconds())
 
     val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
 

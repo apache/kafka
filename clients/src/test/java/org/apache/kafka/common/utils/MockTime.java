@@ -60,13 +60,13 @@ public class MockTime implements Time {
     }
 
     @Override
-    public long milliseconds() {
+    public long absoluteMilliseconds() {
         maybeSleep(autoTickMs);
         return timeMs.get();
     }
 
     @Override
-    public long nanoseconds() {
+    public long relativeNanoseconds() {
         maybeSleep(autoTickMs);
         return highResTimeNs.get();
     }

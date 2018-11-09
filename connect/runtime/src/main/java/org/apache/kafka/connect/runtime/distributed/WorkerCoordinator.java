@@ -112,19 +112,19 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     public void poll(long timeout) {
         // poll for io until the timeout expires
-        final long start = time.milliseconds();
+        final long start = time.absoluteMilliseconds();
         long now = start;
         long remaining;
 
         do {
             if (coordinatorUnknown()) {
                 ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-                now = time.milliseconds();
+                now = time.absoluteMilliseconds();
             }
 
             if (rejoinNeededOrPending()) {
                 ensureActiveGroup();
-                now = time.milliseconds();
+                now = time.absoluteMilliseconds();
             }
 
             pollHeartbeat(now);
@@ -137,7 +137,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             long pollTimeout = Math.min(Math.max(0, remaining), timeToNextHeartbeat(now));
             client.poll(time.timer(pollTimeout));
 
-            now = time.milliseconds();
+            now = time.absoluteMilliseconds();
             elapsed = now - start;
             remaining = timeout - elapsed;
         } while (remaining > 0);

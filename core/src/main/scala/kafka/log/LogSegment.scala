@@ -85,7 +85,7 @@ class LogSegment private[log] (val log: FileRecords,
     else throw new NoSuchFileException(s"Offset index file ${offsetIndex.file.getAbsolutePath} does not exist")
   }
 
-  private var created = time.milliseconds
+  private var created = time.absoluteMilliseconds
 
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
@@ -431,7 +431,7 @@ class LogSegment private[log] (val log: FileRecords,
 
     val bytesTruncated = if (mapping == null) 0 else log.truncateTo(mapping.position)
     if (log.sizeInBytes == 0) {
-      created = time.milliseconds
+      created = time.absoluteMilliseconds
       rollingBasedTimestamp = None
     }
 

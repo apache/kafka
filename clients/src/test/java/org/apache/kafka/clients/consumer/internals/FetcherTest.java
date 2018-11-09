@@ -341,7 +341,7 @@ public class FetcherTest {
         builder.append(0L, "key".getBytes(), null);
         builder.close();
 
-        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+        MemoryRecords.writeEndTransactionalMarker(buffer, 1L, time.absoluteMilliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
 
         buffer.flip();
@@ -852,7 +852,7 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NOT_LEADER_FOR_PARTITION, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals(0L, metadata.timeToNextUpdate(time.absoluteMilliseconds()));
     }
 
     @Test
@@ -864,7 +864,7 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.UNKNOWN_TOPIC_OR_PARTITION, 100L, 0));
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals(0L, metadata.timeToNextUpdate(time.absoluteMilliseconds()));
     }
 
     @Test
@@ -1553,25 +1553,25 @@ public class FetcherTest {
         short apiVersionsResponseVersion = ApiKeys.API_VERSIONS.latestVersion();
         ByteBuffer buffer = ApiVersionsResponse.createApiVersionsResponse(400, RecordBatch.CURRENT_MAGIC_VALUE).serialize(apiVersionsResponseVersion, new ResponseHeader(0));
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
-        while (!client.ready(node, time.milliseconds())) {
-            client.poll(1, time.milliseconds());
+        while (!client.ready(node, time.absoluteMilliseconds())) {
+            client.poll(1, time.absoluteMilliseconds());
             // If a throttled response is received, advance the time to ensure progress.
-            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
+            time.sleep(client.throttleDelayMs(node, time.absoluteMilliseconds()));
         }
         selector.clear();
 
         for (int i = 1; i <= 3; i++) {
             int throttleTimeMs = 100 * i;
             FetchRequest.Builder builder = FetchRequest.Builder.forConsumer(100, 100, new LinkedHashMap<>());
-            ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true);
-            client.send(request, time.milliseconds());
-            client.poll(1, time.milliseconds());
+            ClientRequest request = client.newClientRequest(node.idString(), builder, time.absoluteMilliseconds(), true);
+            client.send(request, time.absoluteMilliseconds());
+            client.poll(1, time.absoluteMilliseconds());
             FetchResponse response = fullFetchResponse(tp0, nextRecords, Errors.NONE, i, throttleTimeMs);
             buffer = response.serialize(ApiKeys.FETCH.latestVersion(), new ResponseHeader(request.correlationId()));
             selector.completeReceive(new NetworkReceive(node.idString(), buffer));
-            client.poll(1, time.milliseconds());
+            client.poll(1, time.absoluteMilliseconds());
             // If a throttled response is received, advance the time to ensure progress.
-            time.sleep(client.throttleDelayMs(node, time.milliseconds()));
+            time.sleep(client.throttleDelayMs(node, time.absoluteMilliseconds()));
             selector.clear();
         }
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
@@ -2011,8 +2011,8 @@ public class FetcherTest {
         int currentOffset = 0;
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()));
 
         abortTransaction(buffer, 1L, currentOffset);
 
@@ -2045,8 +2045,8 @@ public class FetcherTest {
         int currentOffset = 0;
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()));
 
         currentOffset += commitTransaction(buffer, 1L, currentOffset);
         buffer.flip();
@@ -2161,16 +2161,16 @@ public class FetcherTest {
         int currentOffset = 0;
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "abort1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "abort1-2".getBytes(), "value".getBytes()));
 
         currentOffset += abortTransaction(buffer, 1L, currentOffset);
         // Duplicate abort -- should be ignored.
         currentOffset += abortTransaction(buffer, 1L, currentOffset);
         // Now commit a transaction.
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "commit1-1".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "commit1-2".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "commit1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "commit1-2".getBytes(), "value".getBytes()));
         commitTransaction(buffer, 1L, currentOffset);
         buffer.flip();
 
@@ -2383,8 +2383,8 @@ public class FetcherTest {
         int currentOffset = 0;
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()));
 
         abortTransaction(buffer, 1L, currentOffset);
 
@@ -2417,8 +2417,8 @@ public class FetcherTest {
         long currentOffset = 0;
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "abort1-1".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "abort1-2".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "abort1-1".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "abort1-2".getBytes(), "value".getBytes()));
 
         currentOffset += abortTransaction(buffer, 1L, currentOffset);
         buffer.flip();
@@ -2653,12 +2653,12 @@ public class FetcherTest {
         // Empty control batch should not cause an exception
         DefaultRecordBatch.writeEmptyHeader(buffer, RecordBatch.MAGIC_VALUE_V2, 1L,
                 (short) 0, -1, 0, 0,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, TimestampType.CREATE_TIME, time.milliseconds(),
+                RecordBatch.NO_PARTITION_LEADER_EPOCH, TimestampType.CREATE_TIME, time.absoluteMilliseconds(),
                 true, true);
 
         currentOffset += appendTransactionalRecords(buffer, 1L, currentOffset,
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()),
-                new SimpleRecord(time.milliseconds(), "key".getBytes(), "value".getBytes()));
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()),
+                new SimpleRecord(time.absoluteMilliseconds(), "key".getBytes(), "value".getBytes()));
 
         commitTransaction(buffer, 1L, currentOffset);
         buffer.flip();
@@ -2698,7 +2698,7 @@ public class FetcherTest {
 
     private int appendTransactionalRecords(ByteBuffer buffer, long pid, long baseOffset, int baseSequence, SimpleRecord... records) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-                TimestampType.CREATE_TIME, baseOffset, time.milliseconds(), pid, (short) 0, baseSequence, true,
+                TimestampType.CREATE_TIME, baseOffset, time.absoluteMilliseconds(), pid, (short) 0, baseSequence, true,
                 RecordBatch.NO_PARTITION_LEADER_EPOCH);
 
         for (SimpleRecord record : records) {
@@ -2715,7 +2715,7 @@ public class FetcherTest {
     private int commitTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.absoluteMilliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         return 1;
     }
@@ -2723,7 +2723,7 @@ public class FetcherTest {
     private int abortTransaction(ByteBuffer buffer, long producerId, long baseOffset) {
         short producerEpoch = 0;
         int partitionLeaderEpoch = 0;
-        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.milliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
+        MemoryRecords.writeEndTransactionalMarker(buffer, baseOffset, time.absoluteMilliseconds(), partitionLeaderEpoch, producerId, producerEpoch,
                 new EndTransactionMarker(ControlRecordType.ABORT, 0));
         return 1;
     }
@@ -2739,7 +2739,7 @@ public class FetcherTest {
         TopicPartition t2p0 = new TopicPartition(topicName2, 0);
         // Expect a metadata refresh.
         metadata.bootstrap(ClientUtils.parseAndValidateAddresses(Collections.singletonList("1.1.1.1:1111"),
-                ClientDnsLookup.DEFAULT), time.milliseconds());
+                ClientDnsLookup.DEFAULT), time.absoluteMilliseconds());
 
         Map<String, Integer> partitionNumByTopic = new HashMap<>();
         partitionNumByTopic.put(topicName, 2);

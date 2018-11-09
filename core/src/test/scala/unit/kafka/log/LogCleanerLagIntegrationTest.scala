@@ -55,7 +55,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
     val log = cleaner.logs.get(topicPartitions(0))
 
     // t = T0
-    val T0 = time.milliseconds
+    val T0 = time.absoluteMilliseconds
     val appends0 = writeDups(numKeys = 100, numDups = 3, log, codec, timestamp = T0)
     val startSizeBlock0 = log.size
     debug(s"total log size at T0: $startSizeBlock0")
@@ -76,7 +76,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
     // t = T1 > T0 + compactionLag
     // advance to time a bit more than one compaction lag from start
     time.sleep(compactionLag/2 + 1)
-    val T1 = time.milliseconds
+    val T1 = time.absoluteMilliseconds
 
     // write another block of data
     val appends1 = appends0 ++ writeDups(numKeys = 100, numDups = 3, log, codec, timestamp = T1)

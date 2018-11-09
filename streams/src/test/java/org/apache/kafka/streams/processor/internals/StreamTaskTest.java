@@ -442,7 +442,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         processorSystemTime.mockProcessor.scheduleCancellable.cancel();
@@ -524,32 +524,32 @@ public class StreamTaskTest {
 
         task.addRecords(partition1, Collections.singleton(new ConsumerRecord<>(topic1, 1, 0, bytes, bytes)));
 
-        assertFalse(task.isProcessable(time.milliseconds()));
+        assertFalse(task.isProcessable(time.absoluteMilliseconds()));
 
-        assertFalse(task.isProcessable(time.milliseconds() + 50L));
+        assertFalse(task.isProcessable(time.absoluteMilliseconds() + 50L));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 100L));
+        assertTrue(task.isProcessable(time.absoluteMilliseconds() + 100L));
         assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // once decided to enforce, continue doing that
-        assertTrue(task.isProcessable(time.milliseconds() + 101L));
+        assertTrue(task.isProcessable(time.absoluteMilliseconds() + 101L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
-        assertTrue(task.isProcessable(time.milliseconds() + 130L));
+        assertTrue(task.isProcessable(time.absoluteMilliseconds() + 130L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
         // one resumed to normal processing, the timer should be reset
         task.process();
 
-        assertFalse(task.isProcessable(time.milliseconds() + 150L));
+        assertFalse(task.isProcessable(time.absoluteMilliseconds() + 150L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertFalse(task.isProcessable(time.milliseconds() + 249L));
+        assertFalse(task.isProcessable(time.absoluteMilliseconds() + 249L));
         assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
 
-        assertTrue(task.isProcessable(time.milliseconds() + 250L));
+        assertTrue(task.isProcessable(time.absoluteMilliseconds() + 250L));
         assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
     }
 
@@ -559,7 +559,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         time.sleep(10);
         assertTrue(task.maybePunctuateSystemTime());
         time.sleep(10);
@@ -590,7 +590,7 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         time.sleep(100);
         assertTrue(task.maybePunctuateSystemTime());
         assertFalse(task.maybePunctuateSystemTime());
@@ -1277,7 +1277,7 @@ public class StreamTaskTest {
         task.punctuate(processorSystemTime, 5, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
             @Override
             public void punctuate(final long timestamp) {
-                recordCollector.send("result-topic1", 3, 5, null, 0, time.milliseconds(),
+                recordCollector.send("result-topic1", 3, 5, null, 0, time.absoluteMilliseconds(),
                         new IntegerSerializer(),  new IntegerSerializer());
             }
         });

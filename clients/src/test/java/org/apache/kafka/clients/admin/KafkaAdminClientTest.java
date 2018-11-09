@@ -321,12 +321,12 @@ public class KafkaAdminClientTest {
             AtomicLong secondAttemptTime = new AtomicLong(0);
 
             mockClient.prepareResponse(body -> {
-                firstAttemptTime.set(time.milliseconds());
+                firstAttemptTime.set(time.absoluteMilliseconds());
                 return body instanceof CreateTopicsRequest;
             }, null, true);
 
             mockClient.prepareResponse(body -> {
-                secondAttemptTime.set(time.milliseconds());
+                secondAttemptTime.set(time.absoluteMilliseconds());
                 return body instanceof CreateTopicsRequest;
             }, new CreateTopicsResponse(Collections.singletonMap("myTopic", new ApiError(Errors.NONE, ""))));
 

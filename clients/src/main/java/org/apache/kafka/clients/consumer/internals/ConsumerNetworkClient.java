@@ -121,7 +121,7 @@ public class ConsumerNetworkClient implements Closeable {
     public RequestFuture<ClientResponse> send(Node node,
                                               AbstractRequest.Builder<?> requestBuilder,
                                               int requestTimeoutMs) {
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         RequestFutureCompletionHandler completionHandler = new RequestFutureCompletionHandler();
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
                 requestTimeoutMs, completionHandler);
@@ -135,7 +135,7 @@ public class ConsumerNetworkClient implements Closeable {
     public Node leastLoadedNode() {
         lock.lock();
         try {
-            return client.leastLoadedNode(time.milliseconds());
+            return client.leastLoadedNode(time.absoluteMilliseconds());
         } finally {
             lock.unlock();
         }
@@ -516,7 +516,7 @@ public class ConsumerNetworkClient implements Closeable {
     public boolean isUnavailable(Node node) {
         lock.lock();
         try {
-            return client.connectionFailed(node) && client.connectionDelay(node, time.milliseconds()) > 0;
+            return client.connectionFailed(node) && client.connectionDelay(node, time.absoluteMilliseconds()) > 0;
         } finally {
             lock.unlock();
         }
@@ -545,7 +545,7 @@ public class ConsumerNetworkClient implements Closeable {
     public void tryConnect(Node node) {
         lock.lock();
         try {
-            client.ready(node, time.milliseconds());
+            client.ready(node, time.absoluteMilliseconds());
         } finally {
             lock.unlock();
         }

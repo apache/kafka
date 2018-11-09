@@ -128,7 +128,7 @@ class TransactionCoordinator(brokerId: Int,
             txnTimeoutMs = transactionTimeoutMs,
             state = Empty,
             topicPartitions = collection.mutable.Set.empty[TopicPartition],
-            txnLastUpdateTimestamp = time.milliseconds())
+            txnLastUpdateTimestamp = time.absoluteMilliseconds())
           txnManager.putTransactionStateIfNotExists(transactionalId, createdMetadata)
 
         case Some(epochAndTxnMetadata) => Right(epochAndTxnMetadata)
@@ -200,9 +200,9 @@ class TransactionCoordinator(brokerId: Int,
         case CompleteAbort | CompleteCommit | Empty =>
           val transitMetadata = if (txnMetadata.isProducerEpochExhausted) {
             val newProducerId = producerIdManager.generateProducerId()
-            txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.milliseconds())
+            txnMetadata.prepareProducerIdRotation(newProducerId, transactionTimeoutMs, time.absoluteMilliseconds())
           } else {
-            txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.milliseconds())
+            txnMetadata.prepareIncrementProducerEpoch(transactionTimeoutMs, time.absoluteMilliseconds())
           }
 
           Right(coordinatorEpoch, transitMetadata)
@@ -258,7 +258,7 @@ class TransactionCoordinator(brokerId: Int,
               // this is an optimization: if the partitions are already in the metadata reply OK immediately
               Left(Errors.NONE)
             } else {
-              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.milliseconds()))
+              Right(coordinatorEpoch, txnMetadata.prepareAddPartitions(partitions.toSet, time.absoluteMilliseconds()))
             }
           }
       }
@@ -328,7 +328,7 @@ class TransactionCoordinator(brokerId: Int,
                   txnMetadata.producerEpoch = producerEpoch
                 }
 
-                Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.milliseconds()))
+                Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, time.absoluteMilliseconds()))
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
                   Left(Errors.NONE)
@@ -393,12 +393,12 @@ class TransactionCoordinator(brokerId: Int,
                           if (txnMarkerResult != TransactionResult.COMMIT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.absoluteMilliseconds()))
                         case PrepareAbort =>
                           if (txnMarkerResult != TransactionResult.ABORT)
                             logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                           else
-                            Right(txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                            Right(txnMetadata, txnMetadata.prepareComplete(time.absoluteMilliseconds()))
                         case Dead | PrepareEpochFence =>
                           val errorMsg = s"Found transactionalId $transactionalId with state ${txnMetadata.state}. " +
                             s"This is illegal as we should never have transitioned to this state."

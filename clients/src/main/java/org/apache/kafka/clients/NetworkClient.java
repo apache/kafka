@@ -307,7 +307,7 @@ public class NetworkClient implements KafkaClient {
 
         selector.close(nodeId);
         List<ApiKeys> requestTypes = new ArrayList<>();
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         for (InFlightRequest request : inFlightRequests.clearAll(nodeId)) {
             if (request.isInternalRequest) {
                 if (request.header.apiKey() == ApiKeys.METADATA) {
@@ -538,7 +538,7 @@ public class NetworkClient implements KafkaClient {
         }
 
         // process completed actions
-        long updatedNow = this.time.milliseconds();
+        long updatedNow = this.time.absoluteMilliseconds();
         List<ClientResponse> responses = new ArrayList<>();
         handleCompletedSends(responses, updatedNow);
         handleCompletedReceives(responses, updatedNow);
@@ -992,7 +992,7 @@ public class NetworkClient implements KafkaClient {
         public void handleAuthenticationFailure(AuthenticationException exception) {
             metadataFetchInProgress = false;
             if (metadata.updateRequested())
-                metadata.failedUpdate(time.milliseconds(), exception);
+                metadata.failedUpdate(time.absoluteMilliseconds(), exception);
         }
 
         @Override

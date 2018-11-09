@@ -473,7 +473,7 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, "", Time.SYSTEM.milliseconds())
+    OffsetAndMetadata(offset, "", Time.SYSTEM.absoluteMilliseconds())
   }
 
 }

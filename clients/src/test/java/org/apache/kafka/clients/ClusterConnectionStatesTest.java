@@ -51,139 +51,139 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testClusterConnectionStateChanges() throws UnknownHostException {
-        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
 
         // Start connecting to Node and check state
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.CONNECTING);
         assertTrue(connectionStates.isConnecting(nodeId1));
-        assertFalse(connectionStates.isReady(nodeId1, time.milliseconds()));
-        assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertFalse(connectionStates.isReady(nodeId1, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
 
         time.sleep(100);
 
         // Successful connection
         connectionStates.ready(nodeId1);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.READY);
-        assertTrue(connectionStates.isReady(nodeId1, time.milliseconds()));
-        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertTrue(connectionStates.isReady(nodeId1, time.absoluteMilliseconds()));
+        assertTrue(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
-        assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), Long.MAX_VALUE);
+        assertFalse(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
+        assertEquals(connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds()), Long.MAX_VALUE);
 
         time.sleep(15000);
 
         // Disconnected from broker
-        connectionStates.disconnected(nodeId1, time.milliseconds());
+        connectionStates.disconnected(nodeId1, time.absoluteMilliseconds());
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.DISCONNECTED);
         assertTrue(connectionStates.isDisconnected(nodeId1));
-        assertTrue(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
         assertFalse(connectionStates.isConnecting(nodeId1));
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
-        assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
+        assertFalse(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
 
         // After disconnecting we expect a backoff value equal to the reconnect.backoff.ms setting (plus minus 20% jitter)
         double backoffTolerance = reconnectBackoffMs * reconnectBackoffJitter;
-        long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+        long currentBackoff = connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds());
         assertEquals(reconnectBackoffMs, currentBackoff, backoffTolerance);
 
         time.sleep(currentBackoff + 1);
         // after waiting for the current backoff value we should be allowed to connect again
-        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
     }
 
     @Test
     public void testMultipleNodeConnectionStates() throws UnknownHostException {
         // Check initial state, allowed to connect to all nodes, but no nodes shown as ready
-        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
-        assertTrue(connectionStates.canConnect(nodeId2, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
+        assertTrue(connectionStates.canConnect(nodeId2, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
 
         // Start connecting one node and check that the pool only shows ready nodes after
         // successful connect
-        connectionStates.connecting(nodeId2, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        connectionStates.connecting(nodeId2, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId2);
-        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertTrue(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
 
         // Connect second node and check that both are shown as ready, pool should immediately
         // show ready nodes, since node2 is already connected
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
-        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        assertTrue(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
         time.sleep(1000);
         connectionStates.ready(nodeId1);
-        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertTrue(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
 
         time.sleep(12000);
 
         // disconnect nodes and check proper state of pool throughout
-        connectionStates.disconnected(nodeId2, time.milliseconds());
-        assertTrue(connectionStates.hasReadyNodes(time.milliseconds()));
-        assertTrue(connectionStates.isBlackedOut(nodeId2, time.milliseconds()));
-        assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        time.sleep(connectionStates.connectionDelay(nodeId2, time.milliseconds()));
+        connectionStates.disconnected(nodeId2, time.absoluteMilliseconds());
+        assertTrue(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
+        assertTrue(connectionStates.isBlackedOut(nodeId2, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
+        time.sleep(connectionStates.connectionDelay(nodeId2, time.absoluteMilliseconds()));
         // by the time node1 disconnects node2 should have been unblocked again
-        connectionStates.disconnected(nodeId1, time.milliseconds() + 1);
-        assertTrue(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertFalse(connectionStates.isBlackedOut(nodeId2, time.milliseconds()));
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        connectionStates.disconnected(nodeId1, time.absoluteMilliseconds() + 1);
+        assertTrue(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.isBlackedOut(nodeId2, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
     }
 
     @Test
     public void testAuthorizationFailed() throws UnknownHostException {
         // Try connecting
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
 
         time.sleep(100);
 
-        connectionStates.authenticationFailed(nodeId1, time.milliseconds(), new AuthenticationException("No path to CA for certificate!"));
+        connectionStates.authenticationFailed(nodeId1, time.absoluteMilliseconds(), new AuthenticationException("No path to CA for certificate!"));
         time.sleep(1000);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
         assertTrue(connectionStates.authenticationException(nodeId1) instanceof AuthenticationException);
-        assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
-        assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertFalse(connectionStates.hasReadyNodes(time.absoluteMilliseconds()));
+        assertFalse(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
 
-        time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
+        time.sleep(connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds()) + 1);
 
-        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
         connectionStates.ready(nodeId1);
         assertNull(connectionStates.authenticationException(nodeId1));
     }
 
     @Test
     public void testRemoveNode() throws UnknownHostException {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
         connectionStates.ready(nodeId1);
         time.sleep(10000);
 
-        connectionStates.disconnected(nodeId1, time.milliseconds());
+        connectionStates.disconnected(nodeId1, time.absoluteMilliseconds());
         // Node is disconnected and blocked, removing it from the list should reset all blocks
         connectionStates.remove(nodeId1);
-        assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
-        assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
-        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), 0L);
+        assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
+        assertFalse(connectionStates.isBlackedOut(nodeId1, time.absoluteMilliseconds()));
+        assertEquals(connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds()), 0L);
     }
 
     @Test
     public void testMaxReconnectBackoff() throws UnknownHostException {
         long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMax * (1 + reconnectBackoffJitter));
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
-        connectionStates.disconnected(nodeId1, time.milliseconds());
+        connectionStates.disconnected(nodeId1, time.absoluteMilliseconds());
 
         // Do 100 reconnect attempts and check that MaxReconnectBackoff (plus jitter) is not exceeded
         for (int i = 0; i < 100; i++) {
-            long reconnectBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            long reconnectBackoff = connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds());
             assertTrue(reconnectBackoff <= effectiveMaxReconnectBackoff);
-            assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
+            assertFalse(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
             time.sleep(reconnectBackoff + 1);
-            assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            assertTrue(connectionStates.canConnect(nodeId1, time.absoluteMilliseconds()));
+            connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
             time.sleep(10);
-            connectionStates.disconnected(nodeId1, time.milliseconds());
+            connectionStates.disconnected(nodeId1, time.absoluteMilliseconds());
         }
     }
 
@@ -196,48 +196,48 @@ public class ClusterConnectionStatesTest {
 
         // Run through 10 disconnects and check that reconnect backoff value is within expected range for every attempt
         for (int i = 0; i < 10; i++) {
-            connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
-            connectionStates.disconnected(nodeId1, time.milliseconds());
+            connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+            connectionStates.disconnected(nodeId1, time.absoluteMilliseconds());
             // Calculate expected backoff value without jitter
             long expectedBackoff = Math.round(Math.pow(reconnectBackoffExpBase, Math.min(i, reconnectBackoffMaxExp))
                 * reconnectBackoffMs);
-            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.milliseconds());
+            long currentBackoff = connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds());
             assertEquals(expectedBackoff, currentBackoff, reconnectBackoffJitter * expectedBackoff);
-            time.sleep(connectionStates.connectionDelay(nodeId1, time.milliseconds()) + 1);
+            time.sleep(connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds()) + 1);
         }
     }
 
     @Test
     public void testThrottled() throws UnknownHostException {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
         connectionStates.ready(nodeId1);
         time.sleep(10000);
 
         // Initially not throttled.
-        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.absoluteMilliseconds()));
 
         // Throttle for 100ms from now.
-        connectionStates.throttle(nodeId1, time.milliseconds() + 100);
-        assertEquals(100, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
+        connectionStates.throttle(nodeId1, time.absoluteMilliseconds() + 100);
+        assertEquals(100, connectionStates.throttleDelayMs(nodeId1, time.absoluteMilliseconds()));
 
         // Still throttled after 50ms. The remaining delay is 50ms. The poll delay should be same as throttling delay.
         time.sleep(50);
-        assertEquals(50, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
-        assertEquals(50, connectionStates.pollDelayMs(nodeId1, time.milliseconds()));
+        assertEquals(50, connectionStates.throttleDelayMs(nodeId1, time.absoluteMilliseconds()));
+        assertEquals(50, connectionStates.pollDelayMs(nodeId1, time.absoluteMilliseconds()));
 
         // Not throttled anymore when the deadline is reached. The poll delay should be same as connection delay.
         time.sleep(50);
-        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.milliseconds()));
-        assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()),
-            connectionStates.pollDelayMs(nodeId1, time.milliseconds()));
+        assertEquals(0, connectionStates.throttleDelayMs(nodeId1, time.absoluteMilliseconds()));
+        assertEquals(connectionStates.connectionDelay(nodeId1, time.absoluteMilliseconds()),
+            connectionStates.pollDelayMs(nodeId1, time.absoluteMilliseconds()));
     }
 
     @Test
     public void testSingleIPWithDefault() throws UnknownHostException {
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         assertSame(currAddress, connectionStates.currentAddress(nodeId1));
     }
 
@@ -245,9 +245,9 @@ public class ClusterConnectionStatesTest {
     public void testSingleIPWithUseAll() throws UnknownHostException {
         assertEquals(1, ClientUtils.resolve("localhost", ClientDnsLookup.USE_ALL_DNS_IPS).size());
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), "localhost", ClientDnsLookup.USE_ALL_DNS_IPS);
         assertSame(currAddress, connectionStates.currentAddress(nodeId1));
     }
 
@@ -255,9 +255,9 @@ public class ClusterConnectionStatesTest {
     public void testMultipleIPsWithDefault() throws UnknownHostException {
         assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         assertSame(currAddress, connectionStates.currentAddress(nodeId1));
     }
 
@@ -265,13 +265,13 @@ public class ClusterConnectionStatesTest {
     public void testMultipleIPsWithUseAll() throws UnknownHostException {
         assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
 
-        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
+        connectionStates.connecting(nodeId1, time.absoluteMilliseconds(), hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS);
         InetAddress addr3 = connectionStates.currentAddress(nodeId1);
         assertSame(addr1, addr3);
     }

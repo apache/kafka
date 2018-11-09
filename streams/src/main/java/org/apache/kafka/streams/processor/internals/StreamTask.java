@@ -437,7 +437,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     // visible for testing
     void commit(final boolean startNewTransaction) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         log.debug("Committing");
 
         flushState();
@@ -472,7 +472,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         commitNeeded = false;
         commitRequested = false;
-        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
+        taskMetrics.taskCommitTimeSensor.record(time.relativeNanoseconds() - startNs);
     }
 
     @Override
@@ -735,7 +735,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 return schedule(0L, interval, type, punctuator);
             case WALL_CLOCK_TIME:
                 // align punctuation to now, punctuate after interval has elapsed
-                return schedule(time.milliseconds() + interval, interval, type, punctuator);
+                return schedule(time.absoluteMilliseconds() + interval, interval, type, punctuator);
             default:
                 throw new IllegalArgumentException("Unrecognized PunctuationType: " + type);
         }
@@ -809,7 +809,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     public boolean maybePunctuateSystemTime() {
-        final long timestamp = time.milliseconds();
+        final long timestamp = time.absoluteMilliseconds();
 
         final boolean punctuated = systemTimePunctuationQueue.mayPunctuate(timestamp, PunctuationType.WALL_CLOCK_TIME, this);
 

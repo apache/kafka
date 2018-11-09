@@ -101,7 +101,7 @@ public class ConnectionStressWorker implements TaskWorker {
         this.status = status;
         this.totalConnections = 0;
         this.totalFailedConnections  = 0;
-        this.startTimeMs = TIME.milliseconds();
+        this.startTimeMs = TIME.absoluteMilliseconds();
         this.throttle = new ConnectStressThrottle(WorkerUtils.
             perSecToPerPeriod(spec.targetConnectionsPerSec(), THROTTLE_PERIOD_MS));
         this.nextReportTime = 0;

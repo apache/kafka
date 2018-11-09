@@ -59,13 +59,13 @@ public final class NetworkClientUtils {
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout needs to be greater than 0");
         }
-        long startTime = time.milliseconds();
+        long startTime = time.absoluteMilliseconds();
         long expiryTime = startTime + timeoutMs;
 
         if (isReady(client, node, startTime) ||  client.ready(node, startTime))
             return true;
 
-        long attemptStartTime = time.milliseconds();
+        long attemptStartTime = time.absoluteMilliseconds();
         while (!client.isReady(node, attemptStartTime) && attemptStartTime < expiryTime) {
             if (client.connectionFailed(node)) {
                 throw new IOException("Connection to " + node + " failed.");
@@ -74,7 +74,7 @@ public final class NetworkClientUtils {
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
-            attemptStartTime = time.milliseconds();
+            attemptStartTime = time.absoluteMilliseconds();
         }
         return client.isReady(node, attemptStartTime);
     }
@@ -91,9 +91,9 @@ public final class NetworkClientUtils {
      */
     public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time) throws IOException {
         try {
-            client.send(request, time.milliseconds());
+            client.send(request, time.absoluteMilliseconds());
             while (client.active()) {
-                List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
+                List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.absoluteMilliseconds());
                 for (ClientResponse response : responses) {
                     if (response.requestHeader().correlationId() == request.correlationId()) {
                         if (response.wasDisconnected()) {

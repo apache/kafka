@@ -117,7 +117,7 @@ class LogTest {
     }
 
     // Append a message with timestamp to a segment whose first message do not have a timestamp.
-    val timestamp = mockTime.milliseconds + log.config.segmentMs + 1
+    val timestamp = mockTime.absoluteMilliseconds + log.config.segmentMs + 1
     def createRecordsWithTimestamp = TestUtils.singletonRecords(value = "test".getBytes, timestamp = timestamp)
     log.appendAsLeader(createRecordsWithTimestamp, leaderEpoch = 0)
     assertEquals("Segment should not have been rolled out because the log rolling should be based on wall clock.", 4, log.numberOfSegments)
@@ -132,7 +132,7 @@ class LogTest {
     log.appendAsLeader(createRecordsWithTimestamp, leaderEpoch = 0)
     assertEquals("Log should not roll because the roll should depend on timestamp of the first message.", 5, log.numberOfSegments)
 
-    val recordWithExpiredTimestamp = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    val recordWithExpiredTimestamp = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     log.appendAsLeader(recordWithExpiredTimestamp, leaderEpoch = 0)
     assertEquals("Log should roll because the timestamp in the message should make the log segment expire.", 6, log.numberOfSegments)
 
@@ -149,10 +149,10 @@ class LogTest {
     val pid = 1L
     val epoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 2)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = epoch, sequence = 2)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
@@ -161,7 +161,7 @@ class LogTest {
     val log = createLog(logDir, LogConfig())
 
     // Force a segment roll by using a large offset. The first segment will be empty
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)),
       baseOffset = Int.MaxValue.toLong + 200)
     appendAsFollower(log, records)
     assertEquals(0, log.logSegments.head.size)
@@ -172,7 +172,7 @@ class LogTest {
     assertEquals(1, log.logSegments.size)
 
     // Now verify that we can still append to the active segment
-    appendAsFollower(log, TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+    appendAsFollower(log, TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)),
       baseOffset = 100L))
     assertEquals(1, log.logSegments.size)
     assertEquals(101L, log.logEndOffset)
@@ -187,7 +187,7 @@ class LogTest {
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      val record = new SimpleRecord(mockTime.absoluteMilliseconds, i.toString.getBytes)
       log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
     }
     assertTrue(log.logSegments.size >= 2)
@@ -237,7 +237,7 @@ class LogTest {
     assertEquals(None, log.oldestProducerSnapshotOffset)
 
     for (i <- 0 to 100) {
-      val record = new SimpleRecord(mockTime.milliseconds, i.toString.getBytes)
+      val record = new SimpleRecord(mockTime.absoluteMilliseconds, i.toString.getBytes)
       log.appendAsLeader(TestUtils.records(List(record)), leaderEpoch = 0)
     }
 
@@ -341,7 +341,7 @@ class LogTest {
   def testProducerIdMapOffsetUpdatedForNonIdempotentData() {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)))
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)))
     log.appendAsLeader(records, leaderEpoch = 0)
     log.takeProducerSnapshot()
     assertEquals(Some(1), log.latestProducerSnapshotOffset)
@@ -719,9 +719,9 @@ class LogTest {
     val pid2 = 2L
     val epoch = 0.toShort
 
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)), producerId = pid1,
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds(), "a".getBytes)), producerId = pid1,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "b".getBytes)), producerId = pid2,
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds(), "b".getBytes)), producerId = pid2,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
     assertEquals(2, log.activeProducersWithLastSequence.size)
 
@@ -748,10 +748,10 @@ class LogTest {
     val pid2 = 2L
     val epoch = 0.toShort
 
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)), producerId = pid1,
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds(), "a".getBytes)), producerId = pid1,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
     log.roll()
-    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "b".getBytes)), producerId = pid2,
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds(), "b".getBytes)), producerId = pid2,
       producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
 
     assertEquals(2, log.logSegments.size)
@@ -861,12 +861,12 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024)
     val log = createLog(logDir, logConfig)
 
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord(mockTime.milliseconds(), new Array[Byte](512))),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord(mockTime.absoluteMilliseconds(), new Array[Byte](512))),
       producerId = producerId, producerEpoch = 0, sequence = 0),
       leaderEpoch = 0)
 
     // The next append should overflow the segment and cause it to roll
-    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord(mockTime.milliseconds(), new Array[Byte](512))),
+    log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord(mockTime.absoluteMilliseconds(), new Array[Byte](512))),
       producerId = producerId, producerEpoch = 0, sequence = 1),
       leaderEpoch = 0)
 
@@ -924,7 +924,7 @@ class LogTest {
                             coordinatorEpoch: Int = 0,
                             partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val marker = new EndTransactionMarker(controlRecordType, coordinatorEpoch)
-    MemoryRecords.withEndTransactionMarker(offset, mockTime.milliseconds(), partitionLeaderEpoch, producerId, epoch, marker)
+    MemoryRecords.withEndTransactionMarker(offset, mockTime.absoluteMilliseconds(), partitionLeaderEpoch, producerId, epoch, marker)
   }
 
   @Test
@@ -936,7 +936,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig, maxProducerIdExpirationMs = maxProducerIdExpirationMs,
       producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs)
-    val records = Seq(new SimpleRecord(mockTime.milliseconds(), "foo".getBytes))
+    val records = Seq(new SimpleRecord(mockTime.absoluteMilliseconds(), "foo".getBytes))
     log.appendAsLeader(TestUtils.records(records, producerId = pid, producerEpoch = 0, sequence = 0), leaderEpoch = 0)
 
     assertEquals(Set(pid), log.activeProducersWithLastSequence.keySet)
@@ -958,16 +958,16 @@ class LogTest {
     var seq = 0
     // Pad the beginning of the log.
     for (_ <- 0 to 5) {
-      val record = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+      val record = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)),
         producerId = pid, producerEpoch = epoch, sequence = seq)
       log.appendAsLeader(record, leaderEpoch = 0)
       seq = seq + 1
     }
     // Append an entry with multiple log records.
     def createRecords = TestUtils.records(List(
-      new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
-      new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
-      new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
+      new SimpleRecord(mockTime.absoluteMilliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
+      new SimpleRecord(mockTime.absoluteMilliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
+      new SimpleRecord(mockTime.absoluteMilliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)
     ), producerId = pid, producerEpoch = epoch, sequence = seq)
     val multiEntryAppendInfo = log.appendAsLeader(createRecords, leaderEpoch = 0)
     assertEquals("should have appended 3 entries", multiEntryAppendInfo.lastOffset - multiEntryAppendInfo.firstOffset.get + 1, 3)
@@ -985,8 +985,8 @@ class LogTest {
     try {
       val records = TestUtils.records(
         List(
-          new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
-          new SimpleRecord(mockTime.milliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
+          new SimpleRecord(mockTime.absoluteMilliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes),
+          new SimpleRecord(mockTime.absoluteMilliseconds, s"key-$seq".getBytes, s"value-$seq".getBytes)),
         producerId = pid, producerEpoch = epoch, sequence = seq - 2)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a records " +
@@ -997,14 +997,14 @@ class LogTest {
 
     // Append a duplicate of the batch which is 4th from the tail. This should succeed without error since we
     // retain the batch metadata of the last 5 batches.
-    val duplicateOfFourth = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+    val duplicateOfFourth = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)),
       producerId = pid, producerEpoch = epoch, sequence = 2)
     log.appendAsLeader(duplicateOfFourth, leaderEpoch = 0)
 
     // Duplicates at older entries are reported as OutOfOrderSequence errors
     try {
       val records = TestUtils.records(
-        List(new SimpleRecord(mockTime.milliseconds, s"key-1".getBytes, s"value-1".getBytes)),
+        List(new SimpleRecord(mockTime.absoluteMilliseconds, s"key-1".getBytes, s"value-1".getBytes)),
         producerId = pid, producerEpoch = epoch, sequence = 1)
       log.appendAsLeader(records, leaderEpoch = 0)
       fail("Should have received an OutOfOrderSequenceException since we attempted to append a duplicate of a batch " +
@@ -1014,7 +1014,7 @@ class LogTest {
     }
 
     // Append a duplicate entry with a single records at the tail of the log. This should return the appendInfo of the original entry.
-    def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)),
+    def createRecordsWithDuplicate = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)),
       producerId = pid, producerEpoch = epoch, sequence = seq)
     val origAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
     val newAppendInfo = log.appendAsLeader(createRecordsWithDuplicate, leaderEpoch = 0)
@@ -1031,22 +1031,22 @@ class LogTest {
     val buffer = ByteBuffer.allocate(512)
 
     var builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), 1L, epoch, 0, false, 0)
+      TimestampType.LOG_APPEND_TIME, 0L, mockTime.absoluteMilliseconds(), 1L, epoch, 0, false, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), 2L, epoch, 0, false, 0)
+      TimestampType.LOG_APPEND_TIME, 1L, mockTime.absoluteMilliseconds(), 2L, epoch, 0, false, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), 3L, epoch, 0, false, 0)
+      TimestampType.LOG_APPEND_TIME, 2L, mockTime.absoluteMilliseconds(), 3L, epoch, 0, false, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), 4L, epoch, 0, false, 0)
+      TimestampType.LOG_APPEND_TIME, 3L, mockTime.absoluteMilliseconds(), 4L, epoch, 0, false, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
@@ -1102,31 +1102,31 @@ class LogTest {
 
     // pid1 seq = 0
     var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 0L, mockTime.milliseconds(), pid1, epoch, 0)
+      TimestampType.LOG_APPEND_TIME, 0L, mockTime.absoluteMilliseconds(), pid1, epoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 0
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 1L, mockTime.milliseconds(), pid2, epoch, 0)
+      TimestampType.LOG_APPEND_TIME, 1L, mockTime.absoluteMilliseconds(), pid2, epoch, 0)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid1 seq = 1
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 2L, mockTime.milliseconds(), pid1, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 2L, mockTime.absoluteMilliseconds(), pid1, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // pid2 seq = 1
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 3L, mockTime.milliseconds(), pid2, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 3L, mockTime.absoluteMilliseconds(), pid2, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
     // // pid1 seq = 1 (duplicate)
     builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
-      TimestampType.LOG_APPEND_TIME, 4L, mockTime.milliseconds(), pid1, epoch, 1)
+      TimestampType.LOG_APPEND_TIME, 4L, mockTime.absoluteMilliseconds(), pid1, epoch, 1)
     builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
     builder.close()
 
@@ -1149,10 +1149,10 @@ class LogTest {
     val newEpoch: Short = 1
     val oldEpoch: Short = 0
 
-    val records = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = newEpoch, sequence = 0)
+    val records = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = newEpoch, sequence = 0)
     log.appendAsLeader(records, leaderEpoch = 0)
 
-    val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = oldEpoch, sequence = 0)
+    val nextRecords = TestUtils.records(List(new SimpleRecord(mockTime.absoluteMilliseconds, "key".getBytes, "value".getBytes)), producerId = pid, producerEpoch = oldEpoch, sequence = 0)
     log.appendAsLeader(nextRecords, leaderEpoch = 0)
   }
 
@@ -1162,7 +1162,7 @@ class LogTest {
    */
   @Test
   def testTimeBasedLogRollJitter() {
-    var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    var set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val maxJitter = 20 * 60L
     // create a log
     val logConfig = LogTest.createLogConfig(segmentMs = 1 * 60 * 60L, segmentJitterMs = maxJitter)
@@ -1171,11 +1171,11 @@ class LogTest {
     log.appendAsLeader(set, leaderEpoch = 0)
 
     mockTime.sleep(log.config.segmentMs - maxJitter)
-    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     log.appendAsLeader(set, leaderEpoch = 0)
     assertEquals("Log does not roll on this append because it occurs earlier than max jitter", 1, log.numberOfSegments)
     mockTime.sleep(maxJitter - log.activeSegment.rollJitterMs + 1)
-    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    set = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     log.appendAsLeader(set, leaderEpoch = 0)
     assertEquals("Log should roll after segmentMs adjusted by random jitter", 2, log.numberOfSegments)
   }
@@ -1185,7 +1185,7 @@ class LogTest {
    */
   @Test
   def testSizeBasedLogRoll() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
@@ -1207,7 +1207,7 @@ class LogTest {
   def testLoadEmptyLog() {
     createEmptyLogs(logDir, 0)
     val log = createLog(logDir, LogConfig())
-    log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds), leaderEpoch = 0)
   }
 
   /**
@@ -1385,7 +1385,7 @@ class LogTest {
     val log = createLog(logDir, logConfig)
     val numMessages = 100
     val messageSets = (0 until numMessages).map(i => TestUtils.singletonRecords(value = i.toString.getBytes,
-                                                                                timestamp = mockTime.milliseconds))
+                                                                                timestamp = mockTime.absoluteMilliseconds))
     messageSets.foreach(log.appendAsLeader(_, leaderEpoch = 0))
     log.flush()
 
@@ -1446,7 +1446,7 @@ class LogTest {
       val logConfig = LogTest.createLogConfig(segmentBytes = 100, retentionMs = 0)
       val log = createLog(logDir, logConfig)
       for(i <- 0 until messagesToAppend)
-        log.appendAsLeader(TestUtils.singletonRecords(value = i.toString.getBytes, timestamp = mockTime.milliseconds - 10), leaderEpoch = 0)
+        log.appendAsLeader(TestUtils.singletonRecords(value = i.toString.getBytes, timestamp = mockTime.absoluteMilliseconds - 10), leaderEpoch = 0)
 
       val currOffset = log.logEndOffset
       assertEquals(currOffset, messagesToAppend)
@@ -1461,7 +1461,7 @@ class LogTest {
       assertEquals("Still no change in the logEndOffset", currOffset, log.logEndOffset)
       assertEquals("Should still be able to append and should get the logEndOffset assigned to the new append",
                    currOffset,
-                   log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.milliseconds), leaderEpoch = 0).firstOffset.get)
+                   log.appendAsLeader(TestUtils.singletonRecords(value = "hello".getBytes, timestamp = mockTime.absoluteMilliseconds), leaderEpoch = 0).firstOffset.get)
 
       // cleanup the log
       log.delete()
@@ -1569,7 +1569,7 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
-        timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+        timestamp = mockTime.absoluteMilliseconds + i * 10), leaderEpoch = 0)
     assertEquals("After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages), numMessages, log.logEndOffset)
     val lastIndexOffset = log.activeSegment.offsetIndex.lastOffset
     val numIndexEntries = log.activeSegment.offsetIndex.entries
@@ -1613,13 +1613,13 @@ class LogTest {
     val log = createLog(logDir, logConfig)
 
     val messages = (0 until numMessages).map { i =>
-      MemoryRecords.withRecords(100 + i, CompressionType.NONE, 0, new SimpleRecord(mockTime.milliseconds + i, i.toString.getBytes()))
+      MemoryRecords.withRecords(100 + i, CompressionType.NONE, 0, new SimpleRecord(mockTime.absoluteMilliseconds + i, i.toString.getBytes()))
     }
     messages.foreach(log.appendAsFollower)
     val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
     assertEquals(s"There should be ${numMessages - 1} time index entries", numMessages - 1, timeIndexEntries)
-    assertEquals(s"The last time index entry should have timestamp ${mockTime.milliseconds + numMessages - 1}",
-      mockTime.milliseconds + numMessages - 1, log.activeSegment.timeIndex.lastEntry.timestamp)
+    assertEquals(s"The last time index entry should have timestamp ${mockTime.absoluteMilliseconds + numMessages - 1}",
+      mockTime.absoluteMilliseconds + numMessages - 1, log.activeSegment.timeIndex.lastEntry.timestamp)
   }
 
   /**
@@ -1632,7 +1632,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
-      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.absoluteMilliseconds + i * 10), leaderEpoch = 0)
     val indexFiles = log.logSegments.map(_.offsetIndex.file)
     val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
     log.close()
@@ -1649,9 +1649,9 @@ class LogTest {
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.absoluteMilliseconds + i * 10).get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.absoluteMilliseconds + i * 10).get.offset)
     }
     log.close()
   }
@@ -1663,7 +1663,7 @@ class LogTest {
 
     assertEquals(None, log.fetchOffsetByTimestamp(0L))
 
-    val firstTimestamp = mockTime.milliseconds
+    val firstTimestamp = mockTime.absoluteMilliseconds
     val firstLeaderEpoch = 0
     log.appendAsLeader(TestUtils.singletonRecords(
       value = TestUtils.randomBytes(10),
@@ -1706,7 +1706,7 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
-        timestamp = mockTime.milliseconds + i * 10, magicValue = RecordBatch.MAGIC_VALUE_V1), leaderEpoch = 0)
+        timestamp = mockTime.absoluteMilliseconds + i * 10, magicValue = RecordBatch.MAGIC_VALUE_V1), leaderEpoch = 0)
     val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
     log.close()
 
@@ -1731,7 +1731,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1)
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
-      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.absoluteMilliseconds + i * 10), leaderEpoch = 0)
     val indexFiles = log.logSegments.map(_.offsetIndex.file)
     val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
     log.close()
@@ -1756,9 +1756,9 @@ class LogTest {
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
-        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(log.logSegments.head.baseOffset, log.fetchOffsetByTimestamp(mockTime.absoluteMilliseconds + i * 10).get.offset)
       else
-        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.milliseconds + i * 10).get.offset)
+        assertEquals(i, log.fetchOffsetByTimestamp(mockTime.absoluteMilliseconds + i * 10).get.offset)
     }
     log.close()
   }
@@ -1768,7 +1768,7 @@ class LogTest {
    */
   @Test
   def testTruncateTo() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val setSize = createRecords.sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
@@ -1823,7 +1823,7 @@ class LogTest {
    */
   @Test
   def testIndexResizingAtTruncation() {
-    val setSize = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds).sizeInBytes
+    val setSize = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds).sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     val logConfig = LogTest.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = setSize - 1)
@@ -1831,12 +1831,12 @@ class LogTest {
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
     for (i<- 1 to msgPerSeg)
-      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds + i), leaderEpoch = 0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
 
     mockTime.sleep(msgPerSeg)
     for (i<- 1 to msgPerSeg)
-      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds + i), leaderEpoch = 0)
     assertEquals("There should be exactly 2 segment.", 2, log.numberOfSegments)
     val expectedEntries = msgPerSeg - 1
 
@@ -1850,7 +1850,7 @@ class LogTest {
 
     mockTime.sleep(msgPerSeg)
     for (i<- 1 to msgPerSeg)
-      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds + i), leaderEpoch = 0)
+      log.appendAsLeader(TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds + i), leaderEpoch = 0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
   }
 
@@ -1864,7 +1864,7 @@ class LogTest {
     val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
@@ -1885,7 +1885,7 @@ class LogTest {
    */
   @Test
   def testReopenThenTruncate() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     // create a log
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 10000)
     var log = createLog(logDir, logConfig)
@@ -1905,7 +1905,7 @@ class LogTest {
    */
   @Test
   def testAsyncDelete() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000L)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds - 1000L)
     val asyncDeleteMs = 1000
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 10000,
                                     retentionMs = 999, fileDeleteDelayMs = asyncDeleteMs)
@@ -1940,7 +1940,7 @@ class LogTest {
    */
   @Test
   def testOpenDeletesObsoleteFiles() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds - 1000)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
     var log = createLog(logDir, logConfig)
 
@@ -1973,7 +1973,7 @@ class LogTest {
     val buffer = ByteBuffer.allocate(512)
     for (offset <- appendOffsets) {
       val builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE,
-                                          TimestampType.LOG_APPEND_TIME, offset, mockTime.milliseconds(),
+                                          TimestampType.LOG_APPEND_TIME, offset, mockTime.absoluteMilliseconds(),
                                           1L, 0, 0, false, 0)
       builder.append(new SimpleRecord("key".getBytes, "value".getBytes))
       builder.close()
@@ -2044,7 +2044,7 @@ class LogTest {
   def testCorruptLog() {
     // append some messages to create some segments
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val recoveryPoint = 50L
     for (_ <- 0 until 10) {
       // create a log and write some messages to it
@@ -2422,7 +2422,7 @@ class LogTest {
   def testCleanShutdownFile() {
     // append some messages to create some segments
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds)
 
     val cleanShutdownFile = createCleanShutdownFile()
     assertTrue(".kafka_cleanshutdown must exist", cleanShutdownFile.exists())
@@ -2595,7 +2595,7 @@ class LogTest {
 
   @Test
   def testDeleteOldSegments() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds - 1000)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
     val log = createLog(logDir, logConfig)
 
@@ -2645,7 +2645,7 @@ class LogTest {
 
   @Test
   def testLogDeletionAfterClose() {
-    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.absoluteMilliseconds - 1000)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
     val log = createLog(logDir, logConfig)
 
@@ -2740,7 +2740,7 @@ class LogTest {
 
   @Test
   def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted() {
-    def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = mockTime.milliseconds)
+    def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = mockTime.absoluteMilliseconds)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000000)
     val log = createLog(logDir, logConfig)
 
@@ -2764,7 +2764,7 @@ class LogTest {
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
     // mark oldest segment as older the retention.ms
-    log.logSegments.head.lastModified = mockTime.milliseconds - 20000
+    log.logSegments.head.lastModified = mockTime.absoluteMilliseconds - 20000
 
     val segments = log.numberOfSegments
     log.onHighWatermarkIncremented(log.logEndOffset)
@@ -3515,7 +3515,7 @@ class LogTest {
   private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
                                          controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
     val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), 0, producerId, producerEpoch, marker)
+    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.absoluteMilliseconds(), 0, producerId, producerEpoch, marker)
   }
 
   private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {

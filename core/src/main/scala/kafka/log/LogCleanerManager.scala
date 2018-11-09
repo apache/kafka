@@ -100,7 +100,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
               uncleanablePartitions.get(dir.getAbsolutePath) match {
                 case Some(partitions) => {
                   val lastClean = allCleanerCheckpoints
-                  val now = Time.SYSTEM.milliseconds
+                  val now = Time.SYSTEM.absoluteMilliseconds
                   partitions.map { tp =>
                     val log = logs.get(tp)
                     val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, tp, lastClean, now)
@@ -122,8 +122,8 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
 
   /* a gauge for tracking the time since the last log cleaner run, in milli seconds */
-  @volatile private var timeOfLastRun : Long = Time.SYSTEM.milliseconds
-  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = Time.SYSTEM.milliseconds - timeOfLastRun })
+  @volatile private var timeOfLastRun : Long = Time.SYSTEM.absoluteMilliseconds
+  newGauge("time-since-last-run-ms", new Gauge[Long] { def value = Time.SYSTEM.absoluteMilliseconds - timeOfLastRun })
 
   /**
    * @return the position processed for all logs.
@@ -167,7 +167,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     */
   def grabFilthiestCompactedLog(time: Time): Option[LogToClean] = {
     inLock(lock) {
-      val now = time.milliseconds
+      val now = time.absoluteMilliseconds
       this.timeOfLastRun = now
       val lastClean = allCleanerCheckpoints
       val dirtyLogs = logs.filter {

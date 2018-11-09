@@ -181,7 +181,7 @@ public class IntegrationTestUtils {
                 Collections.singleton(record),
                 producerConfig,
                 headers,
-                time.milliseconds(),
+                time.absoluteMilliseconds(),
                 enableTransactions);
             time.sleep(1L);
         }

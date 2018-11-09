@@ -82,7 +82,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
       val notifications = zkClient.getChildren(seqNodeRoot).sorted
       if (notifications.nonEmpty) {
         info(s"Processing notification(s) to $seqNodeRoot")
-        val now = time.milliseconds
+        val now = time.absoluteMilliseconds
         for (notification <- notifications) {
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {

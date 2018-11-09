@@ -995,7 +995,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         }
 
                         client.pollNoWakeup();
-                        long now = time.milliseconds();
+                        long now = time.absoluteMilliseconds();
 
                         if (coordinatorUnknown()) {
                             if (findCoordinatorFuture != null || lookupCoordinator().failed())

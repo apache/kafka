@@ -84,14 +84,14 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
 
         // register and possibly restore the state from the logs
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             inner.init(context, root);
         } finally {
             this.metrics.recordLatency(
                 restoreTime,
                 startNs,
-                time.nanoseconds()
+                time.relativeNanoseconds()
             );
         }
     }
@@ -109,14 +109,14 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public void put(final K key, final V value, final long windowStartTimestamp) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             inner.put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
         } finally {
-            metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            metrics.recordLatency(this.putTime, startNs, time.relativeNanoseconds());
         }
     }
 
@@ -126,7 +126,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public V fetch(final K key, final long timestamp) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             final byte[] result = inner.fetch(keyBytes(key), timestamp);
             if (result == null) {
@@ -134,7 +134,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
             }
             return serdes.valueFrom(result);
         } finally {
-            metrics.recordLatency(this.fetchTime, startNs, time.nanoseconds());
+            metrics.recordLatency(this.fetchTime, startNs, time.relativeNanoseconds());
         }
     }
 
@@ -175,11 +175,11 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
 
     @Override
     public void flush() {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             inner.flush();
         } finally {
-            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
+            metrics.recordLatency(flushTime, startNs, time.relativeNanoseconds());
         }
     }
 

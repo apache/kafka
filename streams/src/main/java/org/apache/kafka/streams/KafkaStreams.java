@@ -214,7 +214,7 @@ public class KafkaStreams implements AutoCloseable {
     protected volatile State state = State.CREATED;
 
     private boolean waitOnState(final State targetState, final long waitMs) {
-        final long begin = time.milliseconds();
+        final long begin = time.absoluteMilliseconds();
         synchronized (stateLock) {
             long elapsedMs = 0L;
             while (state != targetState) {
@@ -229,7 +229,7 @@ public class KafkaStreams implements AutoCloseable {
                     log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
                     return false;
                 }
-                elapsedMs = time.milliseconds() - begin;
+                elapsedMs = time.absoluteMilliseconds() - begin;
             }
             return true;
         }

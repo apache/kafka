@@ -89,7 +89,7 @@ class IsrExpirationTest {
                                                     leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = leaderLogEndOffset,
                                                     followerLogStartOffset = 0L,
-                                                    fetchTimeMs = time.milliseconds,
+                                                    fetchTimeMs = time.absoluteMilliseconds,
                                                     readSize = -1,
                                                     lastStableOffset = None))
     var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
@@ -144,7 +144,7 @@ class IsrExpirationTest {
                                                     leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = leaderLogEndOffset,
                                                     followerLogStartOffset = 0L,
-                                                    fetchTimeMs = time.milliseconds,
+                                                    fetchTimeMs = time.absoluteMilliseconds,
                                                     readSize = -1,
                                                     lastStableOffset = None))
 
@@ -161,7 +161,7 @@ class IsrExpirationTest {
                             leaderLogStartOffset = 0L,
                             leaderLogEndOffset = leaderLogEndOffset,
                             followerLogStartOffset = 0L,
-                            fetchTimeMs = time.milliseconds,
+                            fetchTimeMs = time.absoluteMilliseconds,
                             readSize = -1,
                             lastStableOffset = None))
     }
@@ -181,7 +181,7 @@ class IsrExpirationTest {
                             leaderLogStartOffset = 0L,
                             leaderLogEndOffset = leaderLogEndOffset,
                             followerLogStartOffset = 0L,
-                            fetchTimeMs = time.milliseconds,
+                            fetchTimeMs = time.absoluteMilliseconds,
                             readSize = -1,
                             lastStableOffset = None))
     }
@@ -210,7 +210,7 @@ class IsrExpirationTest {
         leaderLogStartOffset = 0L,
         leaderLogEndOffset = leaderLogEndOffset,
         followerLogStartOffset = 0L,
-        fetchTimeMs = time.milliseconds,
+        fetchTimeMs = time.absoluteMilliseconds,
         readSize = -1,
         lastStableOffset = None))
     var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
@@ -243,7 +243,7 @@ class IsrExpirationTest {
                                                     leaderLogStartOffset = 0L,
                                                     leaderLogEndOffset = 0L,
                                                     followerLogStartOffset = 0L,
-                                                    fetchTimeMs = time.milliseconds,
+                                                    fetchTimeMs = time.absoluteMilliseconds,
                                                     readSize = -1,
                                                     lastStableOffset = None))
     // set the leader and its hw and the hw update time

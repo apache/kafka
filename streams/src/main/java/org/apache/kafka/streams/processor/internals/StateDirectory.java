@@ -280,7 +280,7 @@ public class StateDirectory {
             if (!locks.containsKey(id)) {
                 try {
                     if (lock(id)) {
-                        final long now = time.milliseconds();
+                        final long now = time.absoluteMilliseconds();
                         final long lastModifiedMs = taskDir.lastModified();
                         if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
                             if (!manualUserCall) {

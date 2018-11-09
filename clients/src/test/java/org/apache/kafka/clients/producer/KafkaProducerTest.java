@@ -443,7 +443,7 @@ public class KafkaProducerTest {
                         Thread.yield();
                     MetadataResponse updateResponse = TestUtils.metadataUpdateWith("kafka-cluster", 1,
                             singletonMap(topic, Errors.UNKNOWN_TOPIC_OR_PARTITION), emptyMap());
-                    metadata.update(updateResponse, time.milliseconds());
+                    metadata.update(updateResponse, time.absoluteMilliseconds());
                     time.sleep(60 * 1000L);
                 }
             });
@@ -483,7 +483,7 @@ public class KafkaProducerTest {
         String topic = "topic";
         Metadata metadata = new Metadata(0, 90000, true);
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
-        metadata.update(initialUpdateResponse, Time.SYSTEM.milliseconds());
+        metadata.update(initialUpdateResponse, Time.SYSTEM.absoluteMilliseconds());
 
         KafkaProducer<String, String> producer = new KafkaProducer<>(configs, keySerializer, valueSerializer, metadata,
                 null, null, Time.SYSTEM);
@@ -551,7 +551,7 @@ public class KafkaProducerTest {
 
         Metadata metadata = new Metadata(0, 90000, true);
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
-        metadata.update(initialUpdateResponse, Time.SYSTEM.milliseconds());
+        metadata.update(initialUpdateResponse, Time.SYSTEM.absoluteMilliseconds());
 
         @SuppressWarnings("unchecked") // it is safe to suppress, since this is a mock class
                 ProducerInterceptors<String, String> interceptors = mock(ProducerInterceptors.class);
@@ -590,7 +590,7 @@ public class KafkaProducerTest {
         Time time = new MockTime(1);
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-        metadata.update(initialUpdateResponse, time.milliseconds());
+        metadata.update(initialUpdateResponse, time.absoluteMilliseconds());
 
         MockClient client = new MockClient(time, metadata);
 
@@ -611,7 +611,7 @@ public class KafkaProducerTest {
         Time time = new MockTime();
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-        metadata.update(initialUpdateResponse, time.milliseconds());
+        metadata.update(initialUpdateResponse, time.absoluteMilliseconds());
 
         MockClient client = new MockClient(time, metadata);
 
@@ -639,7 +639,7 @@ public class KafkaProducerTest {
         Time time = new MockTime();
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, emptyMap());
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-        metadata.update(initialUpdateResponse, time.milliseconds());
+        metadata.update(initialUpdateResponse, time.absoluteMilliseconds());
 
         MockClient client = new MockClient(time, metadata);
 
@@ -681,7 +681,7 @@ public class KafkaProducerTest {
         Time time = new MockTime();
         MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, emptyMap());
         Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-        metadata.update(initialUpdateResponse, time.milliseconds());
+        metadata.update(initialUpdateResponse, time.absoluteMilliseconds());
         MockClient client = new MockClient(time, metadata);
 
         Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),

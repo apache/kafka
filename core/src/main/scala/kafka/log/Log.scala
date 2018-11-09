@@ -220,7 +220,7 @@ class Log(@volatile var dir: File,
   @volatile private var isMemoryMappedBufferClosed = false
 
   /* last time it was flushed */
-  private val lastFlushedTime = new AtomicLong(time.milliseconds)
+  private val lastFlushedTime = new AtomicLong(time.absoluteMilliseconds)
 
   def initFileSize: Int = {
     if (config.preallocate)
@@ -273,7 +273,7 @@ class Log(@volatile var dir: File,
   @volatile private var _leaderEpochCache: LeaderEpochFileCache = initializeLeaderEpochCache()
 
   locally {
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
 
     val nextOffset = loadSegments()
 
@@ -294,7 +294,7 @@ class Log(@volatile var dir: File,
     loadProducerState(logEndOffset, reloadFromCleanShutdown = hasCleanShutdownFile)
 
     info(s"Completed load of log with ${segments.size} segments, log start offset $logStartOffset and " +
-      s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
+      s"log end offset $logEndOffset in ${time.absoluteMilliseconds() - startMs} ms")
   }
 
   private val tags = {
@@ -328,7 +328,7 @@ class Log(@volatile var dir: File,
 
   scheduler.schedule(name = "PeriodicProducerExpirationCheck", fun = () => {
     lock synchronized {
-      producerStateManager.removeExpiredProducers(time.milliseconds)
+      producerStateManager.removeExpiredProducers(time.absoluteMilliseconds)
     }
   }, period = producerIdExpirationCheckIntervalMs, delay = producerIdExpirationCheckIntervalMs, unit = TimeUnit.MILLISECONDS)
 
@@ -639,7 +639,7 @@ class Log(@volatile var dir: File,
       }
     } else {
       val isEmptyBeforeTruncation = producerStateManager.isEmpty && producerStateManager.mapEndOffset >= lastOffset
-      producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.milliseconds())
+      producerStateManager.truncateAndReload(logStartOffset, lastOffset, time.absoluteMilliseconds())
 
       // Only do the potentially expensive reloading if the last snapshot offset is lower than the log end
       // offset (which would be the case on first startup) and there were active producers prior to truncation
@@ -807,7 +807,7 @@ class Log(@volatile var dir: File,
           // assign offsets to the message set
           val offset = new LongRef(nextOffsetMetadata.messageOffset)
           appendInfo.firstOffset = Some(offset.value)
-          val now = time.milliseconds
+          val now = time.absoluteMilliseconds
           val validateAndOffsetAssignResult = try {
             LogValidator.validateMessagesAndAssignOffsets(validRecords,
               offset,
@@ -1328,7 +1328,7 @@ class Log(@volatile var dir: File,
     for (i <- segments.indices)
       offsetTimeArray(i) = (math.max(segments(i).baseOffset, logStartOffset), segments(i).lastModified)
     if (lastSegmentHasSize)
-      offsetTimeArray(segments.length) = (logEndOffset, time.milliseconds)
+      offsetTimeArray(segments.length) = (logEndOffset, time.absoluteMilliseconds)
 
     var startIndex = -1
     timestamp match {
@@ -1464,7 +1464,7 @@ class Log(@volatile var dir: File,
 
   private def deleteRetentionMsBreachedSegments(): Int = {
     if (config.retentionMs < 0) return 0
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     deleteOldSegments((segment, _) => startMs - segment.largestTimestamp > config.retentionMs,
       reason = s"retention time ${config.retentionMs}ms breach")
   }
@@ -1524,7 +1524,7 @@ class Log(@volatile var dir: File,
    */
   private def maybeRoll(messagesSize: Int, appendInfo: LogAppendInfo): LogSegment = {
     val segment = activeSegment
-    val now = time.milliseconds
+    val now = time.absoluteMilliseconds
 
     val maxTimestampInMessages = appendInfo.maxTimestamp
     val maxOffsetInMessages = appendInfo.lastOffset
@@ -1564,7 +1564,7 @@ class Log(@volatile var dir: File,
    */
   def roll(expectedNextOffset: Long = 0): LogSegment = {
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
-      val start = time.hiResClockMs()
+      val start = time.relativeMilliseconds()
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
         val newOffset = math.max(expectedNextOffset, logEndOffset)
@@ -1604,7 +1604,7 @@ class Log(@volatile var dir: File,
         // schedule an asynchronous flush of the old segment
         scheduler.schedule("flush-log", () => flush(newOffset), delay = 0L)
 
-        info(s"Rolled new log segment at offset $newOffset in ${time.hiResClockMs() - start} ms.")
+        info(s"Rolled new log segment at offset $newOffset in ${time.relativeMilliseconds() - start} ms.")
 
         segment
       }
@@ -1630,7 +1630,7 @@ class Log(@volatile var dir: File,
     maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset") {
       if (offset <= this.recoveryPoint)
         return
-      debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.milliseconds()}, " +
+      debug(s"Flushing log up to offset $offset, last flushed: $lastFlushTime,  current time: ${time.absoluteMilliseconds()}, " +
         s"unflushed: $unflushedMessages")
       for (segment <- logSegments(this.recoveryPoint, offset))
         segment.flush()
@@ -1639,7 +1639,7 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         if (offset > this.recoveryPoint) {
           this.recoveryPoint = offset
-          lastFlushedTime.set(time.milliseconds)
+          lastFlushedTime.set(time.absoluteMilliseconds)
         }
       }
     }

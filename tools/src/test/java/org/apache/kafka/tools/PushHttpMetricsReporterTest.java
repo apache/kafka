@@ -325,7 +325,7 @@ public class PushHttpMetricsReporterTest {
         assertTrue(client.isObject());
         assertEquals(InetAddress.getLocalHost().getCanonicalHostName(), client.get("host").textValue());
         assertEquals("", client.get("client_id").textValue());
-        assertEquals(time.milliseconds(), client.get("time").longValue());
+        assertEquals(time.absoluteMilliseconds(), client.get("time").longValue());
     }
 
     private void expectReadResponse() throws Exception {

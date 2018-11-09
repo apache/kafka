@@ -1665,7 +1665,7 @@ private[controller] class ControllerStats extends KafkaMetricsGroup {
 }
 
 sealed trait ControllerEvent {
-  val enqueueTimeMs: Long = Time.SYSTEM.milliseconds()
+  val enqueueTimeMs: Long = Time.SYSTEM.absoluteMilliseconds()
 
   def state: ControllerState
   def process(): Unit

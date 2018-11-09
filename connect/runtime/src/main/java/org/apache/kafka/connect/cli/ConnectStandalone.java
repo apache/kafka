@@ -65,7 +65,7 @@ public class ConnectStandalone {
         try {
             Time time = Time.SYSTEM;
             log.info("Kafka Connect standalone worker initializing ...");
-            long initStart = time.hiResClockMs();
+            long initStart = time.relativeMilliseconds();
             WorkerInfo initInfo = new WorkerInfo();
             initInfo.logAll();
 
@@ -89,7 +89,7 @@ public class ConnectStandalone {
 
             Herder herder = new StandaloneHerder(worker, kafkaClusterId);
             final Connect connect = new Connect(herder, rest);
-            log.info("Kafka Connect standalone worker initialization took {}ms", time.hiResClockMs() - initStart);
+            log.info("Kafka Connect standalone worker initialization took {}ms", time.relativeMilliseconds() - initStart);
 
             try {
                 connect.start();

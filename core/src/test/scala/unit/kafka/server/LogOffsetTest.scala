@@ -169,7 +169,7 @@ class LogOffsetTest extends BaseRequestTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = Integer.toString(42).getBytes()), leaderEpoch = 0)
     log.flush()
 
-    val now = time.milliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
+    val now = time.absoluteMilliseconds + 30000 // pretend it is the future to avoid race conditions with the fs
 
     val offsets = log.legacyFetchOffsetsBefore(now, 15)
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), offsets)

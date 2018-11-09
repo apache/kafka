@@ -50,7 +50,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     private static final long LIFETIME_SECONDS_TO_USE = 1000 * 60 * 60;
     private static final String EXPIRATION_TIME_CLAIM_TEXT = expClaimText(LIFETIME_SECONDS_TO_USE);
     private static final String TOO_EARLY_EXPIRATION_TIME_CLAIM_TEXT = expClaimText(0);
-    private static final String ISSUED_AT_CLAIM_TEXT = claimOrHeaderText("iat", MOCK_TIME.milliseconds() / 1000.0);
+    private static final String ISSUED_AT_CLAIM_TEXT = claimOrHeaderText("iat", MOCK_TIME.absoluteMilliseconds() / 1000.0);
     private static final String SCOPE_CLAIM_TEXT = claimOrHeaderText("scope", "scope1");
     private static final Map<String, String> MODULE_OPTIONS_MAP_NO_SCOPE_REQUIRED;
     static {
@@ -177,6 +177,6 @@ public class OAuthBearerUnsecuredValidatorCallbackHandlerTest {
     }
 
     private static String expClaimText(long lifetimeSeconds) {
-        return claimOrHeaderText("exp", MOCK_TIME.milliseconds() / 1000.0 + lifetimeSeconds);
+        return claimOrHeaderText("exp", MOCK_TIME.absoluteMilliseconds() / 1000.0 + lifetimeSeconds);
     }
 }

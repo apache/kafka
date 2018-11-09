@@ -36,24 +36,24 @@ class ThrottlerTest {
                                   time = mockTime)
 
     // Observe desiredCountPerInterval at t1
-    val t1 = mockTime.milliseconds()
+    val t1 = mockTime.absoluteMilliseconds()
     throttler.maybeThrottle(desiredCountPerInterval)
-    assertEquals(t1, mockTime.milliseconds())
+    assertEquals(t1, mockTime.absoluteMilliseconds())
 
     // Observe desiredCountPerInterval at t1 + throttleCheckIntervalMs + 1,
     mockTime.sleep(throttleCheckIntervalMs + 1)
     throttler.maybeThrottle(desiredCountPerInterval)
-    val t2 = mockTime.milliseconds()
+    val t2 = mockTime.absoluteMilliseconds()
     assertTrue(t2 >= t1 + 2 * throttleCheckIntervalMs)
 
     // Observe desiredCountPerInterval at t2
     throttler.maybeThrottle(desiredCountPerInterval)
-    assertEquals(t2, mockTime.milliseconds())
+    assertEquals(t2, mockTime.absoluteMilliseconds())
 
     // Observe desiredCountPerInterval at t2 + throttleCheckIntervalMs + 1
     mockTime.sleep(throttleCheckIntervalMs + 1)
     throttler.maybeThrottle(desiredCountPerInterval)
-    val t3 = mockTime.milliseconds()
+    val t3 = mockTime.absoluteMilliseconds()
     assertTrue(t3 >= t2 + 2 * throttleCheckIntervalMs)
 
     val elapsedTimeMs = t3 - t1

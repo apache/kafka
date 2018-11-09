@@ -46,43 +46,43 @@ public class AdminMetadataManagerTest {
     public void testMetadataReady() {
         // Metadata is not ready on initialization
         assertFalse(mgr.isReady());
-        assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(0, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
         // Metadata is not ready when bootstrap servers are set
         mgr.update(Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))),
-                time.milliseconds());
+                time.absoluteMilliseconds());
         assertFalse(mgr.isReady());
-        assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(0, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
-        mgr.update(mockCluster(), time.milliseconds());
+        mgr.update(mockCluster(), time.absoluteMilliseconds());
         assertTrue(mgr.isReady());
-        assertEquals(metadataExpireMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(metadataExpireMs, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
         time.sleep(metadataExpireMs);
-        assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(0, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
     }
 
     @Test
     public void testMetadataRefreshBackoff() {
-        mgr.transitionToUpdatePending(time.milliseconds());
-        assertEquals(Long.MAX_VALUE, mgr.metadataFetchDelayMs(time.milliseconds()));
+        mgr.transitionToUpdatePending(time.absoluteMilliseconds());
+        assertEquals(Long.MAX_VALUE, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
         mgr.updateFailed(new RuntimeException());
-        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
         // Even if we explicitly request an update, the backoff should be respected
         mgr.requestUpdate();
-        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
 
         time.sleep(refreshBackoffMs);
-        assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(0, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
     }
 
     @Test
     public void testAuthenticationFailure() {
-        mgr.transitionToUpdatePending(time.milliseconds());
+        mgr.transitionToUpdatePending(time.absoluteMilliseconds());
         mgr.updateFailed(new AuthenticationException("Authentication failed"));
-        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.milliseconds()));
+        assertEquals(refreshBackoffMs, mgr.metadataFetchDelayMs(time.absoluteMilliseconds()));
         try {
             mgr.isReady();
             fail("Expected AuthenticationException to be thrown");
@@ -90,7 +90,7 @@ public class AdminMetadataManagerTest {
             // Expected
         }
 
-        mgr.update(mockCluster(), time.milliseconds());
+        mgr.update(mockCluster(), time.absoluteMilliseconds());
         assertTrue(mgr.isReady());
     }
 

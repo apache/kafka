@@ -111,9 +111,9 @@ public class AbstractCoordinatorTest {
         // after backing off, we should be able to connect.
         mockClient.blackout(coordinatorNode, 10L);
 
-        long initialTime = mockTime.milliseconds();
+        long initialTime = mockTime.absoluteMilliseconds();
         coordinator.ensureCoordinatorReady(mockTime.timer(Long.MAX_VALUE));
-        long endTime = mockTime.milliseconds();
+        long endTime = mockTime.absoluteMilliseconds();
 
         assertTrue(endTime - initialTime >= RETRY_BACKOFF_MS);
     }
@@ -202,7 +202,7 @@ public class AbstractCoordinatorTest {
             long startMs = System.currentTimeMillis();
             while (System.currentTimeMillis() - startMs < 1000) {
                 Thread.sleep(10);
-                coordinator.pollHeartbeat(mockTime.milliseconds());
+                coordinator.pollHeartbeat(mockTime.absoluteMilliseconds());
             }
             fail("Expected pollHeartbeat to raise an error in 1 second");
         } catch (RuntimeException exception) {
@@ -230,7 +230,7 @@ public class AbstractCoordinatorTest {
         }, heartbeatResponse(Errors.NONE));
 
         mockTime.sleep(HEARTBEAT_INTERVAL_MS);
-        coordinator.pollHeartbeat(mockTime.milliseconds());
+        coordinator.pollHeartbeat(mockTime.absoluteMilliseconds());
 
         if (!heartbeatDone.await(1, TimeUnit.SECONDS)) {
             fail("Should have received a heartbeat request after calling pollHeartbeat");

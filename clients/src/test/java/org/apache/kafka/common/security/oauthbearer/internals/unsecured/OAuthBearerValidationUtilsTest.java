@@ -62,7 +62,7 @@ public class OAuthBearerValidationUtilsTest {
 
     @Test
     public void validateIssuedAt() {
-        long nowMs = TIME.milliseconds();
+        long nowMs = TIME.absoluteMilliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
         for (boolean exists : new boolean[] {true, false}) {
             StringBuilder sb = new StringBuilder("{");
@@ -99,7 +99,7 @@ public class OAuthBearerValidationUtilsTest {
 
     @Test
     public void validateExpirationTime() {
-        long nowMs = TIME.milliseconds();
+        long nowMs = TIME.absoluteMilliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
         StringBuilder sb = new StringBuilder("{");
         appendJsonText(sb, "exp", nowClaimValue);
@@ -126,7 +126,7 @@ public class OAuthBearerValidationUtilsTest {
 
     @Test
     public void validateExpirationTimeAndIssuedAtConsistency() throws OAuthBearerIllegalTokenException {
-        long nowMs = TIME.milliseconds();
+        long nowMs = TIME.absoluteMilliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
         for (boolean issuedAtExists : new boolean[] {true, false}) {
             if (!issuedAtExists) {
@@ -160,7 +160,7 @@ public class OAuthBearerValidationUtilsTest {
     @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void validateScope() {
-        long nowMs = TIME.milliseconds();
+        long nowMs = TIME.absoluteMilliseconds();
         double nowClaimValue = ((double) nowMs) / 1000;
         final List<String> noScope = Collections.emptyList();
         final List<String> scope1 = Arrays.asList("scope1");

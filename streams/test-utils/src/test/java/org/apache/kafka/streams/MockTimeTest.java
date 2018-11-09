@@ -25,14 +25,14 @@ public class MockTimeTest {
     @Test
     public void shouldSetStartTime() {
         final TopologyTestDriver.MockTime time = new TopologyTestDriver.MockTime(42L);
-        assertEquals(42L, time.milliseconds());
-        assertEquals(42L * 1000L * 1000L, time.nanoseconds());
+        assertEquals(42L, time.absoluteMilliseconds());
+        assertEquals(42L * 1000L * 1000L, time.relativeNanoseconds());
     }
 
     @Test
     public void shouldGetNanosAsMillis() {
         final TopologyTestDriver.MockTime time = new TopologyTestDriver.MockTime(42L);
-        assertEquals(42L, time.hiResClockMs());
+        assertEquals(42L, time.relativeMilliseconds());
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -44,13 +44,13 @@ public class MockTimeTest {
     public void shouldAdvanceTimeOnSleep() {
         final TopologyTestDriver.MockTime time = new TopologyTestDriver.MockTime(42L);
 
-        assertEquals(42L, time.milliseconds());
+        assertEquals(42L, time.absoluteMilliseconds());
         time.sleep(1L);
-        assertEquals(43L, time.milliseconds());
+        assertEquals(43L, time.absoluteMilliseconds());
         time.sleep(0L);
-        assertEquals(43L, time.milliseconds());
+        assertEquals(43L, time.absoluteMilliseconds());
         time.sleep(3L);
-        assertEquals(46L, time.milliseconds());
+        assertEquals(46L, time.absoluteMilliseconds());
     }
 
 }

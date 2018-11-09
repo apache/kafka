@@ -249,7 +249,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   private def addLogToBeDeleted(log: Log): Unit = {
-    this.logsToBeDeleted.add((log, time.milliseconds()))
+    this.logsToBeDeleted.add((log, time.absoluteMilliseconds()))
   }
 
   // Only for testing
@@ -300,7 +300,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def loadLogs(): Unit = {
     info("Loading logs.")
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
     val threadPools = ArrayBuffer.empty[ExecutorService]
     val offlineDirs = mutable.Set.empty[(String, IOException)]
     val jobs = mutable.Map.empty[File, Seq[Future[_]]]
@@ -381,7 +381,7 @@ class LogManager(logDirs: Seq[File],
       threadPools.foreach(_.shutdown())
     }
 
-    info(s"Logs loading complete in ${time.milliseconds - startMs} ms.")
+    info(s"Logs loading complete in ${time.absoluteMilliseconds - startMs} ms.")
   }
 
   /**
@@ -749,7 +749,7 @@ class LogManager(logDirs: Seq[File],
       def nextDeleteDelayMs: Long = {
         if (!logsToBeDeleted.isEmpty) {
           val (_, scheduleTimeMs) = logsToBeDeleted.peek()
-          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.milliseconds()
+          scheduleTimeMs + currentDefaultConfig.fileDeleteDelayMs - time.absoluteMilliseconds()
         } else
           currentDefaultConfig.fileDeleteDelayMs
       }
@@ -892,7 +892,7 @@ class LogManager(logDirs: Seq[File],
   def cleanupLogs() {
     debug("Beginning log cleanup...")
     var total = 0
-    val startMs = time.milliseconds
+    val startMs = time.absoluteMilliseconds
 
     // clean current logs.
     val deletableLogs = {
@@ -926,7 +926,7 @@ class LogManager(logDirs: Seq[File],
     }
 
     debug(s"Log cleanup completed. $total files deleted in " +
-                  (time.milliseconds - startMs) / 1000 + " seconds")
+                  (time.absoluteMilliseconds - startMs) / 1000 + " seconds")
   }
 
   /**
@@ -965,7 +965,7 @@ class LogManager(logDirs: Seq[File],
 
     for ((topicPartition, log) <- currentLogs.toList ++ futureLogs.toList) {
       try {
-        val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
+        val timeSinceLastFlush = time.absoluteMilliseconds - log.lastFlushTime
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
               s" last flushed ${log.lastFlushTime} time since last flush: $timeSinceLastFlush")
         if(timeSinceLastFlush >= log.config.flushMs)

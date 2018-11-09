@@ -82,7 +82,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
         callbackHandler.handle(new Callback[] {callback});
         OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
         assertNotNull("create token failed", jws);
-        long startMs = mockTime.milliseconds();
+        long startMs = mockTime.absoluteMilliseconds();
         confirmCorrectValues(jws, user, startMs, 1000 * 60 * 60);
         assertEquals(new HashSet<>(Arrays.asList("sub", "iat", "exp")), jws.claims().keySet());
     }
@@ -118,7 +118,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandlerTest {
             callbackHandler.handle(new Callback[] {callback});
             OAuthBearerUnsecuredJws jws = (OAuthBearerUnsecuredJws) callback.token();
             assertNotNull("create token failed", jws);
-            long startMs = mockTime.milliseconds();
+            long startMs = mockTime.absoluteMilliseconds();
             confirmCorrectValues(jws, user, startMs, lifetmeSeconds * 1000);
             Map<String, Object> claims = jws.claims();
             assertEquals(new HashSet<>(Arrays.asList(actualScopeClaimName, principalClaimName, "iat", "exp", "number",

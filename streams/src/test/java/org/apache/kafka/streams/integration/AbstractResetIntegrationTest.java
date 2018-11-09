@@ -221,7 +221,7 @@ public abstract class AbstractResetIntegrationTest {
 
         for (final KeyValue<Long, String> record : records) {
             mockTime.sleep(10);
-            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.milliseconds());
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC, Collections.singleton(record), producerConfig, mockTime.absoluteMilliseconds());
         }
     }
 
@@ -340,7 +340,7 @@ public abstract class AbstractResetIntegrationTest {
             INTERMEDIATE_USER_TOPIC,
             Collections.singleton(badMessage),
                 producerConfig,
-            mockTime.milliseconds());
+            mockTime.absoluteMilliseconds());
 
         // RESET
         streams = new KafkaStreams(setupTopologyWithIntermediateUserTopic(OUTPUT_TOPIC_2_RERUN), streamsConfig);

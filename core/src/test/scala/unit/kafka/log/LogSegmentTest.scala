@@ -171,24 +171,24 @@ class LogSegmentTest {
 
     time.sleep(500)
     reopened.truncateTo(57)
-    assertEquals(0, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertEquals(0, reopened.timeWaitedForRoll(time.absoluteMilliseconds(), RecordBatch.NO_TIMESTAMP))
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
     var rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
+      maxOffsetInMessages = 100L, messagesSize = 1024, time.absoluteMilliseconds())
     assertFalse(reopened.shouldRoll(rollParams))
 
     // The segment should not be rolled even if maxSegmentMs has been exceeded
     time.sleep(maxSegmentMs + 1)
-    assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.absoluteMilliseconds(), RecordBatch.NO_TIMESTAMP))
     rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
+      maxOffsetInMessages = 100L, messagesSize = 1024, time.absoluteMilliseconds())
     assertFalse(reopened.shouldRoll(rollParams))
 
     // But we should still roll the segment if we cannot fit the next offset
     rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = Int.MaxValue.toLong + 200L, messagesSize = 1024, time.milliseconds())
+      maxOffsetInMessages = Int.MaxValue.toLong + 200L, messagesSize = 1024, time.absoluteMilliseconds())
     assertTrue(reopened.shouldRoll(rollParams))
   }
 
@@ -224,10 +224,10 @@ class LogSegmentTest {
 
     // If the segment is empty after truncation, the create time should be reset
     time.sleep(500)
-    assertEquals(500, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertEquals(500, seg.timeWaitedForRoll(time.absoluteMilliseconds(), RecordBatch.NO_TIMESTAMP))
 
     seg.truncateTo(0)
-    assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertEquals(0, seg.timeWaitedForRoll(time.absoluteMilliseconds(), RecordBatch.NO_TIMESTAMP))
     assertFalse(seg.timeIndex.isFull)
     assertFalse(seg.offsetIndex.isFull)
     assertNull("Segment should be empty.", seg.read(0, None, 1024))

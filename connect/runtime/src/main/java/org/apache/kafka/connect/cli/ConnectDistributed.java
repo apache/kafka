@@ -63,7 +63,7 @@ public class ConnectDistributed {
         try {
             Time time = Time.SYSTEM;
             log.info("Kafka Connect distributed worker initializing ...");
-            long initStart = time.hiResClockMs();
+            long initStart = time.relativeMilliseconds();
             WorkerInfo initInfo = new WorkerInfo();
             initInfo.logAll();
 
@@ -102,7 +102,7 @@ public class ConnectDistributed {
                     kafkaClusterId, statusBackingStore, configBackingStore,
                     advertisedUrl.toString());
             final Connect connect = new Connect(herder, rest);
-            log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
+            log.info("Kafka Connect distributed worker initialization took {}ms", time.relativeMilliseconds() - initStart);
             try {
                 connect.start();
             } catch (Exception e) {

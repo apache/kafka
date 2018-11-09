@@ -111,12 +111,12 @@ object RequestChannel extends Logging {
     trace(s"Processor $processor received request: ${requestDesc(true)}")
 
     def requestThreadTimeNanos = {
-      if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
+      if (apiLocalCompleteTimeNanos == -1L) apiLocalCompleteTimeNanos = Time.SYSTEM.relativeNanoseconds
       math.max(apiLocalCompleteTimeNanos - requestDequeueTimeNanos, 0L)
     }
 
     def updateRequestMetrics(networkThreadTimeNanos: Long, response: Response) {
-      val endTimeNanos = Time.SYSTEM.nanoseconds
+      val endTimeNanos = Time.SYSTEM.relativeNanoseconds
       // In some corner cases, apiLocalCompleteTimeNanos may not be set when the request completes if the remote
       // processing time is really small. This value is set in KafkaApis from a request handling thread.
       // This may be read in a network thread before the actual update happens in KafkaApis which will cause us to
@@ -223,7 +223,7 @@ object RequestChannel extends Logging {
 
   abstract class Response(val request: Request) {
     locally {
-      val nowNs = Time.SYSTEM.nanoseconds
+      val nowNs = Time.SYSTEM.relativeNanoseconds
       request.responseCompleteTimeNanos = nowNs
       if (request.apiLocalCompleteTimeNanos == -1L)
         request.apiLocalCompleteTimeNanos = nowNs

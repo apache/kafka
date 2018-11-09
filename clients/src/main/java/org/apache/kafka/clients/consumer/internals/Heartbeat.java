@@ -70,12 +70,12 @@ public final class Heartbeat {
     }
 
     public void failHeartbeat() {
-        update(time.milliseconds());
+        update(time.absoluteMilliseconds());
         heartbeatTimer.reset(retryBackoffMs);
     }
 
     public void receiveHeartbeat() {
-        update(time.milliseconds());
+        update(time.absoluteMilliseconds());
         sessionTimer.reset(sessionTimeoutMs);
     }
 
@@ -99,14 +99,14 @@ public final class Heartbeat {
     }
 
     public void resetTimeouts() {
-        update(time.milliseconds());
+        update(time.absoluteMilliseconds());
         sessionTimer.reset(sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
         heartbeatTimer.reset(heartbeatIntervalMs);
     }
 
     public void resetSessionTimeout() {
-        update(time.milliseconds());
+        update(time.absoluteMilliseconds());
         sessionTimer.reset(sessionTimeoutMs);
     }
 

@@ -125,7 +125,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         trace("Committing offsets.")
         try {
           consumerWrapper.commit()
-          lastSuccessfulCommitTime = time.milliseconds
+          lastSuccessfulCommitTime = time.absoluteMilliseconds
           retryNeeded = false
         } catch {
           case e: WakeupException =>

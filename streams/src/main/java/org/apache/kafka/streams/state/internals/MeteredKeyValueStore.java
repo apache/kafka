@@ -233,11 +233,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
 
     private V measureLatency(final Action<V> action,
                              final Sensor sensor) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             return action.execute();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            metrics.recordLatency(sensor, startNs, time.relativeNanoseconds());
         }
     }
 
@@ -263,7 +263,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
                                         final Sensor sensor) {
             this.iter = iter;
             this.sensor = sensor;
-            this.startNs = time.nanoseconds();
+            this.startNs = time.relativeNanoseconds();
         }
 
         @Override
@@ -289,7 +289,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatency(this.sensor, this.startNs, time.relativeNanoseconds());
             }
         }
 

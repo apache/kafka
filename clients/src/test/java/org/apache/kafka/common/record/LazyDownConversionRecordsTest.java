@@ -49,7 +49,7 @@ public class LazyDownConversionRecordsTest {
      */
     @Test
     public void testConversionOfCommitMarker() throws IOException {
-        MemoryRecords recordsToConvert = MemoryRecords.withEndTransactionMarker(0, Time.SYSTEM.milliseconds(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        MemoryRecords recordsToConvert = MemoryRecords.withEndTransactionMarker(0, Time.SYSTEM.absoluteMilliseconds(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 1, (short) 1, new EndTransactionMarker(ControlRecordType.COMMIT, 0));
         MemoryRecords convertedRecords = convertRecords(recordsToConvert, (byte) 1, recordsToConvert.sizeInBytes());
         ByteBuffer buffer = convertedRecords.buffer();

@@ -321,7 +321,7 @@ public class Selector implements Selectable, AutoCloseable {
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
         this.channels.put(id, channel);
         if (idleExpiryManager != null)
-            idleExpiryManager.update(channel.id(), time.nanoseconds());
+            idleExpiryManager.update(channel.id(), time.relativeNanoseconds());
         return key;
     }
 
@@ -448,10 +448,10 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         /* check ready keys */
-        long startSelect = time.nanoseconds();
+        long startSelect = time.relativeNanoseconds();
         int numReadyKeys = select(timeout);
-        long endSelect = time.nanoseconds();
-        this.sensors.selectTime.record(endSelect - startSelect, time.milliseconds());
+        long endSelect = time.relativeNanoseconds();
+        this.sensors.selectTime.record(endSelect - startSelect, time.absoluteMilliseconds());
 
         if (numReadyKeys > 0 || !immediatelyConnectedKeys.isEmpty() || dataInBuffers) {
             Set<SelectionKey> readyKeys = this.nioSelector.selectedKeys();
@@ -475,8 +475,8 @@ public class Selector implements Selectable, AutoCloseable {
             madeReadProgressLastPoll = true; //no work is also "progress"
         }
 
-        long endIo = time.nanoseconds();
-        this.sensors.ioTime.record(endIo - endSelect, time.milliseconds());
+        long endIo = time.relativeNanoseconds();
+        this.sensors.ioTime.record(endIo - endSelect, time.absoluteMilliseconds());
 
         // Close channels that were delayed and are now ready to be closed
         completeDelayedChannelClose(endIo);
@@ -502,7 +502,7 @@ public class Selector implements Selectable, AutoCloseable {
                            long currentTimeNanos) {
         for (SelectionKey key : determineHandlingOrder(selectionKeys)) {
             KafkaChannel channel = channel(key);
-            long channelStartTimeNanos = recordTimePerConnection ? time.nanoseconds() : 0;
+            long channelStartTimeNanos = recordTimePerConnection ? time.relativeNanoseconds() : 0;
             boolean sendFailed = false;
 
             // register all per-connection metrics at once
@@ -539,7 +539,7 @@ public class Selector implements Selectable, AutoCloseable {
                         throw e;
                     }
                     if (channel.ready()) {
-                        long readyTimeMs = time.milliseconds();
+                        long readyTimeMs = time.absoluteMilliseconds();
                         if (channel.successfulAuthentications() == 1) {
                             sensors.successfulAuthentication.record(1.0, readyTimeMs);
                             if (!channel.connectedClientSupportsReauthentication())
@@ -643,7 +643,7 @@ public class Selector implements Selectable, AutoCloseable {
     // Record time spent in pollSelectionKeys for channel (moved into a method to keep checkstyle happy)
     private void maybeRecordTimePerConnection(KafkaChannel channel, long startTimeNanos) {
         if (recordTimePerConnection)
-            channel.addNetworkThreadTimeNanos(time.nanoseconds() - startTimeNanos);
+            channel.addNetworkThreadTimeNanos(time.relativeNanoseconds() - startTimeNanos);
     }
 
     @Override
@@ -1167,7 +1167,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesSent(String connectionId, long bytes) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             this.bytesSent.record(bytes, now);
             if (!connectionId.isEmpty()) {
                 String nodeRequestName = "node-" + connectionId + ".bytes-sent";
@@ -1178,7 +1178,7 @@ public class Selector implements Selectable, AutoCloseable {
         }
 
         public void recordBytesReceived(String connection, int bytes) {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             this.bytesReceived.record(bytes, now);
             if (!connection.isEmpty()) {
                 String nodeRequestName = "node-" + connection + ".bytes-received";
@@ -1210,7 +1210,7 @@ public class Selector implements Selectable, AutoCloseable {
          */
         public DelayedAuthenticationFailureClose(KafkaChannel channel, int delayMs) {
             this.channel = channel;
-            this.endTimeNanos = time.nanoseconds() + (delayMs * 1000L * 1000L);
+            this.endTimeNanos = time.relativeNanoseconds() + (delayMs * 1000L * 1000L);
             this.closed = false;
         }
 
@@ -1246,7 +1246,7 @@ public class Selector implements Selectable, AutoCloseable {
             this.connectionsMaxIdleNanos = connectionsMaxIdleMs * 1000 * 1000;
             // initial capacity and load factor are default, we set them explicitly because we want to set accessOrder = true
             this.lruConnections = new LinkedHashMap<>(16, .75F, true);
-            this.nextIdleCloseCheckTime = time.nanoseconds() + this.connectionsMaxIdleNanos;
+            this.nextIdleCloseCheckTime = time.relativeNanoseconds() + this.connectionsMaxIdleNanos;
         }
 
         public void update(String connectionId, long currentTimeNanos) {

@@ -62,7 +62,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
     //Send the request to the mock client
     val clientRequest = request(requestBuilder)
-    client.send(clientRequest, time.milliseconds())
+    client.send(clientRequest, time.absoluteMilliseconds())
 
     //Create a suitable response based on the API key
     val response = requestBuilder.apiKey() match {
@@ -83,14 +83,14 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
 
     //Use mock client to create the appropriate response object
     client.respondFrom(response, new Node(destination.id, destination.host, destination.port))
-    client.poll(30, time.milliseconds()).iterator().next()
+    client.poll(30, time.absoluteMilliseconds()).iterator().next()
   }
 
   private def request(requestBuilder: Builder[_ <: AbstractRequest]): ClientRequest = {
     client.newClientRequest(
       destination.id.toString,
       requestBuilder,
-      time.milliseconds(),
+      time.absoluteMilliseconds(),
       true)
   }
 

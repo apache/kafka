@@ -160,7 +160,7 @@ public class OAuthBearerUnsecuredValidatorCallbackHandler implements Authenticat
         int allowableClockSkewMs = allowableClockSkewMs();
         OAuthBearerUnsecuredJws unsecuredJwt = new OAuthBearerUnsecuredJws(tokenValue, principalClaimName,
                 scopeClaimName);
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         OAuthBearerValidationUtils
                 .validateClaimForExistenceAndType(unsecuredJwt, true, principalClaimName, String.class)
                 .throwExceptionIfFailed();

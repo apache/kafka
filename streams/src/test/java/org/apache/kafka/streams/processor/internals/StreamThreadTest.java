@@ -311,10 +311,10 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
 
         EasyMock.verify(taskManager);
@@ -438,10 +438,10 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval - 10L);
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
 
         EasyMock.verify(taskManager);
@@ -475,10 +475,10 @@ public class StreamThreadTest {
             new LogContext(""),
             new AtomicInteger()
         );
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
         mockTime.sleep(commitInterval + 1);
-        thread.setNow(mockTime.milliseconds());
+        thread.setNow(mockTime.absoluteMilliseconds());
         thread.maybeCommit();
 
         EasyMock.verify(taskManager);

@@ -125,7 +125,7 @@ object BrokerIdZNode {
       PortKey -> port,
       EndpointsKey -> advertisedEndpoints.map(_.connectionString).toBuffer.asJava,
       JmxPortKey -> jmxPort,
-      TimestampKey -> Time.SYSTEM.milliseconds().toString
+      TimestampKey -> Time.SYSTEM.absoluteMilliseconds().toString
     )
     rack.foreach(rack => if (version >= 3) jsonMap += (RackKey -> rack))
 

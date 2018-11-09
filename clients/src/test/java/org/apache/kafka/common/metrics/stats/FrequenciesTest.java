@@ -82,23 +82,23 @@ public class FrequenciesTest {
 
         // Record 2 windows worth of values
         for (int i = 0; i != 25; ++i) {
-            frequencies.record(config, 0.0, time.milliseconds());
+            frequencies.record(config, 0.0, time.absoluteMilliseconds());
         }
         for (int i = 0; i != 75; ++i) {
-            frequencies.record(config, 1.0, time.milliseconds());
+            frequencies.record(config, 1.0, time.absoluteMilliseconds());
         }
-        assertEquals(0.25, falseMetric.stat().measure(config, time.milliseconds()), DELTA);
-        assertEquals(0.75, trueMetric.stat().measure(config, time.milliseconds()), DELTA);
+        assertEquals(0.25, falseMetric.stat().measure(config, time.absoluteMilliseconds()), DELTA);
+        assertEquals(0.75, trueMetric.stat().measure(config, time.absoluteMilliseconds()), DELTA);
 
         // Record 2 more windows worth of values
         for (int i = 0; i != 40; ++i) {
-            frequencies.record(config, 0.0, time.milliseconds());
+            frequencies.record(config, 0.0, time.absoluteMilliseconds());
         }
         for (int i = 0; i != 60; ++i) {
-            frequencies.record(config, 1.0, time.milliseconds());
+            frequencies.record(config, 1.0, time.absoluteMilliseconds());
         }
-        assertEquals(0.40, falseMetric.stat().measure(config, time.milliseconds()), DELTA);
-        assertEquals(0.60, trueMetric.stat().measure(config, time.milliseconds()), DELTA);
+        assertEquals(0.40, falseMetric.stat().measure(config, time.absoluteMilliseconds()), DELTA);
+        assertEquals(0.60, trueMetric.stat().measure(config, time.absoluteMilliseconds()), DELTA);
     }
 
     @Test
@@ -122,7 +122,7 @@ public class FrequenciesTest {
 
         // Record 2 windows worth of values
         for (int i = 0; i != 100; ++i) {
-            frequencies.record(config, i % 4 + 1, time.milliseconds());
+            frequencies.record(config, i % 4 + 1, time.absoluteMilliseconds());
         }
         assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
         assertEquals(0.25, (Double) metric2.metricValue(), DELTA);
@@ -131,7 +131,7 @@ public class FrequenciesTest {
 
         // Record 2 windows worth of values
         for (int i = 0; i != 100; ++i) {
-            frequencies.record(config, i % 2 + 1, time.milliseconds());
+            frequencies.record(config, i % 2 + 1, time.absoluteMilliseconds());
         }
         assertEquals(0.50, (Double) metric1.metricValue(), DELTA);
         assertEquals(0.50, (Double) metric2.metricValue(), DELTA);
@@ -141,7 +141,7 @@ public class FrequenciesTest {
         // Record 1 window worth of values to overlap with the last window
         // that is half 1.0 and half 2.0
         for (int i = 0; i != 50; ++i) {
-            frequencies.record(config, 4.0, time.milliseconds());
+            frequencies.record(config, 4.0, time.absoluteMilliseconds());
         }
         assertEquals(0.25, (Double) metric1.metricValue(), DELTA);
         assertEquals(0.25, (Double) metric2.metricValue(), DELTA);

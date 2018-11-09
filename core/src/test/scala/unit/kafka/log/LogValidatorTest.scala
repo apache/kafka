@@ -182,7 +182,7 @@ class LogValidatorTest {
       records,
       offsetCounter = new LongRef(0),
       time = time,
-      now = time.milliseconds(),
+      now = time.absoluteMilliseconds(),
       sourceCodec = DefaultCompressionCodec,
       targetCodec = DefaultCompressionCodec,
       compactedTopic = false,

@@ -132,7 +132,7 @@ class SimpleFetchTest {
                                                           leaderLogStartOffset = 0L,
                                                           leaderLogEndOffset = leo.messageOffset,
                                                           followerLogStartOffset = 0L,
-                                                          fetchTimeMs = time.milliseconds,
+                                                          fetchTimeMs = time.absoluteMilliseconds,
                                                           readSize = -1,
                                                           lastStableOffset = None))
 
