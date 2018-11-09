@@ -224,8 +224,10 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
       if (exception == null)
         successCount += 1
-      else
+      else {
+        error("Commit callback failed unexpectedly", exception)
         failCount += 1
+      }
     }
   }
 
