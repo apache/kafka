@@ -53,6 +53,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
@@ -73,7 +74,6 @@ public class SuppressionIntegrationTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final int COMMIT_INTERVAL = 100;
-    private static final long TIMEOUT_MS = 30_000L;
 
     private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
         return builder
@@ -201,7 +201,7 @@ public class SuppressionIntegrationTest {
     }
 
     private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
-        waitForCondition(() -> !driver.state().isRunning(), TIMEOUT_MS, "Streams didn't shut down.");
+        waitForCondition(() -> !driver.state().isRunning(), DEFAULT_TIMEOUT, "Streams didn't shut down.");
         assertThat(driver.state(), is(KafkaStreams.State.ERROR));
     }
 }
