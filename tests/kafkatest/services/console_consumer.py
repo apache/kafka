@@ -60,7 +60,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
+                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
                  kafka_opts_override="", consumer_properties={}, client_prop_file_override=""):
         """
@@ -85,7 +85,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             isolation_level             How to handle transactional messages.
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
-            consumer_properties         A dict of consumer properties passed to the process with --consumer-property
             client_prop_file_override   Override client.properties file used by the consumer
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
@@ -120,7 +119,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.print_timestamp = print_timestamp
         self.jaas_override_variables = jaas_override_variables or {}
         self.kafka_opts_override = kafka_opts_override
-        self.consumer_properties = consumer_properties
         self.client_prop_file_override = client_prop_file_override
 
 
@@ -140,9 +138,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         prop_file += str(self.security_config)
         return prop_file
-
-    def get_user_consumer_properties(self):
-        return ' '.join("--consumer-property %s=%s" % (key,val) for (key,val) in self.consumer_properties.iteritems())
 
 
     def start_cmd(self, node):
@@ -171,8 +166,6 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
               "%(console_consumer)s " \
               "--topic %(topic)s " \
               "--consumer.config %(config_file)s " % args
-
-        cmd += self.get_user_consumer_properties()
 
         if self.new_consumer:
             assert node.version >= V_0_9_0_0, \

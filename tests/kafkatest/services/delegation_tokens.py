@@ -29,9 +29,9 @@ sasl.kerberos.service.name=kafka
         self.command_path = "/opt/kafka-dev/bin/kafka-delegation-tokens.sh"
         self.kafka_opts = "KAFKA_OPTS=\"-Djava.security.auth.login.config=/mnt/security/jaas.conf " \
                           "-Djava.security.krb5.conf=/mnt/security/krb5.conf\" "
-        self.bootstrap_server = "  --bootstrap-server $(hostname -f):9094"
-        self.base_cmd = self.kafka_opts + self.command_path + self.bootstrap_server
         self.kafka = kafka
+        self.bootstrap_server = " --bootstrap-server " + self.kafka.bootstrap_servers('SASL_PLAINTEXT')
+        self.base_cmd = self.kafka_opts + self.command_path + self.bootstrap_server
         self.client_prop_path = os.path.join(self.kafka.PERSISTENT_ROOT, "client.properties")
         self.jaas_deleg_conf_path = os.path.join(self.kafka.PERSISTENT_ROOT, "jaas_deleg.conf")
         self.token_hmac_path = os.path.join(self.kafka.PERSISTENT_ROOT, "deleg_token_hmac.out")
@@ -62,11 +62,6 @@ sasl.kerberos.service.name=kafka
                               "  --hmac %s" \
                               "  --command-config %s > %s" \
               % (renew_time_period, hmac, self.client_prop_path, self.renew_delegation_token_out)
-        return self.node.account.ssh_capture(cmd, allow_fail=False)
-
-    def describe_delegation_token(self):
-        cmd = self.base_cmd + "  --describe" \
-                              "  --command-config %s > %s" % (self.client_prop_path, self.delegation_token_out)
         return self.node.account.ssh_capture(cmd, allow_fail=False)
 
     def create_jaas_conf_with_delegation_token(self):

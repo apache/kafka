@@ -48,8 +48,8 @@ class DelegationTokenTest(Test):
 security.protocol=SASL_PLAINTEXT
 sasl.mechanism=SCRAM-SHA-256
 sasl.kerberos.service.name=kafka
+client.id=console-consumer
 """
-        self.delegation_tokens = DelegationTokens(self.kafka)
         self.client_kafka_opts=' -Djava.security.auth.login.config=' + self.jaas_deleg_conf_path
 
         self.producer = VerifiableProducer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic, max_messages=1,
@@ -58,8 +58,12 @@ sasl.kerberos.service.name=kafka
 
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic,
                                         kafka_opts_override=self.client_kafka_opts,
-                                        client_prop_file_override=self.client_properties_content,
-                                        consumer_properties={"client.id":"console-consumer"})
+                                        client_prop_file_override=self.client_properties_content)
+
+        self.kafka.security_protocol = 'SASL_PLAINTEXT'
+        self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
+        self.kafka.interbroker_sasl_mechanism = 'GSSAPI'
+
 
     def setUp(self):
         self.zk.start()
@@ -105,11 +109,9 @@ sasl.kerberos.service.name=kafka
 
         self.delegation_tokens.renew_delegation_token(dt["hmac"], new_expirydate_ms)
 
-    def test_delegation_token_lifecycle(self, security_protocol='SASL_PLAINTEXT', sasl_mechanism='GSSAPI'):
-        self.kafka.security_protocol = security_protocol
-        self.kafka.client_sasl_mechanism = 'GSSAPI,SCRAM-SHA-256'
-        self.kafka.interbroker_sasl_mechanism = sasl_mechanism
+    def test_delegation_token_lifecycle(self):
         self.kafka.start()
+        self.delegation_tokens = DelegationTokens(self.kafka)
 
         self.generate_delegation_token()
         self.renew_delegation_token()
