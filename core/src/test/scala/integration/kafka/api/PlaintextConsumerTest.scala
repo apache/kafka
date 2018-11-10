@@ -1834,7 +1834,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 1 uses the default group id and consumes from earliest offset
     val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
     val consumer1 = createConsumer(
@@ -1843,17 +1842,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 2 uses the default group id and consumes from latest offset
     val consumer2Config = new Properties(consumerConfig)
-    consumer2Config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
     consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
     val consumer2 = createConsumer(
       configOverrides = consumer2Config,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
 
-    // consumer 3 uses the default group id and consumes from earliest offset
+    // consumer 3 uses the default group id and starts from an explicit offset
     val consumer3Config = new Properties(consumerConfig)
-    consumer3Config.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false)
-    consumer3Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer3Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer3")
     val consumer3 = createConsumer(
       configOverrides = consumer3Config,
@@ -1890,7 +1886,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
     producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
-    producer.send(new ProducerRecord(topic, partition, "k3".getBytes, "v3".getBytes)).get()
     producer.close()
 
     // consumer 1 uses the empty group id
@@ -1908,17 +1903,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
     val consumer2 = createConsumer(configOverrides = consumer2Config)
 
-    // consumer 3 uses the empty group id and consumes from earliest offset if there is no committed offset
-    val consumer3Config = new Properties(consumerConfig)
-    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-    consumer3Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
-    consumer3Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer3")
-    consumer3Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
-    val consumer3 = createConsumer(configOverrides = consumer3Config)
-
     consumer1.assign(asList(tp))
     consumer2.assign(asList(tp))
-    consumer3.assign(asList(tp))
 
     val records1 = consumer1.poll(Duration.ofMillis(5000))
     consumer1.commitSync()
@@ -1926,17 +1912,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records2 = consumer2.poll(Duration.ofMillis(5000))
     consumer2.commitSync()
 
-    val records3 = consumer3.poll(Duration.ofMillis(5000))
-    consumer3.commitSync()
-
     consumer1.close()
     consumer2.close()
-    consumer3.close()
 
-    assertTrue("Expected consumers to consumer a single message each from the last committed offset",
-      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0 &&
-      records2.count() == 1 && records2.records(tp).asScala.head.offset == 1 &&
-      records3.count() == 1 && records3.records(tp).asScala.head.offset == 2
-    )
+    assertTrue("Expected consumer1 to consume one message from offset 0",
+      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
+    assertTrue("Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1",
+      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
   }
 }
