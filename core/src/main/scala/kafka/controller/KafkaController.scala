@@ -195,20 +195,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * @param id Id of the broker to shutdown.
    * @return The number of partitions that the broker still leads.
    */
-  def controlledShutdown(id: Int, epoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
-    // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
-    // so we will keep the previous behavior and don't reject the request
-    if (epoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-      val cachedBrokerEpoch = controllerContext.brokerEpochsCache(id)
-      if (epoch < cachedBrokerEpoch) {
-        val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
-          s"$epoch. Current broker epoch is $cachedBrokerEpoch"
-        stateChangeLogger.warn(stateBrokerEpochErrorMessage)
-        controlledShutdownCallback(Try {throw new StaleBrokerEpochException(stateChangeLogger.messageWithPrefix(stateBrokerEpochErrorMessage))})
-        return
-      }
-    }
-    val controlledShutdownEvent = ControlledShutdown(id, controlledShutdownCallback)
+  def controlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
+    val controlledShutdownEvent = ControlledShutdown(id, brokerEpoch, controlledShutdownCallback)
     eventManager.put(controlledShutdownEvent)
   }
 
@@ -1029,7 +1017,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case class ControlledShutdown(id: Int, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
+  case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
 
     def state = ControllerState.ControlledShutdown
 
@@ -1041,6 +1029,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     private def doControlledShutdown(id: Int): Set[TopicPartition] = {
       if (!isActive) {
         throw new ControllerMovedException("Controller moved to another broker. Aborting controlled shutdown")
+      }
+
+      // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
+      // so we will keep the previous behavior and don't reject the request
+      if (brokerEpoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
+        val cachedBrokerEpoch = controllerContext.brokerEpochsCache(id)
+        if (brokerEpoch < cachedBrokerEpoch) {
+          val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
+            s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch"
+          warn(stateBrokerEpochErrorMessage)
+          throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
+        }
       }
 
       info(s"Shutting down broker $id")

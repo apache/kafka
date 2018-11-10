@@ -371,7 +371,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
     val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
-    controller.controlledShutdown(2, servers(2).brokerEpoch.get, controlledShutdownCallback)
+    controller.controlledShutdown(2, servers.find(_.config.brokerId == 2).get.brokerEpoch.get, controlledShutdownCallback)
     var partitionsRemaining = resultQueue.take().get
     var activeServers = servers.filter(s => s.config.brokerId != 2)
     // wait for the update metadata request to trickle to the brokers
@@ -384,8 +384,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(0, leaderAfterShutdown)
     assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
     assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
-
-    controller.controlledShutdown(1, servers(2).brokerEpoch.get, controlledShutdownCallback)
+    controller.controlledShutdown(1, servers.find(_.config.brokerId == 1).get.brokerEpoch.get, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
     assertEquals(0, partitionsRemaining.size)
     activeServers = servers.filter(s => s.config.brokerId == 0)
@@ -394,7 +393,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(0, leaderAfterShutdown)
 
     assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
-    controller.controlledShutdown(0, servers(0).brokerEpoch.get, controlledShutdownCallback)
+    controller.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.brokerEpoch.get, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
     assertEquals(1, partitionsRemaining.size)
     // leader doesn't change since all the replicas are shut down
