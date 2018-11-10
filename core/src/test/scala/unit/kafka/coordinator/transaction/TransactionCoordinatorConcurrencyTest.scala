@@ -81,7 +81,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new MockTimer,
       reaperEnabled = false)
     val brokerNode = new Node(0, "host", 10)
-    val metadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
+    val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
     EasyMock.expect(metadataCache.getPartitionLeaderEndpoint(
       EasyMock.anyString(),
       EasyMock.anyInt(),
@@ -246,8 +246,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   private def prepareTxnLog(partitionId: Int): Unit = {
 
-    val logMock =  EasyMock.mock(classOf[Log])
-    val fileRecordsMock = EasyMock.mock(classOf[FileRecords])
+    val logMock: Log =  EasyMock.mock(classOf[Log])
+    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     val topicPartition = new TopicPartition(TRANSACTION_STATE_TOPIC_NAME, partitionId)
     val startOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(20L)

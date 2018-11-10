@@ -76,7 +76,7 @@ class PartitionTest {
     val brokerProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     brokerProps.put(KafkaConfig.LogDirsProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val brokerConfig = KafkaConfig.fromProps(brokerProps)
-    val kafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val kafkaZkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     replicaManager = new ReplicaManager(
       config = brokerConfig, metrics, time, zkClient = kafkaZkClient, new MockScheduler(time),
       logManager, new AtomicBoolean(false), QuotaFactory.instantiate(brokerConfig, metrics, time, ""),
@@ -481,7 +481,7 @@ class PartitionTest {
   def testListOffsetIsolationLevels(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
-    val replicaManager = EasyMock.mock(classOf[ReplicaManager])
+    val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
     val zkClient = EasyMock.mock(classOf[KafkaZkClient])
 
     val partition = new Partition(topicPartition,

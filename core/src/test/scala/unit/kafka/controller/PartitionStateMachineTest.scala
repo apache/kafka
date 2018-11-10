@@ -433,7 +433,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       mockZkClient, partitionState, mockControllerBrokerRequestBatch)
 
     def createMockController() = {
-      val mockController = EasyMock.createMock(classOf[KafkaController])
+      val mockController: KafkaController = EasyMock.createMock(classOf[KafkaController])
       EasyMock.expect(mockController.controllerContext).andReturn(controllerContext).anyTimes()
       EasyMock.expect(mockController.config).andReturn(customConfig).anyTimes()
       EasyMock.expect(mockController.partitionStateMachine).andReturn(partitionStateMachine).anyTimes()

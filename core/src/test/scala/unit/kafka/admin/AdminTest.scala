@@ -142,7 +142,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
-    val zkMock = EasyMock.createNiceMock(classOf[ZkUtils])
+    val zkMock: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     EasyMock.expect(zkMock.pathExists(s"/brokers/topics/$topic")).andReturn(false)
     EasyMock.expect(zkMock.getAllTopics).andReturn(Seq("some.topic", topic, "some.other.topic"))
     EasyMock.replay(zkMock)

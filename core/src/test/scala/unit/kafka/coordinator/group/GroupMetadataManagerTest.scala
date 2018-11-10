@@ -729,7 +729,7 @@ class GroupMetadataManagerTest {
     val tp2 = new TopicPartition("bar", 0)
     val tp3 = new TopicPartition("xxx", 0)
 
-    val logMock =  EasyMock.mock(classOf[Log])
+    val logMock: Log = EasyMock.mock(classOf[Log])
     EasyMock.expect(replicaManager.getLog(groupTopicPartition)).andStubReturn(Some(logMock))
 
     val segment1MemberId = "a"
@@ -1785,19 +1785,19 @@ class GroupMetadataManagerTest {
       offsetCommitRecords ++ Seq(groupMetadataRecord): _*)
 
     // Prepend empty control batch to valid records
-    val mockBatch = EasyMock.createMock(classOf[MutableRecordBatch])
+    val mockBatch: MutableRecordBatch = EasyMock.createMock(classOf[MutableRecordBatch])
     EasyMock.expect(mockBatch.iterator).andReturn(Collections.emptyIterator[Record])
     EasyMock.expect(mockBatch.isControlBatch).andReturn(true)
     EasyMock.expect(mockBatch.isTransactional).andReturn(true)
     EasyMock.expect(mockBatch.nextOffset).andReturn(16L)
     EasyMock.replay(mockBatch)
-    val mockRecords = EasyMock.createMock(classOf[MemoryRecords])
+    val mockRecords: MemoryRecords = EasyMock.createMock(classOf[MemoryRecords])
     EasyMock.expect(mockRecords.batches).andReturn((Iterable[MutableRecordBatch](mockBatch) ++ records.batches.asScala).asJava).anyTimes()
     EasyMock.expect(mockRecords.records).andReturn(records.records()).anyTimes()
     EasyMock.expect(mockRecords.sizeInBytes()).andReturn(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + records.sizeInBytes()).anyTimes()
     EasyMock.replay(mockRecords)
 
-    val logMock = EasyMock.mock(classOf[Log])
+    val logMock: Log = EasyMock.mock(classOf[Log])
     EasyMock.expect(logMock.logStartOffset).andReturn(startOffset).anyTimes()
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
       maxLength = EasyMock.anyInt(),
@@ -1886,7 +1886,7 @@ class GroupMetadataManagerTest {
   private def expectGroupMetadataLoad(groupMetadataTopicPartition: TopicPartition,
                                       startOffset: Long,
                                       records: MemoryRecords): Unit = {
-    val logMock =  EasyMock.mock(classOf[Log])
+    val logMock: Log =  EasyMock.mock(classOf[Log])
     EasyMock.expect(replicaManager.getLog(groupMetadataTopicPartition)).andStubReturn(Some(logMock))
     val endOffset = expectGroupMetadataLoad(logMock, startOffset, records)
     EasyMock.expect(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).andStubReturn(Some(endOffset))
@@ -1902,7 +1902,7 @@ class GroupMetadataManagerTest {
                                       startOffset: Long,
                                       records: MemoryRecords): Long = {
     val endOffset = startOffset + records.records.asScala.size
-    val fileRecordsMock = EasyMock.mock(classOf[FileRecords])
+    val fileRecordsMock: FileRecords = EasyMock.mock(classOf[FileRecords])
 
     EasyMock.expect(logMock.logStartOffset).andStubReturn(startOffset)
     EasyMock.expect(logMock.read(EasyMock.eq(startOffset),
