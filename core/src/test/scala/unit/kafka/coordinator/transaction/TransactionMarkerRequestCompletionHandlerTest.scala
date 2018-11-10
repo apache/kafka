@@ -47,9 +47,10 @@ class TransactionMarkerRequestCompletionHandlerTest {
   private val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerEpoch, txnTimeoutMs,
     PrepareCommit, mutable.Set[TopicPartition](topicPartition), 0L, 0L)
 
-  private val markerChannelManager = EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
+  private val markerChannelManager: TransactionMarkerChannelManager =
+    EasyMock.createNiceMock(classOf[TransactionMarkerChannelManager])
 
-  private val txnStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
+  private val txnStateManager: TransactionStateManager = EasyMock.createNiceMock(classOf[TransactionStateManager])
 
   private val handler = new TransactionMarkerRequestCompletionHandler(brokerId, txnStateManager, markerChannelManager, txnIdAndMarkers)
 

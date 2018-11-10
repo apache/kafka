@@ -35,7 +35,7 @@ class HighwatermarkPersistenceTest {
 
   val configs = TestUtils.createBrokerConfigs(2, TestUtils.MockZkConnect).map(KafkaConfig.fromProps)
   val topic = "foo"
-  val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
+  val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
   val logManagers = configs map { config =>
     TestUtils.createLogManager(
       logDirs = config.logDirs.map(new File(_)),

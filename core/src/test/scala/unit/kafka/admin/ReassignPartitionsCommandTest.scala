@@ -268,7 +268,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.fetchEntityConfig(anyString(), anyString())).andStubReturn(new Properties)
@@ -294,7 +294,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
@@ -328,7 +328,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(existing)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     val assigner = new ReassignPartitionsCommand(zk, None, proposed, Map.empty, admin)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[List[Int]], capture(propsCapture))).anyTimes()
@@ -364,7 +364,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(brokers = brokers)
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     expect(admin.fetchEntityConfig(is(ConfigType.Topic), anyString())).andStubReturn(new Properties)
     expect(admin.changeBrokerConfig(anyObject().asInstanceOf[Seq[Int]], capture(propsCapture))).anyTimes()
@@ -399,7 +399,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     //Setup
     val zk = stubZKClient(brokers = Seq(100, 101))
-    val admin = createMock(classOf[AdminZkClient])
+    val admin: AdminZkClient = createMock(classOf[AdminZkClient])
     val propsCapture: Capture[Properties] = newCapture(CaptureType.ALL)
     expect(admin.fetchEntityConfig(is(ConfigType.Broker), anyString())).andStubReturn(new Properties)
     expect(admin.fetchEntityConfig(is(ConfigType.Topic), is("topic1"))).andStubReturn(copyOf(existingConfigs))
@@ -567,7 +567,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
   def stubZKClient(existingAssignment: Map[TopicPartition, Seq[Int]] = Map[TopicPartition, Seq[Int]](),
                    brokers: Seq[Int] = Seq[Int]()): KafkaZkClient = {
-    val zkClient = createMock(classOf[KafkaZkClient])
+    val zkClient: KafkaZkClient = createMock(classOf[KafkaZkClient])
     expect(zkClient.getReplicaAssignmentForTopics(anyObject().asInstanceOf[Set[String]])).andStubReturn(existingAssignment)
     expect(zkClient.getAllBrokersInCluster).andStubReturn(brokers.map(TestUtils.createBroker(_, "", 1)))
     replay(zkClient)

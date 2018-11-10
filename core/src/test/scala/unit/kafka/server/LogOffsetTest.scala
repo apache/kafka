@@ -211,8 +211,8 @@ class LogOffsetTest extends BaseRequestTest {
    * a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegmentSize() {
-    val log = EasyMock.niceMock(classOf[Log])
-    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    val log: Log = EasyMock.niceMock(classOf[Log])
+    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
       private val value = new AtomicInteger(0)
       def answer: Int = value.getAndIncrement()
@@ -228,8 +228,8 @@ class LogOffsetTest extends BaseRequestTest {
    * different (simulating a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegments() {
-    val log = EasyMock.niceMock(classOf[Log])
-    val logSegment = EasyMock.niceMock(classOf[LogSegment])
+    val log: Log = EasyMock.niceMock(classOf[Log])
+    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {
       new IAnswer[Iterable[LogSegment]] {
         def answer = new Iterable[LogSegment] {

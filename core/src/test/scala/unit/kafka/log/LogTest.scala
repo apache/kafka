@@ -325,7 +325,7 @@ class LogTest {
   @Test
   def testSizeForLargeLogs(): Unit = {
     val largeSize = Int.MaxValue.toLong * 2
-    val logSegment = EasyMock.createMock(classOf[LogSegment])
+    val logSegment: LogSegment = EasyMock.createMock(classOf[LogSegment])
 
     EasyMock.expect(logSegment.size).andReturn(Int.MaxValue).anyTimes
     EasyMock.replay(logSegment)
@@ -347,7 +347,7 @@ class LogTest {
 
   @Test
   def testSkipLoadingIfEmptyProducerStateBeforeTruncation(): Unit = {
-    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+    val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
 
     // Load the log
     EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
@@ -426,7 +426,7 @@ class LogTest {
 
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndNoCleanShutdown(): Unit = {
-    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+    val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
 
     stateManager.updateMapEndOffset(0L)
     EasyMock.expectLastCall().anyTimes()
@@ -463,7 +463,7 @@ class LogTest {
 
   @Test
   def testSkipTruncateAndReloadIfOldMessageFormatAndCleanShutdown(): Unit = {
-    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+    val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
 
     stateManager.updateMapEndOffset(0L)
     EasyMock.expectLastCall().anyTimes()
@@ -503,7 +503,7 @@ class LogTest {
 
   @Test
   def testSkipTruncateAndReloadIfNewMessageFormatAndCleanShutdown(): Unit = {
-    val stateManager = EasyMock.mock(classOf[ProducerStateManager])
+    val stateManager: ProducerStateManager = EasyMock.mock(classOf[ProducerStateManager])
 
     EasyMock.expect(stateManager.latestSnapshotOffset).andReturn(None)
 

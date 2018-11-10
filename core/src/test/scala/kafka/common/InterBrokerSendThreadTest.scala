@@ -30,7 +30,7 @@ import scala.collection.mutable
 
 class InterBrokerSendThreadTest {
   private val time = new MockTime()
-  private val networkClient = EasyMock.createMock(classOf[NetworkClient])
+  private val networkClient: NetworkClient = EasyMock.createMock(classOf[NetworkClient])
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
 
