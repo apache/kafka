@@ -41,29 +41,29 @@ import static org.apache.kafka.common.protocol.types.Type.INT32;
 import static org.apache.kafka.common.protocol.types.Type.INT64;
 
 public class StopReplicaRequest extends AbstractControlRequest {
-    private static final String DELETE_PARTITIONS_KEY_NAME = "delete_partitions";
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
+    private static final Field.Bool DELETE_PARTITIONS = new Field.Bool("delete_partitions", "Boolean which indicates if replica's partitions must be deleted.");
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions", "The partitions");
+    private static final Field.Array PARTITION_IDS = new Field.Array("partition_ids", INT32, "The partition ids of a topic");
 
-    private static final Schema STOP_REPLICA_REQUEST_PARTITION_V0 = new Schema(
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             TOPIC_NAME,
             PARTITION_ID);
+    private static final Field PARTITIONS_V1 = PARTITIONS.withFields(
+            TOPIC_NAME,
+            PARTITION_IDS);
+
     private static final Schema STOP_REPLICA_REQUEST_V0 = new Schema(
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(DELETE_PARTITIONS_KEY_NAME, BOOLEAN, "Boolean which indicates if replica's partitions must be deleted."),
-            new Field(PARTITIONS_KEY_NAME, new ArrayOf(STOP_REPLICA_REQUEST_PARTITION_V0)));
+            CONTROLLER_ID,
+            CONTROLLER_EPOCH,
+            DELETE_PARTITIONS,
+            PARTITIONS_V0);
 
     private static final Schema STOP_REPLICA_REQUEST_V1 = new Schema(
-            new Field(CONTROLLER_ID_KEY_NAME, INT32, "The controller id."),
-            new Field(CONTROLLER_EPOCH_KEY_NAME, INT32, "The controller epoch."),
-            new Field(BROKER_EPOCH_KEY_NAME, INT64, "The broker epoch"),
-            new Field(DELETE_PARTITIONS_KEY_NAME, BOOLEAN, "Boolean which indicates if replica's partitions must be deleted."),
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32))
-            ))));
-
+            CONTROLLER_ID,
+            CONTROLLER_EPOCH,
+            BROKER_EPOCH,
+            DELETE_PARTITIONS,
+            PARTITIONS_V1);
 
 
     public static Schema[] schemaVersions() {
@@ -115,24 +115,24 @@ public class StopReplicaRequest extends AbstractControlRequest {
         super(ApiKeys.STOP_REPLICA, struct, version);
 
         partitions = new HashSet<>();
-        if (struct.hasField(TOPICS_KEY_NAME)) { // V1
-            for (Object topicObj : struct.getArray(TOPICS_KEY_NAME)) {
+        if (version > 0) { // V1
+            for (Object topicObj : struct.get(PARTITIONS)) {
                 Struct topicData = (Struct) topicObj;
                 String topic = topicData.get(TOPIC_NAME);
-                for (Object partitionObj : topicData.getArray(PARTITIONS_KEY_NAME)) {
+                for (Object partitionObj : topicData.get(PARTITION_IDS)) {
                     int partition = (Integer) partitionObj;
                     partitions.add(new TopicPartition(topic, partition));
                 }
             }
         } else { // V0
-            for (Object partitionDataObj : struct.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionDataObj : struct.get(PARTITIONS)) {
                 Struct partitionData = (Struct) partitionDataObj;
                 String topic = partitionData.get(TOPIC_NAME);
                 int partition = partitionData.get(PARTITION_ID);
                 partitions.add(new TopicPartition(topic, partition));
             }
         }
-        deletePartitions = struct.getBoolean(DELETE_PARTITIONS_KEY_NAME);
+        deletePartitions = struct.get(DELETE_PARTITIONS);
     }
 
     @Override
@@ -171,31 +171,31 @@ public class StopReplicaRequest extends AbstractControlRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.STOP_REPLICA.requestSchema(version()));
 
-        struct.set(CONTROLLER_ID_KEY_NAME, controllerId);
-        struct.set(CONTROLLER_EPOCH_KEY_NAME, controllerEpoch);
-        struct.setIfExists(BROKER_EPOCH_KEY_NAME, brokerEpoch);
-        struct.set(DELETE_PARTITIONS_KEY_NAME, deletePartitions);
+        struct.set(CONTROLLER_ID, controllerId);
+        struct.set(CONTROLLER_EPOCH, controllerEpoch);
+        struct.setIfExists(BROKER_EPOCH, brokerEpoch);
+        struct.set(DELETE_PARTITIONS, deletePartitions);
 
-        if (struct.hasField(TOPICS_KEY_NAME)) { // V1
+        if (version() > 0) { // V1
             Map<String, List<Integer>> topicPartitionsMap = CollectionUtils.groupPartitionsByTopic(partitions);
             List<Struct> topicsData = new ArrayList<>(topicPartitionsMap.size());
             for (Map.Entry<String, List<Integer>> entry : topicPartitionsMap.entrySet()) {
-                Struct topicData = struct.instance(TOPICS_KEY_NAME);
+                Struct topicData = struct.instance(PARTITIONS);
                 topicData.set(TOPIC_NAME, entry.getKey());
-                topicData.set(PARTITIONS_KEY_NAME, entry.getValue().toArray());
+                topicData.set(PARTITION_IDS, entry.getValue().toArray());
                 topicsData.add(topicData);
             }
-            struct.set(TOPICS_KEY_NAME, topicsData.toArray());
+            struct.set(PARTITIONS, topicsData.toArray());
 
         } else { // V0
             List<Struct> partitionDatas = new ArrayList<>(partitions.size());
             for (TopicPartition partition : partitions) {
-                Struct partitionData = struct.instance(PARTITIONS_KEY_NAME);
+                Struct partitionData = struct.instance(PARTITIONS);
                 partitionData.set(TOPIC_NAME, partition.topic());
                 partitionData.set(PARTITION_ID, partition.partition());
                 partitionDatas.add(partitionData);
             }
-            struct.set(PARTITIONS_KEY_NAME, partitionDatas.toArray());
+            struct.set(PARTITIONS, partitionDatas.toArray());
         }
         return struct;
     }

@@ -99,6 +99,10 @@ public class Struct {
         return getString(field.name);
     }
 
+    public Boolean get(Field.Bool field) {
+        return getBoolean(field.name);
+    }
+
     public Object[] get(Field.Array field) {
         return getArray(field.name);
     }
@@ -327,6 +331,10 @@ public class Struct {
     }
 
     public Struct set(Field.Int16 def, short value) {
+        return set(def.name, value);
+    }
+
+    public Struct set(Field.Bool def, boolean value) {
         return set(def.name, value);
     }
 

@@ -17,15 +17,16 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
 
 // Abstarct class for all control requests including UpdateMetadataRequest, LeaderAndIsrRequest and StopReplicaRequest
 public abstract class AbstractControlRequest extends AbstractRequest {
     public static final long UNKNOWN_BROKER_EPOCH = -1L;
 
-    protected static final String CONTROLLER_ID_KEY_NAME = "controller_id";
-    protected static final String CONTROLLER_EPOCH_KEY_NAME = "controller_epoch";
-    protected static final String BROKER_EPOCH_KEY_NAME = "broker_epoch";
+    protected static final Field.Int32 CONTROLLER_ID = new Field.Int32("controller_id", "The controller id");
+    protected static final Field.Int32 CONTROLLER_EPOCH = new Field.Int32("controller_epoch", "The controller epoch");
+    protected static final Field.Int64 BROKER_EPOCH = new Field.Int64("broker_epoch", "The broker epoch");
 
     protected final int controllerId;
     protected final int controllerEpoch;
@@ -66,9 +67,9 @@ public abstract class AbstractControlRequest extends AbstractRequest {
 
     protected AbstractControlRequest(ApiKeys api, Struct struct, short version) {
         super(api, version);
-        this.controllerId = struct.getInt(CONTROLLER_ID_KEY_NAME);
-        this.controllerEpoch = struct.getInt(CONTROLLER_EPOCH_KEY_NAME);
-        this.brokerEpoch = struct.hasField(BROKER_EPOCH_KEY_NAME) ? struct.getLong(BROKER_EPOCH_KEY_NAME) : UNKNOWN_BROKER_EPOCH;
+        this.controllerId = struct.get(CONTROLLER_ID);
+        this.controllerEpoch = struct.get(CONTROLLER_EPOCH);
+        this.brokerEpoch = struct.getOrElse(BROKER_EPOCH, UNKNOWN_BROKER_EPOCH);
     }
 
     // Used for test
