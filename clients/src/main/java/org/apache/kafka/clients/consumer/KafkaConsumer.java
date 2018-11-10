@@ -656,9 +656,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     @SuppressWarnings("unchecked")
-    private KafkaConsumer(ConsumerConfig config,
-                          Deserializer<K> keyDeserializer,
-                          Deserializer<V> valueDeserializer) {
+    private KafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
             if (clientId.isEmpty())
@@ -667,11 +665,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(getClass());
+
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
-            if (groupId == null)
-                // overwrite in case of default group id
-                enableAutoCommit = false;
-            else if (groupId.isEmpty())
+            if (groupId == null) { // overwrite in case of default group id where the config is not explicitly provided
+                if (!config.originals().containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG))
+                    enableAutoCommit = false;
+            } else if (groupId.isEmpty())
                 log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
 
             log.debug("Initializing the Kafka consumer");
@@ -698,16 +697,14 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerInterceptor.class);
             this.interceptors = new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
-                this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-                        Deserializer.class);
+                this.keyDeserializer = config.getConfiguredInstance(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
                 this.keyDeserializer.configure(config.originals(), true);
             } else {
                 config.ignore(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG);
                 this.keyDeserializer = keyDeserializer;
             }
             if (valueDeserializer == null) {
-                this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-                        Deserializer.class);
+                this.valueDeserializer = config.getConfiguredInstance(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Deserializer.class);
                 this.valueDeserializer.configure(config.originals(), false);
             } else {
                 config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
@@ -723,11 +720,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String metricGrpPrefix = "consumer";
             ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
-
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
-
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
             NetworkClient netClient = new NetworkClient(
@@ -802,11 +797,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
-
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
-            // call close methods if internal objects are already constructed
-            // this is to prevent resource leak. see KAFKA-2121
+            // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             close(0, true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);

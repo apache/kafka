@@ -1284,25 +1284,29 @@ public class KafkaConsumerTest {
     @Test
     public void testOperationsBySubscribingConsumerWithDefaultGroupId() {
         try {
-            newConsumer((String) null).subscribe(Collections.singleton(topic));
+            newConsumer().subscribe(Collections.singleton(topic));
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
         try {
-            newConsumer((String) null).committed(tp0);
+            newConsumer().committed(tp0);
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
         try {
-            newConsumer((String) null).commitAsync();
+            newConsumer().commitAsync();
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
         try {
-            newConsumer((String) null).commitSync();
+            newConsumer().commitSync();
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
@@ -1310,23 +1314,26 @@ public class KafkaConsumerTest {
 
     @Test
     public void testOperationsByAssigningConsumerWithDefaultGroupId() {
-        KafkaConsumer consumer = newConsumer((String) null);
+        KafkaConsumer consumer = newConsumer();
         consumer.assign(Collections.singleton(tp0));
 
         try {
             consumer.committed(tp0);
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
         try {
             consumer.commitAsync();
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
         try {
             consumer.commitSync();
+            fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
