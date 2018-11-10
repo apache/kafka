@@ -444,7 +444,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     }
 
     val mockController = createMockController()
-    val mockEventManager = EasyMock.createMock(classOf[ControllerEventManager])
+    val mockEventManager: ControllerEventManager = EasyMock.createMock(classOf[ControllerEventManager])
     EasyMock.replay(mockController, replicaStateMachine, mockEventManager)
 
     val topicDeletionManager = new TopicDeletionManager(mockController, mockEventManager, mockZkClient)

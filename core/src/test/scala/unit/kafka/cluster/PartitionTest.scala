@@ -386,8 +386,8 @@ class PartitionTest {
                                       isLeader: Boolean,
                                       log: Log = logManager.getOrCreateLog(topicPartition, logConfig)): Partition = {
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
-    val replicaManager = EasyMock.mock(classOf[ReplicaManager])
-    val zkClient = EasyMock.mock(classOf[KafkaZkClient])
+    val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
+    val zkClient: KafkaZkClient = EasyMock.mock(classOf[KafkaZkClient])
 
     val partition = new Partition(topicPartition,
       isOffline = false,
@@ -482,7 +482,7 @@ class PartitionTest {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
     val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
-    val zkClient = EasyMock.mock(classOf[KafkaZkClient])
+    val zkClient: KafkaZkClient = EasyMock.mock(classOf[KafkaZkClient])
 
     val partition = new Partition(topicPartition,
       isOffline = false,

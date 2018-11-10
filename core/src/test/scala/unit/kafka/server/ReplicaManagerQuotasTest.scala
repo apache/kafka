@@ -191,8 +191,8 @@ class ReplicaManagerQuotasTest {
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
-    val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
-    val scheduler = createNiceMock(classOf[KafkaScheduler])
+    val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
     val log: Log = createNiceMock(classOf[Log])

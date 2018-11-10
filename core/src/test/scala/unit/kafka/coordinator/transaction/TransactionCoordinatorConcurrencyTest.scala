@@ -87,7 +87,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       EasyMock.anyInt(),
       EasyMock.anyObject())
     ).andReturn(Some(brokerNode)).anyTimes()
-    val networkClient = EasyMock.createNiceMock(classOf[NetworkClient])
+    val networkClient: NetworkClient = EasyMock.createNiceMock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
       metadataCache,
