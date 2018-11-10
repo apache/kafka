@@ -265,7 +265,8 @@ class ConnectStandaloneService(ConnectServiceBase):
         return self.nodes[0]
 
     def start_cmd(self, node, connector_configs):
-        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+        cmd = "cd " + self.PERSISTENT_ROOT + " && "
+        cmd += "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
@@ -313,7 +314,8 @@ class ConnectDistributedService(ConnectServiceBase):
 
     # connector_configs argument is intentionally ignored in distributed service.
     def start_cmd(self, node, connector_configs):
-        cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
+        cmd = "cd " + self.PERSISTENT_ROOT + " && "
+        cmd += "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         for envvar in self.environment:
             cmd += "export %s=%s; " % (envvar, str(self.environment[envvar]))
