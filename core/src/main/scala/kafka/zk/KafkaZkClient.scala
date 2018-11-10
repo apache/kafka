@@ -1835,7 +1835,7 @@ object KafkaZkClient {
           MultiRequest(Seq(checkOp, DeleteOp(path, version)), ctx)
         case SetDataRequest(path, data, version, ctx) =>
           MultiRequest(Seq(checkOp, SetDataOp(path, data, version)), ctx)
-        case _ => throw new IllegalStateException(s"$request cannot map to a valid zookeepr op")
+        case _ => throw new IllegalStateException(s"$request does not need controller epoch check")
       }
   }
 
@@ -1878,7 +1878,7 @@ object KafkaZkClient {
                 }
                 SetDataResponse(resultCode, setDataOp.path, ctx, stat, responseMetadata)
             }
-
+          case _ => throw new IllegalStateException(s"Cannot unwrap $response because the first zookeeper op is not check op in original MultiRequest")
         }
       case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
     }

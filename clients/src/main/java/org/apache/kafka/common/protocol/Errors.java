@@ -95,7 +95,7 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.BrokerEpochMismatchException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -289,7 +289,7 @@ public enum Errors {
             UnknownLeaderEpochException::new),
     UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
             UnsupportedCompressionTypeException::new),
-    STALE_BROKER_EPOCH(77, "Broker epoch has changed", StaleBrokerEpochException::new);
+    BROKER_EPOCH_MISMATCH(77, "Broker epoch has changed", BrokerEpochMismatchException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

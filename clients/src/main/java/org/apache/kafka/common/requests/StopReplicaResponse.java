@@ -59,7 +59,7 @@ public class StopReplicaResponse extends AbstractResponse {
      * Possible error code:
      *
      * STALE_CONTROLLER_EPOCH (11)
-     * STALE_BROKER_EPOCH (77)
+     * BROKER_EPOCH_MISMATCH (77)
      */
     private final Errors error;
 

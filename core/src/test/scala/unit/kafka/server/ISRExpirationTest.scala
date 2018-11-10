@@ -61,7 +61,7 @@ class IsrExpirationTest {
 
     replicaManager = new ReplicaManager(configs.head, metrics, time, null, null, logManager, new AtomicBoolean(false),
       QuotaFactory.instantiate(configs.head, metrics, time, ""), new BrokerTopicStats, new MetadataCache(configs.head.brokerId),
-      new LogDirFailureChannel(configs.head.logDirs.size), new BrokerEpoch(configs.head.brokerId))
+      new LogDirFailureChannel(configs.head.logDirs.size))
   }
 
   @After

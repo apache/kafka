@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.common.errors;
 
-public class StaleBrokerEpochException extends ApiException {
+public class BrokerEpochMismatchException extends ApiException {
 
     private static final long serialVersionUID = 1L;
 
-    public StaleBrokerEpochException(String message) {
+    public BrokerEpochMismatchException(String message) {
         super(message);
     }
 
-    public StaleBrokerEpochException(String message, Throwable cause) {
+    public BrokerEpochMismatchException(String message, Throwable cause) {
         super(message, cause);
     }
 

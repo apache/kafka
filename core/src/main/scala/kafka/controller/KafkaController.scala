@@ -29,7 +29,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, BrokerEpochMismatchException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
@@ -61,11 +61,12 @@ object KafkaController extends Logging {
 }
 
 class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
-                      tokenManager: DelegationTokenManager, brokerEpoch: BrokerEpoch, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+                      tokenManager: DelegationTokenManager, initialBrokerEpoch: Long, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
   @volatile private var brokerInfo = initialBrokerInfo
+  @volatile private var brokerEpoch = initialBrokerEpoch
 
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
@@ -150,6 +151,14 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * Returns true if this broker is the current controller.
    */
   def isActive: Boolean = activeControllerId == config.brokerId
+
+  /**
+   * Returns true if the given epoch is the current broker epoch or unknown broker epoch.
+   * Broker epoch in the control request is unknown if the controller hasn't been upgraded to use KIP-380
+   */
+  def isCurrentOrUnknownBrokerEpoch(epoch: Long): Boolean = epoch == AbstractControlRequest.UNKNOWN_BROKER_EPOCH || epoch == brokerEpoch
+
+  def curBrokerEpoch: Long = brokerEpoch
 
   def epoch: Int = controllerContext.epoch
 
@@ -640,7 +649,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     controllerContext.liveBrokers = curBrokerAndEpochs.map(_._1).toSet
     // update broker epoch cache for all live brokers
-    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochsCache(e._1.id) =  e._2)
+    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochsCache(e._1.id) = e._2)
     info(s"Initialized broker epochs cache: ${controllerContext.brokerEpochsCache}")
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
@@ -1039,7 +1048,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
             s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch"
           warn(stateBrokerEpochErrorMessage)
-          throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
+          throw new BrokerEpochMismatchException(stateBrokerEpochErrorMessage)
         }
       }
 
@@ -1555,8 +1564,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state: ControllerState = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      val curBrokerEpoch = zkClient.registerBroker(brokerInfo)
-      brokerEpoch.update(curBrokerEpoch)
+      val newBrokerEpoch = zkClient.registerBroker(brokerInfo)
+      info(s"Update broker epoch from $brokerEpoch to $newBrokerEpoch")
+      brokerEpoch = newBrokerEpoch
       Reelect.process()
     }
   }

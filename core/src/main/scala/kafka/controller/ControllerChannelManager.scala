@@ -334,7 +334,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        replicas: Seq[Int], isNew: Boolean) {
 
-    brokerIds.filter(b => b >= 0 && controllerContext.liveOrShuttingDownBrokerIds.contains(b)).foreach { brokerId =>
+    brokerIds.filter(b => controllerContext.liveOrShuttingDownBrokerIds.contains(b)).foreach { brokerId =>
       val result = leaderAndIsrRequestMap.getOrElseUpdate(brokerId, mutable.Map.empty)
       val alreadyNew = result.get(topicPartition).exists(_.isNew)
       result.put(topicPartition, new LeaderAndIsrRequest.PartitionState(leaderIsrAndControllerEpoch.controllerEpoch,
@@ -351,7 +351,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topicPartition: TopicPartition, deletePartition: Boolean,
                                       callback: (AbstractResponse, Int) => Unit) {
-    brokerIds.filter(b => b >= 0 && controllerContext.liveOrShuttingDownBrokerIds.contains(b)).foreach { brokerId =>
+    brokerIds.filter(b => controllerContext.liveOrShuttingDownBrokerIds.contains(b)).foreach { brokerId =>
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId),
@@ -390,7 +390,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       }
     }
 
-    updateMetadataRequestBrokerSet ++= brokerIds.filter(b => b >= 0 && controllerContext.liveOrShuttingDownBrokerIds.contains(b))
+    updateMetadataRequestBrokerSet ++= brokerIds.filter(b => controllerContext.liveOrShuttingDownBrokerIds.contains(b))
     partitions.foreach(partition => updateMetadataRequestPartitionInfo(partition,
       beingDeleted = controller.topicDeletionManager.topicsToBeDeleted.contains(partition.topic)))
   }

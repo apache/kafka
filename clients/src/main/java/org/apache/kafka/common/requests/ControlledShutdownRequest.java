@@ -102,6 +102,7 @@ public class ControlledShutdownRequest extends AbstractRequest {
     public int brokerId() {
         return brokerId;
     }
+
     public long brokerEpoch() {
         return brokerEpoch;
     }
