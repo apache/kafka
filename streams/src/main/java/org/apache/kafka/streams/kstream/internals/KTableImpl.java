@@ -492,7 +492,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final boolean rightOuter,
                                            final String joinMergeName,
                                            final String internalQueryableName,
-                                           final MaterializedInternal materializedInternal) {
+                                           final MaterializedInternal<K, R, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         final Set<String> allSourceNodes = ensureJoinableWith(other);
 
         if (leftOuter) {
@@ -522,7 +522,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final KTableKTableJoinMerger<K, R> joinMerge = new KTableKTableJoinMerger<>(joinThis, joinOther, internalQueryableName);
 
-        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, Change<V>, Change<V1>, Change<R>> kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
+        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, Change<V>, Change<V1>, Change<R>, R> kTableJoinNodeBuilder = KTableKTableJoinNode.kTableKTableJoinNodeBuilder();
 
         // only materialize if specified in Materialized
         if (materializedInternal != null) {
@@ -542,7 +542,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                              .withOtherJoinSideNodeName(((KTableImpl) other).name)
                              .withThisJoinSideNodeName(name);
 
-        final KTableKTableJoinNode<K, Change<V>, Change<V1>, Change<R>> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
+        final KTableKTableJoinNode<K, Change<V>, Change<V1>, Change<R>, R> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
         // we can inherit parent key serde if user do not provide specific overrides

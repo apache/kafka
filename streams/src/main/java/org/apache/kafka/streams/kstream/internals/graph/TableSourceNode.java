@@ -129,7 +129,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal consumedInternal) {
+        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }

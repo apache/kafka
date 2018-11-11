@@ -65,7 +65,8 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
         }
 
         if (shouldMaterialize) {
-            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
+            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>(
+                    (MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
         }
     }
 }
