@@ -22,6 +22,7 @@ import java.io.{Closeable, File, FileWriter}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
+import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
@@ -147,7 +148,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads.foreach(_.join(5 * 1000))
     executors.foreach(_.shutdownNow())
     producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
-    consumers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    consumers.foreach(_.close(Duration.ZERO))
     adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -994,7 +995,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
     do {
-      consumer.poll(1)
+      consumer.poll(Duration.ofMillis(1))
     } while (consumer.assignment.isEmpty)
     consumer.assignment.asScala.foreach(tp => consumer.position(tp))
   }
@@ -1027,7 +1028,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
     var received = 0
     TestUtils.waitUntilTrue(() => {
-      received += consumer.poll(50).count
+      received += consumer.poll(Duration.ofMillis(50)).count
       received >= numRecords
     }, s"Consumed $received records until timeout instead of the expected $numRecords records")
     assertEquals(numRecords, received)
@@ -1307,7 +1308,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     executors += executor
     val future = executor.submit(new Runnable() {
       def run() {
-        assertEquals(0, consumer.poll(100).count)
+        assertEquals(0, consumer.poll(Duration.ofMillis(100)).count)
       }
     })
     verifyTimeout(future)
@@ -1462,7 +1463,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     override def doWork(): Unit = {
       try {
         while (isRunning || (lastReceived != producerThread.lastSent && System.currentTimeMillis < endTimeMs)) {
-          val records = consumer.poll(50)
+          val records = consumer.poll(Duration.ofMillis(50))
           received += records.count
           if (!records.isEmpty) {
             lastBatch = records

@@ -21,6 +21,7 @@ import java.util.Collections
 import kafka.admin.AdminClient
 import kafka.server.KafkaConfig
 import java.lang.{Long => JLong}
+import java.time.Duration
 
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -146,7 +147,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0)
+      consumer.poll(Duration.ZERO)
       !consumer.assignment.isEmpty
     }, "Expected non-empty assignment")
   }

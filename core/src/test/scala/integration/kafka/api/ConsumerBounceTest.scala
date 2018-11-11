@@ -13,6 +13,7 @@
 
 package kafka.api
 
+import java.time.Duration
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
@@ -94,7 +95,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     scheduler.start()
 
     while (scheduler.isRunning) {
-      val records = consumer.poll(100).asScala
+      val records = consumer.poll(Duration.ofMillis(100)).asScala
       assertEquals(Set(tp), consumer.assignment.asScala)
 
       for (record <- records) {
@@ -164,7 +165,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     executor.schedule(new Runnable {
         def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
       }, 2, TimeUnit.SECONDS)
-    consumer.poll(0)
+    consumer.poll(Duration.ZERO)
 
     val producer = createProducer()
 
@@ -302,14 +303,14 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
               revokeSemaphore.foreach(s => s.release())
             }
           })
-          consumer.poll(0)
+          consumer.poll(Duration.ZERO)
         }, 0)
     }
 
     def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
-          otherConsumers.foreach(consumer => consumer.poll(100))
+          otherConsumers.foreach(consumer => consumer.poll(Duration.ofMillis(100)))
       assertTrue("Rebalance did not complete in time", future.isDone)
     }
 
@@ -368,7 +369,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
     while (received < numRecords && System.currentTimeMillis < endTimeMs)
-      received += consumer.poll(1000).count()
+      received += consumer.poll(Duration.ofMillis(1000)).count()
     assertEquals(numRecords, received)
   }
 
@@ -378,7 +379,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       val closeGraceTimeMs = 2000
       val startNanos = System.nanoTime
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
-      consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
+      consumer.close(Duration.ofMillis(closeTimeoutMs))
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
@@ -401,7 +402,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       }
       def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
       }})
-    consumer.poll(3000)
+    consumer.poll(Duration.ofMillis(3000))
     assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
       assertEquals(committedRecords, consumer.committed(tp).offset)

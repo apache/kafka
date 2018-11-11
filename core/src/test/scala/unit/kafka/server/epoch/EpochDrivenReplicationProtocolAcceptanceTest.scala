@@ -18,6 +18,7 @@
 package kafka.server.epoch
 
 import java.io.{File, RandomAccessFile}
+import java.time.Duration
 import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV1
@@ -239,7 +240,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Search to see if we have non-monotonic offsets in the log
     startConsumer()
-    val records = consumer.poll(1000).asScala
+    val records = consumer.poll(Duration.ofMillis(1000)).asScala
     var prevOffset = -1L
     records.foreach { r =>
       assertTrue(s"Offset $prevOffset came before ${r.offset} ", r.offset > prevOffset)

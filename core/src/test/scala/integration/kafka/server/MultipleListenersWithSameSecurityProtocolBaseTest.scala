@@ -19,6 +19,7 @@
 package kafka.server
 
 import java.io.File
+import java.time.Duration
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -171,7 +172,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       consumer.subscribe(Collections.singleton(clientMetadata.topic))
       val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
       TestUtils.waitUntilTrue(() => {
-        records ++= consumer.poll(50).asScala
+        records ++= consumer.poll(Duration.ofMillis(50)).asScala
         records.size == producerRecords.size
       }, s"Consumed ${records.size} records until timeout instead of the expected ${producerRecords.size} records with mechanism ${clientMetadata.saslMechanism}")
     }

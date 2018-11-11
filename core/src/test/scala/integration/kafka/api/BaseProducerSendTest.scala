@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
@@ -89,7 +90,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   private def pollUntilNumRecords(numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
     val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
     TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
+      records ++= consumer.poll(Duration.ofMillis(50)).asScala
       records.size == numRecords
     }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
     records
@@ -457,7 +458,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           case e: ExecutionException => assertEquals(classOf[KafkaException], e.getCause.getClass)
         }
       }
-      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(50).count)
+      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(Duration.ofMillis(50)).count)
     }
   }
 

@@ -16,6 +16,7 @@
  */
 package kafka.api
 
+import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 
@@ -68,7 +69,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
     consumer.subscribe(Collections.singleton(topic))
     val consumerRecords = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
     TestUtils.waitUntilTrue(() => {
-      consumerRecords ++= consumer.poll(50).asScala
+      consumerRecords ++= consumer.poll(Duration.ofMillis(50)).asScala
       consumerRecords.size == producerRecords.size
     }, s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records")
 

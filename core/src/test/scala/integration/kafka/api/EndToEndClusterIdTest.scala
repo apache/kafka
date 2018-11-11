@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.time.Duration
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
@@ -207,7 +208,7 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     val maxIters = numRecords * 50
     var iters = 0
     while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
+      for (record <- consumer.poll(Duration.ofMillis(50)).asScala) {
         records += record
       }
       if (iters > maxIters)

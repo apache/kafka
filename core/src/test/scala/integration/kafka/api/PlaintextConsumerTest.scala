@@ -130,7 +130,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testDeprecatedPollBlocksForAssignment(): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(Set(topic).asJava)
-    consumer.poll(0)
+    consumer.poll(Duration.ZERO)
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
@@ -1522,7 +1522,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    val records = awaitNonEmptyRecords(consumer, tp)
+    awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")

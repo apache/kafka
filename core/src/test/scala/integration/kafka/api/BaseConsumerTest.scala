@@ -305,8 +305,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                  partitions: Set[TopicPartition]): Boolean = {
     val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
-      // at least one consumer got empty assignment
-      val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
       return false
     }
 

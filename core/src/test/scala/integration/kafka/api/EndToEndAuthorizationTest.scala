@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -21,6 +21,7 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 
 import java.io.File
+import java.time.Duration
 import java.util.ArrayList
 import java.util.concurrent.ExecutionException
 
@@ -222,7 +223,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       assertTrue("failed re-authentications not 0", TestUtils.totalMetricValue(s, "failed-reauthentication-total") == 0)
     }
   }
-  
+
   private def getGauge(metricName: String) = {
     Metrics.defaultRegistry.allMetrics.asScala
            .filterKeys(k => k.getName == metricName)
@@ -328,7 +329,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     confirmReauthenticationMetrics
   }
-  
+
    /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
@@ -342,7 +343,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     consumeRecords(consumer)
     confirmReauthenticationMetrics
   }
-  
+
   @Test(expected = classOf[TopicAuthorizationException])
   def testNoConsumeWithoutDescribeAclViaSubscribe(): Unit = {
     noConsumeWithoutDescribeAclSetup()
@@ -351,7 +352,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     // this should timeout since the consumer will not be able to fetch any metadata for the topic
     consumeRecords(consumer, timeout = 3000)
   }
-  
+
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(groupAclArgs)
@@ -369,7 +370,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.apis.authorizer.get, groupResource)
     }
   }
-  
+
   @Test
   def testNoConsumeWithDescribeAclViaAssign(): Unit = {
     noConsumeWithDescribeAclSetup()
@@ -385,7 +386,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     confirmReauthenticationMetrics
   }
-  
+
   @Test
   def testNoConsumeWithDescribeAclViaSubscribe(): Unit = {
     noConsumeWithDescribeAclSetup()
@@ -401,7 +402,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
     confirmReauthenticationMetrics
   }
-  
+
   private def noConsumeWithDescribeAclSetup(): Unit = {
     AclCommand.main(produceAclArgs(tp.topic))
     AclCommand.main(groupAclArgs)
@@ -462,7 +463,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     val deadlineMs = System.currentTimeMillis() + timeout
     while (records.size < numRecords && System.currentTimeMillis() < deadlineMs) {
-      for (record <- consumer.poll(50).asScala)
+      for (record <- consumer.poll(Duration.ofMillis(50)).asScala)
         records.add(record)
     }
     if (records.size < numRecords)

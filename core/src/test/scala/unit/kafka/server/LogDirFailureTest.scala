@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 
@@ -140,7 +141,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // The first send() should succeed
     producer.send(record).get()
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0).count() == 1
+      consumer.poll(Duration.ZERO).count() == 1
     }, "Expected the first message", 3000L)
 
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
@@ -189,7 +190,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // Consumer should receive some messages
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0).count() > 0
+      consumer.poll(Duration.ZERO).count() > 0
     }, "Expected some messages", 3000L)
 
     // There should be no remaining LogDirEventNotification znode
@@ -204,7 +205,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0)
+      consumer.poll(Duration.ZERO)
       !consumer.assignment.isEmpty
     }, "Expected non-empty assignment")
   }

@@ -17,6 +17,7 @@
 package kafka.api
 
 import java.util
+import java.time.{Duration => JDuration}
 import java.util.{Collections, Properties}
 import java.util.Arrays.asList
 import java.util.concurrent.{ExecutionException, TimeUnit}
@@ -919,7 +920,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     sendRecords(producer, 10, topicPartition)
     var messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
+      messageCount += consumer.poll(JDuration.ZERO).count
       messageCount == 10
     }, "Expected 10 messages", 3000L)
 
@@ -927,7 +928,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.seek(topicPartition, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
+      messageCount += consumer.poll(JDuration.ZERO).count
       messageCount == 7
     }, "Expected 7 messages", 3000L)
 
@@ -935,7 +936,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     consumer.seek(topicPartition, 1)
     messageCount = 0
     TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
+      messageCount += consumer.poll(JDuration.ZERO).count
       messageCount == 2
     }, "Expected 2 messages", 3000L)
   }
@@ -989,7 +990,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
     TestUtils.waitUntilTrue(() => {
-      consumer.poll(0)
+      consumer.poll(JDuration.ZERO)
       !consumer.assignment.isEmpty
     }, "Expected non-empty assignment")
   }
@@ -1138,7 +1139,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           override def run {
             consumer.subscribe(Collections.singleton(testTopicName))
             while (true) {
-              consumer.poll(5000)
+              consumer.poll(JDuration.ofMillis(5000))
               consumer.commitSync()
             }
           }

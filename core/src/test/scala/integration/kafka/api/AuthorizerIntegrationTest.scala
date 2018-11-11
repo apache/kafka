@@ -611,7 +611,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val producer = createProducer()
     sendRecords(producer, 1, tp)
     removeAllAcls()
-    
+
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeRecords(consumer)
@@ -734,7 +734,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
     val consumer = createConsumer()
     consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
-    consumer.poll(50)
+    consumer.poll(Duration.ofMillis(50))
     assertTrue(consumer.subscription.isEmpty)
   }
 
@@ -781,7 +781,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)),  Resource(Topic,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
-    consumer.poll(0)
+    consumer.poll(Duration.ZERO)
     assertTrue(consumer.subscription().isEmpty)
     assertTrue(consumer.assignment().isEmpty)
   }
@@ -807,7 +807,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)), Resource(Topic,
       GROUP_METADATA_TOPIC_NAME, LITERAL))
     consumer.subscribe(Pattern.compile(GROUP_METADATA_TOPIC_NAME))
-    consumer.poll(0)
+    consumer.poll(Duration.ZERO)
     assertEquals(Set(GROUP_METADATA_TOPIC_NAME), consumer.subscription.asScala)
   }
 
@@ -1519,7 +1519,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
 
     TestUtils.waitUntilTrue(() => {
-      for (record <- consumer.poll(50).asScala)
+      for (record <- consumer.poll(Duration.ofMillis(50)).asScala)
         records.add(record)
       records.size == numRecords
     }, "Failed to receive all expected records from the consumer")
