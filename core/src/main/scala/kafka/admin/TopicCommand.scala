@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.io.StdIn
 
 object TopicCommand extends Logging {
 
@@ -390,7 +391,7 @@ object TopicCommand extends Logging {
 
   def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
-    if (!Console.readLine().equalsIgnoreCase("y")) {
+    if (!StdIn.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
       Exit.exit(0)
     }
