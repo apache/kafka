@@ -142,8 +142,8 @@ abstract class AbstractFetcherThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   private def buildLeaderEpochRequest(): ResultWithPartitions[Map[TopicPartition, EpochData]] = inLock(partitionMapLock) {
-    var partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
-    var partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
+    val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
+    val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
 
     partitionStates.partitionStates.asScala.foreach { state =>
       val tp = state.topicPartition
