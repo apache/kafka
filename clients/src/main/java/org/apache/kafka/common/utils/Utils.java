@@ -663,18 +663,10 @@ public final class Utils {
      */
     @SafeVarargs
     public static <T> Set<T> mkSet(T... elems) {
-        return new HashSet<>(Arrays.asList(elems));
-    }
-
-    /*
-     * Creates a list
-     * @param elems the elements
-     * @param <T> the type of element
-     * @return List
-     */
-    @SafeVarargs
-    public static <T> List<T> mkList(T... elems) {
-        return Arrays.asList(elems);
+        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
+        for (T elem : elems)
+            result.add(elem);
+        return result;
     }
 
     /**

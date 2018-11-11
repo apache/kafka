@@ -44,6 +44,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -122,7 +123,7 @@ public class InternalStreamsBuilderTest {
         merged.groupByKey().count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("my-table"));
         builder.buildAndOptimizeTopology();
         final Map<String, List<String>> actual = builder.internalTopologyBuilder.stateStoreNameToSourceTopics();
-        assertEquals(Utils.mkList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
+        assertEquals(asList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
     }
 
     @Test

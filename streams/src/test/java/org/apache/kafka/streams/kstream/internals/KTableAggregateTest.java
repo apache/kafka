@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -50,6 +49,7 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
 public class KTableAggregateTest {
@@ -106,7 +106,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "C", "8");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                 "A:0+1",
                 "B:0+2",
                 "A:0+1-1+3",
@@ -139,7 +139,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "A", "3");
         driver.process(topic1, "A", "4");
         driver.flushState();
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "A:0+4"), supplier.theCapturedProcessor().processed);
     }
 
@@ -192,7 +192,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
@@ -220,7 +220,7 @@ public class KTableAggregateTest {
         driver.flushState();
 
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "green:1",
             "green:2",
             "green:1", "blue:1",
@@ -281,7 +281,7 @@ public class KTableAggregateTest {
         driver.flushState();
 
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "blue:1",
             "yellow:1",
             "green:2"
@@ -337,7 +337,7 @@ public class KTableAggregateTest {
         driver.process(input, "12", "C");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                  "1:1",
                  "1:12",
                  "1:2",

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -64,6 +63,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -365,7 +365,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(input, "b", "v1"));
         }
         final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
-        assertThat(mockProcessors.get(0).processed, equalTo(Utils.mkList("a:v1", "a:v2")));
+        assertThat(mockProcessors.get(0).processed, equalTo(asList("a:v1", "a:v2")));
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
     }
 
@@ -683,7 +683,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
     
     @Test
@@ -712,7 +712,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -730,7 +730,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -753,7 +753,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 }
