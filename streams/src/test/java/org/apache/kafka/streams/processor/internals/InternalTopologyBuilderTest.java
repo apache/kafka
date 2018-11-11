@@ -494,7 +494,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicChooserWhenAddingSink() {
-        builder.addSink("name", (TopicNameExtractor) null, null, null, null);
+        builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)

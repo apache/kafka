@@ -232,7 +232,7 @@ public class MockProcessorContextTest {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                //noinspection unchecked
+                @SuppressWarnings("unchecked")
                 final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);

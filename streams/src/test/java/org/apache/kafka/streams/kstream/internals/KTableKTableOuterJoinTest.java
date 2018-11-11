@@ -88,6 +88,7 @@ public class KTableKTableOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
+        @SuppressWarnings("unchecked")
         final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
         driver.setUp(builder, stateDir);
@@ -359,6 +360,7 @@ public class KTableKTableOuterJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
+        @SuppressWarnings("unchecked")
         final Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
             (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
             (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),

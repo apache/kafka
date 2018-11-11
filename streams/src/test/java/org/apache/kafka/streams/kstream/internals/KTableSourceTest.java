@@ -96,6 +96,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final Topology topology = builder.build();
@@ -146,6 +147,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
@@ -184,6 +186,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         table1.enableSendingOldValues();

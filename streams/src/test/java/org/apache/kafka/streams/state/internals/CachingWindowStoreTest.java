@@ -117,6 +117,7 @@ public class CachingWindowStoreTest {
                 private WindowStore<String, String> store;
                 private int numRecordsProcessed;
 
+                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext processorContext) {
                     this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");

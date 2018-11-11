@@ -35,7 +35,7 @@ import java.util.Properties;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
-    public Map forwardedValues = new HashMap();
+    public Map<Object, Object> forwardedValues = new HashMap<>();
 
     public NoOpProcessorContext() {
         super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);

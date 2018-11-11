@@ -618,7 +618,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotResumeConsumptionUntilAllStoresRestored() {
         EasyMock.expect(active.allTasksRunning()).andReturn(false);
-        final Consumer<byte[], byte[]> consumer = (Consumer<byte[], byte[]>) EasyMock.createStrictMock(Consumer.class);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
         taskManager.setConsumer(consumer);
         EasyMock.replay(active, consumer);
 

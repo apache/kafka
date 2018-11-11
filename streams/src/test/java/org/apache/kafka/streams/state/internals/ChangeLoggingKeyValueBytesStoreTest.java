@@ -45,7 +45,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private InternalMockProcessorContext context;
     private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
-    private final Map sent = new HashMap<>();
+    private final Map<Object, Object> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
     private final byte[] there = "there".getBytes();
