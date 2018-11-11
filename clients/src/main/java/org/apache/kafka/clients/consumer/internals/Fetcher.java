@@ -1285,13 +1285,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 return null;
 
             PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
-                    partition.abortedTransactions.size(),
-                    new Comparator<FetchResponse.AbortedTransaction>() {
-                        @Override
-                        public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
-                            return Long.compare(o1.firstOffset, o2.firstOffset);
-                        }
-                    }
+                    partition.abortedTransactions.size(), Comparator.comparingLong(o -> o.firstOffset)
             );
             abortedTransactions.addAll(partition.abortedTransactions);
             return abortedTransactions;
