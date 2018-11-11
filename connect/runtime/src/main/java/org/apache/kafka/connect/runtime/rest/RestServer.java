@@ -77,7 +77,7 @@ public class RestServer {
     private final WorkerConfig config;
     private Server jettyServer;
 
-    private List<ConnectRestExtension> connectRestExtensions = Collections.EMPTY_LIST;
+    private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
      * Create a REST server for this herder using the specified configs.
