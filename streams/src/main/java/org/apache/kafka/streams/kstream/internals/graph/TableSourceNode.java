@@ -73,6 +73,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String topicName = getTopicNames().iterator().next();
 

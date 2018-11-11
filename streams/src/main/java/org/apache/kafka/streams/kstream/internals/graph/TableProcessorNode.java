@@ -53,6 +53,7 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
                "} " + super.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final boolean shouldMaterialize = materializedInternal != null && materializedInternal.isQueryable();
