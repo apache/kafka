@@ -29,37 +29,37 @@ import joptsimple.OptionParser
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
-import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
-import scala.util.{Failure, Success, Try}
 import scala.util.control.ControlThrowable
+import scala.util.{Failure, Success, Try}
 
 /**
- * The mirror maker has the following architecture:
- * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
- * - All the mirror maker threads share one producer.
- * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
- *
- * @note For mirror maker, the following settings are set by default to make sure there is no data loss:
- *       1. use producer with following settings
- *            acks=all
- *            delivery.timeout.ms=max integer
- *            max.block.ms=max long
- *            max.in.flight.requests.per.connection=1
- *       2. Consumer Settings
- *            enable.auto.commit=false
- *       3. Mirror Maker Setting:
- *            abort.on.send.failure=true
- */
+  * The mirror maker has the following architecture:
+  * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
+  * - All the mirror maker threads share one producer.
+  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
+  *
+  * @note      For mirror maker, the following settings are set by default to make sure there is no data loss:
+  *       1. use producer with following settings
+  *            acks=all
+  *            delivery.timeout.ms=max integer
+  *            max.block.ms=max long
+  *            max.in.flight.requests.per.connection=1
+  *       2. Consumer Settings
+  *            enable.auto.commit=false
+  *       3. Mirror Maker Setting:
+  *            abort.on.send.failure=true
+  */
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] var producer: MirrorMakerProducer = null
@@ -157,16 +157,10 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
       val helpOpt = parser.accepts("help", "Print this message.")
 
-      if (args.length == 0)
-        CommandLineUtils.printUsageAndDie(parser, "Continuously copy data between two Kafka clusters.")
-
-
       val options = parser.parse(args: _*)
 
-      if (options.has(helpOpt)) {
-        parser.printHelpOn(System.out)
-        sys.exit(0)
-      }
+      if (args.length == 0 || options.has(helpOpt))
+        CommandLineUtils.printUsageAndDie(parser, "Continuously copy data between two Kafka clusters.")
 
       CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
       val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
@@ -243,8 +237,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         }
       }
     } catch {
-      case ct : ControlThrowable => throw ct
-      case t : Throwable =>
+      case ct: ControlThrowable => throw ct
+      case t: Throwable =>
         error("Exception when starting mirror maker.", t)
     }
 

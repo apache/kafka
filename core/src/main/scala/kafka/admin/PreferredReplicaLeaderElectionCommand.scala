@@ -1,68 +1,51 @@
 /**
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one or more
+  * contributor license agreements.  See the NOTICE file distributed with
+  * this work for additional information regarding copyright ownership.
+  * The ASF licenses this file to You under the Apache License, Version 2.0
+  * (the "License"); you may not use this file except in compliance with
+  * the License.  You may obtain a copy of the License at
+  *
+  * http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+  * See the License for the specific language governing permissions and
+  * limitations under the License.
+  */
 package kafka.admin
 
-import joptsimple.OptionParser
-import kafka.utils._
 import kafka.common.AdminCommandFailedException
+import kafka.utils._
 import kafka.zk.KafkaZkClient
-
-import collection._
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
+
+import scala.collection._
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser(false)
-    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
-      "for which preferred replica leader election should be done, in the following format - \n" +
-       "{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\n" +
-      "Defaults to all existing partitions")
-      .withRequiredArg
-      .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
-      .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
-      "form host:port. Multiple URLS can be given to allow fail-over.")
-      .withRequiredArg
-      .describedAs("urls")
-      .ofType(classOf[String])
-      
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 
-                                                " it can be used to balance leadership among the servers.")
+    val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
+    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(commandOpts, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
+      " it can be used to balance leadership among the servers.")
 
-    val options = parser.parse(args : _*)
+    commandOpts.checkArgs()
 
-    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-
-    val zkConnect = options.valueOf(zkConnectOpt)
+    val zkConnect = commandOpts.options.valueOf(commandOpts.zkConnectOpt)
     var zkClient: KafkaZkClient = null
     try {
       val time = Time.SYSTEM
       zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
 
       val partitionsForPreferredReplicaElection =
-        if (!options.has(jsonFileOpt))
+        if (!commandOpts.options.has(commandOpts.jsonFileOpt))
           zkClient.getAllPartitions()
         else
-          parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
+          parsePreferredReplicaElectionData(Utils.readFileAsString(commandOpts.options.valueOf(commandOpts.jsonFileOpt)))
       val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
@@ -109,13 +92,34 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
+
+  class PreferredReplicaLeaderElectionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
+      "for which preferred replica leader election should be done, in the following format - \n" +
+      "{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\n" +
+      "Defaults to all existing partitions")
+      .withRequiredArg
+      .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
+      .ofType(classOf[String])
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
+      "form host:port. Multiple URLS can be given to allow fail-over.")
+      .withRequiredArg
+      .describedAs("urls")
+      .ofType(classOf[String])
+
+    options = parser.parse(args: _*)
+
+    def checkArgs() {
+      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+    }
+  }
 }
 
 class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
   def moveLeaderToPreferredReplica() = {
     try {
       val topics = partitionsFromUser.map(_.topic).toSet
-      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
+      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap { case (topic, partitions) =>
         partitions.map(new TopicPartition(topic, _))
       }.toSet
 
