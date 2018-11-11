@@ -135,6 +135,7 @@ public class KTableImplTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldPreserveSerdesForOperators() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);

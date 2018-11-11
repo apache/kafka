@@ -92,6 +92,7 @@ public class RestServer {
         createConnectors(listeners);
     }
 
+    @SuppressWarnings("deprecation")
     List<String> parseListeners() {
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         if (listeners == null || listeners.size() == 0) {

@@ -102,6 +102,7 @@ public class Plugins {
         );
     }
 
+    @SuppressWarnings("deprecation")
     protected static boolean isInternalConverter(String classPropertyName) {
         return classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG)
             || classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG);
@@ -243,6 +244,7 @@ public class Plugins {
         }
 
         // Determine whether this is a key or value converter based upon the supplied property name ...
+        @SuppressWarnings("deprecation")
         final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
                                      || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
 

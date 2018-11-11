@@ -446,6 +446,7 @@ public class KafkaConsumerTest {
         Assert.assertEquals(0, requests.size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
         final Time time = new MockTime();
@@ -461,7 +462,6 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        //noinspection deprecation
         consumer.poll(0L);
 
         // The underlying client SHOULD get a fetch request

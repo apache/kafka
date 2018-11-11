@@ -189,6 +189,7 @@ public class KStreamImplTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldPreserveSerdesForOperators() {
         final StreamsBuilder builder = new StreamsBuilder();

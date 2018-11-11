@@ -37,7 +37,6 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -463,7 +462,7 @@ public class KafkaProducerTest {
     @Test
     @Deprecated
     public void testHeadersWithExtendedClasses() {
-        doTestHeaders(ExtendedSerializer.class);
+        doTestHeaders(org.apache.kafka.common.serialization.ExtendedSerializer.class);
     }
 
     @Test

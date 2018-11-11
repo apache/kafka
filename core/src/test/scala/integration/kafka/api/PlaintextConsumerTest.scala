@@ -126,6 +126,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, records.size)
   }
 
+  @deprecated("poll(Duration) is the replacement", since = "2.0")
   @Test
   def testDeprecatedPollBlocksForAssignment(): Unit = {
     val consumer = createConsumer()
@@ -134,6 +135,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
+  @deprecated("Serializer now includes a default method that provides the headers", since = "2.1")
   @Test
   def testHeadersExtendedSerializerDeserializer(): Unit = {
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
