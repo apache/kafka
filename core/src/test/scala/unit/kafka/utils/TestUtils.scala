@@ -1230,7 +1230,7 @@ object TestUtils extends Logging {
     } finally consumer.close()
   }
 
-  def pollUntilAtLeastNumRecords[K, V](consumer: KafkaConsumer[K, V],
+  def pollUntilAtLeastNumRecords[K, V](consumer: Consumer[K, V],
                                        numRecords: Int,
                                        waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
@@ -1244,7 +1244,7 @@ object TestUtils extends Logging {
     records
   }
 
-  def consumeRecords[K, V](consumer: KafkaConsumer[K, V],
+  def consumeRecords[K, V](consumer: Consumer[K, V],
                            numRecords: Int,
                            waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = pollUntilAtLeastNumRecords(consumer, numRecords, waitTimeMs)

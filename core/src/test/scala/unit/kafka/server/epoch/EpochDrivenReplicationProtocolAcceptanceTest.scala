@@ -239,7 +239,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Search to see if we have non-monotonic offsets in the log
     startConsumer()
-    val records = consumer.poll(1000).asScala
+    val records = TestUtils.pollUntilAtLeastNumRecords(consumer, 100)
     var prevOffset = -1L
     records.foreach { r =>
       assertTrue(s"Offset $prevOffset came before ${r.offset} ", r.offset > prevOffset)
