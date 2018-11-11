@@ -326,6 +326,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
+    @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
