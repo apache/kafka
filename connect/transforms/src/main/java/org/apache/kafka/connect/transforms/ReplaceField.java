@@ -83,7 +83,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         renames = parseRenameMappings(config.getList(ConfigName.RENAME));
         reverseRenames = invert(renames);
 
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
     }
 
     static Map<String, String> parseRenameMappings(List<String> mappings) {

@@ -62,13 +62,8 @@ public class Plugins {
     }
 
     private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
-        return (DelegatingClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    @Override
-                    public Object run() {
-                        return new DelegatingClassLoader(paths);
-                    }
-                }
+        return AccessController.doPrivileged(
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths)
         );
     }
 

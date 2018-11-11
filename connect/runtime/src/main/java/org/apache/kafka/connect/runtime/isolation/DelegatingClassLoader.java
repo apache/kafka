@@ -151,13 +151,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             final URL[] urls,
             final ClassLoader parent
     ) {
-        return (PluginClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    @Override
-                    public Object run() {
-                        return new PluginClassLoader(pluginLocation, urls, parent);
-                    }
-                }
+        return AccessController.doPrivileged(
+                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
         );
     }
 
