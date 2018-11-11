@@ -239,7 +239,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                     TopicPartition partition = entry.getKey();
                                     long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                    FetchResponse.PartitionData fetchData = entry.getValue();
+                                    FetchResponse.PartitionData<Records> fetchData = entry.getValue();
 
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, fetchData);
@@ -1280,7 +1280,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 
-        private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {
+        private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData<?> partition) {
             if (partition.abortedTransactions == null || partition.abortedTransactions.isEmpty())
                 return null;
 
