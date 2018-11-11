@@ -222,6 +222,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             synchronized (Fetcher.this) {
+                                @SuppressWarnings("unchecked")
                                 FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                                 FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                                 if (handler == null) {
