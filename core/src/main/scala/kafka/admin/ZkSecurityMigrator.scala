@@ -18,13 +18,13 @@
 package kafka.admin
 
 import joptsimple.OptionParser
-import org.I0Itec.zkclient.exception.ZkException
 import kafka.utils.{CommandLineUtils, Logging, ZkUtils}
+import org.I0Itec.zkclient.exception.ZkException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.zookeeper.AsyncCallback.{ChildrenCallback, StatCallback}
-import org.apache.zookeeper.data.Stat
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.data.Stat
 
 import scala.annotation.tailrec
 import scala.collection.JavaConverters._
@@ -76,7 +76,7 @@ object ZkSecurityMigrator extends Logging {
     val helpOpt = parser.accepts("help", "Print usage information.")
 
     val options = parser.parse(args : _*)
-    if (options.has(helpOpt))
+    if (args.length == 0 || options.has(helpOpt))
       CommandLineUtils.printUsageAndDie(parser, usageMessage)
 
     if (jaasFile == null) {
