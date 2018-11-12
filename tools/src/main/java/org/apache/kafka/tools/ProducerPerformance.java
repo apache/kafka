@@ -53,7 +53,8 @@ public class ProducerPerformance {
 
             /* parse args */
             String topicName = res.getString("topic");
-            long numRecords = res.getLong("numRecords");
+            Long numRecords = res.getLong("numRecords");
+            Long durationSeconds = res.getLong("durationSeconds");
             Integer recordSize = res.getInt("recordSize");
             int throughput = res.getInt("throughput");
             List<String> producerProps = res.getList("producerConfig");
@@ -119,14 +120,19 @@ public class ProducerPerformance {
                     payload[i] = (byte) (random.nextInt(26) + 65);
             }
             ProducerRecord<byte[], byte[]> record;
-            Stats stats = new Stats(numRecords, 5000);
+            // When running for a fixed duration we do not know how many records
+            // the test will generate.  In that case have the Stats class keep
+            // the maximum number of latency measurements it allows.
+            Stats stats = new Stats(numRecords != null ? numRecords : Integer.MAX_VALUE, 5000);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
-            for (int i = 0; i < numRecords; i++) {
+            for (long i = 0;
+                 (numRecords != null && i < numRecords) ||
+                     (durationSeconds != null && ((System.currentTimeMillis() - startMs) / 1000 <= durationSeconds)); i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
@@ -198,6 +204,11 @@ public class ProducerPerformance {
                 .required(true)
                 .description("either --record-size or --payload-file must be specified but not both.");
 
+        MutuallyExclusiveGroup produceRecordsOptions = parser
+                .addMutuallyExclusiveGroup()
+                .required(true)
+                .description("either --num-records or --duration-seconds must be specified but not both.");
+
         parser.addArgument("--topic")
                 .action(store())
                 .required(true)
@@ -205,13 +216,19 @@ public class ProducerPerformance {
                 .metavar("TOPIC")
                 .help("produce messages to this topic");
 
-        parser.addArgument("--num-records")
+        produceRecordsOptions.addArgument("--num-records")
                 .action(store())
-                .required(true)
                 .type(Long.class)
                 .metavar("NUM-RECORDS")
                 .dest("numRecords")
                 .help("number of messages to produce");
+
+        produceRecordsOptions.addArgument("--duration-seconds")
+                .action(store())
+                .type(Long.class)
+                .metavar("PRODUCE-FOR-SECONDS")
+                .dest("durationSeconds")
+                .help("how many seconds to produce for.  Can not be used with --num-records.");
 
         payloadOptions.addArgument("--record-size")
                 .action(store())
