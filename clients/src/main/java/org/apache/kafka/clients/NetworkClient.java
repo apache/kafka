@@ -638,7 +638,7 @@ public class NetworkClient implements KafkaClient {
         return found;
     }
 
-    public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
+    public static AbstractResponse parseSaslResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
         // Sasl authentication does not use a MemoryPool, hence null Closeable
         return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct, null);
