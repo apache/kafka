@@ -68,6 +68,7 @@ public class JsonSerializationTest {
 
     private <T> void verify(T val1) throws Exception {
         byte[] bytes = JsonUtil.JSON_SERDE.writeValueAsBytes(val1);
+        @SuppressWarnings("unchecked")
         Class<T> clazz = (Class<T>) val1.getClass();
         T val2 = JsonUtil.JSON_SERDE.readValue(bytes, clazz);
         for (Field field : clazz.getDeclaredFields()) {
