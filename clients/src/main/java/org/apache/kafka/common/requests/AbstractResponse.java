@@ -185,6 +185,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse implement
         return toStruct(version).toString();
     }
 
+    @Override
     public void close() {
         if (closeable != null) {
             try {

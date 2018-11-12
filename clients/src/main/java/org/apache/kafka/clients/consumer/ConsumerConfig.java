@@ -131,7 +131,7 @@ public class ConsumerConfig extends AbstractConfig {
             "Records are fetched in batches by the consumer, and if the first record batch in the first non-empty partition of the fetch is larger than " +
             "this value, the record batch will still be returned to ensure that the consumer can make progress. As such, this is not a absolute maximum. " +
             "The maximum record batch size accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
-            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel. It should be lower than <code>buffer.memory</code>.";
+            "<code>max.message.bytes</code> (topic config). Note that the consumer performs multiple fetches in parallel. The value must be lower than <code>buffer.memory</code>.";
     public static final int DEFAULT_FETCH_MAX_BYTES = 50 * 1024 * 1024;
 
     /**
@@ -474,7 +474,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         Type.LONG,
                                         Long.MAX_VALUE,
                                         atLeast(1),
-                                        Importance.HIGH,
+                                        Importance.MEDIUM,
                                         BUFFER_MEMORY_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
