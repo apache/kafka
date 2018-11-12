@@ -158,7 +158,6 @@ subprojects {
   tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
     options.compilerArgs << "-Xlint:all"
-    options.compilerArgs << "-Xlint:-deprecation"
     // temporary exclusions until all the warnings are fixed
     options.compilerArgs << "-Xlint:-rawtypes"
     options.compilerArgs << "-Xlint:-serial"
