@@ -64,6 +64,7 @@ public class RestServerTest {
         server.stop();
     }
 
+    @SuppressWarnings("deprecation")
     private Map<String, String> baseWorkerProps() {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
@@ -89,6 +90,7 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testParseListeners() {
         // Use listeners field
@@ -108,6 +110,7 @@ public class RestServerTest {
         Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeenrs without protocol

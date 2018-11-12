@@ -80,6 +80,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class})
 @PowerMockIgnore("javax.management.*")

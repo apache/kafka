@@ -859,6 +859,7 @@ public class WorkerTest extends ThreadedTest {
         expectConverters(JsonConverter.class, expectDefaultConverters);
     }
 
+    @SuppressWarnings("deprecation")
     private void expectConverters(Class<? extends Converter> converterClass, Boolean expectDefaultConverters) {
         // As default converters are instantiated when a task starts, they are expected only if the `startTask` method is called
         if (expectDefaultConverters) {
