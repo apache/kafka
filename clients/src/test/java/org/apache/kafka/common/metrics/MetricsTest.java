@@ -347,7 +347,7 @@ public class MetricsTest {
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
         max.record(config, 50, time.milliseconds());
         time.sleep(samples * windowMs);
-        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
     }
 
     @Test
@@ -375,9 +375,9 @@ public class MetricsTest {
         sampledTotal.record(config, 50, time.milliseconds());
         time.sleep(samples * windowMs);
 
-        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
-        assertEquals(Double.MAX_VALUE, min.measure(config, time.milliseconds()), EPS);
-        assertEquals(0.0, avg.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, min.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, avg.measure(config, time.milliseconds()), EPS);
         assertEquals(0, count.measure(config, time.milliseconds()), EPS);
         assertEquals(0.0, sampledTotal.measure(config, time.milliseconds()), EPS);
     }
