@@ -27,12 +27,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
-import org.apache.kafka.connect.storage.ConfigBackingStore;
-import org.apache.kafka.connect.storage.Converter;
-import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
-import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
-import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
-import org.apache.kafka.connect.storage.StatusBackingStore;
+import org.apache.kafka.connect.storage.*;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,8 +48,8 @@ import java.util.Map;
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
+    public static void main(String[] args) {
+        if (args.length < 1 || (args.length == 1 && "--help".equalsIgnoreCase(args[0].trim()))) {
             log.info("Usage: ConnectDistributed worker.properties");
             Exit.exit(1);
         }
