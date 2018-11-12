@@ -52,6 +52,7 @@ class LogTest {
   val brokerTopicStats = new BrokerTopicStats
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
+  val deleteDir = new File(logDir, Log.DeleteDirParent)
   val mockTime = new MockTime()
 
   @Before
@@ -2458,9 +2459,17 @@ class LogTest {
   @Test
   def testParseTopicPartitionNameWithPeriodForDeletedTopic() {
     val topic = "foo.bar-testtopic"
-    val partition = "42"
-    val dir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
-    val topicPartition = Log.parseTopicPartitionName(dir)
+    val partition = 42
+
+    // old topic deletion marker
+    var dir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition).toString))
+    var topicPartition = Log.parseTopicPartitionName(dir)
+    assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
+    assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
+
+    // new topic deletion marker
+    dir = new File(logDir, Log.logDirName(new TopicPartition(topic, partition)))
+    topicPartition = Log.parseTopicPartitionName(dir)
     assertEquals("Unexpected topic name parsed", topic, topicPartition.topic)
     assertEquals("Unexpected partition number parsed", partition.toInt, topicPartition.partition)
   }
@@ -2519,11 +2528,21 @@ class LogTest {
     } catch {
       case _: KafkaException => // expected
     }
-    // also test the "-delete" marker case
-    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt)))
+
+    // also test the "-delete" marker case (old topic deletion marker)
+    val deleteMarkerDir = new File(logDir, Log.logDeleteDirName(new TopicPartition(topic, partition.toInt).toString))
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+
+    // also test the case for dir marked for deletion (new topic deletion marker)
+    val markedForDeletionDir = new File(deleteDir, Log.logDeleteDirName())
+    try {
+      Log.parseTopicPartitionName(markedForDeletionDir)
+      fail("KafkaException should have been thrown for dir: " + markedForDeletionDir.getCanonicalPath)
     } catch {
       case _: KafkaException => // expected
     }
@@ -2541,11 +2560,21 @@ class LogTest {
     } catch {
       case _: KafkaException => // expected
     }
-    // also test the "-delete" marker case
+
+    // also test the "-delete" marker case (old topic deletion marker)
     val deleteMarkerDir = new File(logDir, topicPartitionName(topic, partition) + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+
+    // also test the case for dir marked for deletion (new topic deletion marker)
+    val markedForDeletionDir = new File(deleteDir, Log.logDeleteDirName())
+    try {
+      Log.parseTopicPartitionName(markedForDeletionDir)
+      fail("KafkaException should have been thrown for dir: " + markedForDeletionDir.getCanonicalPath)
     } catch {
       case _: KafkaException => // expected
     }
@@ -2562,11 +2591,21 @@ class LogTest {
     } catch {
       case _: KafkaException => // expected
     }
-    // also test the "-delete" marker case
+
+    // also test the "-delete" marker case (old topic deletion marker)
     val deleteMarkerDir = new File(logDir, topic + partition + "." + DeleteDirSuffix)
     try {
       Log.parseTopicPartitionName(deleteMarkerDir)
       fail("KafkaException should have been thrown for dir: " + deleteMarkerDir.getCanonicalPath)
+    } catch {
+      case _: KafkaException => // expected
+    }
+
+    // also test the case for dir marked for deletion (new topic deletion marker)
+    val markedForDeletionDir = new File(deleteDir, Log.logDeleteDirName())
+    try {
+      Log.parseTopicPartitionName(markedForDeletionDir)
+      fail("KafkaException should have been thrown for dir: " + markedForDeletionDir.getCanonicalPath)
     } catch {
       case _: KafkaException => // expected
     }
