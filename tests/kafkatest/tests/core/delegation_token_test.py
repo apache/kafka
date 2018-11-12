@@ -111,7 +111,7 @@ client.id=console-consumer
 
     def test_delegation_token_lifecycle(self):
         self.kafka.start()
-        self.delegation_tokens = DelegationTokens(self.kafka)
+        self.delegation_tokens = DelegationTokens(self.kafka, self.test_context)
 
         self.generate_delegation_token()
         self.renew_delegation_token()

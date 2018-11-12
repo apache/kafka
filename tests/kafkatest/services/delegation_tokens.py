@@ -14,19 +14,21 @@
 # limitations under the License.
 
 import os.path
+from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 
 """
 Delegation tokens is a tool to manage the lifecycle of delegation tokens.
 All commands are executed on a secured Kafka node reusing its generated jaas.conf and krb5.conf.
 """
 
-class DelegationTokens:
-    def __init__(self, kafka):
+class DelegationTokens(KafkaPathResolverMixin):
+    def __init__(self, kafka, context):
         self.client_properties_content = """
 security.protocol=SASL_PLAINTEXT
 sasl.kerberos.service.name=kafka
 -"""
-        self.command_path = "/opt/kafka-dev/bin/kafka-delegation-tokens.sh"
+        self.context = context
+        self.command_path = self.path.script("kafka-delegation-tokens.sh")
         self.kafka_opts = "KAFKA_OPTS=\"-Djava.security.auth.login.config=/mnt/security/jaas.conf " \
                           "-Djava.security.krb5.conf=/mnt/security/krb5.conf\" "
         self.kafka = kafka
