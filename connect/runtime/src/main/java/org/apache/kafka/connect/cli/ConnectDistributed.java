@@ -53,8 +53,8 @@ import java.util.Map;
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
+    public static void main(String[] args) {
+        if (args.length < 1 || (args.length == 1 && "--help".equalsIgnoreCase(args[0].trim()))) {
             log.info("Usage: ConnectDistributed worker.properties");
             Exit.exit(1);
         }
