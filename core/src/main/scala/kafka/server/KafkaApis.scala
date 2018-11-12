@@ -181,19 +181,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (isAuthorizedClusterAction(request)) {
-      val response =
-        if (controller.isCurrentOrUnknownBrokerEpoch(leaderAndIsrRequest.brokerEpoch())) {
-          replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
-        } else {
-          warn("Received LeaderAndIsr request with broker epoch " +
-            s"${leaderAndIsrRequest.brokerEpoch()} not equal to current broker epoch ${controller.curBrokerEpoch}")
-          leaderAndIsrRequest.getErrorResponse(0, Errors.BROKER_EPOCH_MISMATCH.exception)
-        }
-      sendResponseExemptThrottle(request, response)
-    } else {
+    if (!isAuthorizedClusterAction(request)) {
       sendResponseMaybeThrottle(request, throttleTimeMs => leaderAndIsrRequest.getErrorResponse(throttleTimeMs,
         Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      warn("Received LeaderAndIsr request with broker epoch " +
+        s"${leaderAndIsrRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
+    } else {
+      val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
+      sendResponseExemptThrottle(request, response)
     }
   }
 
@@ -202,31 +201,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
-
-    if (isAuthorizedClusterAction(request)) {
-      if (controller.isCurrentOrUnknownBrokerEpoch(stopReplicaRequest.brokerEpoch())) {
-        val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
-        // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
-        // since this broker is no longer a replica for that offsets topic partition.
-        // This is required to handle the following scenario :
-        // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
-        // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
-        // is not cleared.
-        result.foreach { case (topicPartition, error) =>
-          if (error == Errors.NONE && stopReplicaRequest.deletePartitions && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
-            groupCoordinator.handleGroupEmigration(topicPartition.partition)
-          }
-        }
-        sendResponseExemptThrottle(request, new StopReplicaResponse(error, result.asJava))
-      } else {
-        warn("Received stop replica request with old broker epoch " +
-          s"${stopReplicaRequest.brokerEpoch()} not equal to current broker epoch ${controller.curBrokerEpoch}")
-        sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.BROKER_EPOCH_MISMATCH, Map.empty[TopicPartition, Errors].asJava))
-      }
-    } else {
+    if (!isAuthorizedClusterAction(request)) {
       val result = stopReplicaRequest.partitions.asScala.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
       sendResponseMaybeThrottle(request, _ =>
         new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, result.asJava))
+    } else if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      warn("Received stop replica request with old broker epoch " +
+        s"${stopReplicaRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.STALE_BROKER_EPOCH, Map.empty[TopicPartition, Errors].asJava))
+    } else {
+      val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
+      // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
+      // since this broker is no longer a replica for that offsets topic partition.
+      // This is required to handle the following scenario :
+      // Consider old replicas : {[1,2,3], Leader = 1} is reassigned to new replicas : {[2,3,4], Leader = 2}, broker 1 does not receive a LeaderAndIsr
+      // request to become a follower due to which cache for groups that belong to an offsets topic partition for which broker 1 was the leader,
+      // is not cleared.
+      result.foreach { case (topicPartition, error) =>
+        if (error == Errors.NONE && stopReplicaRequest.deletePartitions && topicPartition.topic == GROUP_METADATA_TOPIC_NAME) {
+          groupCoordinator.handleGroupEmigration(topicPartition.partition)
+        }
+      }
+      sendResponseExemptThrottle(request, new StopReplicaResponse(error, result.asJava))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
@@ -236,32 +234,32 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
-    if (isAuthorizedClusterAction(request)) {
-      if (controller.isCurrentOrUnknownBrokerEpoch(updateMetadataRequest.brokerEpoch())) {
-        val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
-        if (deletedPartitions.nonEmpty)
-          groupCoordinator.handleDeletedPartitions(deletedPartitions)
-
-        if (adminManager.hasDelayedTopicOperations) {
-          updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
-            adminManager.tryCompleteDelayedTopicOperations(topic)
-          }
-        }
-        quotas.clientQuotaCallback.foreach { callback =>
-          if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
-            quotas.fetch.updateQuotaMetricConfigs()
-            quotas.produce.updateQuotaMetricConfigs()
-            quotas.request.updateQuotaMetricConfigs()
-          }
-        }
-        sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
-      } else {
-        warn("Received update metadata request with broker epoch " +
-          s"${updateMetadataRequest.brokerEpoch()} not equal to current broker epoch ${controller.curBrokerEpoch}")
-        sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.BROKER_EPOCH_MISMATCH))
-      }
-    } else {
+    if (!isAuthorizedClusterAction(request)) {
       sendResponseMaybeThrottle(request, _ => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED))
+    } else if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      warn("Received update metadata request with broker epoch " +
+        s"${updateMetadataRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.STALE_BROKER_EPOCH))
+    } else {
+      val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
+      if (deletedPartitions.nonEmpty)
+        groupCoordinator.handleDeletedPartitions(deletedPartitions)
+
+      if (adminManager.hasDelayedTopicOperations) {
+        updateMetadataRequest.partitionStates.keySet.asScala.map(_.topic).foreach { topic =>
+          adminManager.tryCompleteDelayedTopicOperations(topic)
+        }
+      }
+      quotas.clientQuotaCallback.foreach { callback =>
+        if (callback.updateClusterMetadata(metadataCache.getClusterMetadata(clusterId, request.context.listenerName))) {
+          quotas.fetch.updateQuotaMetricConfigs()
+          quotas.produce.updateQuotaMetricConfigs()
+          quotas.request.updateQuotaMetricConfigs()
+        }
+      }
+      sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
     }
   }
 
@@ -2331,6 +2329,17 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponse(response: RequestChannel.Response): Unit = {
     requestChannel.sendResponse(response)
+  }
+
+  private def isBrokerEpochStale(epoch: Long): Boolean = {
+    // Broker epoch in the control request is unknown if the controller hasn't been upgraded to use KIP-380
+    if (epoch == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
+    else {
+      val curBrokerEpoch = controller.brokerEpoch
+      if (epoch < curBrokerEpoch) true
+      else if (epoch == curBrokerEpoch) false
+      else throw new IllegalStateException(s"Epoch $epoch larger than current broker epoch $curBrokerEpoch")
+    }
   }
 
 }

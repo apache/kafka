@@ -55,7 +55,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
     private static final Field.Array OFFLINE_REPLICAS = new Field.Array("offline_replicas", INT32, "The offline replica ids");
 
     // Live brokers fields
-    private static final Field.Int32  BROKER_ID = new Field.Int32("id", "The broker id");
+    private static final Field.Int32 BROKER_ID = new Field.Int32("id", "The broker id");
     private static final Field.ComplexArray ENDPOINTS = new Field.ComplexArray("end_points", "The endpoints");
     private static final Field.NullableStr RACK = new Field.NullableStr("rack", "The rack");
 
@@ -279,8 +279,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             struct.set(ISR, basePartitionState.isr.toArray());
             struct.set(ZK_VERSION, basePartitionState.zkVersion);
             struct.set(REPLICAS, basePartitionState.replicas.toArray());
-            if (struct.hasField(OFFLINE_REPLICAS))
-                struct.set(OFFLINE_REPLICAS, offlineReplicas.toArray());
+            struct.setIfExists(OFFLINE_REPLICAS, offlineReplicas.toArray());
         }
     }
 

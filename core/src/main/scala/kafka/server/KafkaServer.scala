@@ -505,7 +505,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
                 else 2
 
               val controlledShutdownRequest = new ControlledShutdownRequest.Builder(config.brokerId,
-                kafkaController.curBrokerEpoch, controlledShutdownApiVersion)
+                kafkaController.brokerEpoch, controlledShutdownApiVersion)
               val request = networkClient.newClientRequest(node(prevController).idString, controlledShutdownRequest,
                 time.milliseconds(), true)
               val clientResponse = NetworkClientUtils.sendAndReceive(networkClient, request, time)

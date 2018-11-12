@@ -150,7 +150,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
           Seq(0, 1).map(Integer.valueOf).asJava, false)
       )
       val requestBuilder = new LeaderAndIsrRequest.Builder(
-        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, servers(brokerId2).kafkaController.curBrokerEpoch ,partitionStates.asJava, nodes.toSet.asJava)
+        ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, staleControllerEpoch, servers(brokerId2).kafkaController.brokerEpoch ,partitionStates.asJava, nodes.toSet.asJava)
 
       controllerChannelManager.sendRequest(brokerId2, ApiKeys.LEADER_AND_ISR, requestBuilder,
         staleControllerEpochCallback)

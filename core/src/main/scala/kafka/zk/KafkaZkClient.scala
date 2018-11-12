@@ -396,7 +396,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return sequence of brokers in the cluster.
    */
   def getAllBrokersInCluster: Seq[Broker] = {
-    val brokerIds = getSortedBrokerList
+    val brokerIds = getSortedBrokerList()
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
@@ -415,14 +415,14 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * @return sequence of brokers in the cluster.
     */
   def getAllBrokerAndEpochsInCluster: Seq[(Broker, Long)] = {
-    val brokerIds = getSortedBrokerList
+    val brokerIds = getSortedBrokerList()
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
       val brokerId = getDataResponse.ctx.get.asInstanceOf[Int]
       getDataResponse.resultCode match {
         case Code.OK =>
-          Option((BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
+          Some((BrokerIdZNode.decode(brokerId, getDataResponse.data).broker, getDataResponse.stat.getCzxid))
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
@@ -1644,11 +1644,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   private def retryRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req], expectedControllerZkVersion: Int): Seq[Req#Response] = {
-    if (expectedControllerZkVersion < KafkaController.InitialControllerEpoch) {
-      retryRequestsUntilConnected(requests)
-    } else {
-      retryRequestsUntilConnected(requests.map(wrapRequestWithControllerEpochCheck(_, expectedControllerZkVersion)))
-        .map(unwrapResponseWithControllerEpochCheck(_).asInstanceOf[Req#Response])
+    expectedControllerZkVersion match {
+      case ZkVersion.MatchAnyVersion => retryRequestsUntilConnected(requests)
+      case version if version >= 0 =>
+        retryRequestsUntilConnected(requests.map(wrapRequestWithControllerEpochCheck(_, version)))
+          .map(unwrapResponseWithControllerEpochCheck(_).asInstanceOf[Req#Response])
+      case invalidVersion =>
+        throw new IllegalArgumentException(s"Expected controller epoch zkVersion $invalidVersion should be non-negative or equal to ${ZkVersion.MatchAnyVersion}")
     }
   }
 

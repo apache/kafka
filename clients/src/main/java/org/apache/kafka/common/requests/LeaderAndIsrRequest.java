@@ -37,15 +37,12 @@ import java.util.Set;
 
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
 import static org.apache.kafka.common.protocol.types.Type.INT32;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class LeaderAndIsrRequest extends AbstractControlRequest {
     private static final Field.ComplexArray TOPIC_STATES = new Field.ComplexArray("topic_states", "Topic states");
     private static final Field.ComplexArray PARTITION_STATES = new Field.ComplexArray("partition_states", "Partition states");
-    private static final Field.ComplexArray LIVE_LEADERS = new Field.ComplexArray("live_brokers", "Live broekrs");
+    private static final Field.ComplexArray LIVE_LEADERS = new Field.ComplexArray("live_leaders", "Live leaders");
 
     // PartitionState fields
     private static final Field.Int32 LEADER = new Field.Int32("leader", "The broker id for the leader.");
@@ -56,7 +53,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     private static final Field.Bool IS_NEW = new Field.Bool("is_new", "Whether the replica should have existed on the broker or not");
 
     // live_leaders fields
-    private static final Field.Int32  END_POINT_ID = new Field.Int32("id", "The broker id");
+    private static final Field.Int32 END_POINT_ID = new Field.Int32("id", "The broker id");
     private static final Field.Str HOST = new Field.Str("host", "The hostname of the broker.");
     private static final Field.Int32  PORT = new Field.Int32("port", "The port on which the broker accepts requests.");
 

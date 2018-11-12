@@ -71,7 +71,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
       case (broker, epoch) =>
         val brokerServer = servers.find(e => e.config.brokerId == broker.id)
         assertTrue(brokerServer.isDefined)
-        assertEquals(epoch, brokerServer.get.kafkaController.curBrokerEpoch)
+        assertEquals(epoch, brokerServer.get.kafkaController.brokerEpoch)
     }
   }
 
@@ -79,7 +79,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   def testControllerBrokerEpochCacheMatchesWithZk(): Unit = {
     val controller = getController
     val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
-    val controllerBrokerEpochsCache = controller.kafkaController.controllerContext.brokerEpochsCache
+    val controllerBrokerEpochsCache = controller.kafkaController.controllerContext.brokerEpochs
 
     // Broker epochs cache matches with zk in steady state
     checkControllerBrokerEpochsCacheMatchesWithZk(controllerBrokerEpochsCache)
@@ -132,7 +132,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         )
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch, // Correct broker epoch
+          broker2.kafkaController.brokerEpoch, // Correct broker epoch
           partitionStates.asJava, nodes.toSet.asJava)
 
         sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.LEADER_AND_ISR, requestBuilder)
@@ -155,7 +155,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         }
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch, // Correct broker epoch
+          broker2.kafkaController.brokerEpoch, // Correct broker epoch
           partitionStates.asJava, liverBrokers.toSet.asJava)
 
         sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.UPDATE_METADATA, requestBuilder)
@@ -168,7 +168,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
       {
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch, // Correct broker epoch
+          broker2.kafkaController.brokerEpoch, // Correct broker epoch
           true, Set(tp).asJava)
 
         sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.STOP_REPLICA, requestBuilder)
@@ -219,7 +219,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         )
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch - 1, // Stale broker epoch
+          broker2.kafkaController.brokerEpoch - 1, // Stale broker epoch
           partitionStates.asJava, nodes.toSet.asJava)
 
         sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.LEADER_AND_ISR, requestBuilder)
@@ -241,7 +241,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         }
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch - 1, // Stale broker epoch
+          broker2.kafkaController.brokerEpoch - 1, // Stale broker epoch
           partitionStates.asJava, liverBrokers.toSet.asJava)
 
         sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.UPDATE_METADATA, requestBuilder)
@@ -251,7 +251,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
       {
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
-          broker2.kafkaController.curBrokerEpoch - 1, // Stale broker epoch
+          broker2.kafkaController.brokerEpoch - 1, // Stale broker epoch
           false, Set(new TopicPartition(topic, partitionId)).asJava)
 
         sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.STOP_REPLICA, requestBuilder)
@@ -281,7 +281,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
                                                builder: AbstractControlRequest.Builder[_ <: AbstractControlRequest]): Unit = {
     var staleBrokerEpochDetected = false
     controllerChannelManager.sendRequest(brokerId2, apiKeys, builder,
-      response => {staleBrokerEpochDetected = response.errorCounts().containsKey(Errors.BROKER_EPOCH_MISMATCH)})
+      response => {staleBrokerEpochDetected = response.errorCounts().containsKey(Errors.STALE_BROKER_EPOCH)})
     TestUtils.waitUntilTrue(() => staleBrokerEpochDetected, "Broker epoch should be stale")
     assertTrue("Stale broker epoch not detected by the broker", staleBrokerEpochDetected)
   }

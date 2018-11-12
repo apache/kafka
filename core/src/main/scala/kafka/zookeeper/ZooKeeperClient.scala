@@ -456,12 +456,15 @@ sealed trait ZkOp {
 case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
   override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
 }
+
 case class DeleteOp(path: String, version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.delete(path, version)
 }
+
 case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.setData(path, data, version)
 }
+
 case class CheckOp(path: String, version: Int) extends ZkOp {
   override def toZookeeperOp: Op = Op.check(path, version)
 }

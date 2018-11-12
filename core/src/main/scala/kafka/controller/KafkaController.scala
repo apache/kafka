@@ -29,7 +29,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, BrokerEpochMismatchException}
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, LeaderAndIsrResponse, StopReplicaResponse}
@@ -66,7 +66,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
   @volatile private var brokerInfo = initialBrokerInfo
-  @volatile private var brokerEpoch = initialBrokerEpoch
+  @volatile private var _brokerEpoch = initialBrokerEpoch
 
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
@@ -152,13 +152,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    */
   def isActive: Boolean = activeControllerId == config.brokerId
 
-  /**
-   * Returns true if the given epoch is the current broker epoch or unknown broker epoch.
-   * Broker epoch in the control request is unknown if the controller hasn't been upgraded to use KIP-380
-   */
-  def isCurrentOrUnknownBrokerEpoch(epoch: Long): Boolean = epoch == AbstractControlRequest.UNKNOWN_BROKER_EPOCH || epoch == brokerEpoch
-
-  def curBrokerEpoch: Long = brokerEpoch
+  def brokerEpoch: Long = _brokerEpoch
 
   def epoch: Int = controllerContext.epoch
 
@@ -649,8 +643,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     controllerContext.liveBrokers = curBrokerAndEpochs.map(_._1).toSet
     // update broker epoch cache for all live brokers
-    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochsCache(e._1.id) = e._2)
-    info(s"Initialized broker epochs cache: ${controllerContext.brokerEpochsCache}")
+    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochs(e._1.id) = e._2)
+    info(s"Initialized broker epochs cache: ${controllerContext.brokerEpochs}")
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
@@ -1043,12 +1037,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
       // so we will keep the previous behavior and don't reject the request
       if (brokerEpoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-        val cachedBrokerEpoch = controllerContext.brokerEpochsCache(id)
+        val cachedBrokerEpoch = controllerContext.brokerEpochs(id)
         if (brokerEpoch < cachedBrokerEpoch) {
           val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
             s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch"
           warn(stateBrokerEpochErrorMessage)
-          throw new BrokerEpochMismatchException(stateBrokerEpochErrorMessage)
+          throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
         }
       }
 
@@ -1276,7 +1270,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
       val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
-        .filter(bid => curBrokerIdAndEpochMap(bid) > controllerContext.brokerEpochsCache(bid))
+        .filter(brokerId => curBrokerIdAndEpochMap(brokerId) > controllerContext.brokerEpochs(brokerId))
       val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
       val bouncedBrokers = curBrokers.filter(broker => bouncedBrokerIds(broker.id))
       controllerContext.liveBrokers = curBrokers
@@ -1294,21 +1288,21 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       bouncedBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
       deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
       if (newBrokerIds.nonEmpty) {
-        newBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        newBrokerIds.foreach(brokerId => controllerContext.brokerEpochs(brokerId) = curBrokerIdAndEpochMap(brokerId))
         onBrokerStartup(newBrokerIdsSorted)
       }
       if (bouncedBrokerIds.nonEmpty) {
         onBrokerFailure(bouncedBrokerIdsSorted)
-        bouncedBrokerIds.foreach(bid => controllerContext.brokerEpochsCache(bid) = curBrokerIdAndEpochMap(bid))
+        bouncedBrokerIds.foreach(brokerId => controllerContext.brokerEpochs(brokerId) = curBrokerIdAndEpochMap(brokerId))
         onBrokerStartup(bouncedBrokerIdsSorted)
       }
       if (deadBrokerIds.nonEmpty) {
         onBrokerFailure(deadBrokerIdsSorted)
-        deadBrokerIds.foreach(controllerContext.brokerEpochsCache.remove)
+        deadBrokerIds.foreach(controllerContext.brokerEpochs.remove)
       }
 
       if (newBrokerIds.nonEmpty || deadBrokerIds.nonEmpty || bouncedBrokerIds.nonEmpty) {
-        info(s"Updated broker epochs cache: ${controllerContext.brokerEpochsCache}")
+        info(s"Updated broker epochs cache: ${controllerContext.brokerEpochs}")
       }
     }
   }
@@ -1565,8 +1559,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       val newBrokerEpoch = zkClient.registerBroker(brokerInfo)
-      info(s"Update broker epoch from $brokerEpoch to $newBrokerEpoch")
-      brokerEpoch = newBrokerEpoch
+      info(s"Update broker epoch from ${_brokerEpoch} to $newBrokerEpoch")
+      _brokerEpoch = newBrokerEpoch
       Reelect.process()
     }
   }
