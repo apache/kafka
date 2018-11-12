@@ -276,10 +276,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           new ControlledShutdownResponse(Errors.NONE, partitionsRemaining.asJava)
 
         case Failure(throwable) =>
-          throwable match {
-            case _: StaleBrokerEpochException => return
-            case t => controlledShutdownRequest.getErrorResponse(t)
-          }
+          controlledShutdownRequest.getErrorResponse(throwable)
       }
       sendResponseExemptThrottle(request, response)
     }
