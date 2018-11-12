@@ -19,6 +19,7 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.trogdor.coordinator.TaskManager;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -55,18 +56,26 @@ public class TasksRequest extends Message {
      */
     private final long lastEndMs;
 
+    /**
+     * The desired state of the tasks.
+     * An empty string will match all states.
+     */
+    private final String state;
+
     @JsonCreator
     public TasksRequest(@JsonProperty("taskIds") Collection<String> taskIds,
             @JsonProperty("firstStartMs") long firstStartMs,
             @JsonProperty("lastStartMs") long lastStartMs,
             @JsonProperty("firstEndMs") long firstEndMs,
-            @JsonProperty("lastEndMs") long lastEndMs) {
+            @JsonProperty("lastEndMs") long lastEndMs,
+            @JsonProperty("state") String state) {
         this.taskIds = Collections.unmodifiableSet((taskIds == null) ?
             new HashSet<String>() : new HashSet<>(taskIds));
         this.firstStartMs = Math.max(0, firstStartMs);
         this.lastStartMs = Math.max(0, lastStartMs);
         this.firstEndMs = Math.max(0, firstEndMs);
         this.lastEndMs = Math.max(0, lastEndMs);
+        this.state = state;
     }
 
     @JsonProperty
@@ -94,6 +103,11 @@ public class TasksRequest extends Message {
         return lastEndMs;
     }
 
+    @JsonProperty
+    public String state() {
+        return state;
+    }
+
     /**
      * Determine if this TaskRequest should return a particular task.
      *
@@ -102,7 +116,7 @@ public class TasksRequest extends Message {
      * @param endMs     The task end time, or -1 if the task hasn't ended.
      * @return          True if information about the task should be returned.
      */
-    public boolean matches(String taskId, long startMs, long endMs) {
+    public boolean matches(String taskId, long startMs, long endMs, TaskManager.ManagedTaskState state) {
         if ((!taskIds.isEmpty()) && (!taskIds.contains(taskId))) {
             return false;
         }
@@ -118,6 +132,11 @@ public class TasksRequest extends Message {
         if ((lastEndMs > 0) && ((endMs < 0) || (endMs > lastEndMs))) {
             return false;
         }
+
+        if (!this.state.equals("") && TaskManager.ManagedTaskState.valueOf(this.state) != state) {
+            return false;
+        }
+
         return true;
     }
 }

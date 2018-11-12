@@ -38,10 +38,12 @@ import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.PathParam;
-import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
+
+import static org.apache.kafka.trogdor.coordinator.TaskManager.MANAGED_TASK_STATE_NAMES;
 
 /**
  * The REST resource for the Coordinator. This describes the RPCs which the coordinator
@@ -95,24 +97,27 @@ public class CoordinatorRestResource {
         return Empty.INSTANCE;
     }
 
-    @GET
-    @Path("/tasks")
-    public TasksResponse tasks(@QueryParam("taskId") List<String> taskId,
+    public Response tasks(@QueryParam("taskId") List<String> taskId,
             @DefaultValue("0") @QueryParam("firstStartMs") long firstStartMs,
             @DefaultValue("0") @QueryParam("lastStartMs") long lastStartMs,
             @DefaultValue("0") @QueryParam("firstEndMs") long firstEndMs,
-            @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs) throws Throwable {
-        return coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs));
+            @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
+            @DefaultValue("") @QueryParam("state") String state) throws Throwable {
+        if (!state.equals("") && !MANAGED_TASK_STATE_NAMES.contains(state))
+            return Response.status(400).entity(String.format("State %s is invalid. Must be one of %s", state, MANAGED_TASK_STATE_NAMES)).build();
+
+        TasksResponse resp = coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs, state));
+        return Response.status(200).entity(resp).build();
     }
 
     @GET
     @Path("/tasks/{taskId}")
-    public TaskState tasks(@PathParam("taskId") String taskId) throws Throwable {
+    public Response tasks(@PathParam("taskId") String taskId) throws Throwable {
         TaskState response = coordinator().task(new TaskRequest(taskId));
         if (response == null)
-            throw new NotFoundException(String.format("No task with ID \"%s\" exists.", taskId));
+            return Response.status(404).entity(String.format("No task with ID \"%s\" exists.", taskId)).build();
 
-        return response;
+        return Response.status(200).entity(response).build();
     }
 
     @PUT

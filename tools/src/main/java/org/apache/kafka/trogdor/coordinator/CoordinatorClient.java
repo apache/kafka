@@ -244,7 +244,7 @@ public class CoordinatorClient {
         } else if (res.getBoolean("show_tasks")) {
             System.out.println("Got coordinator tasks: " +
                 JsonUtil.toPrettyJsonString(client.tasks(
-                    new TasksRequest(null, 0, 0, 0, 0))));
+                    new TasksRequest(null, 0, 0, 0, 0, ""))));
         } else if (res.getString("show_task") != null) {
             String taskId = res.getString("show_task");
             TaskRequest req = new TaskRequest(res.getString("show_task"));

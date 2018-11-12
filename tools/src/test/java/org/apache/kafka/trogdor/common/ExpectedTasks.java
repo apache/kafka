@@ -146,7 +146,7 @@ public class ExpectedTasks {
             public boolean conditionMet() {
                 TasksResponse tasks = null;
                 try {
-                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0));
+                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0, ""));
                 } catch (Exception e) {
                     log.info("Unable to get coordinator tasks", e);
                     throw new RuntimeException(e);

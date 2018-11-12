@@ -407,34 +407,40 @@ public class CoordinatorTest {
 
     @Test
     public void testTasksRequestMatches() throws Exception {
-        TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0);
-        assertTrue(req1.matches("foo1", -1, -1));
-        assertTrue(req1.matches("bar1", 100, 200));
-        assertTrue(req1.matches("baz1", 100, -1));
+        TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0, "");
+        assertTrue(req1.matches("foo1", -1, -1, TaskManager.ManagedTaskState.PENDING));
+        assertTrue(req1.matches("bar1", 100, 200, TaskManager.ManagedTaskState.DONE));
+        assertTrue(req1.matches("baz1", 100, -1, TaskManager.ManagedTaskState.RUNNING));
 
-        TasksRequest req2 = new TasksRequest(null, 100, 0, 0, 0);
-        assertFalse(req2.matches("foo1", -1, -1));
-        assertTrue(req2.matches("bar1", 100, 200));
-        assertFalse(req2.matches("bar1", 99, 200));
-        assertFalse(req2.matches("baz1", 99, -1));
+        TasksRequest req2 = new TasksRequest(null, 100, 0, 0, 0, "");
+        assertFalse(req2.matches("foo1", -1, -1, TaskManager.ManagedTaskState.PENDING));
+        assertTrue(req2.matches("bar1", 100, 200, TaskManager.ManagedTaskState.DONE));
+        assertFalse(req2.matches("bar1", 99, 200, TaskManager.ManagedTaskState.DONE));
+        assertFalse(req2.matches("baz1", 99, -1, TaskManager.ManagedTaskState.RUNNING));
 
-        TasksRequest req3 = new TasksRequest(null, 200, 900, 200, 900);
-        assertFalse(req3.matches("foo1", -1, -1));
-        assertFalse(req3.matches("bar1", 100, 200));
-        assertFalse(req3.matches("bar1", 200, 1000));
-        assertTrue(req3.matches("bar1", 200, 700));
-        assertFalse(req3.matches("baz1", 101, -1));
+        TasksRequest req3 = new TasksRequest(null, 200, 900, 200, 900, "");
+        assertFalse(req3.matches("foo1", -1, -1, TaskManager.ManagedTaskState.PENDING));
+        assertFalse(req3.matches("bar1", 100, 200, TaskManager.ManagedTaskState.DONE));
+        assertFalse(req3.matches("bar1", 200, 1000, TaskManager.ManagedTaskState.DONE));
+        assertTrue(req3.matches("bar1", 200, 700, TaskManager.ManagedTaskState.DONE));
+        assertFalse(req3.matches("baz1", 101, -1, TaskManager.ManagedTaskState.RUNNING));
 
         List<String> taskIds = new ArrayList<>();
         taskIds.add("foo1");
         taskIds.add("bar1");
         taskIds.add("baz1");
-        TasksRequest req4 = new TasksRequest(taskIds, 1000, -1, -1, -1);
-        assertFalse(req4.matches("foo1", -1, -1));
-        assertTrue(req4.matches("foo1", 1000, -1));
-        assertFalse(req4.matches("foo1", 900, -1));
-        assertFalse(req4.matches("baz2", 2000, -1));
-        assertFalse(req4.matches("baz2", -1, -1));
+        TasksRequest req4 = new TasksRequest(taskIds, 1000, -1, -1, -1, "");
+        assertFalse(req4.matches("foo1", -1, -1, TaskManager.ManagedTaskState.PENDING));
+        assertTrue(req4.matches("foo1", 1000, -1, TaskManager.ManagedTaskState.RUNNING));
+        assertFalse(req4.matches("foo1", 900, -1, TaskManager.ManagedTaskState.RUNNING));
+        assertFalse(req4.matches("baz2", 2000, -1, TaskManager.ManagedTaskState.RUNNING));
+        assertFalse(req4.matches("baz2", -1, -1, TaskManager.ManagedTaskState.PENDING));
+
+        TasksRequest req5 = new TasksRequest(null, 0, 0, 0, 0, TaskManager.ManagedTaskState.RUNNING.name());
+        assertTrue(req5.matches("foo1", -1, -1, TaskManager.ManagedTaskState.RUNNING));
+        assertFalse(req5.matches("bar1", -1, -1, TaskManager.ManagedTaskState.DONE));
+        assertFalse(req5.matches("baz1", -1, -1, TaskManager.ManagedTaskState.STOPPING));
+        assertFalse(req5.matches("baz1", -1, -1, TaskManager.ManagedTaskState.PENDING));
     }
 
     @Test
@@ -463,9 +469,9 @@ public class CoordinatorTest {
                 waitFor(coordinatorClient);
 
             assertEquals(0, coordinatorClient.tasks(
-                new TasksRequest(null, 10, 0, 10, 0)).tasks().size());
+                new TasksRequest(null, 10, 0, 10, 0, "")).tasks().size());
             TasksResponse resp1 = coordinatorClient.tasks(
-                new TasksRequest(Arrays.asList(new String[] {"foo", "baz" }), 0, 0, 0, 0));
+                new TasksRequest(Arrays.asList(new String[] {"foo", "baz" }), 0, 0, 0, 0, ""));
             assertTrue(resp1.tasks().containsKey("foo"));
             assertFalse(resp1.tasks().containsKey("bar"));
             assertEquals(1, resp1.tasks().size());
@@ -483,13 +489,13 @@ public class CoordinatorTest {
                 waitFor(cluster.agentClient("node02"));
 
             TasksResponse resp2 = coordinatorClient.tasks(
-                new TasksRequest(null, 1, 0, 0, 0));
+                new TasksRequest(null, 1, 0, 0, 0, ""));
             assertTrue(resp2.tasks().containsKey("foo"));
             assertFalse(resp2.tasks().containsKey("bar"));
             assertEquals(1, resp2.tasks().size());
 
             assertEquals(0, coordinatorClient.tasks(
-                new TasksRequest(null, 3, 0, 0, 0)).tasks().size());
+                new TasksRequest(null, 3, 0, 0, 0, "")).tasks().size());
         }
     }
 

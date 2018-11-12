@@ -46,7 +46,9 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -58,6 +60,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 /**
  * The TaskManager is responsible for managing tasks inside the Trogdor coordinator.
@@ -142,12 +145,14 @@ public final class TaskManager {
             Utils.join(nodeManagers.keySet(), ", "));
     }
 
-    enum ManagedTaskState {
+    public enum ManagedTaskState {
         PENDING,
         RUNNING,
         STOPPING,
-        DONE;
+        DONE
     }
+
+    public static List<String> MANAGED_TASK_STATE_NAMES = Arrays.stream(TaskManager.ManagedTaskState.values()).map(Enum::name).collect(Collectors.toList());
 
     class ManagedTask {
         /**
@@ -621,7 +626,7 @@ public final class TaskManager {
         public TasksResponse call() throws Exception {
             TreeMap<String, TaskState> states = new TreeMap<>();
             for (ManagedTask task : tasks.values()) {
-                if (request.matches(task.id, task.startedMs, task.doneMs)) {
+                if (request.matches(task.id, task.startedMs, task.doneMs, task.state)) {
                     states.put(task.id, task.taskState());
                 }
             }
