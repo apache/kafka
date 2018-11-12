@@ -73,7 +73,7 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer])
-    val producer = new MirrorMakerProducer(true, producerProps)
+    val producer = new MirrorMakerProducer(true, producerProps, collection.mutable.Map[String, String]())
     MirrorMaker.producer = producer
     MirrorMaker.producer.send(new ProducerRecord(topic, msg.getBytes()))
     MirrorMaker.producer.close()
