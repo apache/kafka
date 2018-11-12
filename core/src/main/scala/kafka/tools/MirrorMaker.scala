@@ -29,7 +29,7 @@ import joptsimple.OptionParser
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
-import org.apache.kafka.clients.consumer._
+import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
@@ -44,22 +44,22 @@ import scala.util.control.ControlThrowable
 import scala.util.{Failure, Success, Try}
 
 /**
-  * The mirror maker has the following architecture:
-  * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
-  * - All the mirror maker threads share one producer.
-  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
-  *
-  * @note      For mirror maker, the following settings are set by default to make sure there is no data loss:
-  *       1. use producer with following settings
-  *            acks=all
-  *            delivery.timeout.ms=max integer
-  *            max.block.ms=max long
-  *            max.in.flight.requests.per.connection=1
-  *       2. Consumer Settings
-  *            enable.auto.commit=false
-  *       3. Mirror Maker Setting:
-  *            abort.on.send.failure=true
-  */
+ * The mirror maker has the following architecture:
+ * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
+ * - All the mirror maker threads share one producer.
+ * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
+ *
+ * @note For mirror maker, the following settings are set by default to make sure there is no data loss:
+ *       1. use producer with following settings
+ *            acks=all
+ *            delivery.timeout.ms=max integer
+ *            max.block.ms=max long
+ *            max.in.flight.requests.per.connection=1
+ *       2. Consumer Settings
+ *            enable.auto.commit=false
+ *       3. Mirror Maker Setting:
+ *            abort.on.send.failure=true
+ */
 object MirrorMaker extends Logging with KafkaMetricsGroup {
 
   private[tools] var producer: MirrorMakerProducer = null
