@@ -944,9 +944,8 @@ class LogManager(logDirs: Seq[File],
    * Map of log dir to logs by topic and partitions in that dir
    */
   private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
-    (this.currentLogs.toList ++ this.futureLogs.toList).groupBy {
-      case (_, log) => log.dir.getParent
-    }.mapValues(_.toMap)
+    (this.currentLogs.toList ++ this.futureLogs.toList).toMap
+      .groupBy { case (_, log) => log.dir.getParent }
   }
 
   // logDir should be an absolute path
