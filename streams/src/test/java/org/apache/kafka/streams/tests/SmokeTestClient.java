@@ -33,7 +33,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -111,6 +110,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         return fullProps;
     }
 
+    @SuppressWarnings("deprecation")
     private static KafkaStreams createKafkaStreams(final Properties props) {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
@@ -126,7 +126,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // min
         final KGroupedStream<String, Integer> groupedData =
-            data.groupByKey(Serialized.with(stringSerde, intSerde));
+            data.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(stringSerde, intSerde));
 
         groupedData
             .windowedBy(TimeWindows.of(Duration.ofDays(1)))
@@ -239,7 +239,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // test repartition
         final Agg agg = new Agg();
-        cntTable.groupBy(agg.selector(), Serialized.with(stringSerde, longSerde))
+        cntTable.groupBy(agg.selector(), org.apache.kafka.streams.kstream.Serialized.with(stringSerde, longSerde))
             .aggregate(agg.init(), agg.adder(), agg.remover(),
                 Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
                     .withKeySerde(Serdes.String())

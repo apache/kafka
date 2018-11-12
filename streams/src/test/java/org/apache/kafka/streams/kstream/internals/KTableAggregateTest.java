@@ -30,11 +30,9 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -52,11 +50,13 @@ import java.util.Map;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KTableAggregateTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-    private final Serialized<String, String> stringSerialzied = Serialized.with(stringSerde, stringSerde);
+    private final org.apache.kafka.streams.kstream.Serialized<String, String> stringSerialzied =
+            org.apache.kafka.streams.kstream.Serialized.with(stringSerde, stringSerde);
     private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
 
     private File stateDir = null;
@@ -64,7 +64,7 @@ public class KTableAggregateTest {
     @Rule
     public EmbeddedKafkaCluster cluster = null;
     @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    public final org.apache.kafka.test.KStreamTestDriver driver = new org.apache.kafka.test.KStreamTestDriver();
 
     @Before
     public void setUp() {
@@ -362,7 +362,7 @@ public class KTableAggregateTest {
             public KeyValue<String, Long> apply(final Long key, final String value) {
                 return new KeyValue<>(value, key);
             }
-        }, Serialized.with(Serdes.String(), Serdes.Long()))
+        }, org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.Long()))
                 .reduce(new Reducer<Long>() {
                     @Override
                     public Long apply(final Long value1, final Long value2) {
