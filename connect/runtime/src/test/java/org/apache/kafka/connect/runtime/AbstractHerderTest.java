@@ -241,7 +241,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class);
         replayAll();
 
-        Map<String, String> config = new HashMap();
+        Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSinkConnector.class.getName());
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");

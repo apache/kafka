@@ -165,10 +165,10 @@ public class RestServerTest {
         System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.EMPTY_LIST,
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                                            workerConfig,
                                            ConnectRestExtension.class))
-            .andStubReturn(Collections.EMPTY_LIST);
+            .andStubReturn(Collections.emptyList());
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(connectorsCallback));
