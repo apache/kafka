@@ -68,6 +68,7 @@ import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("unchecked")
 public class StreamsPartitionAssignorTest {
 
     private final TopicPartition t1p0 = new TopicPartition("topic1", 0);

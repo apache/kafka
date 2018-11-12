@@ -71,7 +71,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
-
+@SuppressWarnings("unchecked")
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());

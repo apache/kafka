@@ -66,6 +66,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KTableImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());

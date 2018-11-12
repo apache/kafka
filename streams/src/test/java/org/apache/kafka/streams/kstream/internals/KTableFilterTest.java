@@ -45,6 +45,7 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KTableFilterTest {
 
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());

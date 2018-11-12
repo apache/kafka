@@ -46,6 +46,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
 
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());

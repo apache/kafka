@@ -68,6 +68,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KGroupedStreamImplTest {
 
     private static final String TOPIC = "topic";
