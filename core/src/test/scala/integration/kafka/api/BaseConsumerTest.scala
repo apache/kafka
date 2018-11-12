@@ -205,13 +205,11 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
 
       override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
         exception match {
-          case null =>
-            isComplete = true
           case e: RetriableCommitFailedException =>
             sendAsyncCommit(this)
           case e =>
             isComplete = true
-            error = Some(e)
+            error = Option(e)
         }
       }
     }
