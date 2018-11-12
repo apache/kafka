@@ -1040,7 +1040,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         val cachedBrokerEpoch = controllerContext.brokerEpochs(id)
         if (brokerEpoch < cachedBrokerEpoch) {
           val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
-            s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch"
+            s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch."
           warn(stateBrokerEpochErrorMessage)
           throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
         }

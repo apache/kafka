@@ -188,7 +188,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       warn("Received LeaderAndIsr request with broker epoch " +
-        s"${leaderAndIsrRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+        s"${leaderAndIsrRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
@@ -209,7 +209,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       warn("Received stop replica request with old broker epoch " +
-        s"${stopReplicaRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+        s"${stopReplicaRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.STALE_BROKER_EPOCH, Map.empty[TopicPartition, Errors].asJava))
     } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
@@ -240,7 +240,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
       warn("Received update metadata request with broker epoch " +
-        s"${updateMetadataRequest.brokerEpoch()} not equal to current broker epoch ${controller.brokerEpoch}")
+        s"${updateMetadataRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.STALE_BROKER_EPOCH))
     } else {
       val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
@@ -276,7 +276,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           new ControlledShutdownResponse(Errors.NONE, partitionsRemaining.asJava)
 
         case Failure(throwable) =>
-          controlledShutdownRequest.getErrorResponse(throwable)
+          throwable match {
+            case _: StaleBrokerEpochException => return
+            case t => controlledShutdownRequest.getErrorResponse(t)
+          }
       }
       sendResponseExemptThrottle(request, response)
     }

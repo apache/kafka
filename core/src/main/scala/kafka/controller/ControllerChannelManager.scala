@@ -404,27 +404,25 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
         else 0
 
-      leaderAndIsrRequestMap.foreach { case (broker, leaderAndIsrPartitionStates) =>
-        leaderAndIsrPartitionStates.foreach {
-          case (topicPartition, state) =>
-            val typeOfRequest =
-              if (broker == state.basePartitionState.leader) "become-leader"
-              else "become-follower"
-            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
-        }
+      leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
+        case (broker, leaderAndIsrPartitionStates) =>
+          leaderAndIsrPartitionStates.foreach {
+            case (topicPartition, state) =>
+              val typeOfRequest =
+                if (broker == state.basePartitionState.leader) "become-leader"
+                else "become-follower"
+              stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+          }
+          val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
+          val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
+            _.node(controller.config.interBrokerListenerName)
+          }
+          val brokerEpoch = controllerContext.brokerEpochs(broker)
+          val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
+            brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
+          controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
+            (r: AbstractResponse) => controller.eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
 
-        controllerContext.brokerEpochs.get(broker) match {
-          case Some(brokerEpoch) =>
-            val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
-            val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
-              _.node(controller.config.interBrokerListenerName)
-            }
-            val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
-              brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
-            controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
-              (r: AbstractResponse) => controller.eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
-          case None => stateChangeLog.trace(s"Broker epoch does not exists for broker $broker. Skip sending LeaderAndIsr request to this broker.")
-        }
       }
       leaderAndIsrRequestMap.clear()
 
@@ -460,14 +458,11 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
           }
         }
 
-      updateMetadataRequestBrokerSet.foreach { broker =>
-        controllerContext.brokerEpochs.get(broker) match {
-          case Some(brokerEpoch) =>
-            val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
-              brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
-            controller.sendRequest(broker, ApiKeys.UPDATE_METADATA, updateMetadataRequest, null)
-          case None => stateChangeLog.trace(s"Broker epoch does not exists for broker $broker. Skip sending UpdateMetadata request to this broker.")
-        }
+      updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
+        val brokerEpoch = controllerContext.brokerEpochs(broker)
+        val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
+          brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
+        controller.sendRequest(broker, ApiKeys.UPDATE_METADATA, updateMetadataRequest, null)
       }
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
@@ -476,30 +471,27 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
         else 0
 
-      stopReplicaRequestMap.foreach { case (broker, replicaInfoList) =>
-        controllerContext.brokerEpochs.get(broker) match {
-          case Some(brokerEpoch) =>
-            val stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet
-            val stopReplicaWithoutDelete = replicaInfoList.filterNot(_.deletePartition).map(_.replica).toSet
-            debug(s"The stop replica request (delete = true) sent to broker $broker is ${stopReplicaWithDelete.mkString(",")}")
-            debug(s"The stop replica request (delete = false) sent to broker $broker is ${stopReplicaWithoutDelete.mkString(",")}")
+      stopReplicaRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach { case (broker, replicaInfoList) =>
+        val stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet
+        val stopReplicaWithoutDelete = replicaInfoList.filterNot(_.deletePartition).map(_.replica).toSet
+        debug(s"The stop replica request (delete = true) sent to broker $broker is ${stopReplicaWithDelete.mkString(",")}")
+        debug(s"The stop replica request (delete = false) sent to broker $broker is ${stopReplicaWithoutDelete.mkString(",")}")
 
-            val (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r => !r.deletePartition && r.callback == null)
+        val (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r => !r.deletePartition && r.callback == null)
+        val brokerEpoch = controllerContext.brokerEpochs(broker)
 
-            // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
-            // changes the order in which the requests are sent for the same partitions, but that's OK.
-            val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch,
-              brokerEpoch, false,
-              replicasToGroup.map(_.replica.topicPartition).toSet.asJava)
-            controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
+        // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
+        // changes the order in which the requests are sent for the same partitions, but that's OK.
+        val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch,
+          brokerEpoch, false,
+          replicasToGroup.map(_.replica.topicPartition).toSet.asJava)
+        controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
 
-            replicasToNotGroup.foreach { r =>
-              val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion,
-                controllerId, controllerEpoch, brokerEpoch, r.deletePartition,
-                Set(r.replica.topicPartition).asJava)
-              controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
-            }
-          case None =>stateChangeLog.trace(s"Broker epoch does not exists for broker $broker. Skip sending UpdateMetadata request to this broker.")
+        replicasToNotGroup.foreach { r =>
+          val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion,
+            controllerId, controllerEpoch, brokerEpoch, r.deletePartition,
+            Set(r.replica.topicPartition).asJava)
+          controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
         }
       }
       stopReplicaRequestMap.clear()
