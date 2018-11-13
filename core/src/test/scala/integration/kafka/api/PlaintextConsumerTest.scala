@@ -1868,8 +1868,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2.close()
     consumer3.close()
 
-    assertTrue("Expected one consumer to consumer from earliest, one from latest, and one from offset 1 " +
-      "without fetching the last committed offset.", numRecords1 == 3 && numRecords2 == 0 && numRecords3 == 2)
+    assertEquals("Expected consumer1 to consume from earliest offset", 3, numRecords1)
+    assertEquals("Expected consumer2 to consume from latest offset", 0, numRecords2)
+    assertEquals("Expected consumer3 to consume from offset 1", 2, numRecords3)
   }
 
   @Test
