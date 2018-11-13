@@ -133,14 +133,19 @@ public class ErrorHandlingIntegrationTest {
 
         // produce some strings into test topic
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
-            connect.kafka().produce("test-topic", "key-" + i, "value-" + String.valueOf(i));
+            connect.kafka().produce("test-topic", "key-" + i, "value-" + i);
         }
 
         // consume all records from test topic
         log.info("Consuming records from test topic");
-        for (ConsumerRecord<byte[], byte[]> recs : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
-            log.debug("Consumed record (key='{}', value='{}') from topic {}",
-                    new String(recs.key()), new String(recs.value()), recs.topic());
+        int i = 0;
+        for (ConsumerRecord<byte[], byte[]> rec : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic")) {
+            String k = new String(rec.key());
+            String v = new String(rec.value());
+            log.debug("Consumed record (key='{}', value='{}') from topic {}", k, v, rec.topic());
+            assertEquals("Unexpected key", k, "key-" + i);
+            assertEquals("Unexpected value", v, "value-" + i);
+            i++;
         }
 
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);

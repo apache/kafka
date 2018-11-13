@@ -35,7 +35,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertEquals;
 
 /**
  * An example integration test that demonstrates how to setup an integration test for Connect.
@@ -106,11 +106,11 @@ public class ExampleConnectIntegrationTest {
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
 
-        // start a sink connector
-        connect.configureConnector(CONNECTOR_NAME, props);
-
         // expect all records to be consumed by the connector
         connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
+
+        // start a sink connector
+        connect.configureConnector(CONNECTOR_NAME, props);
 
         // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -118,13 +118,14 @@ public class ExampleConnectIntegrationTest {
         }
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
-        connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic");
+        assertEquals("Unexpected number of records consumed", NUM_RECORDS_PRODUCED,
+                connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic").count());
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // at least one task should have initalized and executed
-        assertTrue("Incorrect task count in connector", connect.getConnectorStatus(CONNECTOR_NAME).tasks().size() > 0);
+        assertEquals("Incorrect task count in connector", 2, connect.getConnectorStatus(CONNECTOR_NAME).tasks().size());
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);

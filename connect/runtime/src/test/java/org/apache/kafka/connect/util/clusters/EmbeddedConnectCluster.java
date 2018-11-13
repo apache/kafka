@@ -93,6 +93,7 @@ public class EmbeddedConnectCluster {
                 worker.stop();
             } catch (Exception e) {
                 log.error("Could not stop connect", e);
+                throw new RuntimeException("Could not stop worker", e);
             }
         }
 
@@ -100,6 +101,7 @@ public class EmbeddedConnectCluster {
             kafkaCluster.after();
         } catch (Exception e) {
             log.error("Could not stop kafka", e);
+            throw new RuntimeException("Could not stop brokers", e);
         }
     }
 
@@ -125,7 +127,7 @@ public class EmbeddedConnectCluster {
         }
         log.debug("Found available ports: {}", Arrays.toString(ports));
         for (int i = 0; i < connectCluster.length; i++) {
-            workerProps.put(REST_PORT_CONFIG, String.valueOf(ports[i])); // set this to zero so we pick a random port
+            workerProps.put(REST_PORT_CONFIG, String.valueOf(ports[i]));
             connectCluster[i] = new ConnectDistributed().startConnect(workerProps);
         }
     }
@@ -180,7 +182,7 @@ public class EmbeddedConnectCluster {
         }
     }
 
-    public String endpointForResource(String resource) {
+    private String endpointForResource(String resource) {
         String url = String.valueOf(connectCluster[0].restUrl());
         return url + resource;
     }

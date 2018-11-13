@@ -31,9 +31,9 @@ import java.util.concurrent.TimeUnit;
 public class ConnectorHandle {
 
     private static final Logger log = LoggerFactory.getLogger(ConnectorHandle.class);
-    private final String connectorName;
 
-    private Map<String, TaskHandle> taskHandles = new ConcurrentHashMap<>();
+    private final String connectorName;
+    private final Map<String, TaskHandle> taskHandles = new ConcurrentHashMap<>();
 
     private CountDownLatch recordsRemainingLatch;
     private int expectedRecords = -1;
@@ -90,7 +90,7 @@ public class ConnectorHandle {
      */
     public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {
         if (recordsRemainingLatch == null) {
-            throw new IllegalStateException("Illegal state encountered. expectedRecords() was not set for this task?");
+            throw new IllegalStateException("expectedRecords() was not set for this task?");
         }
         if (!recordsRemainingLatch.await(consumeMaxDurationMs, TimeUnit.MILLISECONDS)) {
             String msg = String.format("Insufficient records seen by connector %s in %d millis. Records expected=%d, actual=%d",

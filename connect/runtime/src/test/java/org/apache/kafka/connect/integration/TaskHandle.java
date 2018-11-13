@@ -70,9 +70,10 @@ public class TaskHandle {
      * @param numPartitions number of partitions
      */
     public void partitionsAssigned(int numPartitions) {
-        for (int i = 0; i < numPartitions; i++) {
-            expectedPartitionsLatch.countDown();
+        if (numPartitions > 1) {
+            throw new IllegalStateException("Expected only one partition. But, assigned " + numPartitions + ".");
         }
+        expectedPartitionsLatch.countDown();
     }
 
     /**

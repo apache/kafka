@@ -134,13 +134,16 @@ public class EmbeddedKafkaCluster extends ExternalResource {
             producer.close();
         } catch (Exception e) {
             log.error("Could not shutdown producer ", e);
+            throw new RuntimeException("Could not shutdown producer", e);
         }
 
         for (KafkaServer broker : brokers) {
             try {
                 broker.shutdown();
             } catch (Throwable t) {
-                log.error("Could not shutdown broker at {}", address(broker), t);
+                String msg = String.format("Could not shutdown broker at %s", address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
         }
 
@@ -149,14 +152,18 @@ public class EmbeddedKafkaCluster extends ExternalResource {
                 log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
                 CoreUtils.delete(broker.config().logDirs());
             } catch (Throwable t) {
-                log.error("Could not clean up log dirs for broker at {}", address(broker), t);
+                String msg = String.format("Could not clean up log dirs for broker at %s", address(broker));
+                log.error(msg, t);
+                throw new RuntimeException(msg, t);
             }
         }
 
         try {
             zookeeper.shutdown();
         } catch (Throwable t) {
-            log.error("Could not shutdown zookeeper at {}", zKConnectString(), t);
+            String msg = String.format("Could not shutdown zookeeper at %s", zKConnectString());
+            log.error(msg, t);
+            throw new RuntimeException(msg, t);
         }
     }
 
@@ -267,10 +274,12 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         int consumedRecords = 0;
         try (KafkaConsumer<byte[], byte[]> consumer = createConsumerAndSubscribeTo(Collections.emptyMap(), topics)) {
             final long startMillis = System.currentTimeMillis();
-            long current = startMillis;
-            while (current - startMillis < maxDuration) {
-                ConsumerRecords<byte[], byte[]> rec = consumer.poll(Duration.ofMillis(maxDuration));
+            long allowedDuration = maxDuration;
+            while (allowedDuration > 0) {
+                log.debug("Consuming from {} for {} millis.", Arrays.toString(topics), allowedDuration);
+                ConsumerRecords<byte[], byte[]> rec = consumer.poll(Duration.ofMillis(allowedDuration));
                 if (rec.isEmpty()) {
+                    allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
                     continue;
                 }
                 for (TopicPartition partition: rec.partitions()) {
@@ -281,7 +290,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
                 if (consumedRecords >= n) {
                     return new ConsumerRecords<>(records);
                 }
-                current = System.currentTimeMillis();
+                allowedDuration = maxDuration - (System.currentTimeMillis() - startMillis);
             }
         }
 
