@@ -121,7 +121,7 @@ public abstract class AbstractCoordinator implements Closeable {
     private Generation generation = Generation.NO_GENERATION;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
-    
+
     /**
      * Initialize the coordination manager.
      */
@@ -136,6 +136,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                Time time,
                                long retryBackoffMs,
                                boolean leaveGroupOnClose) {
+        assert groupId != null : "Expected a non-null group id for coordinator construction";
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;

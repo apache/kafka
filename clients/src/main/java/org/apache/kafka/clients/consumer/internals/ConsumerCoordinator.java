@@ -491,9 +491,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation completed within the timeout
      */
     public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
-        // no committed offset should be fetched for the default group id
-        if (groupId == null) return true;
-
         final Set<TopicPartition> missingFetchPositions = subscriptions.missingFetchPositions();
 
         final Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(missingFetchPositions, timer);

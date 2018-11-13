@@ -2230,7 +2230,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     private void maybeThrowInvalidGroupIdException() {
         if (groupId == null)
-            throw new InvalidGroupIdException("The null group id does not support group management or offset commit APIs.");
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     // Visible for testing

@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -1861,6 +1861,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer3.seek(tp, 1)
 
     val numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count()
+
+    try {
+      consumer1.commitSync()
+      fail("Expected offset commit to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
+    try {
+      consumer2.committed(tp)
+      fail("Expected committed offset fetch to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
     val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
     val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()
 
