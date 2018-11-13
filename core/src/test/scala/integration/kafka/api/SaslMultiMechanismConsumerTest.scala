@@ -45,6 +45,7 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
 
   @Test
   def testMultipleBrokerMechanisms() {
+
     val plainSaslProducer = createProducer()
     val plainSaslConsumer = createConsumer()
 
@@ -59,7 +60,9 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, 0)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
-    sendAndAwaitAsyncCommit(plainSaslConsumer)
+    val plainCommitCallback = new CountConsumerCommitCallback()
+    plainSaslConsumer.commitAsync(plainCommitCallback)
+    awaitCommitCallback(plainSaslConsumer, plainCommitCallback)
     startingOffset += numRecords
 
     // Test SASL/GSSAPI producer and consumer
@@ -67,7 +70,9 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     gssapiSaslConsumer.assign(List(tp).asJava)
     gssapiSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = gssapiSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
-    sendAndAwaitAsyncCommit(gssapiSaslConsumer)
+    val gssapiCommitCallback = new CountConsumerCommitCallback()
+    gssapiSaslConsumer.commitAsync(gssapiCommitCallback)
+    awaitCommitCallback(gssapiSaslConsumer, gssapiCommitCallback)
     startingOffset += numRecords
 
     // Test SASL/PLAIN producer and SASL/GSSAPI consumer
@@ -82,6 +87,6 @@ class SaslMultiMechanismConsumerTest extends BaseConsumerTest with SaslSetup {
     plainSaslConsumer.assign(List(tp).asJava)
     plainSaslConsumer.seek(tp, startingOffset)
     consumeAndVerifyRecords(consumer = plainSaslConsumer, numRecords = numRecords, startingOffset = startingOffset)
-  }
 
+  }
 }

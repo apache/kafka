@@ -24,7 +24,6 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
-@SuppressWarnings("unchecked")
 public class StateSerdesTest {
 
     @Test(expected = NullPointerException.class)

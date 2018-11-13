@@ -33,7 +33,6 @@ import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.io.StdIn
 
 object AclCommand extends Logging {
 
@@ -449,7 +448,7 @@ object AclCommand extends Logging {
     if (opts.options.has(opts.forceOpt))
         return true
     println(msg)
-    StdIn.readLine().equalsIgnoreCase("y")
+    Console.readLine().equalsIgnoreCase("y")
   }
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[Acl]]): Unit = {

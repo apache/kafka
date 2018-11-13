@@ -60,7 +60,7 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaOffsetBackingStore.class)
 @PowerMockIgnore("javax.management.*")
-@SuppressWarnings({"unchecked", "deprecation"})
+@SuppressWarnings("unchecked")
 public class KafkaOffsetBackingStoreTest {
     private static final String TOPIC = "connect-offsets";
     private static final short TOPIC_PARTITIONS = 2;
@@ -117,7 +117,7 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testStartStop() throws Exception {
         expectConfigure();
-        expectStart(Collections.emptyList());
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
 
         PowerMock.replayAll();
@@ -166,15 +166,18 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testGetSet() throws Exception {
         expectConfigure();
-        expectStart(Collections.emptyList());
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
 
         // First get() against an empty store
         final Capture<Callback<Void>> firstGetReadToEndCallback = EasyMock.newCapture();
         storeLog.readToEnd(EasyMock.capture(firstGetReadToEndCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            firstGetReadToEndCallback.getValue().onCompletion(null, null);
-            return null;
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                firstGetReadToEndCallback.getValue().onCompletion(null, null);
+                return null;
+            }
         });
 
         // Set offsets
@@ -281,7 +284,7 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testGetSetNull() throws Exception {
         expectConfigure();
-        expectStart(Collections.emptyList());
+        expectStart(Collections.EMPTY_LIST);
 
         // Set offsets
         Capture<org.apache.kafka.clients.producer.Callback> callback0 = EasyMock.newCapture();
@@ -294,11 +297,14 @@ public class KafkaOffsetBackingStoreTest {
         // Second get() should get the produced data and return the new values
         final Capture<Callback<Void>> secondGetReadToEndCallback = EasyMock.newCapture();
         storeLog.readToEnd(EasyMock.capture(secondGetReadToEndCallback));
-        PowerMock.expectLastCall().andAnswer(() -> {
-            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, (byte[]) null, TP0_VALUE.array()));
-            capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), (byte[]) null));
-            secondGetReadToEndCallback.getValue().onCompletion(null, null);
-            return null;
+        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
+            @Override
+            public Object answer() throws Throwable {
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, (byte[]) null, TP0_VALUE.array()));
+                capturedConsumedCallback.getValue().onCompletion(null, new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY.array(), (byte[]) null));
+                secondGetReadToEndCallback.getValue().onCompletion(null, null);
+                return null;
+            }
         });
 
         expectStop();
@@ -348,7 +354,7 @@ public class KafkaOffsetBackingStoreTest {
     @Test
     public void testSetFailure() throws Exception {
         expectConfigure();
-        expectStart(Collections.emptyList());
+        expectStart(Collections.EMPTY_LIST);
         expectStop();
 
         // Set offsets

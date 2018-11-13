@@ -351,7 +351,6 @@ public class RestoreIntegrationTest {
             this.processorLatch = processorLatch;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
@@ -392,7 +391,7 @@ public class RestoreIntegrationTest {
         consumerConfig.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         consumerConfig.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
 
-        final Consumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerConfig);
+        final Consumer consumer = new KafkaConsumer(consumerConfig);
         final List<TopicPartition> partitions = Arrays.asList(
             new TopicPartition(topic, 0),
             new TopicPartition(topic, 1));

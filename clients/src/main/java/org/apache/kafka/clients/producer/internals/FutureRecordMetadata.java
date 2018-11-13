@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.utils.Time;
-
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 /**
  * The future result of a record send
@@ -35,18 +34,16 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final Long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
-    private final Time time;
     private volatile FutureRecordMetadata nextRecordMetadata = null;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
-                                Long checksum, int serializedKeySize, int serializedValueSize, Time time) {
+                                Long checksum, int serializedKeySize, int serializedValueSize) {
         this.result = result;
         this.relativeOffset = relativeOffset;
         this.createTimestamp = createTimestamp;
         this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
-        this.time = time;
     }
 
     @Override
@@ -70,14 +67,13 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     @Override
     public RecordMetadata get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
         // Handle overflow.
-        long now = time.milliseconds();
-        long timeoutMillis = unit.toMillis(timeout);
-        long deadline = Long.MAX_VALUE - timeoutMillis < now ? Long.MAX_VALUE : now + timeoutMillis;
+        long now = System.currentTimeMillis();
+        long deadline = Long.MAX_VALUE - timeout < now ? Long.MAX_VALUE : now + timeout;
         boolean occurred = this.result.await(timeout, unit);
-        if (!occurred)
-            throw new TimeoutException("Timeout after waiting for " + timeoutMillis + " ms.");
         if (nextRecordMetadata != null)
-            return nextRecordMetadata.get(deadline - time.milliseconds(), TimeUnit.MILLISECONDS);
+            return nextRecordMetadata.get(deadline - System.currentTimeMillis(), TimeUnit.MILLISECONDS);
+        if (!occurred)
+            throw new TimeoutException("Timeout after waiting for " + TimeUnit.MILLISECONDS.convert(timeout, unit) + " ms.");
         return valueOrError();
     }
 

@@ -141,7 +141,6 @@ public class FlattenTest {
 
         assertNull(transformed.valueSchema());
         assertTrue(transformed.value() instanceof Map);
-        @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
         assertEquals(9, transformedMap.size());
         assertEquals((byte) 8, transformedMap.get("A#B#int8"));
@@ -197,7 +196,6 @@ public class FlattenTest {
 
         assertNull(transformed.valueSchema());
         assertTrue(transformed.value() instanceof Map);
-        @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.value();
 
         assertNull(transformedMap.get("B.opt_int32"));
@@ -213,7 +211,6 @@ public class FlattenTest {
 
         assertNull(transformed.keySchema());
         assertTrue(transformed.key() instanceof Map);
-        @SuppressWarnings("unchecked")
         Map<String, Object> transformedMap = (Map<String, Object>) transformed.key();
         assertEquals(12, transformedMap.get("A.B"));
     }

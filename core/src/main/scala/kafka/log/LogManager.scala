@@ -440,8 +440,6 @@ class LogManager(logDirs: Seq[File],
       CoreUtils.swallow(cleaner.shutdown(), this)
     }
 
-    val localLogsByDir = logsByDir
-
     // close logs in each dir
     for (dir <- liveLogDirs) {
       debug(s"Flushing and closing logs at $dir")
@@ -449,7 +447,7 @@ class LogManager(logDirs: Seq[File],
       val pool = Executors.newFixedThreadPool(numRecoveryThreadsPerDataDir)
       threadPools.append(pool)
 
-      val logsInDir = localLogsByDir.getOrElse(dir.toString, Map()).values
+      val logsInDir = logsByDir.getOrElse(dir.toString, Map()).values
 
       val jobsForDir = logsInDir map { log =>
         CoreUtils.runnable {
@@ -468,7 +466,7 @@ class LogManager(logDirs: Seq[File],
 
         // update the last flush point
         debug(s"Updating recovery points at $dir")
-        checkpointRecoveryOffsetsAndCleanSnapshot(dir, localLogsByDir.getOrElse(dir.toString, Map()).values.toSeq)
+        checkpointLogRecoveryOffsetsInDir(dir)
 
         debug(s"Updating log start offsets at $dir")
         checkpointLogStartOffsetsInDir(dir)
@@ -497,7 +495,7 @@ class LogManager(logDirs: Seq[File],
    * @param isFuture True iff the truncation should be performed on the future log of the specified partitions
    */
   def truncateTo(partitionOffsets: Map[TopicPartition, Long], isFuture: Boolean) {
-    val affectedLogs = ArrayBuffer.empty[Log]
+    var truncated = false
     for ((topicPartition, truncateOffset) <- partitionOffsets) {
       val log = {
         if (isFuture)
@@ -513,7 +511,7 @@ class LogManager(logDirs: Seq[File],
           cleaner.abortAndPauseCleaning(topicPartition)
         try {
           if (log.truncateTo(truncateOffset))
-            affectedLogs += log
+            truncated = true
           if (needToStopCleaner && !isFuture)
             cleaner.maybeTruncateCheckpoint(log.dir.getParentFile, topicPartition, log.activeSegment.baseOffset)
         } finally {
@@ -525,9 +523,8 @@ class LogManager(logDirs: Seq[File],
       }
     }
 
-    for ((dir, logs) <- affectedLogs.groupBy(_.dir.getParentFile)) {
-      checkpointRecoveryOffsetsAndCleanSnapshot(dir, logs)
-    }
+    if (truncated)
+      checkpointLogRecoveryOffsets()
   }
 
   /**
@@ -560,7 +557,7 @@ class LogManager(logDirs: Seq[File],
           info(s"Compaction for partition $topicPartition is resumed")
         }
       }
-      checkpointRecoveryOffsetsAndCleanSnapshot(log.dir.getParentFile, Seq(log))
+      checkpointLogRecoveryOffsetsInDir(log.dir.getParentFile)
     }
   }
 
@@ -569,11 +566,7 @@ class LogManager(logDirs: Seq[File],
    * to avoid recovering the whole log on startup.
    */
   def checkpointLogRecoveryOffsets() {
-    logsByDir.foreach { case (dir, partitionToLogMap) =>
-      liveLogDirs.find(_.getAbsolutePath.equals(dir)).foreach { f =>
-        checkpointRecoveryOffsetsAndCleanSnapshot(f, partitionToLogMap.values.toSeq)
-      }
-    }
+    liveLogDirs.foreach(checkpointLogRecoveryOffsetsInDir)
   }
 
   /**
@@ -585,29 +578,21 @@ class LogManager(logDirs: Seq[File],
   }
 
   /**
-    * Write the recovery checkpoint file for all logs in provided directory and clean older snapshots for provided logs.
-    *
-    * @param dir the directory in which logs are checkpointed
-    * @param logsToCleanSnapshot logs whose snapshots need to be cleaned
-    */
-  // Only for testing
-  private[log] def checkpointRecoveryOffsetsAndCleanSnapshot(dir: File, logsToCleanSnapshot: Seq[Log]): Unit = {
-    try {
-      checkpointLogRecoveryOffsetsInDir(dir)
-      logsToCleanSnapshot.foreach(_.deleteSnapshotsAfterRecoveryPointCheckpoint())
-    } catch {
-      case e: IOException =>
-        logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to recovery point " +
-          s"file in directory $dir", e)
-    }
-  }
-
+   * Make a checkpoint for all logs in provided directory.
+   */
   private def checkpointLogRecoveryOffsetsInDir(dir: File): Unit = {
     for {
       partitionToLog <- logsByDir.get(dir.getAbsolutePath)
       checkpoint <- recoveryPointCheckpoints.get(dir)
     } {
-      checkpoint.write(partitionToLog.mapValues(_.recoveryPoint))
+      try {
+        checkpoint.write(partitionToLog.mapValues(_.recoveryPoint))
+        allLogs.foreach(_.deleteSnapshotsAfterRecoveryPointCheckpoint())
+      } catch {
+        case e: IOException =>
+          logDirFailureChannel.maybeAddOfflineLogDir(dir.getAbsolutePath, s"Disk error while writing to recovery point " +
+            s"file in directory $dir", e)
+      }
     }
   }
 
@@ -817,7 +802,7 @@ class LogManager(logDirs: Seq[File],
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
-        checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.dir.getParentFile, ArrayBuffer.empty)
+        checkpointLogRecoveryOffsetsInDir(sourceLog.dir.getParentFile)
         checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
         addLogToBeDeleted(sourceLog)
       } catch {
@@ -855,7 +840,7 @@ class LogManager(logDirs: Seq[File],
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
-      checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)
+      checkpointLogRecoveryOffsetsInDir(removedLog.dir.getParentFile)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)
       addLogToBeDeleted(removedLog)
       info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
@@ -944,8 +929,9 @@ class LogManager(logDirs: Seq[File],
    * Map of log dir to logs by topic and partitions in that dir
    */
   private def logsByDir: Map[String, Map[TopicPartition, Log]] = {
-    (this.currentLogs.toList ++ this.futureLogs.toList).toMap
-      .groupBy { case (_, log) => log.dir.getParent }
+    (this.currentLogs.toList ++ this.futureLogs.toList).groupBy {
+      case (_, log) => log.dir.getParent
+    }.mapValues(_.toMap)
   }
 
   // logDir should be an absolute path

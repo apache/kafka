@@ -77,7 +77,7 @@ public class RestServer {
     private final WorkerConfig config;
     private Server jettyServer;
 
-    private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
+    private List<ConnectRestExtension> connectRestExtensions = Collections.EMPTY_LIST;
 
     /**
      * Create a REST server for this herder using the specified configs.
@@ -92,7 +92,6 @@ public class RestServer {
         createConnectors(listeners);
     }
 
-    @SuppressWarnings("deprecation")
     List<String> parseListeners() {
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         if (listeners == null || listeners.size() == 0) {

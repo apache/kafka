@@ -94,7 +94,6 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return fetch(key, from.toEpochMilli(), to.toEpochMilli());
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         Objects.requireNonNull(from, "from can't be null");

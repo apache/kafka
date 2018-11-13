@@ -159,14 +159,11 @@ public class ConnectorPluginsResourceTest {
 
         try {
             for (Class<?> klass : abstractConnectorClasses) {
-                @SuppressWarnings("unchecked")
-                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc((Class<? extends Connector>) klass, "0.0.0");
-                CONNECTOR_PLUGINS.add(pluginDesc);
+                CONNECTOR_PLUGINS.add(
+                        new MockConnectorPluginDesc((Class<? extends Connector>) klass, "0.0.0"));
             }
             for (Class<?> klass : connectorClasses) {
-                @SuppressWarnings("unchecked")
-                MockConnectorPluginDesc pluginDesc = new MockConnectorPluginDesc((Class<? extends Connector>) klass);
-                CONNECTOR_PLUGINS.add(pluginDesc);
+                CONNECTOR_PLUGINS.add(new MockConnectorPluginDesc((Class<? extends Connector>) klass));
             }
         } catch (Exception e) {
             throw new RuntimeException(e);

@@ -918,17 +918,26 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
     var messageCount = 0
-    TestUtils.consumeRecords(consumer, 10)
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count
+      messageCount == 10
+    }, "Expected 10 messages", 3000L)
 
     client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
-    TestUtils.consumeRecords(consumer, 7)
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count
+      messageCount == 7
+    }, "Expected 7 messages", 3000L)
 
     client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
-    TestUtils.consumeRecords(consumer, 2)
+    TestUtils.waitUntilTrue(() => {
+      messageCount += consumer.poll(0).count
+      messageCount == 2
+    }, "Expected 2 messages", 3000L)
   }
 
   @Test
@@ -979,7 +988,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
-    TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(0)
+      !consumer.assignment.isEmpty
+    }, "Expected non-empty assignment")
   }
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
@@ -1135,7 +1147,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           consumerThread.start
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
-            val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
+            val matching = client.listConsumerGroups().all().get().asScala.
+              filter(listing => listing.groupId().equals(testGroupId))
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 

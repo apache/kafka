@@ -58,7 +58,6 @@ public class ConfigEntry {
      * @param isReadOnly whether the config is read-only and cannot be updated
      * @deprecated since 1.1.0. This constructor will be removed in a future release.
      */
-    @Deprecated
     public ConfigEntry(String name, String value, boolean isDefault, boolean isSensitive, boolean isReadOnly) {
         this(name,
              value,

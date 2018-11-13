@@ -151,8 +151,13 @@ public class DelegatingClassLoader extends URLClassLoader {
             final URL[] urls,
             final ClassLoader parent
     ) {
-        return AccessController.doPrivileged(
-                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
+        return (PluginClassLoader) AccessController.doPrivileged(
+                new PrivilegedAction() {
+                    @Override
+                    public Object run() {
+                        return new PluginClassLoader(pluginLocation, urls, parent);
+                    }
+                }
         );
     }
 
@@ -326,7 +331,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    @SuppressWarnings("unchecked")
     private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();

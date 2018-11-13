@@ -24,7 +24,6 @@ public class CredentialCache {
 
     public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
         Cache<C> cache = new Cache<>(credentialClass);
-        @SuppressWarnings("unchecked")
         Cache<C> oldCache = (Cache<C>) cacheMap.putIfAbsent(mechanism, cache);
         return oldCache == null ? cache : oldCache;
     }

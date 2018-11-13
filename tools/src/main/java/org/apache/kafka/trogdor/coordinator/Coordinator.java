@@ -30,9 +30,7 @@ import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
-import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
-import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -104,10 +102,6 @@ public final class Coordinator {
 
     public TasksResponse tasks(TasksRequest request) throws Exception {
         return taskManager.tasks(request);
-    }
-
-    public TaskState task(TaskRequest request) throws Exception {
-        return taskManager.task(request);
     }
 
     public void beginShutdown(boolean stopAgents) throws Exception {

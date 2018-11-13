@@ -55,7 +55,6 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
             .define(ConfigName.WHITELIST, ConfigDef.Type.LIST, Collections.emptyList(), ConfigDef.Importance.MEDIUM,
                     "Fields to include. If specified, only these fields will be used.")
             .define(ConfigName.RENAME, ConfigDef.Type.LIST, Collections.emptyList(), new ConfigDef.Validator() {
-                @SuppressWarnings("unchecked")
                 @Override
                 public void ensureValid(String name, Object value) {
                     parseRenameMappings((List<String>) value);
@@ -84,7 +83,7 @@ public abstract class ReplaceField<R extends ConnectRecord<R>> implements Transf
         renames = parseRenameMappings(config.getList(ConfigName.RENAME));
         reverseRenames = invert(renames);
 
-        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<>(16));
+        schemaUpdateCache = new SynchronizedCache<>(new LRUCache<Schema, Schema>(16));
     }
 
     static Map<String, String> parseRenameMappings(List<String> mappings) {

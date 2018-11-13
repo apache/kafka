@@ -71,7 +71,7 @@ public class ExpectedTasks {
         }
     }
 
-    public static class ExpectedTask {
+    static class ExpectedTask {
         private final String id;
         private final TaskSpec taskSpec;
         private final TaskState taskState;

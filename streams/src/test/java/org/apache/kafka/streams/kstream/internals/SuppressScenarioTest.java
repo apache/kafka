@@ -352,7 +352,6 @@ public class SuppressScenarioTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -403,7 +402,6 @@ public class SuppressScenarioTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindowsWithLargeJump() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -459,7 +457,6 @@ public class SuppressScenarioTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForSessionWindows() {
         final StreamsBuilder builder = new StreamsBuilder();

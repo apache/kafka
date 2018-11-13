@@ -53,7 +53,6 @@ public class PureJavaCrc32C implements Checksum {
         crc = 0xffffffff;
     }
 
-    @SuppressWarnings("fallthrough")
     @Override
     public void update(byte[] b, int off, int len) {
         int localCrc = crc;

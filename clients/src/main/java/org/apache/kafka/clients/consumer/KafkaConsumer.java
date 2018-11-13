@@ -1024,7 +1024,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
+            fetcher.clearBufferedDataForUnassignedPartitions(Collections.EMPTY_SET);
             this.subscriptions.unsubscribe();
             this.coordinator.maybeLeaveGroup();
             this.metadata.needMetadataForAllTopics(false);

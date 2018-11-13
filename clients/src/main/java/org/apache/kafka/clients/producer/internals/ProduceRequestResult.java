@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * partition in a produce request and it is shared by all the {@link RecordMetadata} instances that are batched together
  * for the same partition in the request.
  */
-public class ProduceRequestResult {
+public final class ProduceRequestResult {
 
     private final CountDownLatch latch = new CountDownLatch(1);
     private final TopicPartition topicPartition;
