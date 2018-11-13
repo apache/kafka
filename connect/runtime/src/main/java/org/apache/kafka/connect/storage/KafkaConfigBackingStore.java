@@ -363,7 +363,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             Struct connectConfig = new Struct(TASK_CONFIGURATION_V0);
             connectConfig.put("properties", taskConfig);
             byte[] serializedConfig = converter.fromConnectData(topic, TASK_CONFIGURATION_V0, connectConfig);
-            log.debug("Writing configuration for task {}", index);
+            log.debug("Writing configuration for connector '{}' task {}", connector, index);
             ConnectorTaskId connectorTaskId = new ConnectorTaskId(connector, index);
             configLog.send(TASK_KEY(connectorTaskId), serializedConfig);
             index++;
