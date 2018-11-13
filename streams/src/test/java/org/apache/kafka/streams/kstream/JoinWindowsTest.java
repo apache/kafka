@@ -24,7 +24,7 @@ import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
-
+@SuppressWarnings("deprecation")
 public class JoinWindowsTest {
 
     private static final long ANY_SIZE = 123L;

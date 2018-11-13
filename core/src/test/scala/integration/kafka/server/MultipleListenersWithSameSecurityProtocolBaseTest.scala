@@ -28,7 +28,7 @@ import kafka.utils.JaasTestUtils.JaasSection
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.config.SslConfigs
 import org.apache.kafka.common.internals.Topic
@@ -38,7 +38,6 @@ import org.junit.{After, Before, Test}
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.JavaConverters._
 
 object MultipleListenersWithSameSecurityProtocolBaseTest {
   val SecureInternal = "SECURE_INTERNAL"
@@ -169,11 +168,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
 
       val consumer = consumers(clientMetadata)
       consumer.subscribe(Collections.singleton(clientMetadata.topic))
-      val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
-      TestUtils.waitUntilTrue(() => {
-        records ++= consumer.poll(50).asScala
-        records.size == producerRecords.size
-      }, s"Consumed ${records.size} records until timeout instead of the expected ${producerRecords.size} records with mechanism ${clientMetadata.saslMechanism}")
+      TestUtils.consumeRecords(consumer, producerRecords.size)
     }
   }
 

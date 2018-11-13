@@ -96,6 +96,7 @@ public class Worker {
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
     private WorkerConfigTransformer workerConfigTransformer;
 
+    @SuppressWarnings("deprecation")
     public Worker(
             String workerId,
             Time time,

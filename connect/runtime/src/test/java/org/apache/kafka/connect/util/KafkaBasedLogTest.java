@@ -131,6 +131,7 @@ public class KafkaBasedLogTest {
         }
     };
 
+    @SuppressWarnings("unchecked")
     @Before
     public void setUp() {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},

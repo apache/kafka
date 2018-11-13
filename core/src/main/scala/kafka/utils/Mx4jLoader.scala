@@ -45,7 +45,7 @@ object Mx4jLoader extends Logging {
       val processorName = new ObjectName("Server:name=XSLTProcessor")
 
       val httpAdaptorClass = Class.forName("mx4j.tools.adaptor.http.HttpAdaptor")
-      val httpAdaptor = httpAdaptorClass.newInstance()
+      val httpAdaptor = httpAdaptorClass.getDeclaredConstructor().newInstance()
       httpAdaptorClass.getMethod("setHost", classOf[String]).invoke(httpAdaptor, address.asInstanceOf[AnyRef])
       httpAdaptorClass.getMethod("setPort", Integer.TYPE).invoke(httpAdaptor, port.asInstanceOf[AnyRef])
 
@@ -53,7 +53,7 @@ object Mx4jLoader extends Logging {
       mbs.registerMBean(httpAdaptor, httpName)
 
       val xsltProcessorClass = Class.forName("mx4j.tools.adaptor.http.XSLTProcessor")
-      val xsltProcessor = xsltProcessorClass.newInstance()
+      val xsltProcessor = xsltProcessorClass.getDeclaredConstructor().newInstance()
       httpAdaptorClass.getMethod("setProcessor", Class.forName("mx4j.tools.adaptor.http.ProcessorMBean")).invoke(httpAdaptor, xsltProcessor.asInstanceOf[AnyRef])
       mbs.registerMBean(xsltProcessor, processorName)
       httpAdaptorClass.getMethod("start").invoke(httpAdaptor)

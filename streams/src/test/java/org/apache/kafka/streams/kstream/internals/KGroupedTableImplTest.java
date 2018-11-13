@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
@@ -205,12 +204,12 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldCountAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
-                      Serialized.with(Serdes.String(),
+        table.groupBy(MockMapper.selectValueKeyValueMapper(),
+                      org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(),
                                       Serdes.String()))
                 .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
                                .withKeySerde(Serdes.String())
@@ -224,12 +223,12 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     @Test
     public void shouldAggregateAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
         table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
-                      Serialized.with(Serdes.String(),
+                      org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(),
                                       Serdes.String()))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,

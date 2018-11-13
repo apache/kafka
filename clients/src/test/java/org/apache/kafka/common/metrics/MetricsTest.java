@@ -839,6 +839,7 @@ public class MetricsTest {
      * This test is to verify the deprecated {@link Metric#value()} method.
      * @deprecated This will be removed in a future major release.
      */
+    @Deprecated
     @Test
     public void testDeprecatedMetricValueMethod() {
         verifyStats(KafkaMetric::value);

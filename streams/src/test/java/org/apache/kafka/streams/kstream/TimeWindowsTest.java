@@ -28,6 +28,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class TimeWindowsTest {
 
     private static final long ANY_SIZE = 123L;

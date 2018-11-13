@@ -35,7 +35,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 import java.util.Properties;
@@ -55,6 +54,7 @@ import java.util.Properties;
  */
 public class PageViewUntypedDemo {
 
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) throws Exception {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
@@ -87,7 +87,7 @@ public class PageViewUntypedDemo {
 
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
-            .groupByKey(Serialized.with(Serdes.String(), jsonSerde))
+            .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), jsonSerde))
             .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()

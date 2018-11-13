@@ -50,9 +50,9 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val partitionT1p0 = createMock(classOf[Partition])
-    val partitionT1p1 = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val partitionT1p0: Partition = createMock(classOf[Partition])
+    val partitionT1p1: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpochT1p0 = 2
     val leaderEpochT1p1 = 5
@@ -101,8 +101,8 @@ class ReplicaAlterLogDirsThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val partitionT1p0 = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val partitionT1p0: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpoch = 2
     val leo = 13
@@ -149,18 +149,18 @@ class ReplicaAlterLogDirsThreadTest {
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val futureReplicaLeaderEpochsT1p0 = createMock(classOf[LeaderEpochFileCache])
-    val futureReplicaLeaderEpochsT1p1 = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaT1p0 = createNiceMock(classOf[Replica])
-    val replicaT1p1 = createNiceMock(classOf[Replica])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val futureReplicaLeaderEpochsT1p0: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val futureReplicaLeaderEpochsT1p1: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaT1p0: Replica = createNiceMock(classOf[Replica])
+    val replicaT1p1: Replica = createNiceMock(classOf[Replica])
     // one future replica mock because our mocking methods return same values for both future replicas
-    val futureReplicaT1p0 = createNiceMock(classOf[Replica])
-    val futureReplicaT1p1 = createNiceMock(classOf[Replica])
-    val partitionT1p0 = createMock(classOf[Partition])
-    val partitionT1p1 = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val futureReplicaT1p0: Replica = createNiceMock(classOf[Replica])
+    val futureReplicaT1p1: Replica = createNiceMock(classOf[Replica])
+    val partitionT1p0: Partition = createMock(classOf[Partition])
+    val partitionT1p1: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val leaderEpoch = 2
@@ -228,14 +228,14 @@ class ReplicaAlterLogDirsThreadTest {
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val futureReplicaLeaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replica = createNiceMock(classOf[Replica])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val futureReplicaLeaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
     // one future replica mock because our mocking methods return same values for both future replicas
-    val futureReplica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val leaderEpoch = 5
@@ -301,13 +301,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager = createMock(classOf[LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val futureReplica = createNiceMock(classOf[Replica])
-    val futureReplicaLeaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val futureReplicaLeaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val initialFetchOffset = 100
@@ -356,13 +356,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     // Setup all the dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[kafka.server.ReplicationQuotaManager])
-    val futureReplicaLeaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[kafka.log.LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val futureReplica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[kafka.server.ReplicaManager])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val futureReplicaLeaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val futureReplicaLeaderEpoch = 1
@@ -439,13 +439,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Setup all dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val futureReplicaLeaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val futureReplica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val futureReplicaLeaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
     val responseCallback: Capture[Seq[(TopicPartition, FetchPartitionData)] => Unit]  = EasyMock.newCapture()
 
     val leaderEpoch = 5
@@ -494,12 +494,12 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Setup all dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager = createMock(classOf[LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val futureReplica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     //Stubs
     expect(futureReplica.logStartOffset).andReturn(123).anyTimes()
@@ -543,12 +543,12 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Setup all dependencies
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
-    val quotaManager = createNiceMock(classOf[ReplicationQuotaManager])
-    val logManager = createMock(classOf[LogManager])
-    val replica = createNiceMock(classOf[Replica])
-    val futureReplica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quotaManager: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val futureReplica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     //Stubs
     expect(futureReplica.logStartOffset).andReturn(123).anyTimes()

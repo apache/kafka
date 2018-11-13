@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -37,6 +36,7 @@ import org.junit.Test;
 
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
@@ -71,7 +71,7 @@ public class KTableSourceTest {
             driver.pipeInput(integerFactory.create(topic1, "B", null));
         }
 
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.theCapturedProcessor().processed);
+        assertEquals(asList("A:1", "B:2", "C:3", "D:4", "A:null", "B:null"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -96,6 +96,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final Topology topology = builder.build();
@@ -146,6 +147,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
@@ -184,6 +186,7 @@ public class KTableSourceTest {
 
         final String topic1 = "topic1";
 
+        @SuppressWarnings("unchecked")
         final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
 
         table1.enableSendingOldValues();
