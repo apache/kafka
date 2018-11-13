@@ -73,6 +73,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
     }
 
     @Override
+    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String topicName = getTopicNames().iterator().next();
 
@@ -129,7 +130,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal consumedInternal) {
+        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }

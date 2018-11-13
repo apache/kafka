@@ -14,21 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+package org.apache.kafka.trogdor.rest;
 
-@Deprecated
-public class SerializedInternal<K, V> extends org.apache.kafka.streams.kstream.Serialized<K, V> {
-    public SerializedInternal(final org.apache.kafka.streams.kstream.Serialized<K, V> serialized) {
-        super(serialized);
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+/**
+ * The request to /coordinator/tasks/{taskId}
+ */
+public class TaskRequest {
+    private final String taskId;
+
+    @JsonCreator
+    public TaskRequest(@JsonProperty("taskId") String taskId) {
+        this.taskId = taskId == null ? "" : taskId;
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
-    }
-
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    @JsonProperty
+    public String taskId() {
+        return taskId;
     }
 }

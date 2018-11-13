@@ -37,7 +37,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
 
     private RecordConversionStats recordConversionStats;
     private RecordsSend convertedRecordsWriter;
-    private Iterator<ConvertedRecords> convertedRecordsIterator;
+    private Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(String destination, LazyDownConversionRecords records) {
         super(destination, records, records.sizeInBytes());
@@ -74,8 +74,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                 // Check if we have more chunks left to down-convert
                 if (convertedRecordsIterator.hasNext()) {
                     // Get next chunk of down-converted messages
-                    ConvertedRecords<MemoryRecords> recordsAndStats = convertedRecordsIterator.next();
-                    convertedRecords = recordsAndStats.records();
+                    ConvertedRecords<?> recordsAndStats = convertedRecordsIterator.next();
+                    convertedRecords = (MemoryRecords) recordsAndStats.records();
                     recordConversionStats.add(recordsAndStats.recordConversionStats());
                     log.debug("Down-converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
                 } else {

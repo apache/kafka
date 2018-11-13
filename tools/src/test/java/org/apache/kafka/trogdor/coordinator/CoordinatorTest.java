@@ -41,7 +41,9 @@ import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
@@ -53,6 +55,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.junit.Test;
 
+import javax.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -487,6 +490,40 @@ public class CoordinatorTest {
 
             assertEquals(0, coordinatorClient.tasks(
                 new TasksRequest(null, 3, 0, 0, 0)).tasks().size());
+        }
+    }
+
+    @Test
+    public void testTaskRequest() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 10);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("foo"));
+            assertEquals(expectedState, resp);
+
+            time.sleep(2);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            try {
+                coordinatorClient.task(new TaskRequest("non-existent-foo"));
+                fail("Non existent task request should have raised a NotFoundException");
+            } catch (NotFoundException ignored) { }
         }
     }
 

@@ -43,7 +43,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
@@ -93,6 +92,7 @@ import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"unchecked", "deprecation"})
 @Category({IntegrationTest.class})
 public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -138,7 +138,7 @@ public class KStreamAggregationIntegrationTest {
         groupedStream = stream
             .groupBy(
                 mapper,
-                Serialized.with(Serdes.String(), Serdes.String()));
+                org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()));
 
         reducer = (value1, value2) -> value1 + ":" + value2;
         initializer = () -> 0;
@@ -428,7 +428,7 @@ public class KStreamAggregationIntegrationTest {
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
+        stream.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.Integer(), Serdes.String()))
                 .windowedBy(TimeWindows.of(ofMillis(500L)))
                 .count()
                 .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start()).to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
@@ -521,7 +521,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(11);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+                .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
                 .count()
                 .toStream()
@@ -619,7 +619,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(11);
         final String userSessionsStore = "UserSessionsStore";
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-                .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+                .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SessionWindows.with(ofMillis(sessionGap)))
                 .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as(userSessionsStore))
                 .toStream()
@@ -706,7 +706,7 @@ public class KStreamAggregationIntegrationTest {
         final CountDownLatch latch = new CountDownLatch(5);
 
         builder.stream(userSessionsStream, Consumed.with(Serdes.String(), Serdes.String()))
-               .groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+               .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
                .windowedBy(UnlimitedWindows.of().startOn(ofEpochMilli(startTime)))
                .count()
                .toStream()

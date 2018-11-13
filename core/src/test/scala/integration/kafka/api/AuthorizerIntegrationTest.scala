@@ -16,7 +16,7 @@ import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.regex.Pattern
-import java.util.{ArrayList, Collections, Optional, Properties}
+import java.util.{Collections, Optional, Properties}
 import java.time.Duration
 
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
@@ -317,7 +317,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createOffsetCommitRequest = {
     new requests.OffsetCommitRequest.Builder(
-      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0, 27, "metadata")).asJava).
+      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0L, Optional.empty[Integer](), "metadata")).asJava).
       setMemberId("").setGenerationId(1).
       build()
   }
@@ -1516,20 +1516,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part) {
-    val records = new ArrayList[ConsumerRecord[Array[Byte], Array[Byte]]]()
-
-    TestUtils.waitUntilTrue(() => {
-      for (record <- consumer.poll(50).asScala)
-        records.add(record)
-      records.size == numRecords
-    }, "Failed to receive all expected records from the consumer")
+    val records = TestUtils.consumeRecords(consumer, numRecords)
 
     for (i <- 0 until numRecords) {
-      val record = records.get(i)
+      val record = records(i)
       val offset = startingOffset + i
-      assertEquals(topic, record.topic())
-      assertEquals(part, record.partition())
-      assertEquals(offset.toLong, record.offset())
+      assertEquals(topic, record.topic)
+      assertEquals(part, record.partition)
+      assertEquals(offset.toLong, record.offset)
     }
   }
 

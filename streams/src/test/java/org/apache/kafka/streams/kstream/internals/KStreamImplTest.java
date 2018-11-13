@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -33,7 +32,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
@@ -64,6 +62,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
@@ -71,7 +70,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
-
+@SuppressWarnings("unchecked")
 public class KStreamImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -189,6 +188,7 @@ public class KStreamImplTest {
             TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("X").build(null).processors().size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldPreserveSerdesForOperators() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -264,13 +264,13 @@ public class KStreamImplTest {
 
         assertEquals(((AbstractStream) stream1.groupByKey()).keySerde(), consumedInternal.keySerde());
         assertEquals(((AbstractStream) stream1.groupByKey()).valueSerde(), consumedInternal.valueSerde());
-        assertEquals(((AbstractStream) stream1.groupByKey(Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) stream1.groupByKey(Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) stream1.groupBy(selector)).keySerde(), null);
         assertEquals(((AbstractStream) stream1.groupBy(selector)).valueSerde(), consumedInternal.valueSerde());
-        assertEquals(((AbstractStream) stream1.groupBy(selector, Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) stream1.groupBy(selector, Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupBy(selector, org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) stream1.groupBy(selector, org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L))).keySerde(), null);
         assertEquals(((AbstractStream) stream1.join(stream1, joiner, JoinWindows.of(100L))).valueSerde(), null);
@@ -364,7 +364,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(input, "b", "v1"));
         }
         final List<MockProcessor<String, String>> mockProcessors = processorSupplier.capturedProcessors(2);
-        assertThat(mockProcessors.get(0).processed, equalTo(Utils.mkList("a:v1", "a:v2")));
+        assertThat(mockProcessors.get(0).processed, equalTo(asList("a:v1", "a:v2")));
         assertThat(mockProcessors.get(1).processed, equalTo(Collections.singletonList("b:v1")));
     }
 
@@ -682,7 +682,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
     
     @Test
@@ -711,7 +711,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic1, "H", "hh"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee", "F:ff", "G:gg", "H:hh"),
                      processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -729,7 +729,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create("topic-7", "E", "ee"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 
@@ -752,7 +752,7 @@ public class KStreamImplTest {
             driver.pipeInput(recordFactory.create(topic3, "E", "ee"));
         }
 
-        assertEquals(Utils.mkList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
+        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd", "E:ee"),
                 processorSupplier.theCapturedProcessor().processed);
     }
 }

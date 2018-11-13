@@ -375,6 +375,35 @@ class LogManagerTest {
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
   }
 
+  @Test
+  def testCheckpointForOnlyAffectedLogs() {
+    val tps = Seq(
+      new TopicPartition("test-a", 0),
+      new TopicPartition("test-a", 1),
+      new TopicPartition("test-a", 2),
+      new TopicPartition("test-b", 0),
+      new TopicPartition("test-b", 1))
+
+    val allLogs = tps.map(logManager.getOrCreateLog(_, logConfig))
+    allLogs.foreach { log =>
+      for (_ <- 0 until 50)
+        log.appendAsLeader(TestUtils.singletonRecords("test".getBytes), leaderEpoch = 0)
+      log.flush()
+    }
+
+    logManager.checkpointRecoveryOffsetsAndCleanSnapshot(this.logDir, allLogs.filter(_.dir.getName.contains("test-a")))
+
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile)).read()
+
+    tps.zip(allLogs).foreach { case (tp, log) =>
+      assertEquals("Recovery point should equal checkpoint", checkpoints(tp), log.recoveryPoint)
+      if (tp.topic.equals("test-a")) // should only cleanup old producer snapshots for topic 'test-a'
+        assertEquals(Some(log.minSnapshotsOffsetToRetain), log.oldestProducerSnapshotOffset)
+      else
+        assertNotEquals(Some(log.minSnapshotsOffsetToRetain), log.oldestProducerSnapshotOffset)
+    }
+  }
+
   private def readLog(log: Log, offset: Long, maxLength: Int = 1024): FetchDataInfo = {
     log.read(offset, maxLength, maxOffset = None, minOneMessage = true, includeAbortedTxns = false)
   }

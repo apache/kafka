@@ -381,7 +381,7 @@ public class FileRecordsTest {
         // Lazy down-conversion will not return any messages for a partial input batch
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
-        Iterator<ConvertedRecords> it = lazyRecords.iterator(16 * 1024L);
+        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
         assertTrue("No messages should be returned", !it.hasNext());
     }
 
@@ -538,7 +538,7 @@ public class FileRecordsTest {
         for (long readSize : maximumReadSize) {
             TopicPartition tp = new TopicPartition("topic-1", 0);
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, Time.SYSTEM);
-            Iterator<ConvertedRecords> it = lazyRecords.iterator(readSize);
+            Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
             verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);

@@ -358,7 +358,7 @@ public class ThreadCacheTest {
         cache.put(namespace2, Bytes.wrap(new byte[]{4}), cleanEntry(new byte[]{4}));
 
         cache.flush(namespace1);
-        assertEquals(Collections.EMPTY_LIST, received);
+        assertEquals(Collections.emptyList(), received);
     }
 
 

@@ -33,7 +33,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 
 import java.io.IOException;
@@ -171,6 +170,7 @@ public class PageViewTypedDemo {
         public String region;
     }
 
+    @SuppressWarnings("deprecation")
     public static void main(final String[] args) {
         final Properties props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-typed");
@@ -206,7 +206,7 @@ public class PageViewTypedDemo {
                 return viewByRegion;
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.region, viewRegion))
-            .groupByKey(Serialized.with(Serdes.String(), new JSONSerde<>()))
+            .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), new JSONSerde<>()))
             .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()

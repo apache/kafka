@@ -21,7 +21,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.{Partition, Replica}
-import kafka.log.Log
+import kafka.log.{Log, LogManager}
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -55,7 +55,7 @@ class IsrExpirationTest {
 
   @Before
   def setUp() {
-    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
@@ -252,8 +252,8 @@ class IsrExpirationTest {
   }
 
   private def logMock: Log = {
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
-    val cache = EasyMock.createNiceMock(classOf[LeaderEpochFileCache])
+    val log: Log = EasyMock.createMock(classOf[Log])
+    val cache: LeaderEpochFileCache = EasyMock.createNiceMock(classOf[LeaderEpochFileCache])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
     EasyMock.expect(log.onHighWatermarkIncremented(0L))

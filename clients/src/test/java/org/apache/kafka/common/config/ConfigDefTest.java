@@ -378,7 +378,7 @@ public class ConfigDefTest {
         updateModes.put("my.broker.config", "per-broker");
         updateModes.put("my.cluster.config", "cluster-wide");
         final String html = configDef.toHtmlTable(updateModes);
-        Set<String> configsInHtml = new HashSet();
+        Set<String> configsInHtml = new HashSet<>();
         for (String line : html.split("\n")) {
             if (line.contains("my.broker.config")) {
                 assertTrue(line.contains("per-broker"));

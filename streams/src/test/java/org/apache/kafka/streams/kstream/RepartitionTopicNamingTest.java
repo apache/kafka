@@ -38,6 +38,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class RepartitionTopicNamingTest {
 
     private final KeyValueMapper<String, String, String> kvMapper = (k, v) -> k + v;

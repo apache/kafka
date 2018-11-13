@@ -191,6 +191,7 @@ public class SaslClientAuthenticator implements Authenticator {
      * The messages are sent and received as size delimited bytes that consists of a 4 byte network-ordered size N
      * followed by N bytes representing the opaque payload.
      */
+    @SuppressWarnings("fallthrough")
     public void authenticate() throws IOException {
         if (netOutBuffer != null && !flushNetOutBufferAndUpdateInterestOps())
             return;

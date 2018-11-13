@@ -47,6 +47,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -358,7 +359,7 @@ public class StoreChangelogReaderTest {
         replay(active, task);
         changelogReader.restore(active);
 
-        assertThat(callback.restored, CoreMatchers.equalTo(Utils.mkList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
+        assertThat(callback.restored, CoreMatchers.equalTo(asList(KeyValue.pair(bytes, bytes), KeyValue.pair(bytes, bytes))));
     }
 
     @Test

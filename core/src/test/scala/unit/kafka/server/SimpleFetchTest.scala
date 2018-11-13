@@ -21,7 +21,7 @@ import java.io.File
 import kafka.api._
 import kafka.utils._
 import kafka.cluster.Replica
-import kafka.log.Log
+import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.metrics.Metrics
@@ -70,15 +70,15 @@ class SimpleFetchTest {
   @Before
   def setUp() {
     // create nice mock since we don't particularly care about zkclient calls
-    val kafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val kafkaZkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
     EasyMock.replay(kafkaZkClient)
 
     // create nice mock since we don't particularly care about scheduler calls
-    val scheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
+    val scheduler: KafkaScheduler = EasyMock.createNiceMock(classOf[KafkaScheduler])
     EasyMock.replay(scheduler)
 
     // create the log which takes read with either HW max offset or none max offset
-    val log = EasyMock.createNiceMock(classOf[Log])
+    val log: Log = EasyMock.createNiceMock(classOf[Log])
     EasyMock.expect(log.logStartOffset).andReturn(0).anyTimes()
     EasyMock.expect(log.logEndOffset).andReturn(leaderLEO).anyTimes()
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
@@ -106,7 +106,7 @@ class SimpleFetchTest {
     EasyMock.replay(log)
 
     // create the log manager that is aware of this mock log
-    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.getLog(topicPartition, false)).andReturn(Some(log)).anyTimes()
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
