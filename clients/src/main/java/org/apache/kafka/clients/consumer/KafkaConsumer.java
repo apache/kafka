@@ -1029,10 +1029,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public void unsubscribe() {
         acquireAndEnsureOpen();
         try {
-            maybeThrowInvalidGroupIdException();
             fetcher.clearBufferedDataForUnassignedPartitions(Collections.emptySet());
             this.subscriptions.unsubscribe();
-            this.coordinator.maybeLeaveGroup();
+            if (this.coordinator != null)
+                this.coordinator.maybeLeaveGroup();
             this.metadata.needMetadataForAllTopics(false);
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {

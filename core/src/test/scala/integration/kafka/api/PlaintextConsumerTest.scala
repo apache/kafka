@@ -1879,6 +1879,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
     val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()
 
+    consumer1.unsubscribe()
+    consumer2.unsubscribe()
+    consumer3.unsubscribe()
+
     consumer1.close()
     consumer2.close()
     consumer3.close()
@@ -1908,7 +1912,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer1Config = new Properties(consumerConfig)
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
-    consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
+    consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
     val consumer1 = createConsumer(configOverrides = consumer1Config)
 
     // consumer 2 uses the empty group id and consumes from latest offset if there is no committed offset
@@ -1916,7 +1920,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumer2Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
-    consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 1)
+    consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
     val consumer2 = createConsumer(configOverrides = consumer2Config)
 
     consumer1.assign(asList(tp))
@@ -1934,6 +1938,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue("Expected consumer1 to consume one message from offset 0",
       records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
     assertTrue("Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1",
-      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
+      records2.count() == 1 && records2.records(tp).asScala.head.offset == 1)
   }
 }
