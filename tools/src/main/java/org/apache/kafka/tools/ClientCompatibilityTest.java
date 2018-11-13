@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -413,7 +414,7 @@ public class ClientCompatibilityTest {
                         if (curTime - prodTimeMs > TIMEOUT_MS)
                             throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                         if (recordIter == null) {
-                            ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                             recordIter = records.iterator();
                         }
                         if (recordIter.hasNext())

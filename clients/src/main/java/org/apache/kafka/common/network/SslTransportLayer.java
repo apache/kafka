@@ -289,6 +289,7 @@ public class SslTransportLayer implements TransportLayer {
         }
     }
 
+    @SuppressWarnings("fallthrough")
     private void doHandshake() throws IOException {
         boolean read = key.isReadable();
         boolean write = key.isWritable();

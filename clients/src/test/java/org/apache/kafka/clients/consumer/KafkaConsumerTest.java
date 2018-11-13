@@ -388,7 +388,7 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertTrue(heartbeatReceived.get());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -421,7 +421,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertTrue(heartbeatReceived.get());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -446,6 +446,7 @@ public class KafkaConsumerTest {
         Assert.assertEquals(0, requests.size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
         final Time time = new MockTime();
@@ -461,7 +462,6 @@ public class KafkaConsumerTest {
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
-        //noinspection deprecation
         consumer.poll(0L);
 
         // The underlying client SHOULD get a fetch request
@@ -492,7 +492,7 @@ public class KafkaConsumerTest {
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
         assertEquals(5, records.count());
         assertEquals(55L, consumer.position(tp0));
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -652,7 +652,7 @@ public class KafkaConsumerTest {
         offsets.put(tp1, offset2);
         client.prepareResponseFrom(offsetResponse(offsets, Errors.NONE), coordinator);
         assertEquals(offset2, consumer.committed(tp1).offset());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -687,7 +687,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertTrue(commitReceived.get());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -716,7 +716,7 @@ public class KafkaConsumerTest {
 
         assertEquals(singleton(topic), consumer.subscription());
         assertEquals(singleton(tp0), consumer.assignment());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -753,7 +753,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertEquals(singleton(otherTopic), consumer.subscription());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -832,7 +832,7 @@ public class KafkaConsumerTest {
             // clear interrupted state again since this thread may be reused by JUnit
             Thread.interrupted();
         }
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -860,7 +860,7 @@ public class KafkaConsumerTest {
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertEquals(0, records.count());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     /**
@@ -1348,7 +1348,7 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
         final ConsumerRecords<String, String> records = consumer.poll(Duration.ZERO);
         assertFalse(records.isEmpty());
-        consumer.close(0, TimeUnit.MILLISECONDS);
+        consumer.close(Duration.ofMillis(0));
     }
 
     private void consumerCloseTest(final long closeTimeoutMs,
@@ -1388,7 +1388,7 @@ public class KafkaConsumerTest {
                 public void run() {
                     consumer.commitAsync();
                     try {
-                        consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS);
+                        consumer.close(Duration.ofMillis(closeTimeoutMs));
                     } catch (Exception e) {
                         closeException.set(e);
                     }

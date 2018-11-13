@@ -901,9 +901,9 @@ public class TopologyTestDriverTest {
                     return new Processor<String, Long>() {
                         private KeyValueStore<String, Long> store;
 
+                        @SuppressWarnings("unchecked")
                         @Override
                         public void init(final ProcessorContext context) {
-                            //noinspection unchecked
                             this.store = (KeyValueStore<String, Long>) context.getStateStore("storeProcessorStore");
                         }
 

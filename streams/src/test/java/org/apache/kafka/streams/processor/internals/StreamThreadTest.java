@@ -76,7 +76,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,6 +86,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -1130,7 +1130,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
-            Utils.mkList(
+            asList(
                 new PartitionInfo("stream-thread-test-count-one-changelog",
                     0,
                     null,
@@ -1452,7 +1452,7 @@ public class StreamThreadTest {
     public void adminClientMetricsVerification() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        final List<Node> cluster = Arrays.asList(broker1, broker2);
+        final List<Node> cluster = asList(broker1, broker2);
 
         final MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
 

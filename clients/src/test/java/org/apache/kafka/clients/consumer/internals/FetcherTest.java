@@ -2575,9 +2575,9 @@ public class FetcherTest {
                             try {
                                 Field field = FetchSessionHandler.class.getDeclaredField("sessionPartitions");
                                 field.setAccessible(true);
-                                LinkedHashMap<TopicPartition, FetchRequest.PartitionData> sessionPartitions =
-                                        (LinkedHashMap<TopicPartition, FetchRequest.PartitionData>) field.get(handler);
-                                for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : sessionPartitions.entrySet()) {
+                                LinkedHashMap<?, ?> sessionPartitions =
+                                        (LinkedHashMap<?, ?>) field.get(handler);
+                                for (Map.Entry<?, ?> entry : sessionPartitions.entrySet()) {
                                     // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
                                     // possibility of ConcurrentModificationException if appropriate synchronization is not used.
                                     Thread.yield();

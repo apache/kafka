@@ -69,7 +69,7 @@ public class JsonConverterTest {
 
     @Before
     public void setUp() {
-        converter.configure(Collections.EMPTY_MAP, false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     // Schema metadata
