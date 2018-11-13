@@ -130,7 +130,10 @@ object DynamicBrokerConfig {
     checkInvalidProps(securityConfigsWithoutListenerPrefix(props),
       "These security configs can be dynamically updated only per-listener using the listener prefix")
     validateConfigTypes(props)
-    if (!perBrokerConfig) {
+    if (perBrokerConfig) {
+      checkInvalidProps(clusterLevelConfigs(props),
+        "Cannot update these configs at per broker level, broker id must not be specified")
+    } else {
       checkInvalidProps(perBrokerConfigs(props),
         "Cannot update these configs at default cluster level, broker id must be specified")
     }
@@ -145,6 +148,11 @@ object DynamicBrokerConfig {
       }
     }
     configNames.intersect(PerBrokerConfigs) ++ configNames.filter(perBrokerListenerConfig)
+  }
+
+  private def clusterLevelConfigs(props: Properties): Set[String] = {
+    val configNames = props.asScala.keySet
+    configNames.intersect(DynamicConfig.Broker.ClusterLevelConfigs)
   }
 
   private def nonDynamicConfigs(props: Properties): Set[String] = {
@@ -322,6 +330,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
         case reconfigurable =>
           trace(s"Files will not be reloaded without config change for $reconfigurable")
       }
+  }
+
+  private[server] def getMaintenanceBrokerList: Seq[Int] = CoreUtils.inReadLock(lock) {
+    DynamicConfig.Broker.getMaintenanceBrokerListFromString(dynamicDefaultConfigs.getOrElse(DynamicConfig.Broker.MaintenanceBrokerListProp,
+      DynamicConfig.Broker.DefaultMaintenanceBrokerList).toString)
   }
 
   private def maybeCreatePasswordEncoder(secret: Option[Password]): Option[PasswordEncoder] = {

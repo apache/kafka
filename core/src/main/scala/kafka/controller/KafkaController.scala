@@ -101,6 +101,7 @@ class KafkaController(val config: KafkaConfig,
                       threadNamePrefix: Option[String] = None)
   extends ControllerEventProcessor with Logging with KafkaMetricsGroup {
 
+  val adminZkClient = new AdminZkClient(zkClient)
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
   @volatile private var brokerInfo = initialBrokerInfo
@@ -215,6 +216,13 @@ class KafkaController(val config: KafkaConfig,
     "ReplicasIneligibleToDeleteCount",
     new Gauge[Int] {
       def value: Int = ineligibleReplicasToDeleteCount
+    }
+  )
+
+    newGauge(
+    "MaintenanceBrokerCount",
+    new Gauge[Int] {
+      def value: Int = if (isActive) config.getMaintenanceBrokerList.size else 0
     }
   )
 
@@ -817,7 +825,9 @@ class KafkaController(val config: KafkaConfig,
     val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
+
     controllerContext.allTopics = zkClient.getAllTopicsInCluster
+    rearrangePartitionReplicaAssignmentForNewTopics(controllerContext.allTopics.toSet)
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     getReplicaAssignmentPolicyCompliant(controllerContext.allTopics.toSet).foreach {
       case (topicPartition, replicaAssignment) =>
@@ -900,6 +910,37 @@ class KafkaController(val config: KafkaConfig,
         val targetReplicas = assignment.targetReplicas.toSet
         targetReplicas.subsetOf(isr)
       }
+    }
+  }
+
+  // Rearrange partition and replica assignment for new topics that get assigned to
+  // maintenance brokers that do not take new partitions
+  private def rearrangePartitionReplicaAssignmentForNewTopics(topics: Set[String]) {
+    try {
+      val noNewPartitionBrokerIds = config.getMaintenanceBrokerList
+      if (noNewPartitionBrokerIds.nonEmpty) {
+        val newTopics = zkClient.getPartitionNodeNonExistsTopics(topics.toSet)
+        val newTopicsToBeArranged = zkClient.getPartitionAssignmentForTopics(newTopics).filter {
+          case (_, partitionMap) =>
+            partitionMap.exists {
+              case (_, assignedReplicas) =>
+                assignedReplicas.replicas.intersect(noNewPartitionBrokerIds).nonEmpty
+            }
+        }
+        newTopicsToBeArranged.foreach {
+          case (topic, partitionMap) =>
+            val numPartitions = partitionMap.size
+            val numReplica = partitionMap.head._2.replicas.size
+            val brokers = controllerContext.liveOrShuttingDownBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }.toSeq
+
+            val replicaAssignment = adminZkClient.assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds.toSet, numPartitions, numReplica)
+            adminZkClient.writeTopicPartitionAssignment(topic, replicaAssignment.mapValues(ReplicaAssignment(_)).toMap, true)
+            info(s"Rearrange partition and replica assignment for topic [$topic]")
+        }
+      }
+    } catch {
+      case e =>
+        error("Error during rearranging partition and replica assignment for new topics for maintenance brokers :" + e.getMessage)
     }
   }
 
@@ -1484,6 +1525,7 @@ class KafkaController(val config: KafkaConfig,
     val newTopics = topics -- controllerContext.allTopics
     val deletedTopics = controllerContext.allTopics -- topics
     controllerContext.allTopics = topics
+    rearrangePartitionReplicaAssignmentForNewTopics(newTopics)
 
     registerPartitionModificationsHandlers(newTopics.toSeq)
     val addedPartitionReplicaAssignment = getReplicaAssignmentPolicyCompliant(newTopics)
@@ -1880,13 +1922,15 @@ class KafkaController(val config: KafkaConfig,
 
     val replicationFactor = config.defaultReplicationFactor
     val brokers = controllerContext.liveOrShuttingDownBrokers.map { sb => kafka.admin.BrokerMetadata(sb.id, sb.rack) }.toSeq
+    val noNewPartitionBrokerIds = config.getMaintenanceBrokerList.toSet
 
     topicsReplicaAssignment.foreach{
       case(topic, partitionAssignment) => {
         val numPartitions = partitionAssignment.size
-        val assignment = AdminUtils.assignReplicasToBrokers(brokers, numPartitions, replicationFactor)
-          .map{ case(partition, replicas) => (new TopicPartition(topic, partition), new ReplicaAssignment(replicas, Seq.empty[Int], Seq.empty[Int]))
-          }.toMap
+        val assignment = adminZkClient.assignReplicasToAvailableBrokers(brokers, noNewPartitionBrokerIds, numPartitions, replicationFactor)
+          .map{ case(partition, replicas) => {
+            (new TopicPartition(topic, partition), new ReplicaAssignment(replicas, Seq.empty[Int], Seq.empty[Int]))
+          }}.toMap
         zkClient.setTopicAssignment(topic, assignment, controllerContext.epochZkVersion)
         info(s"Updated topic [$topic] with $assignment for replica assignment")
       }

@@ -622,6 +622,23 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     }.toMap
   }
 
+  def getPartitionNodeNonExistsTopics(topics: Set[String]): Set[String] = {
+    val existsRequests = topics.map(topic => ExistsRequest(TopicPartitionsZNode.path(topic), ctx = Some(topic)))
+    val existsResponses = retryRequestsUntilConnected(existsRequests.toSeq)
+    val newTopics = scala.collection.mutable.Set.empty[String]
+
+    existsResponses.foreach {
+      existsResponse =>
+        val topic = existsResponse.ctx.get.asInstanceOf[String]
+        existsResponse.resultCode match {
+          case Code.OK =>
+          case Code.NONODE => newTopics.add(topic)
+          case _ => throw existsResponse.resultException.get
+        }
+    }
+    newTopics.toSet
+  }
+
   /**
    * Gets the partition numbers for the given topics
    * @param topics the topics whose partitions we wish to get.

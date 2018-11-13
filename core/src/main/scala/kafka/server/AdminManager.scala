@@ -18,7 +18,7 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 
-import kafka.admin.{AdminOperationException, AdminUtils}
+import kafka.admin.AdminOperationException
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
 import kafka.utils.Log4jController
@@ -111,8 +111,8 @@ class AdminManager(val config: KafkaConfig,
           defaultReplicationFactor else topic.replicationFactor
 
         val assignments = if (topic.assignments().isEmpty) {
-          AdminUtils.assignReplicasToBrokers(
-            brokers, resolvedNumPartitions, resolvedReplicationFactor)
+          adminZkClient.assignReplicasToAvailableBrokers(brokers, config.getMaintenanceBrokerList.toSet,
+            resolvedNumPartitions, resolvedReplicationFactor)
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -307,7 +307,8 @@ class AdminManager(val config: KafkaConfig,
         }
 
         val updatedReplicaAssignment = adminZkClient.addPartitions(topic, existingAssignment, allBrokers,
-          newPartition.totalCount, newPartitionsAssignment, validateOnly = validateOnly)
+          newPartition.totalCount, newPartitionsAssignment, validateOnly = validateOnly,
+          noNewPartitionBrokerIds = config.getMaintenanceBrokerList.toSet)
         CreatePartitionsMetadata(topic, updatedReplicaAssignment, ApiError.NONE)
       } catch {
         case e: AdminOperationException =>
@@ -630,7 +631,10 @@ class AdminManager(val config: KafkaConfig,
   }
 
   private def configType(name: String, synonyms: List[String]): ConfigDef.Type = {
-    val configType = config.typeOf(name)
+    var configType = config.typeOf(name)
+    if (configType == null)
+      configType = DynamicConfig.Broker.typeOf(name)
+
     if (configType != null)
       configType
     else

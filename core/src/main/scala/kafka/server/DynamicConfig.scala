@@ -21,10 +21,11 @@ import java.util.Properties
 
 import kafka.log.LogConfig
 import kafka.security.CredentialProvider
-import org.apache.kafka.common.config.ConfigDef
+import org.apache.kafka.common.config.{ConfigDef, ConfigException}
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.common.config.ConfigDef.Validator
 
 import scala.collection.JavaConverters._
 
@@ -39,9 +40,11 @@ object DynamicConfig {
     val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
     val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
     val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
+    val MaintenanceBrokerListProp = "maintenance.broker.list"
 
     //Defaults
     val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultMaintenanceBrokerList: String = ""
 
     //Documentation
     val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
@@ -52,6 +55,7 @@ object DynamicConfig {
       s"limit be kept above 1MB/s for accurate behaviour."
     val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
+    val MaintenanceBrokerListDoc = "A list containing maintenance broker Ids, separated by comma"
 
     //Definitions
     private val brokerConfigDef = new ConfigDef()
@@ -59,12 +63,37 @@ object DynamicConfig {
       .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
       .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
       .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
+      .define(MaintenanceBrokerListProp, STRING, DefaultMaintenanceBrokerList, MaintenanceBrokerListValidator, MEDIUM, MaintenanceBrokerListDoc)
     DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
     val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
+
+    //cluster level only configs
+    val ClusterLevelConfigs = Set(MaintenanceBrokerListProp)
+    def typeOf(key: String): ConfigDef.Type = {
+      val configKey: ConfigDef.ConfigKey = brokerConfigDef.configKeys().get(key)
+      if (configKey == null)
+        null
+      else
+        configKey.`type`
+    }
 
     def names = brokerConfigDef.names
 
     def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
+
+    def getMaintenanceBrokerListFromString(brokerListStr: String): Seq[Int] = {
+      brokerListStr.split(",").map(_.trim).filter(_.nonEmpty).map(_.toInt)
+    }
+
+    object MaintenanceBrokerListValidator extends Validator {
+      override def ensureValid(name: String, value: Any): Unit = {
+        try {
+          getMaintenanceBrokerListFromString(value.toString)
+        } catch {
+          case e: NumberFormatException => throw new ConfigException(name, value.toString, e.getMessage)
+        }
+      }
+    }
   }
 
   object Client {
