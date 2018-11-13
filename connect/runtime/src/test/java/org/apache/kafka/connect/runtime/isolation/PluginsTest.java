@@ -67,7 +67,6 @@ public class PluginsTest {
         plugins = new Plugins(pluginProps);
     }
 
-    @SuppressWarnings("deprecation")
     @Before
     public void setup() {
         props = new HashMap<>(pluginProps);
@@ -104,7 +103,6 @@ public class PluginsTest {
         assertEquals("foo2", converter.configs.get("extra.config"));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldInstantiateAndConfigureInternalConverters() {
         instantiateAndConfigureInternalConverter(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, ClassLoaderUsage.CURRENT_CLASSLOADER);

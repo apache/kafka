@@ -162,7 +162,6 @@ public class ConnectorConfig extends AbstractConfig {
                 .define(VALUE_CONVERTER_CLASS_CONFIG, Type.CLASS, null, Importance.LOW, VALUE_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, VALUE_CONVERTER_CLASS_DISPLAY)
                 .define(HEADER_CONVERTER_CLASS_CONFIG, Type.CLASS, HEADER_CONVERTER_CLASS_DEFAULT, Importance.LOW, HEADER_CONVERTER_CLASS_DOC, COMMON_GROUP, ++orderInGroup, Width.SHORT, HEADER_CONVERTER_CLASS_DISPLAY)
                 .define(TRANSFORMS_CONFIG, Type.LIST, Collections.emptyList(), ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), new ConfigDef.Validator() {
-                    @SuppressWarnings("unchecked")
                     @Override
                     public void ensureValid(String name, Object value) {
                         final List<String> transformAliases = (List<String>) value;
@@ -248,15 +247,14 @@ public class ConnectorConfig extends AbstractConfig {
         final List<Transformation<R>> transformations = new ArrayList<>(transformAliases.size());
         for (String alias : transformAliases) {
             final String prefix = TRANSFORMS_CONFIG + "." + alias + ".";
+            final Transformation<R> transformation;
             try {
-                @SuppressWarnings("unchecked")
-                final Transformation<R> transformation = getClass(prefix + "type").asSubclass(Transformation.class)
-                        .getDeclaredConstructor().newInstance();
-                transformation.configure(originalsWithPrefix(prefix));
-                transformations.add(transformation);
+                transformation = getClass(prefix + "type").asSubclass(Transformation.class).newInstance();
             } catch (Exception e) {
                 throw new ConnectException(e);
             }
+            transformation.configure(originalsWithPrefix(prefix));
+            transformations.add(transformation);
         }
 
         return transformations;

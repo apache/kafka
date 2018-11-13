@@ -335,7 +335,7 @@ class Log(@volatile var dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  def leaderEpochCache: LeaderEpochFileCache = _leaderEpochCache
+  def leaderEpochCache = _leaderEpochCache
 
   private def initializeLeaderEpochCache(): LeaderEpochFileCache = {
     // create the log directory if it doesn't exist

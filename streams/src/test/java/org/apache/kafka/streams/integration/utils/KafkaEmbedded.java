@@ -148,7 +148,7 @@ public class KafkaEmbedded {
      * @param topic The name of the topic.
      */
     public void createTopic(final String topic) {
-        createTopic(topic, 1, 1, Collections.emptyMap());
+        createTopic(topic, 1, 1, new Properties());
     }
 
     /**
@@ -159,7 +159,7 @@ public class KafkaEmbedded {
      * @param replication The replication factor for (the partitions of) this topic.
      */
     public void createTopic(final String topic, final int partitions, final int replication) {
-        createTopic(topic, partitions, replication, Collections.emptyMap());
+        createTopic(topic, partitions, replication, new Properties());
     }
 
     /**
@@ -173,11 +173,11 @@ public class KafkaEmbedded {
     public void createTopic(final String topic,
                             final int partitions,
                             final int replication,
-                            final Map<String, String> topicConfig) {
+                            final Properties topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
             topic, partitions, replication, topicConfig);
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
-        newTopic.configs(topicConfig);
+        newTopic.configs((Map) topicConfig);
 
         try (final AdminClient adminClient = createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();

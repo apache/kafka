@@ -21,7 +21,6 @@ import java.util
 import java.util.Properties
 
 import kafka.utils.TestUtils
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
@@ -304,7 +303,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
   def testDynamicListenerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
-    val kafkaServer: KafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
+    val kafkaServer = EasyMock.createMock(classOf[kafka.server.KafkaServer])
     EasyMock.expect(kafkaServer.config).andReturn(oldConfig).anyTimes()
     EasyMock.replay(kafkaServer)
 
@@ -329,7 +328,7 @@ class DynamicBrokerConfigTest extends JUnitSuite {
 
   @Test
   def testDynamicConfigInitializationWithoutConfigsInZK(): Unit = {
-    val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val zkClient = EasyMock.createMock(classOf[kafka.zk.KafkaZkClient])
     EasyMock.expect(zkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(new java.util.Properties()).anyTimes()
     EasyMock.replay(zkClient)
 

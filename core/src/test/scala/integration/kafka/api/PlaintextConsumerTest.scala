@@ -126,7 +126,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, records.size)
   }
 
-  @deprecated("poll(Duration) is the replacement", since = "2.0")
   @Test
   def testDeprecatedPollBlocksForAssignment(): Unit = {
     val consumer = createConsumer()
@@ -135,7 +134,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
-  @deprecated("Serializer now includes a default method that provides the headers", since = "2.1")
   @Test
   def testHeadersExtendedSerializerDeserializer(): Unit = {
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
@@ -480,12 +478,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // async commit
     val asyncMetadata = new OffsetAndMetadata(10, "bar")
-    sendAndAwaitAsyncCommit(consumer, Some(Map(tp -> asyncMetadata)))
+    val callback = new CountConsumerCommitCallback
+    consumer.commitAsync(Map((tp, asyncMetadata)).asJava, callback)
+    awaitCommitCallback(consumer, callback)
     assertEquals(asyncMetadata, consumer.committed(tp))
 
     // handle null metadata
     val nullMetadata = new OffsetAndMetadata(5, null)
-    consumer.commitSync(Map(tp -> nullMetadata).asJava)
+    consumer.commitSync(Map((tp, nullMetadata)).asJava)
     assertEquals(nullMetadata, consumer.committed(tp))
   }
 
@@ -496,15 +496,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val callback = new CountConsumerCommitCallback
     val count = 5
-
     for (i <- 1 to count)
       consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
 
-    TestUtils.pollUntilTrue(consumer, () => callback.successCount >= count || callback.lastError.isDefined,
-      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
-
-    assertEquals(None, callback.lastError)
-    assertEquals(count, callback.successCount)
+    awaitCommitCallback(consumer, callback, count=count)
     assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
   }
 
@@ -1024,7 +1019,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     // commit async and verify onCommit is called
-    sendAndAwaitAsyncCommit(testConsumer, Some(Map(tp -> new OffsetAndMetadata(5L))))
+    val commitCallback = new CountConsumerCommitCallback()
+    testConsumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
+    awaitCommitCallback(testConsumer, commitCallback)
     assertEquals(5, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
@@ -1328,7 +1325,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(5, consumer.committed(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
-    sendAndAwaitAsyncCommit(consumer, Some(Map(tp2 -> new OffsetAndMetadata(7L))))
+    val commitCallback = new CountConsumerCommitCallback()
+    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
+    awaitCommitCallback(consumer, commitCallback)
     assertEquals(7, consumer.committed(tp2).offset)
   }
 
@@ -1523,7 +1522,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    awaitNonEmptyRecords(consumer, tp)
+    val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")

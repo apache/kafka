@@ -42,7 +42,6 @@ public class UnlimitedWindowsTest {
         UnlimitedWindows.of().startOn(ofEpochMilli(-1));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldThrowOnUntil() {
         final UnlimitedWindows windowSpec = UnlimitedWindows.of();

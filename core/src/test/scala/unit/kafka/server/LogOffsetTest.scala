@@ -50,7 +50,6 @@ class LogOffsetTest extends BaseRequestTest {
     props.put("log.segment.bytes", "140")
   }
 
-  @deprecated("ListOffsetsRequest V0", since = "")
   @Test
   def testGetOffsetsForUnknownTopic() {
     val topicPartition = new TopicPartition("foo", 0)
@@ -61,7 +60,6 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.responseData.get(topicPartition).error)
   }
 
-  @deprecated("ListOffsetsRequest V0", since = "")
   @Test
   def testGetOffsetsAfterDeleteRecords() {
     val topic = "kafka-"
@@ -153,7 +151,6 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(offsetChanged)
   }
 
-  @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
   def testGetOffsetsBeforeNow() {
     val random = new Random
@@ -183,7 +180,6 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
 
-  @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
   def testGetOffsetsBeforeEarliestTime() {
     val random = new Random
@@ -215,8 +211,8 @@ class LogOffsetTest extends BaseRequestTest {
    * a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegmentSize() {
-    val log: Log = EasyMock.niceMock(classOf[Log])
-    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(logSegment.size).andStubAnswer(new IAnswer[Int] {
       private val value = new AtomicInteger(0)
       def answer: Int = value.getAndIncrement()
@@ -232,8 +228,8 @@ class LogOffsetTest extends BaseRequestTest {
    * different (simulating a race condition) */
   @Test
   def testFetchOffsetsBeforeWithChangingSegments() {
-    val log: Log = EasyMock.niceMock(classOf[Log])
-    val logSegment: LogSegment = EasyMock.niceMock(classOf[LogSegment])
+    val log = EasyMock.niceMock(classOf[Log])
+    val logSegment = EasyMock.niceMock(classOf[LogSegment])
     EasyMock.expect(log.logSegments).andStubAnswer {
       new IAnswer[Iterable[LogSegment]] {
         def answer = new Iterable[LogSegment] {

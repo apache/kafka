@@ -93,6 +93,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   // Visible for testing
   private[server] def getFetcher(topicPartition: TopicPartition): Option[T] = {
     lock synchronized {
+      val fetcherId = getFetcherId(topicPartition)
       fetcherThreadMap.values.find { fetcherThread =>
         fetcherThread.fetchState(topicPartition).isDefined
       }

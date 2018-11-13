@@ -35,7 +35,7 @@ import java.util.Properties;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
-    public Map<Object, Object> forwardedValues = new HashMap<>();
+    public Map forwardedValues = new HashMap();
 
     public NoOpProcessorContext() {
         super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
@@ -53,7 +53,6 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
         return null;
@@ -76,13 +75,11 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         forwardedValues.put(key, value);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         forward(key, value);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
