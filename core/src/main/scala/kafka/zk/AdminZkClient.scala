@@ -56,7 +56,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced,
                   usesTopicId: Boolean = false): Unit = {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
-    val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
+    val noNewPartitionBrokerIds = getMaintenanceBrokerList()
+    val replicaAssignment = assignReplicasToAvailableBrokers(brokerMetadatas, noNewPartitionBrokerIds.toSet, partitions, replicationFactor)
     createTopicWithAssignment(topic, topicConfig, replicaAssignment, usesTopicId = usesTopicId)
   }
 
@@ -83,6 +84,16 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case _ => brokers.map(broker => BrokerMetadata(broker.id, broker.rack))
     }
     brokerMetadatas.sortBy(_.id)
+  }
+
+  /**
+   * Fetch maintenance broker list from zk
+   */
+  def getMaintenanceBrokerList(): Seq[Int] = {
+    val maintenanceBrokerConfig = fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+      .getProperty(DynamicConfig.Broker.MaintenanceBrokerListProp, DynamicConfig.Broker.DefaultMaintenanceBrokerList)
+
+    DynamicConfig.Broker.getMaintenanceBrokerListFromString(maintenanceBrokerConfig)
   }
 
   /**
@@ -158,8 +169,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     LogConfig.validate(config)
   }
 
-  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
-                                            isUpdate: Boolean, usesTopicId: Boolean = false): Unit = {
+  def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, ReplicaAssignment],
+                                    isUpdate: Boolean, usesTopicId: Boolean = false): Unit = {
     try {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
@@ -193,6 +204,39 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     } else {
       throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
     }
+  }
+
+  /**
+   * Assign replicas to brokers that take new partitions.
+   * If the number of replicationFactor is greater than the number of brokers that take new partitions,
+   * all brokers are used for assignment.
+   * @param brokerMetadatas
+   * @param noNewPartitionBrokerIds
+   * @param nPartitions
+   * @param replicationFactor
+   * @param fixedStartIndex
+   * @param startPartitionId
+   * @return
+   */
+  def assignReplicasToAvailableBrokers(brokerMetadatas: Iterable[BrokerMetadata],
+                                       noNewPartitionBrokerIds: Set[Int],
+                                       nPartitions: Int,
+                                       replicationFactor: Int,
+                                       fixedStartIndex: Int = -1,
+                                       startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
+
+    val availableBrokerMetadata = brokerMetadatas.filter {
+      brokerMetadata =>
+        if (noNewPartitionBrokerIds.contains(brokerMetadata.id)) false
+        else true
+    }
+
+    if (replicationFactor > availableBrokerMetadata.size) {
+      info(s"Using all brokers for replica assignment since replicationFactor[$replicationFactor] " +
+        s"is larger than the number of nonMaintenanceBroker[${availableBrokerMetadata.size}]")
+      AdminUtils.assignReplicasToBrokers(brokerMetadatas, nPartitions, replicationFactor, fixedStartIndex, startPartitionId)
+    } else
+      AdminUtils.assignReplicasToBrokers(availableBrokerMetadata, nPartitions, replicationFactor, fixedStartIndex, startPartitionId)
   }
 
   /**
@@ -240,13 +284,15 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    * @param allBrokers All brokers in the cluster
    * @param numPartitions Number of partitions to be set
    * @param replicaAssignment Manual replica assignment, or none
+   * @param noNewPartitionBrokerIds Brokers that do not take new partitions
    * @return the assignment for the new partitions
    */
   def createNewPartitionsAssignment(topic: String,
                                     existingAssignment: Map[Int, ReplicaAssignment],
                                     allBrokers: Seq[BrokerMetadata],
                                     numPartitions: Int = 1,
-                                    replicaAssignment: Option[Map[Int, Seq[Int]]] = None): Map[Int, ReplicaAssignment] = {
+                                    replicaAssignment: Option[Map[Int, Seq[Int]]] = None,
+                                    noNewPartitionBrokerIds: Set[Int] = Set.empty[Int]): Map[Int, ReplicaAssignment] = {
     val existingAssignmentPartition0 = existingAssignment.getOrElse(0,
       throw new AdminOperationException(
         s"Unexpected existing replica assignment for topic '$topic', partition id 0 is missing. " +
@@ -266,8 +312,8 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
       val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
-        startIndex, existingAssignment.size)
+      assignReplicasToAvailableBrokers(allBrokers, noNewPartitionBrokerIds, partitionsToAdd,
+        existingAssignmentPartition0.size, startIndex, existingAssignment.size)
     }
 
     proposedAssignmentForNewPartitions.map { case (tp, replicas) =>

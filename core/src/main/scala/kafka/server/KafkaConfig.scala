@@ -1870,6 +1870,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     millis
   }
 
+  def getMaintenanceBrokerList: Seq[Int] = {
+    dynamicConfig.getMaintenanceBrokerList
+  }
+
   private def getMap(propName: String, propValue: String): Map[String, String] = {
     try {
       CoreUtils.parseCsvMap(propValue)
