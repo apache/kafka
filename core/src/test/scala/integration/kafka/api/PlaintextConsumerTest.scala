@@ -480,14 +480,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // async commit
     val asyncMetadata = new OffsetAndMetadata(10, "bar")
-    val callback = new CountConsumerCommitCallback
-    consumer.commitAsync(Map((tp, asyncMetadata)).asJava, callback)
-    awaitCommitCallback(consumer, callback)
+    sendAndAwaitAsyncCommit(consumer, Some(Map(tp -> asyncMetadata)))
     assertEquals(asyncMetadata, consumer.committed(tp))
 
     // handle null metadata
     val nullMetadata = new OffsetAndMetadata(5, null)
-    consumer.commitSync(Map((tp, nullMetadata)).asJava)
+    consumer.commitSync(Map(tp -> nullMetadata).asJava)
     assertEquals(nullMetadata, consumer.committed(tp))
   }
 
@@ -498,10 +496,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val callback = new CountConsumerCommitCallback
     val count = 5
+
     for (i <- 1 to count)
       consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
 
-    awaitCommitCallback(consumer, callback, count=count)
+    TestUtils.pollUntilTrue(consumer, () => callback.successCount >= count || callback.lastError.isDefined,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+
+    assertEquals(None, callback.lastError)
+    assertEquals(count, callback.successCount)
     assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
   }
 
@@ -1021,9 +1024,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     // commit async and verify onCommit is called
-    val commitCallback = new CountConsumerCommitCallback()
-    testConsumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
-    awaitCommitCallback(testConsumer, commitCallback)
+    sendAndAwaitAsyncCommit(testConsumer, Some(Map(tp -> new OffsetAndMetadata(5L))))
     assertEquals(5, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
@@ -1327,9 +1328,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(5, consumer.committed(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
-    val commitCallback = new CountConsumerCommitCallback()
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
-    awaitCommitCallback(consumer, commitCallback)
+    sendAndAwaitAsyncCommit(consumer, Some(Map(tp2 -> new OffsetAndMetadata(7L))))
     assertEquals(7, consumer.committed(tp2).offset)
   }
 
