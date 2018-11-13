@@ -1747,13 +1747,13 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       }
     }
 
-    private def reCreate(): Code = {
+    private def reCreate(): Stat = {
       val codeAfterDelete = delete()
       var codeAfterReCreate = codeAfterDelete
       debug(s"Result of znode ephemeral deletion at $path is: $codeAfterDelete")
       if (codeAfterDelete == Code.OK || codeAfterDelete == Code.NONODE) {
-        create()
         debug(s"Result of znode ephemeral re-creation at $path is: $codeAfterReCreate")
+        create()
       } else {
         throw KeeperException.create(codeAfterReCreate)
       }
