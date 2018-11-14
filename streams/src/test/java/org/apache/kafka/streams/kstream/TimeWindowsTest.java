@@ -47,7 +47,7 @@ public class TimeWindowsTest {
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
     public void shouldSetWindowRetentionTime() {
-        assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).until(ANY_SIZE).maintainMs());
+        assertEquals(ANY_SIZE, TimeWindows.of(ofMillis(ANY_SIZE)).grace(ofMillis(ANY_SIZE)).maintainMs());
     }
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
@@ -106,7 +106,7 @@ public class TimeWindowsTest {
     public void retentionTimeMustNoBeSmallerThanWindowSize() {
         final TimeWindows windowSpec = TimeWindows.of(ofMillis(ANY_SIZE));
         try {
-            windowSpec.until(ANY_SIZE - 1);
+            windowSpec.grace(ofMillis(ANY_SIZE - 1));
             fail("should not accept retention time smaller than window size");
         } catch (final IllegalArgumentException e) {
             // expected
@@ -160,11 +160,11 @@ public class TimeWindowsTest {
 
         verifyEquality(TimeWindows.of(ofMillis(3)).grace(ofMillis(1)), TimeWindows.of(ofMillis(3)).grace(ofMillis(1)));
 
-        verifyEquality(TimeWindows.of(ofMillis(3)).until(4), TimeWindows.of(ofMillis(3)).until(4));
+        verifyEquality(TimeWindows.of(ofMillis(3)).grace(ofMillis(4)), TimeWindows.of(ofMillis(3)).grace(ofMillis(4)));
 
         verifyEquality(
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).until(4),
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).until(4)
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4)),
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(1)).grace(ofMillis(4))
         );
     }
 
@@ -176,27 +176,27 @@ public class TimeWindowsTest {
 
         verifyInEquality(TimeWindows.of(ofMillis(3)).grace(ofMillis(2)), TimeWindows.of(ofMillis(3)).grace(ofMillis(1)));
 
-        verifyInEquality(TimeWindows.of(ofMillis(3)).until(9), TimeWindows.of(ofMillis(3)).until(4));
+        verifyInEquality(TimeWindows.of(ofMillis(3)).grace(ofMillis(9)), TimeWindows.of(ofMillis(3)).grace(ofMillis(4)));
 
 
         verifyInEquality(
-            TimeWindows.of(ofMillis(4)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(4),
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(4)
+            TimeWindows.of(ofMillis(4)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(4)),
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(4))
         );
 
         verifyInEquality(
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(2)).until(4),
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(4)
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(1)).grace(ofMillis(2)).grace(ofMillis(4)),
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(4))
         );
 
         assertNotEquals(
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(1)).until(4),
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(4)
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(1)).grace(ofMillis(4)),
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(4))
         );
 
         assertNotEquals(
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(9),
-            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).until(4)
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(9)),
+            TimeWindows.of(ofMillis(3)).advanceBy(ofMillis(2)).grace(ofMillis(2)).grace(ofMillis(4))
         );
     }
 }

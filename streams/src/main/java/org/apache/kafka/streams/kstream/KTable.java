@@ -573,7 +573,7 @@ public interface KTable<K, V> {
      * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      * <p>
-     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)}
+     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Grouped)}
      * instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated

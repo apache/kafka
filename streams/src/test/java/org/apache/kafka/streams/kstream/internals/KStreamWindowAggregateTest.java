@@ -47,6 +47,7 @@ import org.junit.Test;
 import java.util.List;
 import java.util.Properties;
 
+import static java.time.Duration.of;
 import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -260,8 +261,8 @@ public class KStreamWindowAggregateTest {
         final String topic = "topic";
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        stream1.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
-               .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).until(100))
+        stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+               .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).grace(ofMillis(100)))
                .aggregate(
                    () -> "",
                    MockAggregator.toStringInstance("+"),

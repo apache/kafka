@@ -28,6 +28,7 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -135,7 +136,6 @@ public class KTableImplTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldPreserveSerdesForOperators() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<String, String> table1 = builder.table("topic-2", stringConsumed);
@@ -184,8 +184,8 @@ public class KTableImplTest {
 
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).keySerde(), null);
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).valueSerde(), null);
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, org.apache.kafka.streams.kstream.Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) table1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
         assertEquals(((AbstractStream) table1.join(table1, joiner)).valueSerde(), null);

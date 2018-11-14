@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -344,7 +345,6 @@ public class KTableKTableLeftJoinTest {
      * It is based on a fairly complicated join used by the developer that reported the bug.
      * Before the fix this would trigger an IllegalStateException.
      */
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotThrowIllegalStateExceptionWhenMultiCacheEvictions() {
         final String agg = "agg";
@@ -360,15 +360,7 @@ public class KTableKTableLeftJoinTest {
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
             .table(agg, consumed)
-            .groupBy(
-                new KeyValueMapper<Long, String, KeyValue<Long, String>>() {
-                    @Override
-                    public KeyValue<Long, String> apply(final Long key, final String value) {
-                        return new KeyValue<>(key, value);
-                    }
-                },
-                org.apache.kafka.streams.kstream.Serialized.with(Serdes.Long(), Serdes.String())
-            )
+            .groupBy(KeyValue::new, Grouped.with(Serdes.Long(), Serdes.String()))
             .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("agg-store"));
 
         final KTable<Long, String> one = builder.table(tableOne, consumed);
