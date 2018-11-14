@@ -81,7 +81,7 @@ public class StreamsOptimizedTest {
 
         final KStream<String, String> mappedStream = sourceStream.selectKey((k, v) -> keyFunction.apply(v));
 
-        if(debugInput) {
+        if (debugInput) {
             mappedStream.peek((k, v) -> System.out.println(String.format("MAPPED key=%s value=%s", k, v)));
         }
 
@@ -126,8 +126,8 @@ public class StreamsOptimizedTest {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 final int repartitionTopicCount = getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern);
                 System.out.println(String.format("REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%d", repartitionTopicCount));
-                Set<ThreadMetadata> localThreadsMetadata = streams.localThreadsMetadata();
-                for (ThreadMetadata threadMetadata : localThreadsMetadata) {
+                final Set<ThreadMetadata> localThreadsMetadata = streams.localThreadsMetadata();
+                for (final ThreadMetadata threadMetadata : localThreadsMetadata) {
                     System.out.println("TASK ASSIGNMENT -> " + threadMetadata.activeTasks());
                 }
                 System.out.flush();
