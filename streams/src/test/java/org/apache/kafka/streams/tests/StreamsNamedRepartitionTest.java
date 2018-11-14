@@ -31,12 +31,9 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.function.Function;
@@ -100,7 +97,7 @@ public class StreamsNamedRepartitionTest {
 
         streams.setStateListener((oldState, newState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
-                if(addOperators) {
+                if (addOperators) {
                     System.out.println("REBALANCING -> RUNNING with UPDATED Topology");
                 } else {
                     System.out.println("REBALANCING -> RUNNING");

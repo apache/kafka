@@ -91,7 +91,7 @@ class StreamsNamedRepartitionTopicTest(Test):
     def verify_running(processor, message):
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             monitor.wait_until(message,
-                               timeout_sec=120,
+                               timeout_sec=60,
                                err_msg="Never saw '%s' message " % message + str(processor.node.account))
 
     @staticmethod
@@ -100,14 +100,14 @@ class StreamsNamedRepartitionTopicTest(Test):
         with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             processor.stop()
             monitor.wait_until('NAMED_REPARTITION_TEST Streams Stopped',
-                               timeout_sec=120,
+                               timeout_sec=60,
                                err_msg="'NAMED_REPARTITION_TEST Streams Stopped' message" + str(processor.node.account))
 
     def verify_processing(self, processors):
         for processor in processors:
             with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
                 monitor.wait_until(self.pattern,
-                                   timeout_sec=120,
+                                   timeout_sec=60,
                                    err_msg="Never saw processing of %s " % self.pattern + str(processor.node.account))
 
     def stop_processors(self, processors):
