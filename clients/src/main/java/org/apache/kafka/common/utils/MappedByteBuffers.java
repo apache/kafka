@@ -70,6 +70,8 @@ public final class MappedByteBuffers {
     private MappedByteBuffers() {}
 
     public static void unmap(String resourceDescription, MappedByteBuffer buffer) throws IOException {
+        if (buffer == null)
+            return;
         if (!buffer.isDirect())
             throw new IllegalArgumentException("Unmapping only works with direct buffers");
         if (UNMAP == null)
