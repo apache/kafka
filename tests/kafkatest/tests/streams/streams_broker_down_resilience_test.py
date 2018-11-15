@@ -15,10 +15,10 @@
 
 import time
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
-from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
+from kafkatest.services.streams import StreamsTestBaseService
 
 
-class StreamsBrokerDownResilience(BaseStreamsTest):
+class StreamsBrokerDownResilience(StreamsTestBaseService):
     """
     This test validates that Streams is resilient to a broker
     being down longer than specified timeouts in configs
@@ -29,14 +29,26 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     client_id = "streams-broker-resilience-verify-consumer"
     num_messages = 5
 
-    def __init__(self, test_context):
+    def __init__(self, test_context, kafka):
         super(StreamsBrokerDownResilience, self).__init__(test_context,
+                                                          kafka,
                                                           topics={self.inputTopic: {'partitions': 3, 'replication-factor': 1},
                                                                   self.outputTopic: {'partitions': 1, 'replication-factor': 1}},
                                                           num_brokers=1)
 
     def setUp(self):
         self.zk.start()
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+        if self.UPGRADE_FROM is not None:
+            properties['upgrade.from'] = self.UPGRADE_FROM
+        if self.UPGRADE_TO == "future_version":
+            properties['test.future.metadata'] = "any_value"
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
 
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
@@ -45,7 +57,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         # So with (2 * 15000) = 30 seconds, we'll set downtime to 70 seconds
         broker_down_time_in_seconds = 70
 
-        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
+        processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.prop_file())
         processor.start()
 
         # until KIP-91 is merged we'll only send 5 messages to assert Kafka Streams is running before taking the broker down
@@ -76,7 +88,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
 
-        configs = self.get_configs()
+        configs = self.prop_file()
 
         # start streams with broker down initially
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
@@ -117,7 +129,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_scale_in_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs()
+        configs = self.prop_file()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
@@ -171,7 +183,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     def test_streams_should_failover_while_brokers_down(self):
         self.kafka.start()
 
-        configs = self.get_configs()
+        configs = self.prop_file()
 
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, configs)
         processor.start()
