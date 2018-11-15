@@ -59,7 +59,7 @@ public class ProcessorContextTest {
     @Test
     public void shouldNotAllowToScheduleZeroMillisecondPunctuation() {
         try {
-            context.schedule(0, null, null);
+            context.schedule(Duration.ofMillis(0L), null, null);
             fail("Should have thrown IllegalArgumentException");
         } catch (final IllegalArgumentException expected) {
             assertThat(expected.getMessage(), equalTo("The minimum supported scheduling interval is 1 millisecond."));
