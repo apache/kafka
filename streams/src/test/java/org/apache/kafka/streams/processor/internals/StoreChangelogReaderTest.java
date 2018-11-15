@@ -100,7 +100,10 @@ public class StoreChangelogReaderTest {
     public void shouldThrowExceptionIfConsumerHasCurrentSubscription() {
         final StateRestorer mockRestorer = EasyMock.mock(StateRestorer.class);
         mockRestorer.setUserRestoreListener(stateRestoreListener);
-        expect(mockRestorer.partition()).andReturn(new TopicPartition("sometopic", 0)).andReturn(new TopicPartition("sometopic", 0));
+        expect(mockRestorer.partition())
+            .andReturn(new TopicPartition("sometopic", 0))
+            .andReturn(new TopicPartition("sometopic", 0))
+            .andReturn(new TopicPartition("sometopic", 0));
         EasyMock.replay(mockRestorer);
         changelogReader.register(mockRestorer);
 
