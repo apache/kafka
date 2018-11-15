@@ -24,7 +24,7 @@ import kafka.cluster.Partition
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
-import kafka.utils.{LogCaptureAppender, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -33,7 +33,6 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.log4j.Level
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, IAnswer}
 import org.junit.Assert._
@@ -815,30 +814,13 @@ class ReplicaFetcherThreadTest {
       leaderEndpointBlockingSend = Some(mockBlockingSend))
     thread.start()
 
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
-    val logCaptureAppender = LogCaptureAppender.createAndRegister()
-
-    try {
-      thread.initiateShutdown()
-
-      val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
-        && e.getRenderedMessage.contains(s"Failed to initiate shutdown of leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
-        && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass == classOf[IllegalArgumentException])
-      assertTrue(event.isDefined)
-
-      thread.awaitShutdown()
-      val event2 = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
-        && e.getRenderedMessage.contains(s"Failed to close leader endpoint $mockBlockingSend after shutting down replica fetcher thread")
-        && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass == classOf[IllegalStateException])
-      assertTrue(event2.isDefined)
-
-      verify(mockBlockingSend)
-    } finally {
-      LogCaptureAppender.unregister(logCaptureAppender)
-      LogCaptureAppender.setClassLoggerLevel(thread.getClass, previousLevel)
-    }
+    // Verify that:
+    //   1) IllegalArgumentException thrown by BlockingSend#initiateClose() during `initiateShutdown` is not propagated
+    //   2) BlockingSend.close() is invoked even if BlockingSend#initiateClose() fails
+    //   3) IllegalStateException thrown by BlockingSend.close() during `awaitShutdown` is not propagated
+    thread.initiateShutdown()
+    thread.awaitShutdown()
+    verify(mockBlockingSend)
   }
 
   def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager) = {
