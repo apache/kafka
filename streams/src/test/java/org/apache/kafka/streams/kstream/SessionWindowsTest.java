@@ -33,11 +33,10 @@ public class SessionWindowsTest {
         assertEquals(anyGap, SessionWindows.with(ofMillis(anyGap)).inactivityGap());
     }
 
-    @Deprecated
     @Test
-    public void shouldSetWindowRetentionTime() {
+    public void shouldSetWindowGraceTime() {
         final long anyRetentionTime = 42L;
-        assertEquals(anyRetentionTime, SessionWindows.with(ofMillis(1)).grace(ofMillis(anyRetentionTime)).maintainMs());
+        assertEquals(anyRetentionTime, SessionWindows.with(ofMillis(1)).grace(ofMillis(anyRetentionTime)).gracePeriodMs());
     }
 
 
@@ -75,7 +74,7 @@ public class SessionWindowsTest {
     public void retentionTimeMustNotBeNegative() {
         final SessionWindows windowSpec = SessionWindows.with(ofMillis(42));
         try {
-            windowSpec.grace(ofMillis(41));
+            windowSpec.until(41);
             fail("should not accept retention time smaller than gap");
         } catch (final IllegalArgumentException e) {
             // expected
@@ -101,10 +100,8 @@ public class SessionWindowsTest {
 
         verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
 
-        verifyInEquality(SessionWindows.with(ofMillis(2)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
+        verifyInEquality(SessionWindows.with(ofMillis(2)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
 
-        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
-
-        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(70)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
+        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
     }
 }

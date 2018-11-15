@@ -81,7 +81,7 @@ public class KStreamWindowReduceTest {
         builder
             .stream("TOPIC", Consumed.with(Serdes.String(), Serdes.String()))
             .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-            .windowedBy(TimeWindows.of(ofMillis(5L)).grace(ofMillis(100)))
+            .windowedBy(TimeWindows.of(ofMillis(5L)).until(100))
             .reduce((value1, value2) -> value1 + "+" + value2)
             .toStream()
             .map((key, value) -> new KeyValue<>(key.toString(), value))

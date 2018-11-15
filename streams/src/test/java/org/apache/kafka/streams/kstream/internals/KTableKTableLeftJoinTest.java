@@ -18,20 +18,17 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
@@ -361,7 +358,7 @@ public class KTableKTableLeftJoinTest {
         final KTable<Long, String> aggTable = builder
             .table(agg, consumed)
             .groupBy(KeyValue::new, Grouped.with(Serdes.Long(), Serdes.String()))
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("agg-store"));
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.as("agg-store"));
 
         final KTable<Long, String> one = builder.table(tableOne, consumed);
         final KTable<Long, String> two = builder.table(tableTwo, consumed);
@@ -370,12 +367,8 @@ public class KTableKTableLeftJoinTest {
         final KTable<Long, String> five = builder.table(tableFive, consumed);
         final KTable<Long, String> six = builder.table(tableSix, consumed);
 
-        final ValueMapper<String, String> mapper = new ValueMapper<String, String>() {
-            @Override
-            public String apply(final String value) {
-                return value.toUpperCase(Locale.ROOT);
-            }
-        };
+        final ValueMapper<String, String> mapper = value -> value.toUpperCase(Locale.ROOT);
+
         final KTable<Long, String> seven = one.mapValues(mapper);
 
         final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);

@@ -72,9 +72,8 @@ public class JoinWindowsTest {
         }
     }
 
-    @Deprecated
     @Test
-    public void untilShouldSetMaintainDuration() {
+    public void untilShouldSetGraceDuration() {
         final JoinWindows windowSpec = JoinWindows.of(ofMillis(ANY_SIZE));
         final long windowSize = windowSpec.size();
         assertEquals(windowSize, windowSpec.grace(ofMillis(windowSize)).gracePeriodMs());
@@ -86,7 +85,7 @@ public class JoinWindowsTest {
         final JoinWindows windowSpec = JoinWindows.of(ofMillis(ANY_SIZE));
         final long windowSize = windowSpec.size();
         try {
-            windowSpec.grace(ofMillis(windowSize - 1));
+            windowSpec.until(windowSize - 1);
             fail("should not accept retention time smaller than window size");
         } catch (final IllegalArgumentException e) {
             // expected
@@ -142,23 +141,18 @@ public class JoinWindowsTest {
 
 
         verifyInEquality(
-            JoinWindows.of(ofMillis(3)).before(ofMillis(9)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60)),
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
+            JoinWindows.of(ofMillis(3)).before(ofMillis(9)).after(ofMillis(2)).grace(ofMillis(3)),
+            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
         );
 
         verifyInEquality(
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(9)).grace(ofMillis(3)).grace(ofMillis(60)),
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
+            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(9)).grace(ofMillis(3)),
+            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
         );
 
         verifyInEquality(
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(9)).grace(ofMillis(60)),
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
-        );
-
-        verifyInEquality(
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(90)),
-            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3)).grace(ofMillis(60))
+            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(9)),
+            JoinWindows.of(ofMillis(3)).before(ofMillis(1)).after(ofMillis(2)).grace(ofMillis(3))
         );
     }
 }

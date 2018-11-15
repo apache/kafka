@@ -51,6 +51,7 @@ import java.util.Map;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KTableAggregateTest {
 
     private final Serde<String> stringSerde = Serdes.String();
