@@ -118,7 +118,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final int fetchSize;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
-    private final int maxPollRecords;
+    private int maxPollRecords;
     private final boolean checkCrcs;
     private final Metadata metadata;
     private final FetchManagerMetrics sensors;
@@ -174,6 +174,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         subscriptions.addListener(this);
     }
+    
+    public int getMaxPollRecords() {
+		return maxPollRecords;
+	}
+
+	public void setMaxPollRecords(int maxPollRecords) {
+		this.maxPollRecords = maxPollRecords;
+	}
 
     /**
      * Represents data about an offset returned by a broker.

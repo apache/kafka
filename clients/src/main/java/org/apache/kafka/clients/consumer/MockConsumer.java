@@ -513,4 +513,14 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public void close(Duration timeout) {
         close();
     }
+
+	@Override
+	public void setMaxPollRecords(int maxPollRecords) {
+		throw new UnsupportedOperationException("Not implemented yet.");
+	}
+
+	@Override
+	public int getMaxPollRecords() {
+		throw new UnsupportedOperationException("Not implemented yet.");
+	}
 }
