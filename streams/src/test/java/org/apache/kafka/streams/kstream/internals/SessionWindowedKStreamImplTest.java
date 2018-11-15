@@ -25,6 +25,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Merger;
@@ -65,11 +66,10 @@ public class SessionWindowedKStreamImplTest {
     };
     private SessionWindowedKStream<String, String> stream;
 
-    @SuppressWarnings("deprecation")
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
-        this.stream = stream.groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
+        this.stream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                 .windowedBy(SessionWindows.with(ofMillis(500)));
     }
 

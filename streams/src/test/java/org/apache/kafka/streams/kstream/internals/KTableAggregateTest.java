@@ -25,6 +25,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -55,8 +56,7 @@ public class KTableAggregateTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-    private final org.apache.kafka.streams.kstream.Serialized<String, String> stringSerialzied =
-            org.apache.kafka.streams.kstream.Serialized.with(stringSerde, stringSerde);
+    private final Grouped<String, String> stringSerialzied = Grouped.with(stringSerde, stringSerde);
     private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
 
     private File stateDir = null;
@@ -362,7 +362,7 @@ public class KTableAggregateTest {
             public KeyValue<String, Long> apply(final Long key, final String value) {
                 return new KeyValue<>(value, key);
             }
-        }, org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.Long()))
+        }, Grouped.with(Serdes.String(), Serdes.Long()))
                 .reduce(new Reducer<Long>() {
                     @Override
                     public Long apply(final Long value1, final Long value2) {

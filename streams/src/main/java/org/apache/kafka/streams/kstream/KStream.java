@@ -874,7 +874,7 @@ public interface KStream<K, V> {
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
      * <p>
      * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
-     * If the key type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)} instead.
+     * If the key type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Grouped)} instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new key for grouping
      * @param <KR>     the key type of the result {@link KGroupedStream}

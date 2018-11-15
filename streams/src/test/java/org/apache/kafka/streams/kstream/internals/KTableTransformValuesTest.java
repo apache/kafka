@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -359,7 +360,6 @@ public class KTableTransformValuesTest {
         assertThat(keyValueStore.get("C"), is("C->null!"));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCalculateCorrectOldValuesIfMaterializedEvenIfStateful() {
         builder
@@ -369,7 +369,7 @@ public class KTableTransformValuesTest {
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.Integer()))
-            .groupBy(toForceSendingOfOldValues(), org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.Integer()))
+            .groupBy(toForceSendingOfOldValues(), Grouped.with(Serdes.String(), Serdes.Integer()))
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
             .mapValues(mapBackToStrings())
             .toStream()
@@ -387,13 +387,12 @@ public class KTableTransformValuesTest {
         assertThat(keyValueStore.get("A"), is(3));
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldCalculateCorrectOldValuesIfNotStatefulEvenIfNotMaterialized() {
         builder
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(new StatelessTransformerSupplier())
-            .groupBy(toForceSendingOfOldValues(), org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.Integer()))
+            .groupBy(toForceSendingOfOldValues(), Grouped.with(Serdes.String(), Serdes.Integer()))
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR)
             .mapValues(mapBackToStrings())
             .toStream()

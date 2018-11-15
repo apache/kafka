@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -204,13 +205,11 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.selectValueKeyValueMapper(),
-                      org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(),
-                                      Serdes.String()))
+        table.groupBy(MockMapper.selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
                 .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
                                .withKeySerde(Serdes.String())
                                .withValueSerde(Serdes.Long()));
@@ -223,13 +222,11 @@ public class KGroupedTableImplTest {
         }
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
-                      org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(),
-                                      Serdes.String()))
+        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            MockAggregator.TOSTRING_REMOVER,
