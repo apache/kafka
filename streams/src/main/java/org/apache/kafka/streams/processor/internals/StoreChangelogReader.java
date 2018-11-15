@@ -61,9 +61,14 @@ public class StoreChangelogReader implements ChangelogReader {
 
     @Override
     public void register(final StateRestorer restorer) {
-        restorer.setUserRestoreListener(userStateRestoreListener);
-        stateRestorers.put(restorer.partition(), restorer);
-        needsInitializing.put(restorer.partition(), restorer);
+        final StateRestorer existingRestorer = stateRestorers.get(restorer.partition());
+        if (existingRestorer == null) {
+            restorer.setUserRestoreListener(userStateRestoreListener);
+            stateRestorers.put(restorer.partition(), restorer);
+            needsInitializing.put(restorer.partition(), restorer);
+        } else {
+            needsInitializing.put(restorer.partition(), existingRestorer);
+        }
     }
 
     /**
@@ -198,7 +203,6 @@ public class StoreChangelogReader implements ChangelogReader {
                 needsInitializing.remove(restoringPartition);
                 restorer.setCheckpointOffset(restoreConsumer.position(restoringPartition));
                 task.reinitializeStateStoresForPartitions(Collections.singleton(restoringPartition));
-                stateRestorers.get(restoringPartition).restoreStarted();
             } else {
                 log.info("Restoring task {}'s state store {} from beginning of the changelog {} ", task.id, restorer.storeName(), restoringPartition);
                 final long position = restoreConsumer.position(restoringPartition);
