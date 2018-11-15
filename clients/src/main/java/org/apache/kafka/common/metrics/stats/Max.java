@@ -26,27 +26,21 @@ import org.apache.kafka.common.metrics.MetricConfig;
 public final class Max extends SampledStat {
 
     public Max() {
-        super(Double.NaN);
+        super(Double.MIN_VALUE);
     }
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        if (Double.isNaN(sample.value))
-            sample.value = value;
-        else
-            sample.value = Math.max(sample.value, value);
+        sample.value = Math.max(sample.value, value);
     }
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double max = Double.NaN;
+        double max = Double.MIN_VALUE;
         for (Sample sample : samples) {
-            if (Double.isNaN(max))
-                max = sample.value;
-            else if (!Double.isNaN(sample.value))
-                max = Math.max(max, sample.value);
+            max = Math.max(max, sample.value);
         }
-        return max;
+        return Math.abs(max - Double.MIN_VALUE) < 0.001 ? Double.NaN : max;
     }
 
 }

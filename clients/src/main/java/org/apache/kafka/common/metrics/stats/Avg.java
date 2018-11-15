@@ -26,32 +26,23 @@ import org.apache.kafka.common.metrics.MetricConfig;
 public class Avg extends SampledStat {
 
     public Avg() {
-        super(Double.NaN);
+        super(0.0);
     }
 
     @Override
     protected void update(Sample sample, MetricConfig config, double value, long now) {
-        if (Double.isNaN(sample.value))
-            sample.value = value;
-        else
-            sample.value += value;
+        sample.value += value;
     }
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double total = Double.NaN;
+        double total = 0;
         long count = 0;
         for (Sample s : samples) {
-            if (Double.isNaN(s.value))
-                continue;
-            if (Double.isNaN(total))
-                total = s.value;
-            else
-                total += s.value;
-
+            total += s.value;
             count += s.eventCount;
         }
-        return count == 0 ? total : total / count;
+        return count == 0 ? Double.NaN : total;
     }
 
 }
