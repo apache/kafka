@@ -137,7 +137,7 @@ class ReplicaFetcherThread(name: String,
       leaderEndpoint.close()
     } catch {
       case t: Throwable =>
-        error(s"Failed to close leader endpoint $leaderEndpoint after shutting down replica fetcher thread shutdown", t)
+        error(s"Failed to close leader endpoint $leaderEndpoint after shutting down replica fetcher thread", t)
     }
   }
 

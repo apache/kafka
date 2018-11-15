@@ -19,7 +19,7 @@ package kafka.server
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import java.io.File
+import java.io.{DataInputStream, File}
 import java.net.ServerSocket
 import java.util.concurrent.{Executors, TimeUnit}
 
@@ -213,10 +213,13 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     var controllerChannelManager: ControllerChannelManager = null
 
     try {
-      // Set up a server to accept connections, but not send any responses to controller requests
+      // Set up a server to accept a connection and receive one byte from the first request. No response is sent.
       serverSocket = new ServerSocket(0)
-      val connectionFuture = executor.submit(new Runnable {
-        override def run(): Unit = serverSocket.accept()
+      val receiveFuture = executor.submit(new Runnable {
+        override def run(): Unit = {
+          val socket = serverSocket.accept()
+          new DataInputStream(socket.getInputStream).readByte()
+        }
       })
 
       // Start a ControllerChannelManager
@@ -228,12 +231,11 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()
 
-      // Initiate a sendRequest and wait for connection to be established
+      // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
         controllerId, 1, Map.empty.asJava, brokers.map(_.node(listenerName)).toSet.asJava)
       controllerChannelManager.sendRequest(1, ApiKeys.LEADER_AND_ISR, requestBuilder)
-      connectionFuture.get(10, TimeUnit.SECONDS)
-      Thread.sleep(10)   // leave a little time to ensure send has been initiated
+      receiveFuture.get(10, TimeUnit.SECONDS)
 
       // Shutdown controller. Request timeout is 30s, verify that shutdown completed well before that
       val shutdownFuture = executor.submit(new Runnable {

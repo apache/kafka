@@ -519,6 +519,8 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
+        ensureActive();
+
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
             // handle them immediately without waiting for Selector#poll.
@@ -527,7 +529,6 @@ public class NetworkClient implements KafkaClient {
             completeResponses(responses);
             return responses;
         }
-        ensureActive();
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
         try {

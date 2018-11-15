@@ -829,7 +829,7 @@ class ReplicaFetcherThreadTest {
 
       thread.awaitShutdown()
       val event2 = logCaptureAppender.getMessages.find(e => e.getLevel == Level.ERROR
-        && e.getRenderedMessage.contains(s"Failed to close leader endpoint $mockBlockingSend after shutting down replica fetcher thread shutdown")
+        && e.getRenderedMessage.contains(s"Failed to close leader endpoint $mockBlockingSend after shutting down replica fetcher thread")
         && e.getThrowableInformation != null
         && e.getThrowableInformation.getThrowable.getClass == classOf[IllegalStateException])
       assertTrue(event2.isDefined)
