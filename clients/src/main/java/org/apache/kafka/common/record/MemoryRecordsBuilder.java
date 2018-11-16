@@ -37,7 +37,7 @@ import static org.apache.kafka.common.utils.Utils.wrapNullable;
  * and the builder is closed (e.g. the Producer), it's important to call `closeForRecordAppends` when the former happens.
  * This will release resources like compression buffers that can be relatively large (64 KB for LZ4).
  */
-public class MemoryRecordsBuilder {
+public class MemoryRecordsBuilder implements AutoCloseable {
     private static final float COMPRESSION_RATE_ESTIMATION_FACTOR = 1.05f;
     private static final DataOutputStream CLOSED_STREAM = new DataOutputStream(new OutputStream() {
         @Override

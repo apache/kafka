@@ -983,7 +983,7 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
-    private class SelectorMetrics {
+    private class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final String metricGrpPrefix;
         private final Map<String, String> metricTags;

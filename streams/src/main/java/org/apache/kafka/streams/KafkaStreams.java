@@ -123,7 +123,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
  * @see org.apache.kafka.streams.Topology
  */
 @InterfaceStability.Evolving
-public class KafkaStreams {
+public class KafkaStreams implements AutoCloseable {
 
     private static final String JMX_PREFIX = "kafka.streams";
     private static final int DEFAULT_CLOSE_TIMEOUT = 0;
