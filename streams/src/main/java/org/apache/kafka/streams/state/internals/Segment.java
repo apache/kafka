@@ -25,7 +25,7 @@ import java.util.Objects;
 class Segment extends RocksDBStore implements Comparable<Segment> {
     public final long id;
 
-    Segment(String segmentName, String windowName, long id) {
+    Segment(final String segmentName, final String windowName, final long id) {
         super(segmentName, windowName);
         this.id = id;
     }
@@ -35,14 +35,16 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
     }
 
     @Override
-    public int compareTo(Segment segment) {
+    public int compareTo(final Segment segment) {
         return Long.compare(id, segment.id);
     }
+
 
     @Override
     public void openDB(final ProcessorContext context) {
         super.openDB(context);
         // skip the registering step
+        internalProcessorContext = context;
     }
 
     @Override
@@ -51,10 +53,10 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
     }
 
     @Override
-    public boolean equals(Object obj) {
+    public boolean equals(final Object obj) {
         if (obj == null || getClass() != obj.getClass()) return false;
 
-        Segment segment = (Segment) obj;
+        final Segment segment = (Segment) obj;
         return Long.compare(id, segment.id) == 0;
     }
 

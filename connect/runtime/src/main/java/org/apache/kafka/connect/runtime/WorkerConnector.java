@@ -89,7 +89,7 @@ public class WorkerConnector {
 
                 @Override
                 public void raiseError(Exception e) {
-                    log.error("{} Connector raised an error", this, e);
+                    log.error("{} Connector raised an error", WorkerConnector.this, e);
                     onFailure(e);
                     ctx.raiseError(e);
                 }
@@ -141,6 +141,7 @@ public class WorkerConnector {
         return state == State.STARTED;
     }
 
+    @SuppressWarnings("fallthrough")
     private void pause() {
         try {
             switch (state) {

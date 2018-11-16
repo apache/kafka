@@ -102,7 +102,7 @@ public class MultiRecordsSend implements Send {
         totalWritten += totalWrittenPerCall;
 
         if (completed() && totalWritten != size)
-            log.error("mismatch in sending bytes over socket; expected: " + size + " actual: " + totalWritten);
+            log.error("mismatch in sending bytes over socket; expected: {} actual: {}", size, totalWritten);
 
         log.trace("Bytes written as part of multi-send call: {}, total bytes written so far: {}, expected bytes to write: {}",
                 totalWrittenPerCall, totalWritten, size);

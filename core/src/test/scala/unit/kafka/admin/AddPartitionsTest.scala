@@ -130,7 +130,7 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(0, partitionMetadata(0).partition)
     assertEquals(1, partitionMetadata(1).partition)
     assertEquals(2, partitionMetadata(2).partition)
-    val replicas = topicMetadata.partitionMetadata.get(1).replicas
+    val replicas = partitionMetadata(1).replicas
     assertEquals(2, replicas.size)
     assertTrue(replicas.asScala.head.id == 0 || replicas.asScala.head.id == 1)
     assertTrue(replicas.asScala(1).id == 0 || replicas.asScala(1).id == 1)

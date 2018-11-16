@@ -22,6 +22,8 @@ import java.security.InvalidKeyException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
@@ -36,6 +38,11 @@ import org.apache.kafka.common.security.scram.internals.ScramMessages.ServerFirs
  * Scram message salt and hash functions defined in <a href="https://tools.ietf.org/html/rfc5802">RFC 5802</a>.
  */
 public class ScramFormatter {
+
+    private static final Pattern EQUAL = Pattern.compile("=", Pattern.LITERAL);
+    private static final Pattern COMMA = Pattern.compile(",", Pattern.LITERAL);
+    private static final Pattern EQUAL_TWO_C = Pattern.compile("=2C", Pattern.LITERAL);
+    private static final Pattern EQUAL_THREE_D = Pattern.compile("=3D", Pattern.LITERAL);
 
     private final MessageDigest messageDigest;
     private final Mac mac;
@@ -96,14 +103,16 @@ public class ScramFormatter {
     }
 
     public String saslName(String username) {
-        return username.replace("=", "=3D").replace(",", "=2C");
+        String replace1 = EQUAL.matcher(username).replaceAll(Matcher.quoteReplacement("=3D"));
+        return COMMA.matcher(replace1).replaceAll(Matcher.quoteReplacement("=2C"));
     }
 
     public String username(String saslName) {
-        String username = saslName.replace("=2C", ",");
-        if (username.replace("=3D", "").indexOf('=') >= 0)
+        String username = EQUAL_TWO_C.matcher(saslName).replaceAll(Matcher.quoteReplacement(","));
+        if (EQUAL_THREE_D.matcher(username).replaceAll(Matcher.quoteReplacement("")).indexOf('=') >= 0) {
             throw new IllegalArgumentException("Invalid username: " + saslName);
-        return username.replace("=3D", "=");
+        }
+        return EQUAL_THREE_D.matcher(username).replaceAll(Matcher.quoteReplacement("="));
     }
 
     public String authMessage(String clientFirstMessageBare, String serverFirstMessage, String clientFinalMessageWithoutProof) {

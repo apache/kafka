@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -29,7 +30,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Rule;
@@ -44,14 +44,15 @@ public class KStreamTransformTest {
     private String topicName = "topic";
 
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
+    @SuppressWarnings("deprecation")
     @Rule
-    public final KStreamTestDriver kstreamDriver = new KStreamTestDriver();
+    public final org.apache.kafka.test.KStreamTestDriver kstreamDriver = new org.apache.kafka.test.KStreamTestDriver();
 
     @Test
     public void testTransform() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
             public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
@@ -76,12 +77,12 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
         kstreamDriver.setUp(builder);
-        for (int expectedKey : expectedKeys) {
+        for (final int expectedKey : expectedKeys) {
             kstreamDriver.process(topicName, expectedKey, expectedKey * 10);
         }
 
@@ -93,7 +94,7 @@ public class KStreamTransformTest {
 
         //String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
-        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
+        final String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
@@ -102,9 +103,9 @@ public class KStreamTransformTest {
 
     @Test
     public void testTransformWithNewDriverAndPunctuator() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
+        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
             public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
                 return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
 
@@ -112,9 +113,9 @@ public class KStreamTransformTest {
 
                     @Override
                     public void init(final ProcessorContext context) {
-                        context.schedule(1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+                        context.schedule(Duration.ofMillis(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                             @Override
-                            public void punctuate(long timestamp) {
+                            public void punctuate(final long timestamp) {
                                 context.forward(-1, (int) timestamp);
                             }
                         });
@@ -135,12 +136,12 @@ public class KStreamTransformTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
-        KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
+        final MockProcessorSupplier<Integer, Integer> processor = new MockProcessorSupplier<>();
+        final KStream<Integer, Integer> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transform(transformerSupplier).process(processor);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
             }
 
@@ -152,7 +153,7 @@ public class KStreamTransformTest {
 
         assertEquals(6, processor.theCapturedProcessor().processed.size());
 
-        String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
+        final String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));

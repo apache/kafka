@@ -25,11 +25,11 @@ Since Kafka console scripts are different for Unix-based and Windows platforms, 
 
 <h4><a id="quickstart_download" href="#quickstart_download">Step 1: Download the code</a></h4>
 
-<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_2.11-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
+<a href="https://www.apache.org/dyn/closer.cgi?path=/kafka/{{fullDotVersion}}/kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz" title="Kafka downloads">Download</a> the {{fullDotVersion}} release and un-tar it.
 
 <pre class="brush: bash;">
-&gt; tar -xzf kafka_2.11-{{fullDotVersion}}.tgz
-&gt; cd kafka_2.11-{{fullDotVersion}}
+&gt; tar -xzf kafka_{{scalaVersion}}-{{fullDotVersion}}.tgz
+&gt; cd kafka_{{scalaVersion}}-{{fullDotVersion}}
 </pre>
 
 <h4><a id="quickstart_startserver" href="#quickstart_startserver">Step 2: Start the server</a></h4>
@@ -113,12 +113,12 @@ Now edit these new files and set the following properties:
 config/server-1.properties:
     broker.id=1
     listeners=PLAINTEXT://:9093
-    log.dir=/tmp/kafka-logs-1
+    log.dirs=/tmp/kafka-logs-1
 
 config/server-2.properties:
     broker.id=2
     listeners=PLAINTEXT://:9094
-    log.dir=/tmp/kafka-logs-2
+    log.dirs=/tmp/kafka-logs-2
 </pre>
 <p>The <code>broker.id</code> property is the unique and permanent name of each node in the cluster. We have to override the port and log directory only because we are running these all on the same machine and we want to keep the brokers from all trying to register on the same port or overwrite each other's data.</p>
 <p>
@@ -192,7 +192,7 @@ ProcessId
 &gt; taskkill /pid 6016 /f
 </pre>
 
-<p>Leadership has switched to one of the slaves and node 1 is no longer in the in-sync replica set:</p>
+<p>Leadership has switched to one of the followers and node 1 is no longer in the in-sync replica set:</p>
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --describe --zookeeper localhost:2181 --topic my-replicated-topic

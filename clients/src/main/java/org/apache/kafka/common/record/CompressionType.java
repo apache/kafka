@@ -113,6 +113,26 @@ public enum CompressionType {
                 throw new KafkaException(e);
             }
         }
+    },
+
+    ZSTD(4, "zstd", 1.0f) {
+        @Override
+        public OutputStream wrapForOutput(ByteBufferOutputStream buffer, byte messageVersion) {
+            try {
+                return (OutputStream) ZstdConstructors.OUTPUT.invoke(buffer);
+            } catch (Throwable e) {
+                throw new KafkaException(e);
+            }
+        }
+
+        @Override
+        public InputStream wrapForInput(ByteBuffer buffer, byte messageVersion, BufferSupplier decompressionBufferSupplier) {
+            try {
+                return (InputStream) ZstdConstructors.INPUT.invoke(new ByteBufferInputStream(buffer));
+            } catch (Throwable e) {
+                throw new KafkaException(e);
+            }
+        }
     };
 
     public final int id;
@@ -128,7 +148,7 @@ public enum CompressionType {
     /**
      * Wrap bufferStream with an OutputStream that will compress data with this CompressionType.
      *
-     * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@#link ByteBuffer}s directly.
+     * Note: Unlike {@link #wrapForInput}, {@link #wrapForOutput} cannot take {@link ByteBuffer}s directly.
      * Currently, {@link MemoryRecordsBuilder#writeDefaultBatchHeader()} and {@link MemoryRecordsBuilder#writeLegacyCompressedWrapperHeader()}
      * write to the underlying buffer in the given {@link ByteBufferOutputStream} after the compressed data has been written.
      * In the event that the buffer needs to be expanded while writing the data, access to the underlying buffer needs to be preserved.
@@ -156,6 +176,8 @@ public enum CompressionType {
                 return SNAPPY;
             case 3:
                 return LZ4;
+            case 4:
+                return ZSTD;
             default:
                 throw new IllegalArgumentException("Unknown compression type id: " + id);
         }
@@ -170,6 +192,8 @@ public enum CompressionType {
             return SNAPPY;
         else if (LZ4.name.equals(name))
             return LZ4;
+        else if (ZSTD.name.equals(name))
+            return ZSTD;
         else
             throw new IllegalArgumentException("Unknown compression name: " + name);
     }
@@ -177,7 +201,7 @@ public enum CompressionType {
     // We should only have a runtime dependency on compression algorithms in case the native libraries don't support
     // some platforms.
     //
-    // For Snappy, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
+    // For Snappy and Zstd, we dynamically load the classes and rely on the initialization-on-demand holder idiom to ensure
     // they're only loaded if used.
     //
     // For LZ4 we are using org.apache.kafka classes, which should always be in the classpath, and would not trigger
@@ -188,6 +212,13 @@ public enum CompressionType {
                 MethodType.methodType(void.class, InputStream.class));
         static final MethodHandle OUTPUT = findConstructor("org.xerial.snappy.SnappyOutputStream",
                 MethodType.methodType(void.class, OutputStream.class));
+    }
+
+    private static class ZstdConstructors {
+        static final MethodHandle INPUT = findConstructor("com.github.luben.zstd.ZstdInputStream",
+            MethodType.methodType(void.class, InputStream.class));
+        static final MethodHandle OUTPUT = findConstructor("com.github.luben.zstd.ZstdOutputStream",
+            MethodType.methodType(void.class, OutputStream.class));
     }
 
     private static MethodHandle findConstructor(String className, MethodType methodType) {

@@ -51,6 +51,8 @@ class ProduceBenchTest(Test):
                                         target_messages_per_sec=1000,
                                         max_messages=100000,
                                         producer_conf={},
+                                        admin_client_conf={},
+                                        common_client_conf={},
                                         inactive_topics=inactive_topics,
                                         active_topics=active_topics)
         workload1 = self.trogdor.create_task("workload1", spec)

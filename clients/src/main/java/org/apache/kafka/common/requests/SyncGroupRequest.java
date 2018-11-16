@@ -101,7 +101,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
     private SyncGroupRequest(String groupId, int generationId, String memberId,
                              Map<String, ByteBuffer> groupAssignment, short version) {
-        super(version);
+        super(ApiKeys.SYNC_GROUP, version);
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;
@@ -109,7 +109,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public SyncGroupRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.SYNC_GROUP, version);
         this.groupId = struct.get(GROUP_ID);
         this.generationId = struct.get(GENERATION_ID);
         this.memberId = struct.get(MEMBER_ID);

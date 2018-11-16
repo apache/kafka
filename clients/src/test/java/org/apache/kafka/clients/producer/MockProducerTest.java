@@ -19,6 +19,7 @@ package org.apache.kafka.clients.producer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -267,18 +268,9 @@ public class MockProducerTest {
         try {
             producer.send(null);
             fail("Should have thrown as producer is fenced off");
-        } catch (ProducerFencedException e) { }
-    }
-
-    @Test
-    public void shouldThrowOnFlushIfProducerGotFenced() {
-        buildMockProducer(true);
-        producer.initTransactions();
-        producer.fenceProducer();
-        try {
-            producer.flush();
-            fail("Should have thrown as producer is fenced off");
-        } catch (ProducerFencedException e) { }
+        } catch (KafkaException e) {
+            assertTrue("The root cause of the exception should be ProducerFenced", e.getCause() instanceof ProducerFencedException);
+        }
     }
 
     @Test
@@ -632,16 +624,6 @@ public class MockProducerTest {
         producer.close();
         try {
             producer.abortTransaction();
-            fail("Should have thrown as producer is already closed");
-        } catch (IllegalStateException e) { }
-    }
-
-    @Test
-    public void shouldThrowOnCloseIfProducerIsClosed() {
-        buildMockProducer(true);
-        producer.close();
-        try {
-            producer.close();
             fail("Should have thrown as producer is already closed");
         } catch (IllegalStateException e) { }
     }

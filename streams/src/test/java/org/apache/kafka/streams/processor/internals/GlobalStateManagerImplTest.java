@@ -32,7 +32,6 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -56,6 +55,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -103,7 +103,7 @@ public class GlobalStateManagerImplTest {
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
 
-        topology = ProcessorTopology.withGlobalStores(Utils.<StateStore>mkList(store1, store2, store3, store4), storeToTopic);
+        topology = ProcessorTopology.withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
@@ -349,7 +349,7 @@ public class GlobalStateManagerImplTest {
         try {
             stateManager.register(store1, null);
             fail("should have thrown due to null callback");
-        } catch (IllegalArgumentException e) {
+        } catch (final IllegalArgumentException e) {
             //pass
         }
     }
@@ -404,7 +404,7 @@ public class GlobalStateManagerImplTest {
 
         try {
             stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // expected
         }
         assertFalse(store.isOpen());
@@ -416,7 +416,7 @@ public class GlobalStateManagerImplTest {
         writeCorruptCheckpoint();
         try {
             stateManager.initialize();
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // expected
         }
         final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime());
@@ -535,7 +535,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized Map<TopicPartition, Long> endOffsets(Collection<org.apache.kafka.common.TopicPartition> partitions) {
+            public synchronized Map<TopicPartition, Long> endOffsets(final Collection<org.apache.kafka.common.TopicPartition> partitions) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }
@@ -568,7 +568,7 @@ public class GlobalStateManagerImplTest {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
         consumer = new MockConsumer<byte[], byte[]>(OffsetResetStrategy.EARLIEST) {
             @Override
-            public synchronized List<PartitionInfo> partitionsFor(String topic) {
+            public synchronized List<PartitionInfo> partitionsFor(final String topic) {
                 numberOfCalls.incrementAndGet();
                 throw new TimeoutException();
             }
@@ -649,7 +649,7 @@ public class GlobalStateManagerImplTest {
         assertTrue(testFile4.exists());
 
         // only delete and recreate store 1 and 3 -- 2 and 4 must be untouched
-        stateManager.reinitializeStateStoresForPartitions(Utils.mkList(t1, t3), processorContext);
+        stateManager.reinitializeStateStoresForPartitions(asList(t1, t3), processorContext);
 
         assertFalse(testFile1.exists());
         assertTrue(testFile2.exists());

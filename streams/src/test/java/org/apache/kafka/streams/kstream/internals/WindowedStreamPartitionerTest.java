@@ -60,19 +60,19 @@ public class WindowedStreamPartitionerTest {
         final WindowedStreamPartitioner<Integer, String> streamPartitioner = new WindowedStreamPartitioner<>(timeWindowedSerializer);
 
         for (int k = 0; k < 10; k++) {
-            Integer key = rand.nextInt();
-            byte[] keyBytes = intSerializer.serialize(topicName, key);
+            final Integer key = rand.nextInt();
+            final byte[] keyBytes = intSerializer.serialize(topicName, key);
 
-            String value = key.toString();
-            byte[] valueBytes = stringSerializer.serialize(topicName, value);
+            final String value = key.toString();
+            final byte[] valueBytes = stringSerializer.serialize(topicName, value);
 
-            Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
+            final Integer expected = defaultPartitioner.partition("topic", key, keyBytes, value, valueBytes, cluster);
 
             for (int w = 1; w < 10; w++) {
-                TimeWindow window = new TimeWindow(10 * w, 20 * w);
+                final TimeWindow window = new TimeWindow(10 * w, 20 * w);
 
-                Windowed<Integer> windowedKey = new Windowed<>(key, window);
-                Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
+                final Windowed<Integer> windowedKey = new Windowed<>(key, window);
+                final Integer actual = streamPartitioner.partition(topicName, windowedKey, value, infos.size());
 
                 assertEquals(expected, actual);
             }

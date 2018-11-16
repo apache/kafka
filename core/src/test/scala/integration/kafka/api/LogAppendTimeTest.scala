@@ -21,14 +21,10 @@ import java.util.concurrent.TimeUnit
 
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.record.TimestampType
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertNotEquals, assertTrue}
-
-import scala.collection.JavaConverters._
-import scala.collection.mutable.ArrayBuffer
 
 /**
   * Tests where the broker is configured to use LogAppendTime. For tests where LogAppendTime is configured via topic
@@ -53,7 +49,7 @@ class LogAppendTimeTest extends IntegrationTestHarness {
 
   @Test
   def testProduceConsume() {
-    val producer = producers.head
+    val producer = createProducer()
     val now = System.currentTimeMillis()
     val createTime = now - TimeUnit.DAYS.toMillis(1)
     val producerRecords = (1 to 10).map(i => new ProducerRecord(topic, null, createTime, s"key$i".getBytes,
@@ -64,13 +60,9 @@ class LogAppendTimeTest extends IntegrationTestHarness {
       assertTrue(recordMetadata.timestamp < now + TimeUnit.SECONDS.toMillis(60))
     }
 
-    val consumer = consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(topic))
-    val consumerRecords = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]
-    TestUtils.waitUntilTrue(() => {
-      consumerRecords ++= consumer.poll(50).asScala
-      consumerRecords.size == producerRecords.size
-    }, s"Consumed ${consumerRecords.size} records until timeout instead of the expected ${producerRecords.size} records")
+    val consumerRecords = TestUtils.consumeRecords(consumer, producerRecords.size)
 
     consumerRecords.zipWithIndex.foreach { case (consumerRecord, index) =>
       val producerRecord = producerRecords(index)

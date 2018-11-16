@@ -40,6 +40,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
     public SessionStore<Bytes, byte[]> get() {
         final RocksDBSegmentedBytesStore segmented = new RocksDBSegmentedBytesStore(
             name,
+            metricsScope(),
             retentionPeriod,
             segmentIntervalMs(),
             new SessionKeySchema());
@@ -48,11 +49,17 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
 
     @Override
     public String metricsScope() {
-        return "rocksdb-session";
+        return "rocksdb-session-state";
     }
 
     @Override
     public long segmentIntervalMs() {
+        // Selected somewhat arbitrarily. Profiling may reveal a different value is preferable.
         return Math.max(retentionPeriod / 2, 60_000L);
+    }
+
+    @Override
+    public long retentionPeriod() {
+        return retentionPeriod;
     }
 }

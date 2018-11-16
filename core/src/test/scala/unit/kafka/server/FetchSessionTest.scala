@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 
 import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
@@ -49,7 +49,7 @@ class FetchSessionTest {
       assertTrue("Missing session " + i + " out of " + sessionIds.size + "(" + sessionId + ")",
         cache.get(sessionId).isDefined)
     }
-    assertEquals(sessionIds.size, cache.size())
+    assertEquals(sessionIds.size, cache.size)
   }
 
   private def dummyCreate(size: Int)() = {
@@ -63,67 +63,67 @@ class FetchSessionTest {
   @Test
   def testSessionCache(): Unit = {
     val cache = new FetchSessionCache(3, 100)
-    assertEquals(0, cache.size())
-    val id1 = cache.maybeCreateSession(0, false, 10, dummyCreate(10))
-    val id2 = cache.maybeCreateSession(10, false, 20, dummyCreate(20))
-    val id3 = cache.maybeCreateSession(20, false, 30, dummyCreate(30))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, dummyCreate(40)))
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, dummyCreate(5)))
+    assertEquals(0, cache.size)
+    val id1 = cache.maybeCreateSession(0, false, 10, () => dummyCreate(10))
+    val id2 = cache.maybeCreateSession(10, false, 20, () => dummyCreate(20))
+    val id3 = cache.maybeCreateSession(20, false, 30, () => dummyCreate(30))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(30, false, 40, () => dummyCreate(40)))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(40, false, 5, () => dummyCreate(5)))
     assertCacheContains(cache, id1, id2, id3)
     cache.touch(cache.get(id1).get, 200)
-    val id4 = cache.maybeCreateSession(210, false, 11, dummyCreate(11))
+    val id4 = cache.maybeCreateSession(210, false, 11, () => dummyCreate(11))
     assertCacheContains(cache, id1, id3, id4)
     cache.touch(cache.get(id1).get, 400)
     cache.touch(cache.get(id3).get, 390)
     cache.touch(cache.get(id4).get, 400)
-    val id5 = cache.maybeCreateSession(410, false, 50, dummyCreate(50))
+    val id5 = cache.maybeCreateSession(410, false, 50, () => dummyCreate(50))
     assertCacheContains(cache, id3, id4, id5)
-    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, dummyCreate(5)))
-    val id6 = cache.maybeCreateSession(410, true, 5, dummyCreate(5))
+    assertEquals(INVALID_SESSION_ID, cache.maybeCreateSession(410, false, 5, () => dummyCreate(5)))
+    val id6 = cache.maybeCreateSession(410, true, 5, () => dummyCreate(5))
     assertCacheContains(cache, id3, id5, id6)
   }
 
   @Test
   def testResizeCachedSessions(): Unit = {
     val cache = new FetchSessionCache(2, 100)
-    assertEquals(0, cache.totalPartitions())
-    assertEquals(0, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
-    val id1 = cache.maybeCreateSession(0, false, 2, dummyCreate(2))
+    assertEquals(0, cache.totalPartitions)
+    assertEquals(0, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
+    val id1 = cache.maybeCreateSession(0, false, 2, () => dummyCreate(2))
     assertTrue(id1 > 0)
     assertCacheContains(cache, id1)
     val session1 = cache.get(id1).get
-    assertEquals(2, session1.size())
-    assertEquals(2, cache.totalPartitions())
-    assertEquals(1, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
-    val id2 = cache.maybeCreateSession(0, false, 4, dummyCreate(4))
+    assertEquals(2, session1.size)
+    assertEquals(2, cache.totalPartitions)
+    assertEquals(1, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
+    val id2 = cache.maybeCreateSession(0, false, 4, () => dummyCreate(4))
     val session2 = cache.get(id2).get
     assertTrue(id2 > 0)
     assertCacheContains(cache, id1, id2)
-    assertEquals(6, cache.totalPartitions())
-    assertEquals(2, cache.size())
-    assertEquals(0, cache.evictionsMeter.count())
+    assertEquals(6, cache.totalPartitions)
+    assertEquals(2, cache.size)
+    assertEquals(0, cache.evictionsMeter.count)
     cache.touch(session1, 200)
     cache.touch(session2, 200)
-    val id3 = cache.maybeCreateSession(200, false, 5, dummyCreate(5))
+    val id3 = cache.maybeCreateSession(200, false, 5, () => dummyCreate(5))
     assertTrue(id3 > 0)
     assertCacheContains(cache, id2, id3)
-    assertEquals(9, cache.totalPartitions())
-    assertEquals(2, cache.size())
-    assertEquals(1, cache.evictionsMeter.count())
+    assertEquals(9, cache.totalPartitions)
+    assertEquals(2, cache.size)
+    assertEquals(1, cache.evictionsMeter.count)
     cache.remove(id3)
     assertCacheContains(cache, id2)
-    assertEquals(1, cache.size())
-    assertEquals(1, cache.evictionsMeter.count())
-    assertEquals(4, cache.totalPartitions())
-    val iter = session2.partitionMap.iterator()
+    assertEquals(1, cache.size)
+    assertEquals(1, cache.evictionsMeter.count)
+    assertEquals(4, cache.totalPartitions)
+    val iter = session2.partitionMap.iterator
     iter.next()
     iter.remove()
-    assertEquals(3, session2.size())
+    assertEquals(3, session2.size)
     assertEquals(4, session2.cachedSize)
     cache.touch(session2, session2.lastUsedMs)
-    assertEquals(3, cache.totalPartitions())
+    assertEquals(3, cache.totalPartitions)
   }
 
   val EMPTY_PART_LIST = Collections.unmodifiableList(new util.ArrayList[TopicPartition]())
@@ -141,8 +141,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with a FULL fetch request
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData2.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData2.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData2.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context2 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData2, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
@@ -215,20 +217,22 @@ class FetchSessionTest {
     var nextSessionId = prevSessionId
     do {
       val reqData8 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-      reqData8.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100))
-      reqData8.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100))
+      reqData8.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(0, 0, 100,
+        Optional.empty()))
+      reqData8.put(new TopicPartition("bar", 1), new FetchRequest.PartitionData(10, 0, 100,
+        Optional.empty()))
       val context8 = fetchManager.newContext(
         new JFetchMetadata(prevSessionId, FINAL_EPOCH), reqData8, EMPTY_PART_LIST, false)
       assertEquals(classOf[SessionlessFetchContext], context8.getClass)
-      assertEquals(0, cache.size())
+      assertEquals(0, cache.size)
       val respData8 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
       respData8.put(new TopicPartition("bar", 0),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       respData8.put(new TopicPartition("bar", 1),
         new FetchResponse.PartitionData(Errors.NONE, 100, 100, 100, null, null))
       val resp8 = context8.updateAndGenerateResponseData(respData8)
-      assertEquals(Errors.NONE, resp8.error())
-      nextSessionId = resp8.sessionId()
+      assertEquals(Errors.NONE, resp8.error)
+      nextSessionId = resp8.sessionId
     } while (nextSessionId == prevSessionId)
   }
 
@@ -240,8 +244,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -256,7 +262,8 @@ class FetchSessionTest {
 
     // Create an incremental fetch request that removes foo-0 and adds bar-0
     val reqData2 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData2.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(15, 0, 0))
+    reqData2.put(new TopicPartition("bar", 0), new FetchRequest.PartitionData(15, 0, 0,
+      Optional.empty()))
     val removed2 = new util.ArrayList[TopicPartition]
     removed2.add(new TopicPartition("foo", 0))
     val context2 = fetchManager.newContext(
@@ -277,9 +284,9 @@ class FetchSessionTest {
     respData2.put(new TopicPartition("bar", 0), new FetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(Errors.NONE, resp2.error())
-    assertEquals(1, resp2.responseData().size())
-    assertTrue(resp2.sessionId() > 0)
+    assertEquals(Errors.NONE, resp2.error)
+    assertEquals(1, resp2.responseData.size)
+    assertTrue(resp2.sessionId > 0)
   }
 
   @Test
@@ -290,8 +297,10 @@ class FetchSessionTest {
 
     // Create a new fetch session with foo-0 and foo-1
     val reqData1 = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
-    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100))
-    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100))
+    reqData1.put(new TopicPartition("foo", 0), new FetchRequest.PartitionData(0, 0, 100,
+      Optional.empty()))
+    reqData1.put(new TopicPartition("foo", 1), new FetchRequest.PartitionData(10, 0, 100,
+      Optional.empty()))
     val context1 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context1.getClass)
     val respData1 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -300,9 +309,9 @@ class FetchSessionTest {
     respData1.put(new TopicPartition("foo", 1), new FetchResponse.PartitionData(
       Errors.NONE, 10, 10, 10, null, null))
     val resp1 = context1.updateAndGenerateResponseData(respData1)
-    assertEquals(Errors.NONE, resp1.error())
+    assertEquals(Errors.NONE, resp1.error)
     assertTrue(resp1.sessionId() != INVALID_SESSION_ID)
-    assertEquals(2, resp1.responseData().size())
+    assertEquals(2, resp1.responseData.size)
 
     // Create an incremental fetch request that removes foo-0 and foo-1
     // Verify that the previous fetch session was closed.
@@ -311,12 +320,12 @@ class FetchSessionTest {
     removed2.add(new TopicPartition("foo", 0))
     removed2.add(new TopicPartition("foo", 1))
     val context2 = fetchManager.newContext(
-      new JFetchMetadata(resp1.sessionId(), 1), reqData2, removed2, false)
+      new JFetchMetadata(resp1.sessionId, 1), reqData2, removed2, false)
     assertEquals(classOf[SessionlessFetchContext], context2.getClass)
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
     val resp2 = context2.updateAndGenerateResponseData(respData2)
-    assertEquals(INVALID_SESSION_ID, resp2.sessionId())
+    assertEquals(INVALID_SESSION_ID, resp2.sessionId)
     assertTrue(resp2.responseData().isEmpty)
-    assertEquals(0, cache.size())
+    assertEquals(0, cache.size)
   }
 }

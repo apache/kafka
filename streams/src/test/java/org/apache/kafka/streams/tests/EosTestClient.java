@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.tests;
 
-import org.apache.kafka.clients.producer.ProducerConfig;
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
@@ -57,7 +57,7 @@ public class EosTestClient extends SmokeTestUtil {
             @Override
             public void run() {
                 isRunning = false;
-                streams.close(TimeUnit.SECONDS.toMillis(300), TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(300));
 
                 // need to wait for callback to avoid race condition
                 // -> make sure the callback printout to stdout is there as it is expected test output
@@ -90,7 +90,7 @@ public class EosTestClient extends SmokeTestUtil {
                 });
                 streams.setStateListener(new KafkaStreams.StateListener() {
                     @Override
-                    public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
+                    public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
                         // don't remove this -- it's required test output
                         System.out.println(System.currentTimeMillis());
                         System.out.println("StateChange: " + oldState + " -> " + newState);
@@ -103,7 +103,7 @@ public class EosTestClient extends SmokeTestUtil {
                 streams.start();
             }
             if (uncaughtException) {
-                streams.close(TimeUnit.SECONDS.toMillis(60), TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(60_000L));
                 streams = null;
             }
             sleep(1000);
@@ -119,8 +119,6 @@ public class EosTestClient extends SmokeTestUtil {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
 
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, Integer> data = builder.stream("data");

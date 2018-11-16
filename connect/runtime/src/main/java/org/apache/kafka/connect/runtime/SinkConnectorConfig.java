@@ -119,4 +119,8 @@ public class SinkConnectorConfig extends ConnectorConfig {
     public boolean isDlqContextHeadersEnabled() {
         return getBoolean(DLQ_CONTEXT_HEADERS_ENABLE_CONFIG);
     }
+
+    public static void main(String[] args) {
+        System.out.println(config.toHtmlTable());
+    }
 }

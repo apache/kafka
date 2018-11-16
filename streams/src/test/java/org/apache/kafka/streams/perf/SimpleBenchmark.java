@@ -32,10 +32,10 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.kstream.KStream;
@@ -54,7 +54,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -62,6 +61,10 @@ import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
+import static java.time.Instant.ofEpochMilli;
 
 /**
  * Class that provides support for a series of benchmarks. It is usually driven by
@@ -212,17 +215,17 @@ public class SimpleBenchmark {
         }
     }
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 5) {
             System.err.println("Not enough parameters are provided; expecting propFileName, testName, numRecords, keySkew, valueSize");
             System.exit(1);
         }
 
-        String propFileName = args[0];
-        String testName = args[1].toLowerCase(Locale.ROOT);
-        int numRecords = Integer.parseInt(args[2]);
-        double keySkew = Double.parseDouble(args[3]); // 0d means even distribution
-        int valueSize = Integer.parseInt(args[4]);
+        final String propFileName = args[0];
+        final String testName = args[1].toLowerCase(Locale.ROOT);
+        final int numRecords = Integer.parseInt(args[2]);
+        final double keySkew = Double.parseDouble(args[3]); // 0d means even distribution
+        final int valueSize = Integer.parseInt(args[4]);
 
         final Properties props = Utils.loadProps(propFileName);
         final String kafka = props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG);
@@ -262,13 +265,10 @@ public class SimpleBenchmark {
         // improve producer throughput
         props.put(ProducerConfig.LINGER_MS_CONFIG, 5000);
         props.put(ProducerConfig.BATCH_SIZE_CONFIG, 128 * 1024);
-
-        //TODO remove this config or set to smaller value when KIP-91 is merged
-        props.put(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG), 60000);
     }
 
     private Properties setProduceConsumeProperties(final String clientId) {
-        Properties clientProps = new Properties();
+        final Properties clientProps = new Properties();
         clientProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, props.getProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG));
         clientProps.put(ProducerConfig.CLIENT_ID_CONFIG, clientId);
         // the socket buffer needs to be large, especially when running in AWS with
@@ -335,7 +335,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -373,7 +373,7 @@ public class SimpleBenchmark {
             consumer.seekToBeginning(partitions);
 
             while (true) {
-                final ConsumerRecords<Integer, byte[]> records = consumer.poll(Duration.ofMillis(POLL_MS));
+                final ConsumerRecords<Integer, byte[]> records = consumer.poll(ofMillis(POLL_MS));
                 if (records.isEmpty()) {
                     if (processedRecords == numRecords) {
                         break;
@@ -469,13 +469,17 @@ public class SimpleBenchmark {
         setStreamProperties("simple-benchmark-streams-with-store");
 
         final StreamsBuilder builder = new StreamsBuilder();
-        final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder
-                = Stores.windowStoreBuilder(Stores.persistentWindowStore("store",
-                AGGREGATE_WINDOW_SIZE * 3,
-                3,
-                AGGREGATE_WINDOW_SIZE,
-                false),
-                INTEGER_SERDE, BYTE_SERDE);
+
+        final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore(
+                "store",
+                ofMillis(AGGREGATE_WINDOW_SIZE * 3),
+                ofMillis(AGGREGATE_WINDOW_SIZE),
+                false
+            ),
+            INTEGER_SERDE,
+            BYTE_SERDE
+        );
         builder.addStateStore(storeBuilder.withCachingEnabled());
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
@@ -496,7 +500,7 @@ public class SimpleBenchmark {
                     @Override
                     public void process(final Integer key, final byte[] value) {
                         final long timestamp = context().timestamp();
-                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, timestamp - 1000L, timestamp + 1000L);
+                        final KeyValueIterator<Windowed<Integer>, byte[]> iter = store.fetch(key - 10, key + 10, ofEpochMilli(timestamp - 1000L), ofEpochMilli(timestamp));
                         while (iter.hasNext()) {
                             iter.next();
                         }
@@ -548,7 +552,7 @@ public class SimpleBenchmark {
 
         input.peek(new CountDownAction(latch))
                 .groupByKey()
-                .windowedBy(TimeWindows.of(AGGREGATE_WINDOW_SIZE).advanceBy(AGGREGATE_WINDOW_ADVANCE))
+                .windowedBy(TimeWindows.of(ofMillis(AGGREGATE_WINDOW_SIZE)).advanceBy(ofMillis(AGGREGATE_WINDOW_ADVANCE)))
                 .count();
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
@@ -591,7 +595,7 @@ public class SimpleBenchmark {
         final KStream<Integer, byte[]> input1 = builder.stream(kStreamTopic1);
         final KStream<Integer, byte[]> input2 = builder.stream(kStreamTopic2);
 
-        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(STREAM_STREAM_JOIN_WINDOW)).foreach(new CountDownAction(latch));
+        input1.leftJoin(input2, VALUE_JOINER, JoinWindows.of(ofMillis(STREAM_STREAM_JOIN_WINDOW))).foreach(new CountDownAction(latch));
 
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
 
@@ -603,7 +607,7 @@ public class SimpleBenchmark {
      * Measure the performance of a KTable-KTable left join. The setup is such that each
      * KTable record joins to exactly one element in the other KTable
      */
-    private void tableTableJoin(String kTableTopic1, String kTableTopic2) {
+    private void tableTableJoin(final String kTableTopic1, final String kTableTopic2) {
         final CountDownLatch latch = new CountDownLatch(1);
 
         // setup join
@@ -672,29 +676,29 @@ public class SimpleBenchmark {
         final KafkaStreams streamsClient = new KafkaStreams(builder.build(), props);
         streamsClient.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
             @Override
-            public void uncaughtException(Thread t, Throwable e) {
+            public void uncaughtException(final Thread t, final Throwable e) {
                 System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
 
-                streamsClient.close(30, TimeUnit.SECONDS);
+                streamsClient.close(ofSeconds(30));
             }
         });
 
         return streamsClient;
     }
     
-    private double megabytesPerSec(long time, long processedBytes) {
+    private double megabytesPerSec(final long time, final long processedBytes) {
         return  (processedBytes / 1024.0 / 1024.0) / (time / 1000.0);
     }
 
-    private double recordsPerSec(long time, int numRecords) {
+    private double recordsPerSec(final long time, final int numRecords) {
         return numRecords / (time / 1000.0);
     }
 
-    private List<TopicPartition> getAllPartitions(KafkaConsumer<?, ?> consumer, String... topics) {
-        ArrayList<TopicPartition> partitions = new ArrayList<>();
+    private List<TopicPartition> getAllPartitions(final KafkaConsumer<?, ?> consumer, final String... topics) {
+        final ArrayList<TopicPartition> partitions = new ArrayList<>();
 
-        for (String topic : topics) {
-            for (PartitionInfo info : consumer.partitionsFor(topic)) {
+        for (final String topic : topics) {
+            for (final PartitionInfo info : consumer.partitionsFor(topic)) {
                 partitions.add(new TopicPartition(info.topic(), info.partition()));
             }
         }

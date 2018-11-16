@@ -110,7 +110,7 @@ public class AddPartitionsToTxnResponse extends AbstractResponse {
         Struct struct = new Struct(ApiKeys.ADD_PARTITIONS_TO_TXN.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
 
-        Map<String, Map<Integer, Errors>> errorsByTopic = CollectionUtils.groupDataByTopic(errors);
+        Map<String, Map<Integer, Errors>> errorsByTopic = CollectionUtils.groupPartitionDataByTopic(errors);
         List<Struct> topics = new ArrayList<>(errorsByTopic.size());
         for (Map.Entry<String, Map<Integer, Errors>> entry : errorsByTopic.entrySet()) {
             Struct topicErrorCodes = struct.instance(ERRORS_KEY_NAME);

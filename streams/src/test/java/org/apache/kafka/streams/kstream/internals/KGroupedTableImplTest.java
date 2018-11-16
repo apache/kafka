@@ -26,11 +26,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
@@ -56,7 +56,7 @@ public class KGroupedTableImplTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private static final String INVALID_STORE_NAME = "~foo bar~";
     private KGroupedTable<String, String> groupedTable;
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
     private final String topic = "input";
 
     @Before
@@ -132,7 +132,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -157,7 +157,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -183,7 +183,7 @@ public class KGroupedTableImplTest {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
             new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
                 @Override
-                public KeyValue<String, Integer> apply(String key, Number value) {
+                public KeyValue<String, Integer> apply(final String key, final Number value) {
                     return KeyValue.pair(key, value.intValue());
                 }
             };
@@ -209,9 +209,7 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldCountAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
-                      Serialized.with(Serdes.String(),
-                                      Serdes.String()))
+        table.groupBy(MockMapper.selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
                 .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
                                .withKeySerde(Serdes.String())
                                .withValueSerde(Serdes.Long()));
@@ -228,9 +226,7 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldAggregateAndMaterializeResults() {
         final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(),
-                      Serialized.with(Serdes.String(),
-                                      Serdes.String()))
+        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
                 .aggregate(MockInitializer.STRING_INIT,
                            MockAggregator.TOSTRING_ADDER,
                            MockAggregator.TOSTRING_REMOVER,

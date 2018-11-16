@@ -53,7 +53,7 @@ public class JaasBasicAuthFilterTest {
     private Configuration previousConfiguration;
 
     @Before
-    public void setup() throws IOException {
+    public void setup() {
         EasyMock.reset(requestContext);
     }
 

@@ -164,8 +164,8 @@ public class VerifiableProducer {
         parser.addArgument("--message-create-time")
                 .action(store())
                 .required(false)
-                .setDefault(-1)
-                .type(Integer.class)
+                .setDefault(-1L)
+                .type(Long.class)
                 .metavar("CREATETIME")
                 .dest("createTime")
                 .help("Send messages with creation time starting at the arguments value, in milliseconds since epoch");
@@ -215,7 +215,7 @@ public class VerifiableProducer {
         int throughput = res.getInt("throughput");
         String configFile = res.getString("producer.config");
         Integer valuePrefix = res.getInt("valuePrefix");
-        Long createTime = (long) res.getInt("createTime");
+        Long createTime = res.getLong("createTime");
         Integer repeatingKeys = res.getInt("repeatingKeys");
 
         if (createTime == -1L)

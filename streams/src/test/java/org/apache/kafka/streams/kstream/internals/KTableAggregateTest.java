@@ -19,23 +19,21 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
 import org.apache.kafka.test.MockMapper;
@@ -50,13 +48,15 @@ import java.io.File;
 import java.util.HashMap;
 import java.util.Map;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class KTableAggregateTest {
 
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-    private final Serialized<String, String> stringSerialzied = Serialized.with(stringSerde, stringSerde);
+    private final Grouped<String, String> stringSerialzied = Grouped.with(stringSerde, stringSerde);
     private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
 
     private File stateDir = null;
@@ -64,7 +64,7 @@ public class KTableAggregateTest {
     @Rule
     public EmbeddedKafkaCluster cluster = null;
     @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    public final org.apache.kafka.test.KStreamTestDriver driver = new org.apache.kafka.test.KStreamTestDriver();
 
     @Before
     public void setUp() {
@@ -77,9 +77,9 @@ public class KTableAggregateTest {
         final String topic1 = "topic1";
 
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-                                                       stringSerialzied
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                             stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
                 MockAggregator.TOSTRING_REMOVER,
@@ -106,7 +106,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "C", "8");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                 "A:0+1",
                 "B:0+2",
                 "A:0+1-1+3",
@@ -123,9 +123,9 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
-                                                       stringSerialzied
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper(),
+                                                             stringSerialzied
         ).aggregate(MockInitializer.STRING_INIT,
             MockAggregator.TOSTRING_ADDER,
             MockAggregator.TOSTRING_REMOVER,
@@ -139,7 +139,7 @@ public class KTableAggregateTest {
         driver.process(topic1, "A", "3");
         driver.process(topic1, "A", "4");
         driver.flushState();
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "A:0+4"), supplier.theCapturedProcessor().processed);
     }
 
@@ -149,21 +149,22 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        KTable<String, String> table1 = builder.table(topic1, consumed);
-        KTable<String, String> table2 = table1.groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
-            @Override
-                public KeyValue<String, String> apply(String key, String value) {
-                switch (key) {
-                    case "null":
-                        return KeyValue.pair(null, value);
-                    case "NULL":
-                        return null;
-                    default:
-                        return KeyValue.pair(value, value);
-                }
+        final KTable<String, String> table1 = builder.table(topic1, consumed);
+        final KTable<String, String> table2 = table1.groupBy(
+            new KeyValueMapper<String, String, KeyValue<String, String>>() {
+                @Override
+                public KeyValue<String, String> apply(final String key, final String value) {
+                    switch (key) {
+                        case "null":
+                            return KeyValue.pair(null, value);
+                        case "NULL":
+                            return null;
+                        default:
+                            return KeyValue.pair(value, value);
+                    }
                 }
             },
-                stringSerialzied
+            stringSerialzied
         )
                 .aggregate(MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
@@ -191,11 +192,11 @@ public class KTableAggregateTest {
         driver.process(topic1, "B", "7");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                 "1:0+1",
                 "1:0+1-1",
                 "1:0+1-1+1",
-                "2:0+2", 
+                "2:0+2",
                   //noop
                 "2:0+2-2", "4:0+4",
                   //noop
@@ -219,7 +220,7 @@ public class KTableAggregateTest {
         driver.flushState();
 
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "green:1",
             "green:2",
             "green:1", "blue:1",
@@ -280,13 +281,13 @@ public class KTableAggregateTest {
         driver.flushState();
 
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
             "blue:1",
             "yellow:1",
             "green:2"
             ), proc.processed);
     }
-    
+
     @Test
     public void testRemoveOldBeforeAddNew() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -297,7 +298,7 @@ public class KTableAggregateTest {
                 .groupBy(new KeyValueMapper<String, String, KeyValue<String, String>>() {
 
                     @Override
-                    public KeyValue<String, String> apply(String key, String value) {
+                    public KeyValue<String, String> apply(final String key, final String value) {
                         return KeyValue.pair(String.valueOf(key.charAt(0)), String.valueOf(key.charAt(1)));
                     }
                 }, stringSerialzied)
@@ -308,15 +309,15 @@ public class KTableAggregateTest {
                         return "";
                     }
                 }, new Aggregator<String, String, String>() {
-                    
+
                     @Override
-                    public String apply(String aggKey, String value, String aggregate) {
+                    public String apply(final String aggKey, final String value, final String aggregate) {
                         return aggregate + value;
-                    } 
+                    }
                 }, new Aggregator<String, String, String>() {
 
                     @Override
-                    public String apply(String key, String value, String aggregate) {
+                    public String apply(final String key, final String value, final String aggregate) {
                         return aggregate.replaceAll(value, "");
                     }
                 }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("someStore").withValueSerde(Serdes.String()))
@@ -336,7 +337,7 @@ public class KTableAggregateTest {
         driver.process(input, "12", "C");
         driver.flushState();
 
-        assertEquals(Utils.mkList(
+        assertEquals(asList(
                  "1:1",
                  "1:12",
                  "1:2",
@@ -361,7 +362,7 @@ public class KTableAggregateTest {
             public KeyValue<String, Long> apply(final Long key, final String value) {
                 return new KeyValue<>(value, key);
             }
-        }, Serialized.with(Serdes.String(), Serdes.Long()))
+        }, Grouped.with(Serdes.String(), Serdes.Long()))
                 .reduce(new Reducer<Long>() {
                     @Override
                     public Long apply(final Long value1, final Long value2) {

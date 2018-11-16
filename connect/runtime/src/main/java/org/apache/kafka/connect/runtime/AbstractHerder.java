@@ -20,9 +20,11 @@ import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.errors.NotFoundException;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
@@ -46,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.LinkedList;
@@ -53,6 +56,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Abstract Herder implementation which handles connector/task lifecycle tracking. Extensions
@@ -246,6 +251,9 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public ConfigInfos validateConnectorConfig(Map<String, String> connectorProps) {
+        if (worker.configTransformer() != null) {
+            connectorProps = worker.configTransformer().transform(connectorProps);
+        }
         String connType = connectorProps.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG);
         if (connType == null)
             throw new BadRequestException("Connector config " + connectorProps + " contains no connector type");
@@ -428,4 +436,42 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
             return null;
         }
     }
+
+    /*
+     * Performs a reverse transformation on a set of task configs, by replacing values with variable references.
+     */
+    public static List<Map<String, String>> reverseTransform(String connName,
+                                                             ClusterConfigState configState,
+                                                             List<Map<String, String>> configs) {
+
+        // Find the config keys in the raw connector config that have variable references
+        Map<String, String> rawConnConfig = configState.rawConnectorConfig(connName);
+        Set<String> connKeysWithVariableValues = keysWithVariableValues(rawConnConfig, ConfigTransformer.DEFAULT_PATTERN);
+
+        List<Map<String, String>> result = new ArrayList<>();
+        for (Map<String, String> config : configs) {
+            Map<String, String> newConfig = new HashMap<>(config);
+            for (String key : connKeysWithVariableValues) {
+                if (newConfig.containsKey(key)) {
+                    newConfig.put(key, rawConnConfig.get(key));
+                }
+            }
+            result.add(newConfig);
+        }
+        return result;
+    }
+
+    private static Set<String> keysWithVariableValues(Map<String, String> rawConfig, Pattern pattern) {
+        Set<String> keys = new HashSet<>();
+        for (Map.Entry<String, String> config : rawConfig.entrySet()) {
+            if (config.getValue() != null) {
+                Matcher matcher = pattern.matcher(config.getValue());
+                if (matcher.matches()) {
+                    keys.add(config.getKey());
+                }
+            }
+        }
+        return keys;
+    }
+
 }

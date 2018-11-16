@@ -23,7 +23,7 @@ import java.util
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import java.util.regex.{Pattern, PatternSyntaxException}
-import java.util.{Date, Properties}
+import java.util.{Date, Optional, Properties}
 
 import joptsimple.OptionParser
 import kafka.api._
@@ -118,7 +118,7 @@ object ReplicaVerificationTool extends Logging {
     try Pattern.compile(regex)
     catch {
       case _: PatternSyntaxException =>
-        throw new RuntimeException(regex + " is an invalid regex.")
+        throw new RuntimeException(s"$regex is an invalid regex.")
     }
 
     val fetchSize = options.valueOf(fetchSizeOpt).intValue
@@ -199,7 +199,7 @@ object ReplicaVerificationTool extends Logging {
       }
     })
     fetcherThreads.foreach(_.start())
-    println(ReplicaVerificationTool.getCurrentTimeString() + ": verification process is started.")
+    println(s"${ReplicaVerificationTool.getCurrentTimeString()}: verification process is started.")
 
   }
 
@@ -300,7 +300,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
     debug("Begin verification")
     maxLag = -1L
     for ((topicPartition, fetchResponsePerReplica) <- recordsCache) {
-      debug("Verifying " + topicPartition)
+      debug(s"Verifying $topicPartition")
       assert(fetchResponsePerReplica.size == expectedReplicasPerTopicPartition(topicPartition),
         "fetched " + fetchResponsePerReplica.size + " replicas for " + topicPartition + ", but expected "
           + expectedReplicasPerTopicPartition(topicPartition) + " replicas")
@@ -389,7 +389,8 @@ private class ReplicaFetcher(name: String, sourceBroker: Node, topicPartitions: 
 
     val requestMap = new util.LinkedHashMap[TopicPartition, JFetchRequest.PartitionData]
     for (topicPartition <- topicPartitions)
-      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition), 0L, fetchSize))
+      requestMap.put(topicPartition, new JFetchRequest.PartitionData(replicaBuffer.getOffset(topicPartition),
+        0L, fetchSize, Optional.empty()))
 
     val fetchRequestBuilder = JFetchRequest.Builder.
       forReplica(ApiKeys.FETCH.latestVersion, Request.DebuggingConsumerId, maxWait, minBytes, requestMap)
@@ -449,7 +450,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
   private val socketTimeout: Int = consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG)
 
   private val networkClient = {
-    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig)
+    val channelBuilder = org.apache.kafka.clients.ClientUtils.createChannelBuilder(consumerConfig, time)
     val selector = new Selector(
       NetworkReceive.UNLIMITED,
       consumerConfig.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
@@ -471,6 +472,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       consumerConfig.getInt(ConsumerConfig.RECEIVE_BUFFER_CONFIG),
       consumerConfig.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
+      ClientDnsLookup.DEFAULT,
       time,
       false,
       new ApiVersions,

@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.network.ByteBufferSend;
-import org.apache.kafka.common.record.MultiRecordsSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -28,6 +27,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.MemoryRecords;
+import org.apache.kafka.common.record.MultiRecordsSend;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
@@ -43,13 +43,27 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
 import static org.apache.kafka.common.protocol.types.Type.RECORDS;
 import static org.apache.kafka.common.protocol.types.Type.STRING;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 
 /**
  * This wrapper supports all versions of the Fetch API
+ *
+ * Possible error codes:
+ *
+ * - {@link Errors#OFFSET_OUT_OF_RANGE} If the fetch offset is out of range for a requested partition
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have READ access to a requested topic
+ * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
+ * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
+ *     matches the known leader epoch on the broker or is empty
+ * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
+ * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
+ * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} If the broker does not have metadata for a topic or partition
+ * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
+ * - {@link Errors#UNSUPPORTED_COMPRESSION_TYPE} If a fetched topic is using a compression type which is
+ *     not supported by the fetch request version
+ * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
@@ -58,22 +72,20 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // topic level field names
     private static final String PARTITIONS_KEY_NAME = "partition_responses";
 
-    // partition level field names
+    // partition level fields
+    private static final Field.Int64 HIGH_WATERMARK = new Field.Int64("high_watermark",
+            "Last committed offset.");
+    private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
+            "Earliest available offset.");
+
     private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
-    private static final String HIGH_WATERMARK_KEY_NAME = "high_watermark";
-    private static final String LAST_STABLE_OFFSET_KEY_NAME = "last_stable_offset";
-    private static final String LOG_START_OFFSET_KEY_NAME = "log_start_offset";
     private static final String ABORTED_TRANSACTIONS_KEY_NAME = "aborted_transactions";
     private static final String RECORD_SET_KEY_NAME = "record_set";
-
-    // aborted transaction field names
-    private static final String PRODUCER_ID_KEY_NAME = "producer_id";
-    private static final String FIRST_OFFSET_KEY_NAME = "first_offset";
 
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V0 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."));
+            HIGH_WATERMARK);
     private static final Schema FETCH_RESPONSE_PARTITION_V0 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V0),
             new Field(RECORD_SET_KEY_NAME, RECORDS));
@@ -85,42 +97,47 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private static final Schema FETCH_RESPONSE_V0 = new Schema(
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
 
+    // V1 bumped for the addition of the throttle time
     private static final Schema FETCH_RESPONSE_V1 = new Schema(
             THROTTLE_TIME_MS,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V0)));
-    // Even though fetch response v2 has the same protocol as v1, the record set in the response is different. In v1,
-    // record set only includes messages of v0 (magic byte 0). In v2, record set can include messages of v0 and v1
-    // (magic byte 0 and 1). For details, see Records, RecordBatch and Record.
+
+    // V2 bumped to indicate the client support message format V1 which uses relative offset and has timestamp.
     private static final Schema FETCH_RESPONSE_V2 = FETCH_RESPONSE_V1;
 
-    // The partition ordering is now relevant - partitions will be processed in order they appear in request.
+    // V3 bumped for addition of top-levl max_bytes field and to indicate that partition ordering is relevant
     private static final Schema FETCH_RESPONSE_V3 = FETCH_RESPONSE_V2;
 
-    // The v4 Fetch Response adds features for transactional consumption (the aborted transaction list and the
+    // V4 adds features for transactional consumption (the aborted transaction list and the
     // last stable offset). It also exposes messages with magic v2 (along with older formats).
-    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
-            new Field(PRODUCER_ID_KEY_NAME, INT64, "The producer id associated with the aborted transactions"),
-            new Field(FIRST_OFFSET_KEY_NAME, INT64, "The first offset in the aborted transaction"));
+    // aborted transaction field names
+    private static final Field.Int64 LAST_STABLE_OFFSET = new Field.Int64("last_stable_offset",
+            "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
+                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)");
+    private static final Field.Int64 PRODUCER_ID = new Field.Int64("producer_id",
+            "The producer id associated with the aborted transactions");
+    private static final Field.Int64 FIRST_OFFSET = new Field.Int64("first_offset",
+            "The first offset in the aborted transaction");
 
-    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V5 = FETCH_RESPONSE_ABORTED_TRANSACTION_V4;
+    private static final Schema FETCH_RESPONSE_ABORTED_TRANSACTION_V4 = new Schema(
+            PRODUCER_ID,
+            FIRST_OFFSET);
 
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V4 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
-            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
-                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
+            HIGH_WATERMARK,
+            LAST_STABLE_OFFSET,
             new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
-    // FETCH_RESPONSE_PARTITION_HEADER_V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
+    // V5 added log_start_offset field - the earliest available offset of partition data that can be consumed.
     private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V5 = new Schema(
             PARTITION_ID,
             ERROR_CODE,
-            new Field(HIGH_WATERMARK_KEY_NAME, INT64, "Last committed offset."),
-            new Field(LAST_STABLE_OFFSET_KEY_NAME, INT64, "The last stable offset (or LSO) of the partition. This is the last offset such that the state " +
-                    "of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)"),
-            new Field(LOG_START_OFFSET_KEY_NAME, INT64, "Earliest available offset."),
-            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V5)));
+            HIGH_WATERMARK,
+            LAST_STABLE_OFFSET,
+            LOG_START_OFFSET,
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
     private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
@@ -146,15 +163,12 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             THROTTLE_TIME_MS,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
-    /**
-     * The body of FETCH_RESPONSE_V6 is the same as FETCH_RESPONSE_V5.
-     * The version number is bumped up to indicate that the client supports KafkaStorageException.
-     * The KafkaStorageException will be translated to NotLeaderForPartitionException in the response if version <= 5
-     */
+    // V6 bumped up to indicate that the client supports KafkaStorageException. The KafkaStorageException will
+    // be translated to NotLeaderForPartitionException in the response if version <= 5
     private static final Schema FETCH_RESPONSE_V6 = FETCH_RESPONSE_V5;
 
-    // FETCH_RESPONSE_V7 added incremental fetch responses and a top-level error code.
-    public static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
+    // V7 added incremental fetch responses and a top-level error code.
+    private static final Field.Int32 SESSION_ID = new Field.Int32("session_id", "The fetch session ID");
 
     private static final Schema FETCH_RESPONSE_V7 = new Schema(
             THROTTLE_TIME_MS,
@@ -162,31 +176,24 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             SESSION_ID,
             new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V5)));
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V8 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema FETCH_RESPONSE_V8 = FETCH_RESPONSE_V7;
+
+    // V9 adds the current leader epoch (see KIP-320)
+    private static final Schema FETCH_RESPONSE_V9 = FETCH_RESPONSE_V8;
+
+    // V10 bumped up to indicate ZStandard capability. (see KIP-110)
+    private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
 
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
-            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8};
+            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9, FETCH_RESPONSE_V10};
     }
-
 
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
-
-    /**
-     * Possible error codes:
-     *
-     *  OFFSET_OUT_OF_RANGE (1)
-     *  UNKNOWN_TOPIC_OR_PARTITION (3)
-     *  NOT_LEADER_FOR_PARTITION (6)
-     *  REPLICA_NOT_AVAILABLE (9)
-     *  UNKNOWN (-1)
-     */
 
     private final int throttleTimeMs;
     private final Errors error;
@@ -318,13 +325,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 Struct partitionResponseHeader = partitionResponse.getStruct(PARTITION_HEADER_KEY_NAME);
                 int partition = partitionResponseHeader.get(PARTITION_ID);
                 Errors error = Errors.forCode(partitionResponseHeader.get(ERROR_CODE));
-                long highWatermark = partitionResponseHeader.getLong(HIGH_WATERMARK_KEY_NAME);
-                long lastStableOffset = INVALID_LAST_STABLE_OFFSET;
-                if (partitionResponseHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME))
-                    lastStableOffset = partitionResponseHeader.getLong(LAST_STABLE_OFFSET_KEY_NAME);
-                long logStartOffset = INVALID_LOG_START_OFFSET;
-                if (partitionResponseHeader.hasField(LOG_START_OFFSET_KEY_NAME))
-                    logStartOffset = partitionResponseHeader.getLong(LOG_START_OFFSET_KEY_NAME);
+                long highWatermark = partitionResponseHeader.get(HIGH_WATERMARK);
+                long lastStableOffset = partitionResponseHeader.getOrElse(LAST_STABLE_OFFSET, INVALID_LAST_STABLE_OFFSET);
+                long logStartOffset = partitionResponseHeader.getOrElse(LOG_START_OFFSET, INVALID_LOG_START_OFFSET);
 
                 BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
                 if (!(baseRecords instanceof MemoryRecords))
@@ -338,8 +341,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                         abortedTransactions = new ArrayList<>(abortedTransactionsArray.length);
                         for (Object abortedTransactionObj : abortedTransactionsArray) {
                             Struct abortedTransactionStruct = (Struct) abortedTransactionObj;
-                            long producerId = abortedTransactionStruct.getLong(PRODUCER_ID_KEY_NAME);
-                            long firstOffset = abortedTransactionStruct.getLong(FIRST_OFFSET_KEY_NAME);
+                            long producerId = abortedTransactionStruct.get(PRODUCER_ID);
+                            long firstOffset = abortedTransactionStruct.get(FIRST_OFFSET);
                             abortedTransactions.add(new AbortedTransaction(producerId, firstOffset));
                         }
                     }
@@ -490,10 +493,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 Struct partitionDataHeader = partitionData.instance(PARTITION_HEADER_KEY_NAME);
                 partitionDataHeader.set(PARTITION_ID, partitionEntry.getKey());
                 partitionDataHeader.set(ERROR_CODE, errorCode);
-                partitionDataHeader.set(HIGH_WATERMARK_KEY_NAME, fetchPartitionData.highWatermark);
+                partitionDataHeader.set(HIGH_WATERMARK, fetchPartitionData.highWatermark);
 
-                if (partitionDataHeader.hasField(LAST_STABLE_OFFSET_KEY_NAME)) {
-                    partitionDataHeader.set(LAST_STABLE_OFFSET_KEY_NAME, fetchPartitionData.lastStableOffset);
+                if (partitionDataHeader.hasField(LAST_STABLE_OFFSET)) {
+                    partitionDataHeader.set(LAST_STABLE_OFFSET, fetchPartitionData.lastStableOffset);
 
                     if (fetchPartitionData.abortedTransactions == null) {
                         partitionDataHeader.set(ABORTED_TRANSACTIONS_KEY_NAME, null);
@@ -501,16 +504,14 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                         List<Struct> abortedTransactionStructs = new ArrayList<>(fetchPartitionData.abortedTransactions.size());
                         for (AbortedTransaction abortedTransaction : fetchPartitionData.abortedTransactions) {
                             Struct abortedTransactionStruct = partitionDataHeader.instance(ABORTED_TRANSACTIONS_KEY_NAME);
-                            abortedTransactionStruct.set(PRODUCER_ID_KEY_NAME, abortedTransaction.producerId);
-                            abortedTransactionStruct.set(FIRST_OFFSET_KEY_NAME, abortedTransaction.firstOffset);
+                            abortedTransactionStruct.set(PRODUCER_ID, abortedTransaction.producerId);
+                            abortedTransactionStruct.set(FIRST_OFFSET, abortedTransaction.firstOffset);
                             abortedTransactionStructs.add(abortedTransactionStruct);
                         }
                         partitionDataHeader.set(ABORTED_TRANSACTIONS_KEY_NAME, abortedTransactionStructs.toArray());
                     }
                 }
-                if (partitionDataHeader.hasField(LOG_START_OFFSET_KEY_NAME))
-                    partitionDataHeader.set(LOG_START_OFFSET_KEY_NAME, fetchPartitionData.logStartOffset);
-
+                partitionDataHeader.setIfExists(LOG_START_OFFSET, fetchPartitionData.logStartOffset);
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);
                 partitionArray.add(partitionData);

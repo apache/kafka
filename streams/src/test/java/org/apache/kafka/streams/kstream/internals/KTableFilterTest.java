@@ -45,17 +45,18 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KTableFilterTest {
 
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
     private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     private void doTestKTable(final StreamsBuilder builder,
                               final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3,
                               final String topic) {
-        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
         table3.toStream().process(supplier);
 
@@ -80,17 +81,17 @@ public class KTableFilterTest {
 
         final String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table1 = builder.table(topic1, consumed);
 
-        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
+        final KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return (value % 2) == 0;
             }
         });
-        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
+        final KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return (value % 2) == 0;
             }
         });
@@ -104,17 +105,17 @@ public class KTableFilterTest {
 
         final String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table1 = builder.table(topic1, consumed);
 
-        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
+        final KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return (value % 2) == 0;
             }
         }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
-        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
+        final KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
             @Override
-            public boolean test(String key, Integer value) {
+            public boolean test(final String key, final Integer value) {
                 return (value % 2) == 0;
             }
         });
@@ -132,8 +133,8 @@ public class KTableFilterTest {
 
         final Topology topology = builder.build();
 
-        KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
         final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
         topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
@@ -141,8 +142,8 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
 
-            KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+            final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+            final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
             getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
@@ -195,23 +196,23 @@ public class KTableFilterTest {
 
     @Test
     public void testValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
                 (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
+        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -221,23 +222,23 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean test(String key, Integer value) {
+                public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
+        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean test(String key, Integer value) {
+                public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
             });
@@ -252,7 +253,7 @@ public class KTableFilterTest {
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
                                           final String topic1) {
-        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
         builder.build().addProcessor("proc1", supplier, table1.name);
         builder.build().addProcessor("proc2", supplier, table2.name);
@@ -290,16 +291,16 @@ public class KTableFilterTest {
 
     @Test
     public void testNotSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
                 (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -309,16 +310,16 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableNotSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean test(String key, Integer value) {
+                public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
@@ -370,16 +371,16 @@ public class KTableFilterTest {
 
     @Test
     public void testSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
                 (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
                 new Predicate<String, Integer>() {
                     @Override
-                    public boolean test(String key, Integer value) {
+                    public boolean test(final String key, final Integer value) {
                         return (value % 2) == 0;
                     }
                 });
@@ -389,16 +390,16 @@ public class KTableFilterTest {
 
     @Test
     public void testQueryableSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
             new Predicate<String, Integer>() {
                 @Override
-                public boolean test(String key, Integer value) {
+                public boolean test(final String key, final Integer value) {
                     return (value % 2) == 0;
                 }
             }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
@@ -432,17 +433,17 @@ public class KTableFilterTest {
     @Test
     public void testSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
+        final KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
             new Predicate<String, String>() {
                 @Override
-                public boolean test(String key, String value) {
+                public boolean test(final String key, final String value) {
                     return value.equalsIgnoreCase("accept");
                 }
             }).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
@@ -454,17 +455,17 @@ public class KTableFilterTest {
     @Test
     public void testQueryableSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        KTableImpl<String, String, String> table1 =
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
+        final KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
             new Predicate<String, String>() {
                 @Override
-                public boolean test(String key, String value) {
+                public boolean test(final String key, final String value) {
                     return value.equalsIgnoreCase("accept");
                 }
             }, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter")).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
@@ -475,9 +476,9 @@ public class KTableFilterTest {
 
     @Test
     public void testTypeVariance() {
-        Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
+        final Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
             @Override
-            public boolean test(Number key, Object value) {
+            public boolean test(final Number key, final Object value) {
                 return false;
             }
         };

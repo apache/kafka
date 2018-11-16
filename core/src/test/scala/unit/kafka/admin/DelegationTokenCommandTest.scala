@@ -49,7 +49,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
 
   override def generateConfigs = {
     val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
-      enableControlledShutdown = false, enableDeleteTopic = true,
+      enableControlledShutdown = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, enableToken = true)
     props.foreach(propertyOverrides)

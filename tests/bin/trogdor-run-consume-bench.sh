@@ -25,13 +25,11 @@ cat <<EOF
         "durationMs": 10000000,
         "consumerNode": "node0",
         "bootstrapServers": "localhost:9092",
-        "maxMessages": 100,
-        "activeTopics": {
-            "foo[1-3]": {
-                "numPartitions": 3,
-                "replicationFactor": 1
-            }
-        }
+        "targetMessagesPerSec": 1000,
+        "threadsPerWorker": 5,
+        "consumerGroup": "cg",
+        "maxMessages": 10000,
+        "activeTopics": ["foo[1-3]"]
     }
 }
 EOF

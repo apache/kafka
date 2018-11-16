@@ -36,12 +36,12 @@ public class MockSourceNode<K, V> extends SourceNode<K, V> {
     public boolean initialized;
     public boolean closed;
 
-    public MockSourceNode(String[] topics, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
+    public MockSourceNode(final String[] topics, final Deserializer<K> keyDeserializer, final Deserializer<V> valDeserializer) {
         super(NAME + INDEX.getAndIncrement(), Arrays.asList(topics), keyDeserializer, valDeserializer);
     }
 
     @Override
-    public void process(K key, V value) {
+    public void process(final K key, final V value) {
         this.numReceived++;
         this.keys.add(key);
         this.values.add(value);

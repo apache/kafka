@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -46,6 +48,8 @@ public class MockAdminClient extends AdminClient {
 
     private Node controller;
     private int timeoutNextRequests = 0;
+
+    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     /**
      * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
@@ -389,5 +393,14 @@ public class MockAdminClient extends AdminClient {
             this.partitions = partitions;
             this.configs = configs != null ? configs : Collections.<String, String>emptyMap();
         }
+    }
+
+    public void setMockMetrics(MetricName name, Metric metric) {
+        mockMetrics.put(name, metric);
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return mockMetrics;
     }
 }

@@ -128,7 +128,7 @@ private object GroupMetadata {
     group.protocol = Option(protocol)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(group.add)
+    members.foreach(group.add(_, null))
     group
   }
 }
@@ -172,6 +172,8 @@ case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offs
  */
 @nonthreadsafe
 private[group] class GroupMetadata(val groupId: String, initialState: GroupState, time: Time) extends Logging {
+  type JoinCallback = JoinGroupResult => Unit
+
   private[group] val lock = new ReentrantLock
 
   private var state: GroupState = initialState
@@ -182,6 +184,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  private var numMembersAwaitingJoin = 0
+  private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
   private val pendingOffsetCommits = new mutable.HashMap[TopicPartition, OffsetAndMetadata]
   private val pendingTransactionalOffsetCommits = new mutable.HashMap[Long, mutable.Map[TopicPartition, CommitRecordMetadataAndOffset]]()
@@ -202,7 +206,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def protocolOrNull: String = protocol.orNull
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
 
-  def add(member: MemberMetadata) {
+  def add(member: MemberMetadata, callback: JoinCallback = null) {
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
@@ -213,10 +217,19 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
     members.put(member.memberId, member)
+    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
+    member.awaitingJoinCallback = callback
+    if (member.awaitingJoinCallback != null)
+      numMembersAwaitingJoin += 1;
   }
 
   def remove(memberId: String) {
-    members.remove(memberId)
+    members.remove(memberId).foreach { member =>
+      member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
+      if (member.awaitingJoinCallback != null)
+        numMembersAwaitingJoin -= 1
+    }
+
     if (isLeader(memberId)) {
       leaderId = if (members.isEmpty) {
         None
@@ -229,6 +242,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def currentState = state
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
+
+  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin
 
   def allMembers = members.keySet
 
@@ -268,13 +283,37 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
-    allMemberMetadata
-      .map(_.protocols)
-      .reduceLeft((commonProtocols, protocols) => commonProtocols & protocols)
+    val numMembers = members.size
+    supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
   }
 
   def supportsProtocols(memberProtocols: Set[String]) = {
-    members.isEmpty || (memberProtocols & candidateProtocols).nonEmpty
+    val numMembers = members.size
+    members.isEmpty || memberProtocols.exists(supportedProtocols(_) == numMembers)
+  }
+
+  def updateMember(member: MemberMetadata,
+                   protocols: List[(String, Array[Byte])],
+                   callback: JoinCallback) = {
+    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
+    protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
+    member.supportedProtocols = protocols
+
+    if (callback != null && member.awaitingJoinCallback == null) {
+      numMembersAwaitingJoin += 1;
+    } else if (callback == null && member.awaitingJoinCallback != null) {
+      numMembersAwaitingJoin -= 1;
+    }
+    member.awaitingJoinCallback = callback
+  }
+
+  def invokeJoinCallback(member: MemberMetadata,
+                         joinGroupResult: JoinGroupResult) : Unit = {
+    if (member.awaitingJoinCallback != null) {
+      member.awaitingJoinCallback(joinGroupResult)
+      member.awaitingJoinCallback = null
+      numMembersAwaitingJoin -= 1;
+    }
   }
 
   def initNextGeneration() = {
