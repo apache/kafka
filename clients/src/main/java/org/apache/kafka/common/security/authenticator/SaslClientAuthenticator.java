@@ -64,11 +64,11 @@ import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Random;
 import java.util.Set;
 
@@ -311,8 +311,8 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     @Override
-    public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
-        return reauthInfo.getAndClearResponsesReceivedDuringReauthentication();
+    public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
+        return reauthInfo.pollResponseReceivedDuringReauthentication();
     }
 
     @Override
@@ -613,12 +613,10 @@ public class SaslClientAuthenticator implements Authenticator {
          *         that arrived during re-authentication that are unrelated to
          *         re-authentication, if any
          */
-        public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
+        public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
             if (pendingAuthenticatedReceives.isEmpty())
-                return Collections.emptyList();
-            List<NetworkReceive> retval = pendingAuthenticatedReceives;
-            pendingAuthenticatedReceives = new ArrayList<>();
-            return retval;
+                return Optional.empty();
+            return Optional.of(pendingAuthenticatedReceives.remove(0));
         }
 
         public void setAuthenticationEndAndSessionReauthenticationTimes(long nowNanos) {

@@ -40,6 +40,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.nio.channels.WritableByteChannel;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Iterator;
@@ -47,6 +48,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+
 
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
@@ -222,7 +224,7 @@ public class NioEchoServer extends Thread {
                         selector.close(channel.id());
                 }
 
-                List<NetworkReceive> completedReceives = selector.completedReceives();
+                Collection<NetworkReceive> completedReceives = selector.completedReceives();
                 for (NetworkReceive rcv : completedReceives) {
                     KafkaChannel channel = channel(rcv.source());
                     if (!maybeBeginServerReauthentication(channel, rcv, time)) {

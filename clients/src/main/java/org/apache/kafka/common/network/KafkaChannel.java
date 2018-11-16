@@ -28,8 +28,8 @@ import java.net.Socket;
 import java.net.SocketAddress;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 /**
@@ -641,8 +641,8 @@ public class KafkaChannel implements AutoCloseable {
      *         {@link NetworkReceive} responses that arrived during
      *         re-authentication that are unrelated to re-authentication, if any
      */
-    public List<NetworkReceive> getAndClearResponsesReceivedDuringReauthentication() {
-        return authenticator.getAndClearResponsesReceivedDuringReauthentication();
+    public Optional<NetworkReceive> pollResponseReceivedDuringReauthentication() {
+        return authenticator.pollResponseReceivedDuringReauthentication();
     }
     
     /**
