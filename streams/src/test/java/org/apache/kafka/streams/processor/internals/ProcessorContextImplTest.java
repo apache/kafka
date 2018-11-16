@@ -89,7 +89,8 @@ public class ProcessorContextImplTest {
                 //No-op.
             }
 
-            @Override public void close() {
+            @Override
+            public void close() {
                 //No-op.
             }
         };
