@@ -31,8 +31,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 public final class Sensors {
-    private static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
-
     private Sensors() {}
 
     public static Sensor createTaskAndStoreLatencyAndThroughputSensors(final Sensor.RecordingLevel level,
