@@ -504,6 +504,18 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+    * If not previously loaded,
+    * load the timestamp of the first message into memory.
+    */
+  private def mayLoadFirstBatchTimestamp(): Unit = {
+    if (rollingBasedTimestamp.isEmpty) {
+      val iter = log.batches.iterator()
+      if (iter.hasNext)
+        rollingBasedTimestamp = Some(iter.next().maxTimestamp)
+    }
+  }
+
+  /**
    * The time this segment has waited to be rolled.
    * If the first message batch has a timestamp we use its timestamp to determine when to roll a segment. A segment
    * is rolled if the difference between the new batch's timestamp and the first batch's timestamp exceeds the
@@ -514,11 +526,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
-    if (rollingBasedTimestamp.isEmpty) {
-      val iter = log.batches.iterator()
-      if (iter.hasNext)
-        rollingBasedTimestamp = Some(iter.next().maxTimestamp)
-    }
+    mayLoadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t
       case _ => now - created
@@ -526,9 +534,10 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-    * @return the first batch timestamp if the timestamp is available and has been previously loaded. Otherwise return 0
+    * @return the first batch timestamp if the timestamp is available. Otherwise return 0
     */
   def getFirstBatchTimestamp() : Long = {
+    mayLoadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => t
       case _ => 0L

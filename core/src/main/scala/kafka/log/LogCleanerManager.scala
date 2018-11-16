@@ -168,7 +168,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
     */
-  def grabFilthiestCompactedLog(time: Time): Option[LogToClean] = {
+  def grabFilthiestCompactedLog(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {
     inLock(lock) {
       val now = time.milliseconds
       this.timeOfLastRun = now
@@ -185,8 +185,10 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
             LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, now)
 
           val firstDirtySegmentCreateTime = LogCleanerManager.getFirstDirtySegmentEstimatedCreateTime(log, firstDirtyOffset)
-          val needCompactionNow = LogCleanerManager.reachMaxCompactionLag(log, firstDirtySegmentCreateTime, now)
-          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, needCompactionNow, firstDirtySegmentCreateTime)
+          val compactionDelayMs = LogCleanerManager.getCompactionDelay(log, firstDirtySegmentCreateTime, now)
+          preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
+
+          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0
@@ -494,23 +496,25 @@ private[log] object LogCleanerManager extends Logging {
     val firstDirtySegmentCreateTime: Long = dirtyNonActiveSegments.headOption match {
       case None => -1
       case Some(segment) =>
-        val firstBatchTimestamp = segment.getFirstBatchTimestamp()
-        if (firstBatchTimestamp > 0)
-          firstBatchTimestamp
-        else {
-          math.max(largestCleanTimestamp, segment.largestTimestamp - log.config.maxSegmentMs)
-        }
+        if (largestCleanTimestamp > 0)
+          largestCleanTimestamp
+        else
+          segment.getFirstBatchTimestamp()
     }
     firstDirtySegmentCreateTime
   }
 
   /**
-    * return whether the given log creation time has reached max Compaction Lag
+    * get delay between the time when log is required to be compacted as determined
+    * by maxCompactionLagMs and the current time.
     */
-  def reachMaxCompactionLag(log: Log, firstDirtySegmentCreateTime: Long, now: Long) : Boolean = {
+  def getCompactionDelay(log: Log, firstDirtySegmentCreateTime: Long, now: Long) : Long = {
     val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
     val cleanUtilTime = now - maxCompactionLagMs
-    if (firstDirtySegmentCreateTime <= cleanUtilTime && firstDirtySegmentCreateTime >= 0) true else false
+    if (firstDirtySegmentCreateTime < cleanUtilTime && firstDirtySegmentCreateTime > 0)
+      cleanUtilTime - firstDirtySegmentCreateTime
+    else
+      0L
   }
 
   /**
