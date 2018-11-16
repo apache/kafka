@@ -19,15 +19,24 @@ package kafka.server
 import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import java.io.File
+import java.io.{DataInputStream, File}
+import java.net.ServerSocket
+import java.util.concurrent.{Executors, TimeUnit}
 
+import kafka.cluster.Broker
+import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.log.LogManager
 import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
+import org.apache.kafka.common.utils.Time
 import org.junit.{Before, Test}
 import org.junit.Assert._
 
@@ -188,5 +197,59 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
     server.shutdown()
     server.awaitShutdown()
     server.shutdown()
+  }
+
+  // Verify that if controller is in the midst of processing a request, shutdown completes
+  // without waiting for request timeout.
+  @Test
+  def testControllerShutdownDuringSend(): Unit = {
+    val securityProtocol = SecurityProtocol.PLAINTEXT
+    val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+
+    val controllerId = 2
+    val metrics = new Metrics
+    val executor = Executors.newSingleThreadExecutor
+    var serverSocket: ServerSocket = null
+    var controllerChannelManager: ControllerChannelManager = null
+
+    try {
+      // Set up a server to accept a connection and receive one byte from the first request. No response is sent.
+      serverSocket = new ServerSocket(0)
+      val receiveFuture = executor.submit(new Runnable {
+        override def run(): Unit = {
+          val socket = serverSocket.accept()
+          new DataInputStream(socket.getInputStream).readByte()
+        }
+      })
+
+      // Start a ControllerChannelManager
+      val brokers = Seq(new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol))
+      val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
+      val controllerContext = new ControllerContext
+      controllerContext.liveBrokers = brokers.toSet
+      controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
+        metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
+      controllerChannelManager.startup()
+
+      // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
+      val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+        controllerId, 1, Map.empty.asJava, brokers.map(_.node(listenerName)).toSet.asJava)
+      controllerChannelManager.sendRequest(1, ApiKeys.LEADER_AND_ISR, requestBuilder)
+      receiveFuture.get(10, TimeUnit.SECONDS)
+
+      // Shutdown controller. Request timeout is 30s, verify that shutdown completed well before that
+      val shutdownFuture = executor.submit(new Runnable {
+        override def run(): Unit = controllerChannelManager.shutdown()
+      })
+      shutdownFuture.get(10, TimeUnit.SECONDS)
+
+    } finally {
+      if (serverSocket != null)
+        serverSocket.close()
+      if (controllerChannelManager != null)
+        controllerChannelManager.shutdown()
+      executor.shutdownNow()
+      metrics.close()
+    }
   }
 }
