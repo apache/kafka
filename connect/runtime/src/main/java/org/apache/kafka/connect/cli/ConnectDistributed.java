@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerInfo;
@@ -94,6 +95,9 @@ public class ConnectDistributed {
         log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
         RestServer rest = new RestServer(config);
+        HerderProvider provider = new HerderProvider();
+        rest.start(provider, plugins);
+
         URI advertisedUrl = rest.advertisedUrl();
         String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
@@ -115,10 +119,13 @@ public class ConnectDistributed {
         DistributedHerder herder = new DistributedHerder(config, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
                 advertisedUrl.toString());
+
         final Connect connect = new Connect(herder, rest);
         log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
         try {
             connect.start();
+            // herder has initialized now, and ready to be used by the RestServer.
+            provider.setHerder(herder);
         } catch (Exception e) {
             log.error("Failed to start Connect", e);
             connect.stop();

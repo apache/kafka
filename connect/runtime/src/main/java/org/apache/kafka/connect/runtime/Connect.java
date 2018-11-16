@@ -51,7 +51,6 @@ public class Connect {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
 
             herder.start();
-            rest.start(herder);
 
             log.info("Kafka Connect started");
         } finally {
