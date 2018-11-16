@@ -47,7 +47,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     private TimeOrderedKeyValueBuffer buffer;
     private InternalProcessorContext internalProcessorContext;
-    private Sensor suppressionSensor;
     private Sensor suppressionEmitSensor;
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
@@ -72,7 +71,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     @Override
     public void init(final ProcessorContext context) {
         internalProcessorContext = (InternalProcessorContext) context;
-        suppressionSensor = Sensors.suppressionSensor(internalProcessorContext);
         suppressionEmitSensor = Sensors.suppressionEmitSensor(internalProcessorContext);
 
         keySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
@@ -84,7 +82,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     public void process(final K key, final Change<V> value) {
         buffer(key, value);
         enforceConstraints();
-        suppressionSensor.record();
     }
 
     private void buffer(final K key, final Change<V> value) {

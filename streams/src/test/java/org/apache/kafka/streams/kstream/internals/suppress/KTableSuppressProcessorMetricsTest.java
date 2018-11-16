@@ -66,28 +66,6 @@ public class KTableSuppressProcessorMetricsTest {
         )
     );
 
-    private static final MetricName SUPPRESSION_TOTAL_METRIC = new MetricName(
-        "intermediate-result-suppression-total",
-        "stream-processor-node-metrics",
-        "The total number of occurrence of intermediate-result-suppression operations.",
-        mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("processor-node-id", "testNode")
-        )
-    );
-
-    private static final MetricName SUPPRESSION_RATE_METRIC = new MetricName(
-        "intermediate-result-suppression-rate",
-        "stream-processor-node-metrics",
-        "The average number of occurrence of intermediate-result-suppression operation per second.",
-        mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("processor-node-id", "testNode")
-        )
-    );
-
     private static final MetricName BUFFER_SIZE_AVG_METRIC = new MetricName(
         "suppression-buffer-size-avg",
         "stream-buffer-metrics",
@@ -188,8 +166,6 @@ public class KTableSuppressProcessorMetricsTest {
 
             verifyMetric(metrics, EVICTION_RATE_METRIC, is(0.0));
             verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(0.0));
-            verifyMetric(metrics, SUPPRESSION_RATE_METRIC, greaterThan(0.0));
-            verifyMetric(metrics, SUPPRESSION_TOTAL_METRIC, is(1.0));
             verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(51.0));
             verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(51.0));
             verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(51.0));
@@ -207,8 +183,6 @@ public class KTableSuppressProcessorMetricsTest {
 
             verifyMetric(metrics, EVICTION_RATE_METRIC, greaterThan(0.0));
             verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(1.0));
-            verifyMetric(metrics, SUPPRESSION_RATE_METRIC, greaterThan(0.0));
-            verifyMetric(metrics, SUPPRESSION_TOTAL_METRIC, is(2.0));
             verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(65.33333333333333));
             verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(47.0));
             verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(98.0));

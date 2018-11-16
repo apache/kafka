@@ -83,22 +83,13 @@ public class Sensors {
         return sensor;
     }
 
-    public static Sensor suppressionSensor(final InternalProcessorContext context) {
-        return makeNodeRateAndTotalSensor(context, "intermediate-result-suppression");
-    }
-
     public static Sensor suppressionEmitSensor(final InternalProcessorContext context) {
-        return makeNodeRateAndTotalSensor(context, "suppression-emit");
-    }
-
-    private static Sensor makeNodeRateAndTotalSensor(final InternalProcessorContext context,
-                                                     final String operation) {
         final StreamsMetricsImpl metrics = context.metrics();
 
         final Sensor sensor = metrics.nodeLevelSensor(
             context.taskId().toString(),
             context.currentNode().name(),
-            operation,
+            "suppression-emit",
             Sensor.RecordingLevel.DEBUG
         );
 
@@ -109,18 +100,18 @@ public class Sensors {
 
         sensor.add(
             new MetricName(
-                operation + "-rate",
+                "suppression-emit-rate",
                 PROCESSOR_NODE_METRICS_GROUP,
-                "The average number of occurrence of " + operation + " operation per second.",
+                "The average number of occurrence of suppression-emit operation per second.",
                 tags
             ),
             new Rate(TimeUnit.SECONDS, new Sum())
         );
         sensor.add(
             new MetricName(
-                operation + "-total",
+                "suppression-emit-total",
                 PROCESSOR_NODE_METRICS_GROUP,
-                "The total number of occurrence of " + operation + " operations.",
+                "The total number of occurrence of suppression-emit operations.",
                 tags
             ),
             new Total()
