@@ -1031,7 +1031,14 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         @Override
                         public void run() {
                             try {
-                                String reconfigUrl = RestServer.urlJoin(leaderUrl(), "/connectors/" + connName + "/tasks");
+                                String leaderUrl = leaderUrl();
+                                if (leaderUrl == null || leaderUrl.trim().isEmpty()) {
+                                    cb.onCompletion(new ConnectException("Request to leader to " +
+                                            "reconfigure connector tasks failed " +
+                                            "because the URL of the leader's REST interface is empty!"), null);
+                                    return;
+                                }
+                                String reconfigUrl = RestServer.urlJoin(leaderUrl, "/connectors/" + connName + "/tasks");
                                 RestClient.httpRequest(reconfigUrl, "POST", rawTaskProps, null, config);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
