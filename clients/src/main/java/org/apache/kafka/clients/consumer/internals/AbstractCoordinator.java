@@ -136,7 +136,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                Time time,
                                long retryBackoffMs,
                                boolean leaveGroupOnClose) {
-        assert groupId != null : "Expected a non-null group id for coordinator construction";
+        Objects.requireNonNull(groupId != null, "Expected a non-null group id for coordinator construction");
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;
