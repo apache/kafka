@@ -39,7 +39,7 @@ public class Min extends SampledStat {
         double min = Double.MAX_VALUE;
         for (Sample sample : samples)
             min = Math.min(min, sample.value);
-        return Math.abs(min - Double.MAX_VALUE) < 0.001 ? Double.NaN : min;
+        return samples.isEmpty() ? Double.NaN : min;
     }
 
 }

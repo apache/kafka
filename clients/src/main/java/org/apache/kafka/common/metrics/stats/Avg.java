@@ -36,13 +36,14 @@ public class Avg extends SampledStat {
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double total = 0;
+        double total = 0.0;
         long count = 0;
         for (Sample s : samples) {
             total += s.value;
             count += s.eventCount;
         }
-        return count == 0 ? Double.NaN : total;
+        return count == 0 ? Double.NaN : total / count;
     }
 
 }
+

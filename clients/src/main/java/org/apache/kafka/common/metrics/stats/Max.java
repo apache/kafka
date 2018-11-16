@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.MetricConfig;
 public final class Max extends SampledStat {
 
     public Max() {
-        super(Double.MIN_VALUE);
+        super(Double.NEGATIVE_INFINITY);
     }
 
     @Override
@@ -36,11 +36,10 @@ public final class Max extends SampledStat {
 
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
-        double max = Double.MIN_VALUE;
-        for (Sample sample : samples) {
+        double max = Double.NEGATIVE_INFINITY;
+        for (Sample sample : samples)
             max = Math.max(max, sample.value);
-        }
-        return Math.abs(max - Double.MIN_VALUE) < 0.001 ? Double.NaN : max;
+        return samples.isEmpty() ? Double.NaN : max;
     }
 
 }
