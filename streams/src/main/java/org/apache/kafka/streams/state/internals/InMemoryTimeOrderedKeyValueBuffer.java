@@ -188,6 +188,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
             collector = ((RecordCollector.Supplier) context).recordCollector();
             changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         }
+        updateBufferMetrics();
         open = true;
     }
 
@@ -198,12 +199,13 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
     @Override
     public void close() {
+        open = false;
         index.clear();
         sortedMap.clear();
         dirtyKeys.clear();
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
-        open = false;
+        updateBufferMetrics();
     }
 
     @Override
