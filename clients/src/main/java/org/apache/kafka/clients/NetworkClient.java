@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
@@ -53,6 +54,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 /**
@@ -62,6 +64,12 @@ import java.util.stream.Collectors;
  * This class is not thread-safe!
  */
 public class NetworkClient implements KafkaClient {
+
+    private enum State {
+        ACTIVE,
+        CLOSING,
+        CLOSED
+    }
 
     private final Logger log;
 
@@ -110,6 +118,8 @@ public class NetworkClient implements KafkaClient {
     private final List<ClientResponse> abortedSends = new LinkedList<>();
 
     private final Sensor throttleTimeSensor;
+
+    private final AtomicReference<State> state;
 
     public NetworkClient(Selectable selector,
                          Metadata metadata,
@@ -243,6 +253,7 @@ public class NetworkClient implements KafkaClient {
         this.apiVersions = apiVersions;
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
+        this.state = new AtomicReference<>(State.ACTIVE);
     }
 
     /**
@@ -418,6 +429,7 @@ public class NetworkClient implements KafkaClient {
     }
 
     private void doSend(ClientRequest clientRequest, boolean isInternalRequest, long now) {
+        ensureActive();
         String nodeId = clientRequest.destination();
         if (!isInternalRequest) {
             // If this request came from outside the NetworkClient, validate
@@ -496,6 +508,8 @@ public class NetworkClient implements KafkaClient {
      */
     @Override
     public List<ClientResponse> poll(long timeout, long now) {
+        ensureActive();
+
         if (!abortedSends.isEmpty()) {
             // If there are aborted sends because of unsupported version exceptions or disconnects,
             // handle them immediately without waiting for Selector#poll.
@@ -575,13 +589,35 @@ public class NetworkClient implements KafkaClient {
         this.selector.wakeup();
     }
 
+    @Override
+    public void initiateClose() {
+        if (state.compareAndSet(State.ACTIVE, State.CLOSING)) {
+            wakeup();
+        }
+    }
+
+    @Override
+    public boolean active() {
+        return state.get() == State.ACTIVE;
+    }
+
+    private void ensureActive() {
+        if (!active())
+            throw new DisconnectException("NetworkClient is no longer active, state is " + state);
+    }
+
     /**
      * Close the network client
      */
     @Override
     public void close() {
-        this.selector.close();
-        this.metadataUpdater.close();
+        state.compareAndSet(State.ACTIVE, State.CLOSING);
+        if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
+            this.selector.close();
+            this.metadataUpdater.close();
+        } else {
+            log.warn("Attempting to close NetworkClient that has already been closed.");
+        }
     }
 
     /**

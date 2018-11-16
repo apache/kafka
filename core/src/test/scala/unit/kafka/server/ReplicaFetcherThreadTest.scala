@@ -23,6 +23,7 @@ import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.metrics.Metrics
@@ -716,6 +717,37 @@ class ReplicaFetcherThreadTest {
 
     //Then we should not have truncated the partition that became leader. Exactly one partition should be truncated.
     assertEquals(49, truncateToCapture.getValue)
+  }
+
+  @Test
+  def shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, "localhost:1234")
+    val config = KafkaConfig.fromProps(props)
+    val mockBlockingSend = createMock(classOf[BlockingSend])
+
+    expect(mockBlockingSend.initiateClose()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
+    replay(mockBlockingSend)
+
+    val thread = new ReplicaFetcherThread(
+      name = "bob",
+      fetcherId = 0,
+      sourceBroker = brokerEndPoint,
+      brokerConfig = config,
+      replicaMgr = null,
+      metrics =  new Metrics(),
+      time = new SystemTime(),
+      quota = null,
+      leaderEndpointBlockingSend = Some(mockBlockingSend))
+    thread.start()
+
+    // Verify that:
+    //   1) IllegalArgumentException thrown by BlockingSend#initiateClose() during `initiateShutdown` is not propagated
+    //   2) BlockingSend.close() is invoked even if BlockingSend#initiateClose() fails
+    //   3) IllegalStateException thrown by BlockingSend.close() during `awaitShutdown` is not propagated
+    thread.initiateShutdown()
+    thread.awaitShutdown()
+    verify(mockBlockingSend)
   }
 
   def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager) = {
