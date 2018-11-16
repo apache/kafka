@@ -14,6 +14,7 @@ package kafka.api
 
 import java.time.Duration
 import java.util
+import java.util.Arrays.asList
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
 
@@ -23,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -1814,4 +1815,129 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
+  @Test
+  def testConsumingWithNullGroupId(): Unit = {
+    val topic = "test_topic"
+    val partition = 0;
+    val tp = new TopicPartition(topic, partition)
+    createTopic(topic, 1, 1)
+
+    TestUtils.waitUntilTrue(() => {
+      this.zkClient.topicExists(topic)
+    }, "Failed to create topic")
+
+    val producer = createProducer()
+    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k3".getBytes, "v3".getBytes)).get()
+    producer.close()
+
+    // consumer 1 uses the default group id and consumes from earliest offset
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    val consumer1 = createConsumer(
+      configOverrides = consumer1Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    // consumer 2 uses the default group id and consumes from latest offset
+    val consumer2Config = new Properties(consumerConfig)
+    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
+    val consumer2 = createConsumer(
+      configOverrides = consumer2Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    // consumer 3 uses the default group id and starts from an explicit offset
+    val consumer3Config = new Properties(consumerConfig)
+    consumer3Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer3")
+    val consumer3 = createConsumer(
+      configOverrides = consumer3Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    consumer1.assign(asList(tp))
+    consumer2.assign(asList(tp))
+    consumer3.assign(asList(tp))
+    consumer3.seek(tp, 1)
+
+    val numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count()
+
+    try {
+      consumer1.commitSync()
+      fail("Expected offset commit to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
+    try {
+      consumer2.committed(tp)
+      fail("Expected committed offset fetch to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
+    val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
+    val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()
+
+    consumer1.unsubscribe()
+    consumer2.unsubscribe()
+    consumer3.unsubscribe()
+
+    consumer1.close()
+    consumer2.close()
+    consumer3.close()
+
+    assertEquals("Expected consumer1 to consume from earliest offset", 3, numRecords1)
+    assertEquals("Expected consumer2 to consume from latest offset", 0, numRecords2)
+    assertEquals("Expected consumer3 to consume from offset 1", 2, numRecords3)
+  }
+
+  @Test
+  def testConsumingWithEmptyGroupId(): Unit = {
+    val topic = "test_topic"
+    val partition = 0;
+    val tp = new TopicPartition(topic, partition)
+    createTopic(topic, 1, 1)
+
+    TestUtils.waitUntilTrue(() => {
+      this.zkClient.topicExists(topic)
+    }, "Failed to create topic")
+
+    val producer = createProducer()
+    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
+    producer.close()
+
+    // consumer 1 uses the empty group id
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
+    val consumer1 = createConsumer(configOverrides = consumer1Config)
+
+    // consumer 2 uses the empty group id and consumes from latest offset if there is no committed offset
+    val consumer2Config = new Properties(consumerConfig)
+    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    consumer2Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
+    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
+    consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
+    val consumer2 = createConsumer(configOverrides = consumer2Config)
+
+    consumer1.assign(asList(tp))
+    consumer2.assign(asList(tp))
+
+    val records1 = consumer1.poll(Duration.ofMillis(5000))
+    consumer1.commitSync()
+
+    val records2 = consumer2.poll(Duration.ofMillis(5000))
+    consumer2.commitSync()
+
+    consumer1.close()
+    consumer2.close()
+
+    assertTrue("Expected consumer1 to consume one message from offset 0",
+      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
+    assertTrue("Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1",
+      records2.count() == 1 && records2.records(tp).asScala.head.offset == 1)
+  }
 }
