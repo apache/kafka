@@ -33,13 +33,12 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.function.Function;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -51,20 +50,19 @@ public class StreamsOptimizedTest {
 
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");
+            System.err.println("StreamsOptimizedTest requires one argument (properties-file) but no provided: ");
         }
-        final String propFileName = args.length > 0 ? args[0] : null;
+        final String propFileName = args[0];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started StreamsOptimizedTest");
         System.out.println("props=" + streamsProperties);
 
-        final String inputTopic = (String) streamsProperties.remove("input.topic");
-        final String aggregationTopic = (String) streamsProperties.remove("aggregation.topic");
-        final String reduceTopic = (String) streamsProperties.remove("reduce.topic");
-        final String joinTopic = (String) streamsProperties.remove("join.topic");
-        final boolean debugInput = Boolean.valueOf((String) streamsProperties.remove("debug.input"));
+        final String inputTopic = (String) Objects.requireNonNull(streamsProperties.remove("input.topic"));
+        final String aggregationTopic = (String) Objects.requireNonNull(streamsProperties.remove("aggregation.topic"));
+        final String reduceTopic = (String) Objects.requireNonNull(streamsProperties.remove("reduce.topic"));
+        final String joinTopic = (String) Objects.requireNonNull(streamsProperties.remove("join.topic"));
 
 
         final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
@@ -81,13 +79,12 @@ public class StreamsOptimizedTest {
 
         final KStream<String, String> mappedStream = sourceStream.selectKey((k, v) -> keyFunction.apply(v));
 
-        if (debugInput) {
-            mappedStream.peek((k, v) -> System.out.println(String.format("MAPPED key=%s value=%s", k, v)));
-        }
+        final KStream<String, Long> countStream = mappedStream.groupByKey()
+                                                               .count(Materialized.with(Serdes.String(),
+                                                                                        Serdes.Long())).toStream();
 
-        final KStream<String, Long> countStream = mappedStream.groupByKey().count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
-
-        mappedStream.groupByKey().aggregate(initializer,
+        mappedStream.groupByKey().aggregate(
+            initializer,
             aggregator,
             Materialized.with(Serdes.String(), Serdes.Integer()))
             .toStream()
@@ -126,10 +123,6 @@ public class StreamsOptimizedTest {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 final int repartitionTopicCount = getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern);
                 System.out.println(String.format("REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%d", repartitionTopicCount));
-                final Set<ThreadMetadata> localThreadsMetadata = streams.localThreadsMetadata();
-                for (final ThreadMetadata threadMetadata : localThreadsMetadata) {
-                    System.out.println("TASK ASSIGNMENT -> " + threadMetadata.activeTasks());
-                }
                 System.out.flush();
             }
         });
@@ -154,7 +147,9 @@ public class StreamsOptimizedTest {
         final Matcher matcher = repartitionTopicPattern.matcher(topologyString);
         final List<String> repartitionTopicsFound = new ArrayList<>();
         while (matcher.find()) {
-            repartitionTopicsFound.add(matcher.group());
+            final String repartitionTopic = matcher.group();
+            System.out.println(String.format("REPARTITION TOPIC found -> %s", repartitionTopic));
+            repartitionTopicsFound.add(repartitionTopic);
         }
         return repartitionTopicsFound.size();
     }

@@ -114,13 +114,13 @@ class StreamsOptimizedTest(Test):
             if not self.all_source_subtopology_tasks(processor):
                 if verify_individual_operations:
                     for operation in self.operation_pattern.split('\|'):
-                        self._do_verify(processor, operation)
+                        self.do_verify(processor, operation)
                 else:
-                    self._do_verify(processor, self.operation_pattern)
+                    self.do_verify(processor, self.operation_pattern)
             else:
                 self.logger.info("Skipping processor %s with all source tasks" % processor.node.account)
 
-    def _do_verify(self, processor, pattern):
+    def do_verify(self, processor, pattern):
         self.logger.info("Verifying %s processing pattern in STDOUT_FILE" % pattern)
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             monitor.wait_until(pattern,
@@ -128,13 +128,13 @@ class StreamsOptimizedTest(Test):
                                err_msg="Never saw processing of %s " % pattern + str(processor.node.account))
 
     def all_source_subtopology_tasks(self, processor):
-        index = 0
-        while index < 5:
+        retries = 0
+        while retries < 5:
             found = list(processor.node.account.ssh_capture("sed -n 's/.*Committed all active tasks \[\(\(0_[0-9], \)\{3\}0_[0-9]\)\].*/\1/p' %s" % processor.LOG_FILE, allow_fail=True))
             self.logger.info("Returned %s from assigned task check" % found)
             if len(found) > 0:
                 return True
-            index += 1
+            retries += 1
             time.sleep(1)
 
         return False
