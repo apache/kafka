@@ -31,29 +31,28 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.ThreadMetadata;
 
 import java.time.Duration;
+import java.util.Objects;
 import java.util.Properties;
-import java.util.Set;
 import java.util.function.Function;
 
 public class StreamsNamedRepartitionTest {
 
     public static void main(final String[] args) throws Exception {
         if (args.length < 1) {
-            System.err.println("StreamsUpgradeTest requires one argument (properties-file) but no provided: ");
+            System.err.println("StreamsNamedRepartitionTest requires one argument (properties-file) but none provided: ");
         }
-        final String propFileName = args.length > 0 ? args[0] : null;
+        final String propFileName = args[0];
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
         System.out.println("StreamsTest instance started NAMED_REPARTITION_TEST");
         System.out.println("props=" + streamsProperties);
 
-        final String inputTopic = (String) streamsProperties.remove("input.topic");
-        final String aggregationTopic = (String) streamsProperties.remove("aggregation.topic");
-        final boolean addOperators = Boolean.valueOf((String) streamsProperties.remove("add.operations"));
+        final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
+        final String aggregationTopic = (String) (Objects.requireNonNull(streamsProperties.remove("aggregation.topic")));
+        final boolean addOperators = Boolean.valueOf(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
 
 
         final Initializer<Integer> initializer = () -> 0;
@@ -101,10 +100,6 @@ public class StreamsNamedRepartitionTest {
                     System.out.println("REBALANCING -> RUNNING with UPDATED Topology");
                 } else {
                     System.out.println("REBALANCING -> RUNNING");
-                }
-                final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
-                for (final ThreadMetadata data : threadMetadata) {
-                    System.out.println(String.format("TASK_ASSIGNMENT -> %s", data.activeTasks()));
                 }
                 System.out.flush();
             }
