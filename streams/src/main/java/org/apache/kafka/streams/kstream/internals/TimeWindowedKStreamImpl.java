@@ -135,6 +135,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         Objects.requireNonNull(materialized, "materialized can't be null");
 
         final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final Aggregator<K, V, V> reduceAggregator = aggregatorForReducer(reducer);
         materializedInternal.generateStoreNameIfNeeded(builder, REDUCE_NAME);
 
         if (materializedInternal.keySerde() == null) {
@@ -147,7 +148,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         return aggregateBuilder.build(
             REDUCE_NAME,
             materialize(materializedInternal),
-            new KStreamWindowReduce<>(windows, materializedInternal.storeName(), reducer),
+            new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, reduceAggregator),
             materializedInternal.isQueryable(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
             materializedInternal.valueSerde());
@@ -215,5 +216,9 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             builder.withCachingEnabled();
         }
         return builder;
+    }
+
+    private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
+        return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
     }
 }
