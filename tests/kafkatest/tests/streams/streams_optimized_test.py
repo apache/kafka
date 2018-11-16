@@ -130,7 +130,7 @@ class StreamsOptimizedTest(Test):
     def all_source_subtopology_tasks(self, processor):
         retries = 0
         while retries < 5:
-            found = list(processor.node.account.ssh_capture("sed -n 's/.*Committed all active tasks \[\(\(0_[0-9], \)\{3\}0_[0-9]\)\].*/\1/p' %s" % processor.LOG_FILE, allow_fail=True))
+            found = list(processor.node.account.ssh_capture("sed -n 's/.*current active tasks: \[\(\(0_[0-9], \)\{3\}0_[0-9]\)\].*/\1/p' %s" % processor.LOG_FILE, allow_fail=True))
             self.logger.info("Returned %s from assigned task check" % found)
             if len(found) > 0:
                 return True
