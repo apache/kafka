@@ -30,10 +30,10 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(commandOpts, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
+    CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")
 
-    commandOpts.checkArgs()
+    CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options, commandOpts.zkConnectOpt)
 
     val zkConnect = commandOpts.options.valueOf(commandOpts.zkConnectOpt)
     var zkClient: KafkaZkClient = null
@@ -108,10 +108,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .ofType(classOf[String])
 
     options = parser.parse(args: _*)
-
-    def checkArgs() {
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-    }
   }
 }
 

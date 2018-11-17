@@ -74,7 +74,7 @@ object BrokerApiVersionsCommand {
     checkArgs()
 
     def checkArgs() {
-      CommandLineUtils.checkHelpArgAndPrintUsageAndDie(this, "Command to retrieving broker version information.")
+      CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to retrieve broker version information.")
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
     }

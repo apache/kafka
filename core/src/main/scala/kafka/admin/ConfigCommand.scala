@@ -72,7 +72,7 @@ object ConfigCommand extends Config {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.checkHelpArgAndPrintUsageAndDie(opts, "Add/Remove entity config for a topic, client, user or broker")
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user or broker")
 
       opts.checkArgs()
 

@@ -413,7 +413,7 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(opts, "This command moves topic partitions between replicas.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to moves topic partitions between replicas.")
 
     // Should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)

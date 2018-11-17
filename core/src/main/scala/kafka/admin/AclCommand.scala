@@ -53,7 +53,7 @@ object AclCommand extends Logging {
 
     val opts = new AclCommandOptions(args)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(opts, "This tools helps to manage acls on kafka.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manage acls on kafka.")
 
     opts.checkArgs()
 

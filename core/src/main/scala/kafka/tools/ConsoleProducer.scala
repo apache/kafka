@@ -204,7 +204,7 @@ object ConsoleProducer {
 
     options = parser.parse(args : _*)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(this, "Read data from standard input and publish it to Kafka.")
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     val topic = options.valueOf(topicOpt)
