@@ -779,7 +779,7 @@ public class TopologyTestDriverTest {
         topology.addStateStore(Stores.keyValueStoreBuilder(
             Stores.inMemoryKeyValueStore("aggStore"),
             Serdes.String(),
-            Serdes.Long()),
+            Serdes.Long()).withCachingEnabled(), // intentionally turn on caching to achieve better test coverage
             "aggregator");
         topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
