@@ -43,7 +43,7 @@ object TopicCommand extends Logging {
 
     val opts = new TopicCommandOptions(args)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(opts, "Create, delete, describe, or change a topic.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "Create, delete, describe, or change a topic.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)

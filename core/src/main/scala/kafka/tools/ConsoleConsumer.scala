@@ -276,7 +276,7 @@ object ConsoleConsumer extends Logging {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(this, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
 
     var groupIdPassed = true
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)

@@ -129,7 +129,7 @@ object DeleteRecordsCommand {
 
     options = parser.parse(args : _*)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(this, "Command for delete records of the given partitions down to the specified offset.")
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "Command for delete records of the given partitions down to the specified offset.")
 
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, offsetJsonFileOpt)
   }

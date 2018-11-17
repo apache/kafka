@@ -252,7 +252,7 @@ object ConsumerPerformance extends LazyLogging {
 
     options = parser.parse(args: _*)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(this, "Performance test utility for the full zookeeper consumer")
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "Performance test utility for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt)
 

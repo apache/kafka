@@ -30,7 +30,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
     val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(commandOpts, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
+    CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")
 
     commandOpts.checkArgs()

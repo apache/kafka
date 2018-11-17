@@ -40,7 +40,7 @@ object DelegationTokenCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new DelegationTokenCommandOptions(args)
 
-    CommandLineUtils.checkHelpArgAndPrintUsageAndDie(opts, "Tool to create, renew, expire, or describe delegation tokens.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "Tool to create, renew, expire, or describe delegation tokens.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.renewOpt, opts.expiryOpt, opts.describeOpt).count(opts.options.has _)
