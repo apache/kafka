@@ -86,7 +86,7 @@ class ConsumeBenchTest(Test):
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
-    def test_consume_bench_single_partition(self):
+    def test_single_partition(self):
         """
         Run a ConsumeBench against a single partition
         """
@@ -107,9 +107,32 @@ class ConsumeBenchTest(Test):
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
 
-    def test_consume_group_bench(self):
+    def test_multiple_consumers_random_group_topics(self):
         """
-        Runs two ConsumeBench workloads in the same consumer group to read messages from topics
+        Runs multiple consumers group to read messages from topics.
+        Since a consumerGroup isn't specified, each consumer should read from all topics independently
+        """
+        self.produce_messages(self.active_topics, max_messages=5000)
+        consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.consumer_workload_service.consumer_node,
+                                                self.consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=5000, # all should read exactly 5k messages
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                threads_per_worker=5,
+                                                active_topics=["consume_bench_topic[0-5]"])
+        consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
+        consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Consume workload finished")
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
+
+    def test_two_consumers_specified_group_topics(self):
+        """
+        Runs two consumers in the same consumer group to read messages from topics.
+        Since a consumerGroup is specified, each consumer should dynamically get assigned a partition from group
         """
         self.produce_messages(self.active_topics)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
@@ -120,13 +143,62 @@ class ConsumeBenchTest(Test):
                                                 consumer_conf={},
                                                 admin_client_conf={},
                                                 common_client_conf={},
+                                                threads_per_worker=2,
                                                 consumer_group="testGroup",
                                                 active_topics=["consume_bench_topic[0-5]"])
-        consume_workload_1 = self.trogdor.create_task("consume_workload_1", consume_spec)
-        consume_workload_2 = self.trogdor.create_task("consume_workload_2", consume_spec)
-        consume_workload_1.wait_for_done(timeout_sec=360)
-        self.logger.debug("Consume workload 1 finished")
-        consume_workload_2.wait_for_done(timeout_sec=360)
-        self.logger.debug("Consume workload 2 finished")
+        consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
+        consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Consume workload finished")
         tasks = self.trogdor.tasks()
         self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
+
+    def test_multiple_consumers_random_group_partitions(self):
+        """
+        Runs multiple consumers in to read messages from specific partitions.
+        Since a consumerGroup isn't specified, each consumer will get assigned a random group
+        and consume from all partitions
+        """
+        self.produce_messages(self.active_topics, max_messages=20000)
+        consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.consumer_workload_service.consumer_node,
+                                                self.consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=2000,
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                threads_per_worker=4,
+                                                active_topics=["consume_bench_topic1:[0-4]"])
+        consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
+        consume_workload.wait_for_done(timeout_sec=360)
+        self.logger.debug("Consume workload finished")
+        tasks = self.trogdor.tasks()
+        self.logger.info("TASKS: %s\n" % json.dumps(tasks, sort_keys=True, indent=2))
+
+    def test_multiple_consumers_specified_group_partitions_should_raise(self):
+        """
+        Runs multiple consumers in to read messages from specific partitions.
+        Since a consumerGroup isn't specified, each consumer will get assigned a random group
+        and consume from all partitions
+        """
+        self.produce_messages(self.active_topics, max_messages=20000)
+        consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
+                                                self.consumer_workload_service.consumer_node,
+                                                self.consumer_workload_service.bootstrap_servers,
+                                                target_messages_per_sec=1000,
+                                                max_messages=2000,
+                                                consumer_conf={},
+                                                admin_client_conf={},
+                                                common_client_conf={},
+                                                threads_per_worker=4,
+                                                consumer_group="fail_group",
+                                                active_topics=["consume_bench_topic1:[0-4]"])
+        consume_workload = self.trogdor.create_task("consume_workload", consume_spec)
+        try:
+            consume_workload.wait_for_done(timeout_sec=360)
+            raise Exception("Should have raised an exception due to an invalid configuration")
+        except RuntimeError as e:
+            if 'Will not split partitions' not in str(e):
+                raise RuntimeError("Unexpected Exception - " + str(e))
+            self.logger.info(e)
+

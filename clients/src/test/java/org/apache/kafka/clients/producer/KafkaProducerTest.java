@@ -37,7 +37,6 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.ExtendedSerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -135,7 +134,7 @@ public class KafkaProducerTest {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(1, "not string key");
-        try (KafkaProducer<?, ?> ff = new KafkaProducer(props, new StringSerializer(), new StringSerializer())) {
+        try (KafkaProducer<?, ?> ff = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
             fail("Constructor should throw exception");
         } catch (ConfigException e) {
             assertTrue("Unexpected exception message: " + e.getMessage(), e.getMessage().contains("not string key"));
@@ -460,12 +459,14 @@ public class KafkaProducerTest {
         assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     @Deprecated
     public void testHeadersWithExtendedClasses() {
-        doTestHeaders(ExtendedSerializer.class);
+        doTestHeaders(org.apache.kafka.common.serialization.ExtendedSerializer.class);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testHeaders() {
         doTestHeaders(Serializer.class);

@@ -754,7 +754,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     val producerEpoch = 145.toShort
     val baseOffset = 15
 
-    val batch = EasyMock.createMock(classOf[RecordBatch])
+    val batch: RecordBatch = EasyMock.createMock(classOf[RecordBatch])
     EasyMock.expect(batch.isControlBatch).andReturn(true).once
     EasyMock.expect(batch.iterator).andReturn(Collections.emptyIterator[Record]).once
     EasyMock.replay(batch)

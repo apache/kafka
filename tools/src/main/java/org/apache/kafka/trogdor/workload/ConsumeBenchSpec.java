@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.trogdor.common.StringExpander;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
@@ -61,6 +62,15 @@ import java.util.HashSet;
  * #{@link org.apache.kafka.clients.consumer.KafkaConsumer#subscribe(Collection)}.
  * It will be assigned partitions dynamically from the consumer group.
  *
+ * This specification supports the spawning of multiple consumers in the single Trogdor worker agent.
+ * The "threadsPerWorker" field denotes how many consumers should be spawned for this spec.
+ * It is worth noting that the "targetMessagesPerSec", "maxMessages" and "activeTopics" fields apply for every consumer individually.
+ *
+ * If a consumer group is not specified, every consumer is assigned a different, random group. When specified, all consumers use the same group.
+ * Since no two consumers in the same group can be assigned the same partition,
+ * explicitly specifying partitions in "activeTopics" when there are multiple "threadsPerWorker"
+ * and a particular "consumerGroup" will result in an #{@link ConfigException}, aborting the task.
+ *
  * An example JSON representation which will result in a consumer that is part of the consumer group "cg" and
  * subscribed to topics foo1, foo2, foo3 and bar.
  * #{@code
@@ -77,7 +87,6 @@ import java.util.HashSet;
  */
 public class ConsumeBenchSpec extends TaskSpec {
 
-    static final String EMPTY_CONSUMER_GROUP = "";
     private static final String VALID_EXPANDED_TOPIC_NAME_PATTERN = "^[^:]+(:[\\d]+|[^:]*)$";
     private final String consumerNode;
     private final String bootstrapServers;
@@ -88,6 +97,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final Map<String, String> commonClientConf;
     private final List<String> activeTopics;
     private final String consumerGroup;
+    private final int threadsPerWorker;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -100,6 +110,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+                            @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
                             @JsonProperty("activeTopics") List<String> activeTopics) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
@@ -110,7 +121,8 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
-        this.consumerGroup = consumerGroup == null ? EMPTY_CONSUMER_GROUP : consumerGroup;
+        this.consumerGroup = consumerGroup == null ? "" : consumerGroup;
+        this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
     }
 
     @JsonProperty
@@ -136,6 +148,11 @@ public class ConsumeBenchSpec extends TaskSpec {
     @JsonProperty
     public int maxMessages() {
         return maxMessages;
+    }
+
+    @JsonProperty
+    public int threadsPerWorker() {
+        return threadsPerWorker;
     }
 
     @JsonProperty

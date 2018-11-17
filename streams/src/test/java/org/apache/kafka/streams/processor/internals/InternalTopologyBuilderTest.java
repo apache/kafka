@@ -48,7 +48,7 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.time.Duration.ofSeconds;
-import static org.apache.kafka.common.utils.Utils.mkList;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
@@ -170,7 +170,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void testAddProcessorWithNullParents() {
-        builder.addProcessor("processor", new MockProcessorSupplier(), null);
+        builder.addProcessor("processor", new MockProcessorSupplier(), (String) null);
     }
 
     @Test
@@ -201,7 +201,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void testAddSinkWithNullParents() {
-        builder.addSink("sink", "topic", null, null, null, null);
+        builder.addSink("sink", "topic", null, null, null, (String) null);
     }
 
     @Test
@@ -346,7 +346,7 @@ public class InternalTopologyBuilderTest {
         builder.addProcessor("processor-1", new MockProcessorSupplier(), "source-1");
 
         builder.addProcessor("processor-2", new MockProcessorSupplier(), "source-2", "processor-1");
-        builder.copartitionSources(mkList("source-1", "source-2"));
+        builder.copartitionSources(asList("source-1", "source-2"));
 
         builder.addProcessor("processor-3", new MockProcessorSupplier(), "source-3", "source-4");
 
@@ -494,7 +494,7 @@ public class InternalTopologyBuilderTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullTopicChooserWhenAddingSink() {
-        builder.addSink("name", (TopicNameExtractor) null, null, null, null);
+        builder.addSink("name", (TopicNameExtractor<Object, Object>) null, null, null, null);
     }
 
     @Test(expected = NullPointerException.class)

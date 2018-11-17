@@ -240,7 +240,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.OFFSET_COMMIT =>
           new OffsetCommitRequest.Builder("test-group",
-            Map(tp -> new OffsetCommitRequest.PartitionData(0, 15, "metadata")).asJava).
+            Map(tp -> new OffsetCommitRequest.PartitionData(0, Optional.empty[Integer](), "metadata")).asJava).
             setMemberId("").setGenerationId(1)
 
         case ApiKeys.OFFSET_FETCH =>
