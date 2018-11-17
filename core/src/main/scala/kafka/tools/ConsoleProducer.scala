@@ -39,7 +39,7 @@ object ConsoleProducer {
 
     try {
         val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
+        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))

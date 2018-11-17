@@ -652,7 +652,7 @@ public class TopologyTest {
     public void topologyWithDynamicRoutingShouldDescribeExtractorClass() {
         final StreamsBuilder builder  = new StreamsBuilder();
 
-        final TopicNameExtractor topicNameExtractor = new TopicNameExtractor() {
+        final TopicNameExtractor<Object, Object> topicNameExtractor = new TopicNameExtractor<Object, Object>() {
             @Override
             public String extract(final Object key, final Object value, final RecordContext recordContext) {
                 return recordContext.topic() + "-" + key;

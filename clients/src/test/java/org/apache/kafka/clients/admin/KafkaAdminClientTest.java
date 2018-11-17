@@ -1119,6 +1119,7 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @SafeVarargs
     private static <T> void assertCollectionIs(Collection<T> collection, T... elements) {
         for (T element : elements) {
             assertTrue("Did not find " + element, collection.contains(element));

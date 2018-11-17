@@ -30,8 +30,8 @@ import org.junit.Assert._
 
 class DelayedFetchTest extends EasyMockSupport {
   private val maxBytes = 1024
-  private val replicaManager = mock(classOf[ReplicaManager])
-  private val replicaQuota = mock(classOf[ReplicaQuota])
+  private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+  private val replicaQuota: ReplicaQuota = mock(classOf[ReplicaQuota])
 
   @Test
   def testFetchWithFencedEpoch(): Unit = {
@@ -58,7 +58,7 @@ class DelayedFetchTest extends EasyMockSupport {
       quota = replicaQuota,
       responseCallback = callback)
 
-    val partition = mock(classOf[Partition])
+    val partition: Partition = mock(classOf[Partition])
 
     EasyMock.expect(replicaManager.getPartitionOrException(topicPartition, expectLeader = true))
         .andReturn(partition)

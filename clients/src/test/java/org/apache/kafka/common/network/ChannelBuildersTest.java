@@ -23,7 +23,6 @@ import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.Test;
 
@@ -66,7 +65,7 @@ public class ChannelBuildersTest {
     }
 
     @SuppressWarnings("deprecation")
-    public static class OldPrincipalBuilder implements PrincipalBuilder {
+    public static class OldPrincipalBuilder implements org.apache.kafka.common.security.auth.PrincipalBuilder {
         private static boolean configured = false;
         private static final String PRINCIPAL_NAME = "bob";
 

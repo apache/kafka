@@ -514,12 +514,12 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addStateStore(final StoreBuilder storeBuilder,
+    public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final String... processorNames) {
         addStateStore(storeBuilder, false, processorNames);
     }
 
-    public final void addStateStore(final StoreBuilder storeBuilder,
+    public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");

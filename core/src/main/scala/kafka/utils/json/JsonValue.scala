@@ -59,7 +59,7 @@ trait JsonValue {
    * If this is a JSON object, return an instance of JsonObject. Otherwise, throw a JsonMappingException.
    */
   def asJsonObject: JsonObject =
-    asJsonObjectOption.getOrElse(throw new JsonMappingException(s"Expected JSON object, received $node"))
+    asJsonObjectOption.getOrElse(throw new JsonMappingException(null, s"Expected JSON object, received $node"))
 
   /**
    * If this is a JSON object, return a JsonObject wrapped by a `Some`. Otherwise, return None.
@@ -76,7 +76,7 @@ trait JsonValue {
    * If this is a JSON array, return an instance of JsonArray. Otherwise, throw a JsonMappingException.
    */
   def asJsonArray: JsonArray =
-    asJsonArrayOption.getOrElse(throw new JsonMappingException(s"Expected JSON array, received $node"))
+    asJsonArrayOption.getOrElse(throw new JsonMappingException(null, s"Expected JSON array, received $node"))
 
   /**
    * If this is a JSON array, return a JsonArray wrapped by a `Some`. Otherwise, return None.

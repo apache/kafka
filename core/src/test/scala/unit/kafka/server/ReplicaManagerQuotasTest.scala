@@ -21,7 +21,7 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.{Partition, Replica}
-import kafka.log.{Log, LogOffsetSnapshot}
+import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -150,7 +150,7 @@ class ReplicaManagerQuotasTest {
     // Set up DelayedFetch where there is data to return to a follower replica, either in-sync or out of sync
     def setupDelayedFetch(isReplicaInSync: Boolean): DelayedFetch = {
       val endOffsetMetadata = new LogOffsetMetadata(messageOffset = 100L, segmentBaseOffset = 0L, relativePositionInSegment = 500)
-      val partition = EasyMock.createMock(classOf[Partition])
+      val partition: Partition = EasyMock.createMock(classOf[Partition])
 
       val offsetSnapshot = LogOffsetSnapshot(
         logStartOffset = 0L,
@@ -160,7 +160,7 @@ class ReplicaManagerQuotasTest {
       EasyMock.expect(partition.fetchOffsetSnapshot(Optional.empty(), fetchOnlyFromLeader = true))
           .andReturn(offsetSnapshot)
 
-      val replicaManager = EasyMock.createMock(classOf[ReplicaManager])
+      val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
       EasyMock.expect(replicaManager.getPartitionOrException(
         EasyMock.anyObject[TopicPartition], EasyMock.anyBoolean()))
         .andReturn(partition).anyTimes()
@@ -191,11 +191,11 @@ class ReplicaManagerQuotasTest {
   }
 
   def setUpMocks(fetchInfo: Seq[(TopicPartition, PartitionData)], record: SimpleRecord = this.record, bothReplicasInSync: Boolean = false) {
-    val zkClient = EasyMock.createMock(classOf[KafkaZkClient])
-    val scheduler = createNiceMock(classOf[KafkaScheduler])
+    val zkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    val scheduler: KafkaScheduler = createNiceMock(classOf[KafkaScheduler])
 
     //Create log which handles both a regular read and a 0 bytes read
-    val log = createNiceMock(classOf[Log])
+    val log: Log = createNiceMock(classOf[Log])
     expect(log.logStartOffset).andReturn(0L).anyTimes()
     expect(log.logEndOffset).andReturn(20L).anyTimes()
     expect(log.logEndOffsetMetadata).andReturn(new LogOffsetMetadata(20L)).anyTimes()
@@ -224,7 +224,7 @@ class ReplicaManagerQuotasTest {
     replay(log)
 
     //Create log manager
-    val logManager = createMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = createMock(classOf[LogManager])
 
     //Return the same log for each partition as it doesn't matter
     expect(logManager.getLog(anyObject(), anyBoolean())).andReturn(Some(log)).anyTimes()
@@ -262,7 +262,7 @@ class ReplicaManagerQuotasTest {
   }
 
   def mockQuota(bound: Long): ReplicaQuota = {
-    val quota = createMock(classOf[ReplicaQuota])
+    val quota: ReplicaQuota = createMock(classOf[ReplicaQuota])
     expect(quota.isThrottled(anyObject())).andReturn(true).anyTimes()
     quota
   }

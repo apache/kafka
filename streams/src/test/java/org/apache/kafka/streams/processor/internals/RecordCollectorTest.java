@@ -214,7 +214,7 @@ public class RecordCollectorTest {
         final Metrics metrics = new Metrics();
         final Sensor sensor = metrics.sensor("skipped-records");
         final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister();
-        final MetricName metricName = new MetricName("name", "group", "description", Collections.EMPTY_MAP);
+        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
         sensor.add(metricName, new Sum());
         final RecordCollector collector = new RecordCollectorImpl(
             "test",
@@ -335,7 +335,7 @@ public class RecordCollectorTest {
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
-                return Collections.EMPTY_LIST;
+                return Collections.emptyList();
             }
 
         });
@@ -353,7 +353,7 @@ public class RecordCollectorTest {
         collector.init(new MockProducer(cluster, true, new DefaultPartitioner(), byteArraySerializer, byteArraySerializer) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
-                return Collections.EMPTY_LIST;
+                return Collections.emptyList();
             }
 
         });
@@ -364,7 +364,7 @@ public class RecordCollectorTest {
     public void testRecordHeaderPassThroughSerializer() {
         final CustomStringSerializer keySerializer = new CustomStringSerializer();
         final CustomStringSerializer valueSerializer = new CustomStringSerializer();
-        keySerializer.configure(Collections.EMPTY_MAP, true);
+        keySerializer.configure(Collections.emptyMap(), true);
 
         final RecordCollectorImpl collector = new RecordCollectorImpl(
                 "test",

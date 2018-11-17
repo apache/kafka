@@ -63,7 +63,7 @@ import java.util.function.Supplier;
  * to memory pressure or other reasons</li>
  * </ul>
  */
-public class KafkaChannel {
+public class KafkaChannel implements AutoCloseable {
     private static final long MIN_REAUTH_INTERVAL_ONE_SECOND_NANOS = 1000 * 1000 * 1000;
 
     /**

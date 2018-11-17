@@ -48,10 +48,10 @@ import static org.junit.Assert.assertTrue;
 public class AbstractStreamTest {
 
     @Test
-    public void testToInternlValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
+    public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
+        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
         expect(valueTransformerSupplier.get()).andReturn(null).times(3);
-        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier =
+        final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
         replay(valueTransformerSupplier);
         valueTransformerWithKeySupplier.get();
@@ -61,8 +61,9 @@ public class AbstractStreamTest {
     }
 
     @Test
-    public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerWithKeySupplier valueTransformerWithKeySupplier = createMock(ValueTransformerWithKeySupplier.class);
+    public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {
+        final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
+            createMock(ValueTransformerWithKeySupplier.class);
         expect(valueTransformerWithKeySupplier.get()).andReturn(null).times(3);
         replay(valueTransformerWithKeySupplier);
         valueTransformerWithKeySupplier.get();

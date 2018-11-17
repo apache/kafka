@@ -94,5 +94,7 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       true)
   }
 
+  override def initiateClose(): Unit = {}
+
   override def close(): Unit = {}
 }

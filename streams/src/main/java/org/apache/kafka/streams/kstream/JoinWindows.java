@@ -246,7 +246,7 @@ public final class JoinWindows extends Windows<Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is smaller than the window size
-     * @deprecated since 2.1. Use {@link JoinWindows#grace(Duration)} instead.
+     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)} instead.
      */
     @SuppressWarnings("deprecation")
     @Override
@@ -264,7 +264,7 @@ public final class JoinWindows extends Windows<Window> {
      * For {@link TimeWindows} the maintain duration is at least as small as the window size.
      *
      * @return the window maintain duration
-     * @deprecated since 2.1. Use {@link JoinWindows#gracePeriodMs()} instead.
+     * @deprecated since 2.1. This function should not be used anymore as retention period can be specified via {@link Materialized#withRetention(Duration)}.
      */
     @SuppressWarnings("deprecation")
     @Override

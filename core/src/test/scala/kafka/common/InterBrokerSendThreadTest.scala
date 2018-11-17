@@ -16,13 +16,14 @@
  */
 package kafka.common
 
+import java.util
+
 import kafka.utils.MockTime
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.errors.AuthenticationException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.AbstractRequest
-import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit.{Assert, Test}
 
@@ -30,7 +31,7 @@ import scala.collection.mutable
 
 class InterBrokerSendThreadTest {
   private val time = new MockTime()
-  private val networkClient = EasyMock.createMock(classOf[NetworkClient])
+  private val networkClient: NetworkClient = EasyMock.createMock(classOf[NetworkClient])
   private val completionHandler = new StubCompletionHandler
   private val requestTimeoutMs = 1000
 
@@ -43,7 +44,7 @@ class InterBrokerSendThreadTest {
 
     // poll is always called but there should be no further invocations on NetworkClient
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(Utils.mkList())
+      .andReturn(new util.ArrayList())
 
     EasyMock.replay(networkClient)
 
@@ -80,7 +81,7 @@ class InterBrokerSendThreadTest {
     EasyMock.expect(networkClient.send(clientRequest, time.milliseconds()))
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(Utils.mkList())
+      .andReturn(new util.ArrayList())
 
     EasyMock.replay(networkClient)
 
@@ -118,7 +119,7 @@ class InterBrokerSendThreadTest {
       .andReturn(0)
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(Utils.mkList())
+      .andReturn(new util.ArrayList())
 
     EasyMock.expect(networkClient.connectionFailed(node))
       .andReturn(true)
@@ -164,7 +165,7 @@ class InterBrokerSendThreadTest {
       .andReturn(0)
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
-      .andReturn(Utils.mkList())
+      .andReturn(new util.ArrayList())
 
     // rule out disconnects so the request stays for the expiry check
     EasyMock.expect(networkClient.connectionFailed(node))
