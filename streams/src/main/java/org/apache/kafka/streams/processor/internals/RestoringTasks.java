@@ -24,8 +24,4 @@ public interface RestoringTasks {
 
     StreamTask restoringTaskFor(final TopicPartition partition);
 
-    void addToRestoring(final StreamTask task);
-
-    void updateRestored(final Collection<TopicPartition> restored);
-
 }

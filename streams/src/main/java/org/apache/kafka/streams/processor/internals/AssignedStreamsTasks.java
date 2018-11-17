@@ -46,8 +46,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return restoringByPartition.get(partition);
     }
 
-    @Override
-    public void updateRestored(final Collection<TopicPartition> restored) {
+    void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
             return;
         }
@@ -77,8 +76,7 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         }
     }
 
-    @Override
-    public void addToRestoring(final StreamTask task) {
+    void addToRestoring(final StreamTask task) {
         restoring.put(task.id(), task);
         for (final TopicPartition topicPartition : task.partitions()) {
             restoringByPartition.put(topicPartition, task);
