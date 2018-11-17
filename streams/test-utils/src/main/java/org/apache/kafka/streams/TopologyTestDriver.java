@@ -325,7 +325,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogContext()
             );
             globalStateTask.initialize();
-            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, null, new RecordHeaders()));
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(ConsumerRecord.NO_TIMESTAMP, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             globalStateManager = null;
             globalStateTask = null;
