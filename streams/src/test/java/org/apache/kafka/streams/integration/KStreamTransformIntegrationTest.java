@@ -50,13 +50,13 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
+@SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
 public class KStreamTransformIntegrationTest {
     private static final int NUM_BROKERS = 1;
@@ -84,8 +84,7 @@ public class KStreamTransformIntegrationTest {
         streamsConfiguration = new Properties();
         final String applicationId = "kgrouped-stream-test-" + testNo;
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -116,6 +115,7 @@ public class KStreamTransformIntegrationTest {
             .flatTransform(() -> new Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                     private KeyValueStore<Integer, Integer> state;
 
+                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext context) {
                         state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
@@ -148,12 +148,7 @@ public class KStreamTransformIntegrationTest {
             new IntegerDeserializer(),
             18);
 
-        Collections.sort(results, new Comparator<KeyValue<Integer, Integer>>() {
-            @Override
-            public int compare(final KeyValue<Integer, Integer> o1, final KeyValue<Integer, Integer> o2) {
-                return KStreamTransformIntegrationTest.compare(o1, o2);
-            }
-        });
+        Collections.sort(results, KStreamTransformIntegrationTest::compare);
 
         assertThat(results, is(Arrays.asList(
             KeyValue.pair(1, 1),
@@ -184,6 +179,7 @@ public class KStreamTransformIntegrationTest {
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
                     private KeyValueStore<Integer, Integer> state;
 
+                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext context) {
                         state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
@@ -213,12 +209,7 @@ public class KStreamTransformIntegrationTest {
             new IntegerDeserializer(),
             6);
 
-        Collections.sort(results, new Comparator<KeyValue<Integer, Integer>>() {
-            @Override
-            public int compare(final KeyValue<Integer, Integer> o1, final KeyValue<Integer, Integer> o2) {
-                return KStreamTransformIntegrationTest.compare(o1, o2);
-            }
-        });
+        Collections.sort(results, KStreamTransformIntegrationTest::compare);
 
         assertThat(results, is(Arrays.asList(
             KeyValue.pair(2, 1),

@@ -579,8 +579,6 @@ public class KStreamImplTest extends EasyMockSupport {
     @Test
     public void shouldCallInitAndCloseOfSinglePairTransformer() {
         final ProcessorContext context = mock(ProcessorContext.class);
-        final String key = "Hello";
-        final String value = "World";
         final class KStreamImplMock extends KStreamImpl<String, String> {
             public KStreamImplMock(final Set<String> sourceNodes) {
                 super(null, null, null, sourceNodes, false, null, null);
@@ -596,7 +594,6 @@ public class KStreamImplTest extends EasyMockSupport {
                 transformer.close();
                 return null;
             }
-
         }
 
         final Transformer<String, String, KeyValue<Integer, Integer>> transformer = mock(Transformer.class);
@@ -609,6 +606,40 @@ public class KStreamImplTest extends EasyMockSupport {
         final KStreamImplMock mockStream = new KStreamImplMock(sourceNodes);
 
         mockStream.transform(() -> transformer);
+
+        verifyAll();
+    }
+
+    @Test
+    public void shouldAlwaysGetNewTransformerFromTransformerSupplier() {
+        final ProcessorContext context = mock(ProcessorContext.class);
+        final class KStreamImplMock extends KStreamImpl<String, String> {
+            public KStreamImplMock(final Set<String> sourceNodes) {
+                super(null, null, null, sourceNodes, false, null, null);
+            }
+
+            @Override
+            public <K1, V1> KStream<K1, V1> flatTransform(
+                final TransformerSupplier<? super String, ? super String, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+                final String... stateStoreNames) {
+
+                transformerSupplier.get();
+                transformerSupplier.get();
+                transformerSupplier.get();
+                return null;
+            }
+        }
+
+        final TransformerSupplier<String, String, KeyValue<Integer, Integer>> transformerSupplier =
+            mock(TransformerSupplier.class);
+        EasyMock.expect(transformerSupplier.get()).andReturn(null).times(3);
+        replayAll();
+
+        final Set<String> sourceNodes = new HashSet<>();
+        sourceNodes.add("node");
+        final KStreamImplMock mockStream = new KStreamImplMock(sourceNodes);
+
+        mockStream.transform(transformerSupplier);
 
         verifyAll();
     }

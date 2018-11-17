@@ -28,7 +28,6 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -134,48 +133,26 @@ public class CachingWindowStoreTest {
                 }
 
                 @Override
-                public Transformer<String, String, KeyValue<String, String>> get() {
-                    return new Transformer<String, String, KeyValue<String, String>>() {
-                        private WindowStore<String, String> store;
-                        private int numRecordsProcessed;
+                public KeyValue<String, String> transform(final String key, final String value) {
+                    int count = 0;
 
-                        @Override
-                        public void init(final ProcessorContext processorContext) {
-                            this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
-                            int count = 0;
+                    final KeyValueIterator<Windowed<String>, String> all = store.all();
+                    while (all.hasNext()) {
+                        count++;
+                        all.next();
+                    }
+                    assertThat(count, equalTo(numRecordsProcessed));
 
-                            final KeyValueIterator<Windowed<String>, String> all = store.all();
-                            while (all.hasNext()) {
-                                count++;
-                                all.next();
-                            }
+                    store.put(value, value);
 
-                            assertThat(count, equalTo(0));
-                        }
+                    numRecordsProcessed++;
 
-                        @Override
-                        public KeyValue<String, String> transform(final String key, final String value) {
-                            int count = 0;
+                    return new KeyValue<>(key, value);
+                }
 
-                            final KeyValueIterator<Windowed<String>, String> all = store.all();
-                            while (all.hasNext()) {
-                                count++;
-                                all.next();
-                            }
-                            assertThat(count, equalTo(numRecordsProcessed));
+                @Override
+                public void close() {
 
-                            store.put(value, value);
-
-                            numRecordsProcessed++;
-
-                            return new KeyValue<>(key, value);
-                        }
-
-                        @Override
-                        public void close() {
-
-                        }
-                    };
                 }
             }, "store-name");
 

@@ -87,7 +87,7 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldTransformInputRecordToEmptyList() {
+    public void shouldAllowEmptyListAsResultOfTransform() {
         processor.init(context);
         EasyMock.reset(transformer);
 
@@ -101,25 +101,25 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldCloseFlatTransformProcessor() {
-        transformer.close();
+    public void shouldAllowNullAsResultOfTransform() {
+        processor.init(context);
+        EasyMock.reset(transformer);
+
+        EasyMock.expect(transformer.transform(inputKey, inputValue))
+            .andReturn(null);
         replayAll();
 
-        processor.close();
+        processor.process(inputKey, inputValue);
 
         verifyAll();
     }
 
     @Test
-    public void shouldNotAllowTransformInputRecordToNull() {
-        processor.init(context);
-        EasyMock.reset(transformer);
-        EasyMock.expect(transformer.transform(inputKey, inputValue)).andReturn(null);
+    public void shouldCloseFlatTransformProcessor() {
+        transformer.close();
         replayAll();
 
-        exception.expect(NullPointerException.class);
-        exception.expectMessage("result of transform can't be null");
-        processor.process(inputKey, inputValue);
+        processor.close();
 
         verifyAll();
     }

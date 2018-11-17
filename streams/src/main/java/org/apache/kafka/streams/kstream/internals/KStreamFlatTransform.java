@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Objects;
-
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
@@ -56,9 +54,10 @@ public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupp
         @Override
         public void process(final KIn key, final VIn value) {
             final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(key, value);
-            Objects.requireNonNull(pairs, "result of transform can't be null");
-            for (final KeyValue<KOut, VOut> pair : pairs) {
-                context().forward(pair.key, pair.value);
+            if (pairs != null) {
+                for (final KeyValue<KOut, VOut> pair : pairs) {
+                    context().forward(pair.key, pair.value);
+                }
             }
         }
 
