@@ -20,7 +20,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -104,16 +107,22 @@ final class ClusterConnectionStates {
      * Enter the connecting state for the given connection.
      * @param id the id of the connection
      * @param now the current time
+     * @throws UnknownHostException 
      */
-    public void connecting(String id, long now) {
+    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         if (nodeState.containsKey(id)) {
-            NodeConnectionState node = nodeState.get(id);
-            node.lastConnectAttemptMs = now;
-            node.state = ConnectionState.CONNECTING;
+            NodeConnectionState connectionState = nodeState.get(id);
+            connectionState.lastConnectAttemptMs = now;
+            connectionState.state = ConnectionState.CONNECTING;
+            connectionState.moveToNextAddress();
         } else {
             nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                this.reconnectBackoffInitMs));
+                this.reconnectBackoffInitMs, ClientUtils.resolve(host, clientDnsLookup)));
         }
+    }
+
+    public InetAddress currentAddress(String id) {
+        return nodeState.get(id).currentAddress();
     }
 
     /**
@@ -334,14 +343,29 @@ final class ClusterConnectionStates {
         long reconnectBackoffMs;
         // Connection is being throttled if current time < throttleUntilTimeMs.
         long throttleUntilTimeMs;
+        private final List<InetAddress> addresses;
+        private int index = 0;
 
-        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs) {
+        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
+                List<InetAddress> addresses) {
             this.state = state;
+            this.addresses = addresses;
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
             this.throttleUntilTimeMs = 0;
+        }
+
+        public InetAddress currentAddress() {
+            return addresses.get(index);
+        }
+
+        /*
+         * implementing a ring buffer with the addresses
+         */
+        public void moveToNextAddress() {
+            index = (index + 1) % addresses.size();
         }
 
         public String toString() {

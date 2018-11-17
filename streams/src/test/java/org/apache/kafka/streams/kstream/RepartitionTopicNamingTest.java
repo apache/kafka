@@ -26,6 +26,7 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -38,6 +39,7 @@ import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class RepartitionTopicNamingTest {
 
     private final KeyValueMapper<String, String, String> kvMapper = (k, v) -> k + v;
@@ -101,8 +103,8 @@ public class RepartitionTopicNamingTest {
         try {
             final StreamsBuilder builder = new StreamsBuilder();
             final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
-            kGroupedStream.windowedBy(TimeWindows.of(10)).count();
-            kGroupedStream.windowedBy(TimeWindows.of(30)).count();
+            kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
+            kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
             builder.build();
             fail("Should not build re-using repartition topic name");
         } catch (final TopologyException te) {
@@ -120,8 +122,8 @@ public class RepartitionTopicNamingTest {
             final KStream<String, String> stream2 = builder.<String, String>stream("topic2").selectKey((k, v) -> k);
             final KStream<String, String> stream3 = builder.<String, String>stream("topic3").selectKey((k, v) -> k);
 
-            final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2, JoinWindows.of(30), Joined.named("join-repartition"));
-            joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.of(30), Joined.named("join-repartition"));
+            final KStream<String, String> joined = stream1.join(stream2, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(30L)), Joined.named("join-repartition"));
+            joined.join(stream3, (v1, v2) -> v1 + v2, JoinWindows.of(Duration.ofMillis(30L)), Joined.named("join-repartition"));
             builder.build();
             fail("Should not build re-using repartition topic name");
         } catch (final TopologyException te) {
@@ -136,8 +138,8 @@ public class RepartitionTopicNamingTest {
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
         final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
-        kGroupedStream.windowedBy(TimeWindows.of(10)).count();
-        kGroupedStream.windowedBy(TimeWindows.of(30)).count();
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
         builder.build(properties);
     }
 
@@ -271,9 +273,9 @@ public class RepartitionTopicNamingTest {
 
         if (isGroupByKey) {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(10)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(10)).count();
+                selectKeyStream.groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
             }
         } else {
             if (otherOperations) {
@@ -296,15 +298,15 @@ public class RepartitionTopicNamingTest {
         final String groupedSessionWindowRepartitionTopicName = "session-window-grouping";
         if (isGroupByKey) {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(10)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(10)).count();
+                selectKeyStream.groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             }
         } else {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(10)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(10)).count();
+                selectKeyStream.groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             }
         }
 
@@ -355,7 +357,7 @@ public class RepartitionTopicNamingTest {
 
         final String joinRepartitionTopicName = "my-join";
         updatedStreamOne.join(updatedStreamTwo, (v1, v2) -> v1 + v2,
-                JoinWindows.of(1000), Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), joinRepartitionTopicName));
+                JoinWindows.of(Duration.ofMillis(1000L)), Joined.with(Serdes.String(), Serdes.String(), Serdes.String(), joinRepartitionTopicName));
 
         return builder.build().describe().toString();
     }
@@ -402,7 +404,7 @@ public class RepartitionTopicNamingTest {
 
         mappedStream.filter((k, v) -> k.equals("A"))
                 .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
-                        JoinWindows.of(5000),
+                        JoinWindows.of(Duration.ofMillis(5000L)),
                         Joined.with(Serdes.String(), Serdes.String(), Serdes.Long(), fourthRepartitionTopicName))
                 .to(JOINED_TOPIC);
 

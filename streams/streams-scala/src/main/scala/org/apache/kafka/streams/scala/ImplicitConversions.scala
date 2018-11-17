@@ -19,6 +19,8 @@
  */
 package org.apache.kafka.streams.scala
 
+import org.apache.kafka.common.serialization.Serde
+import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{
   KGroupedStream => KGroupedStreamJ,
   KGroupedTable => KGroupedTableJ,
@@ -27,12 +29,10 @@ import org.apache.kafka.streams.kstream.{
   SessionWindowedKStream => SessionWindowedKStreamJ,
   TimeWindowedKStream => TimeWindowedKStreamJ
 }
+import org.apache.kafka.streams.processor.StateStore
 import org.apache.kafka.streams.scala.kstream._
-import org.apache.kafka.streams.KeyValue
-import org.apache.kafka.common.serialization.Serde
 
 import scala.language.implicitConversions
-import org.apache.kafka.streams.processor.StateStore
 
 /**
  * Implicit conversions between the Scala wrapper objects and the underlying Java
@@ -61,10 +61,10 @@ object ImplicitConversions {
   implicit def tuple2ToKeyValue[K, V](tuple: (K, V)): KeyValue[K, V] = new KeyValue(tuple._1, tuple._2)
 
   // we would also like to allow users implicit serdes
-  // and these implicits will convert them to `Serialized`, `Produced` or `Consumed`
+  // and these implicits will convert them to `Grouped`, `Produced` or `Consumed`
 
-  implicit def serializedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Serialized[K, V] =
-    Serialized.`with`[K, V]
+  implicit def groupedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] =
+    Grouped.`with`[K, V]
 
   implicit def consumedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Consumed[K, V] =
     Consumed.`with`[K, V]

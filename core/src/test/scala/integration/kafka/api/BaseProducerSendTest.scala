@@ -26,7 +26,7 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.record.TimestampType
@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
@@ -84,15 +84,6 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   protected def registerProducer(producer: KafkaProducer[Array[Byte], Array[Byte]]): KafkaProducer[Array[Byte], Array[Byte]] = {
     producers += producer
     producer
-  }
-
-  private def pollUntilNumRecords(numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
-      records.size == numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
-    records
   }
 
   /**
@@ -329,7 +320,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       consumer.assign(List(new TopicPartition(topic, partition)).asJava)
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val records = pollUntilNumRecords(numRecords)
+      val records = TestUtils.consumeRecords(consumer, numRecords)
 
       records.zipWithIndex.foreach { case (record, i) =>
         assertEquals(topic, record.topic)
@@ -496,7 +487,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         producer.flush()
         assertTrue("All requests are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        pollUntilNumRecords(numRecords)
+        TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
       } finally {
         producer.close()
       }

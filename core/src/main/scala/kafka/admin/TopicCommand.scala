@@ -36,6 +36,7 @@ import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.io.StdIn
 
 object TopicCommand extends Logging {
 
@@ -102,7 +103,7 @@ object TopicCommand extends Logging {
     try {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignment, configs, update = false)
+        adminZkClient.createTopicWithAssignment(topic, configs, assignment)
       } else {
         CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
         val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
@@ -390,7 +391,7 @@ object TopicCommand extends Logging {
 
   def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
-    if (!Console.readLine().equalsIgnoreCase("y")) {
+    if (!StdIn.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
       Exit.exit(0)
     }

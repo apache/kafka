@@ -20,8 +20,8 @@ from kafkatest.services.trogdor.task_spec import TaskSpec
 
 class ProduceBenchWorkloadSpec(TaskSpec):
     def __init__(self, start_ms, duration_ms, producer_node, bootstrap_servers,
-                 target_messages_per_sec, max_messages, producer_conf,
-                 inactive_topics, active_topics):
+                 target_messages_per_sec, max_messages, producer_conf, admin_client_conf,
+                 common_client_conf, inactive_topics, active_topics):
         super(ProduceBenchWorkloadSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.workload.ProduceBenchSpec"
         self.message["producerNode"] = producer_node
@@ -29,6 +29,8 @@ class ProduceBenchWorkloadSpec(TaskSpec):
         self.message["targetMessagesPerSec"] = target_messages_per_sec
         self.message["maxMessages"] = max_messages
         self.message["producerConf"] = producer_conf
+        self.message["adminClientConf"] = admin_client_conf
+        self.message["commonClientConf"] = common_client_conf
         self.message["inactiveTopics"] = inactive_topics
         self.message["activeTopics"] = active_topics
 

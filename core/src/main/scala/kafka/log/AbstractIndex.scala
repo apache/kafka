@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.io.{Closeable, File, IOException, RandomAccessFile}
+import java.io.{Closeable, File, RandomAccessFile}
 import java.nio.channels.FileChannel
 import java.nio.file.Files
 import java.nio.{ByteBuffer, MappedByteBuffer}
@@ -223,13 +223,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    *         not exist
    */
   def deleteIfExists(): Boolean = {
-    inLock(lock) {
-      // On JVM, a memory mapping is typically unmapped by garbage collector.
-      // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
-      // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
-      // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
-      safeForceUnmap()
-    }
+    closeHandler()
     Files.deleteIfExists(file.toPath)
   }
 
@@ -251,9 +245,14 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   /** Close the index */
   def close() {
     trimToValidSize()
+    closeHandler()
   }
 
   def closeHandler(): Unit = {
+    // On JVM, a memory mapping is typically unmapped by garbage collector.
+    // However, in some cases it can pause application threads(STW) for a long moment reading metadata from a physical disk.
+    // To prevent this, we forcefully cleanup memory mapping within proper execution which never affects API responsiveness.
+    // See https://issues.apache.org/jira/browse/KAFKA-4614 for the details.
     inLock(lock) {
       safeForceUnmap()
     }

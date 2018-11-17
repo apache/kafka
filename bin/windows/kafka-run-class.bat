@@ -27,7 +27,7 @@ set BASE_DIR=%CD%
 popd
 
 IF ["%SCALA_VERSION%"] EQU [""] (
-  set SCALA_VERSION=2.11.12
+  set SCALA_VERSION=2.12.7
 )
 
 IF ["%SCALA_BINARY_VERSION%"] EQU [""] (
@@ -111,7 +111,7 @@ IF ["%JMX_PORT%"] NEQ [""] (
 
 rem Log directory to use
 IF ["%LOG_DIR%"] EQU [""] (
-    set LOG_DIR="%BASE_DIR~%/logs"
+    set LOG_DIR="%BASE_DIR%/logs"
 )
 
 rem Log4j settings

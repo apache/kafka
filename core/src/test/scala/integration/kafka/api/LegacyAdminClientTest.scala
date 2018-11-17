@@ -35,6 +35,8 @@ import scala.collection.JavaConverters._
 /**
   * Tests for the deprecated Scala AdminClient.
   */
+@deprecated("The Scala AdminClient has been deprecated in favour of org.apache.kafka.clients.admin.AdminClient",
+  since = "0.11.0")
 class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1

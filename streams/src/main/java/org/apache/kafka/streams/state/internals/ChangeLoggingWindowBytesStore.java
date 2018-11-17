@@ -16,10 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.time.Instant;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -53,48 +51,27 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
         return bytesStore.fetch(key, timestamp);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
     }
 
-    @Override
-    public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
-    }
-
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
         return bytesStore.fetch(keyFrom, keyTo, from, to);
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                           final Bytes to,
-                                                           final Instant fromTime,
-                                                           final Instant toTime) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondInstant(toTime, "toTime");
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
-    }
-
-    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         return bytesStore.all();
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return bytesStore.fetchAll(timeFrom, timeTo);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
     }
 
     @Override

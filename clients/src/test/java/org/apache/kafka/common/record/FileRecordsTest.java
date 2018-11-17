@@ -23,8 +23,6 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
-import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Optional;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -43,10 +42,18 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-public class FileRecordsTest extends EasyMockSupport {
+public class FileRecordsTest {
 
     private byte[][] values = new byte[][] {
             "abcd".getBytes(),
@@ -66,10 +73,7 @@ public class FileRecordsTest extends EasyMockSupport {
     public void testAppendProtectsFromOverflow() throws Exception {
         File fileMock = mock(File.class);
         FileChannel fileChannelMock = mock(FileChannel.class);
-        EasyMock.expect(fileChannelMock.size()).andStubReturn((long) Integer.MAX_VALUE);
-        EasyMock.expect(fileChannelMock.position(Integer.MAX_VALUE)).andReturn(fileChannelMock);
-
-        replayAll();
+        when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
         FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
         append(records, values);
@@ -79,9 +83,7 @@ public class FileRecordsTest extends EasyMockSupport {
     public void testOpenOversizeFile() throws Exception {
         File fileMock = mock(File.class);
         FileChannel fileChannelMock = mock(FileChannel.class);
-        EasyMock.expect(fileChannelMock.size()).andStubReturn(Integer.MAX_VALUE + 5L);
-
-        replayAll();
+        when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
         new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
     }
@@ -221,7 +223,7 @@ public class FileRecordsTest extends EasyMockSupport {
         position += message2Size + batches.get(2).sizeInBytes();
 
         int message4Size = batches.get(3).sizeInBytes();
-        assertEquals("Should be able to find fourth message from a non-existant offset",
+        assertEquals("Should be able to find fourth message from a non-existent offset",
                 new FileRecords.LogOffsetPosition(50L, position, message4Size),
                 fileRecords.searchForOffsetWithSize(3, position));
         assertEquals("Should be able to find fourth message by correct offset",
@@ -262,16 +264,16 @@ public class FileRecordsTest extends EasyMockSupport {
      */
     @Test
     public void testTruncateNotCalledIfSizeIsSameAsTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null);
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
+        when(channelMock.position(42L)).thenReturn(null);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(42);
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
+        verify(channelMock, times(0)).truncate(anyLong());
     }
 
     /**
@@ -280,11 +282,9 @@ public class FileRecordsTest extends EasyMockSupport {
      */
     @Test
     public void testTruncateNotCalledIfSizeIsBiggerThanTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null);
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
 
@@ -295,7 +295,7 @@ public class FileRecordsTest extends EasyMockSupport {
             // expected
         }
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
     }
 
     /**
@@ -303,17 +303,16 @@ public class FileRecordsTest extends EasyMockSupport {
      */
     @Test
     public void testTruncateIfSizeIsDifferentToTargetSize() throws IOException {
-        FileChannel channelMock = EasyMock.createMock(FileChannel.class);
+        FileChannel channelMock = mock(FileChannel.class);
 
-        EasyMock.expect(channelMock.size()).andReturn(42L).atLeastOnce();
-        EasyMock.expect(channelMock.position(42L)).andReturn(null).once();
-        EasyMock.expect(channelMock.truncate(23L)).andReturn(null).once();
-        EasyMock.replay(channelMock);
+        when(channelMock.size()).thenReturn(42L);
+        when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
         FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(23);
 
-        EasyMock.verify(channelMock);
+        verify(channelMock, atLeastOnce()).size();
+        verify(channelMock).truncate(23);
     }
 
     /**
@@ -322,12 +321,12 @@ public class FileRecordsTest extends EasyMockSupport {
     @Test
     public void testPreallocateTrue() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         long position = fileRecords.channel().position();
         int size = fileRecords.sizeInBytes();
         assertEquals(0, position);
         assertEquals(0, size);
-        assertEquals(512 * 1024 * 1024, temp.length());
+        assertEquals(1024 * 1024, temp.length());
     }
 
     /**
@@ -336,7 +335,7 @@ public class FileRecordsTest extends EasyMockSupport {
     @Test
     public void testPreallocateFalse() throws IOException {
         File temp = tempFile();
-        FileRecords set = FileRecords.open(temp, false, 512 * 1024 * 1024, false);
+        FileRecords set = FileRecords.open(temp, false, 1024 * 1024, false);
         long position = set.channel().position();
         int size = set.sizeInBytes();
         assertEquals(0, position);
@@ -350,7 +349,7 @@ public class FileRecordsTest extends EasyMockSupport {
     @Test
     public void testPreallocateClearShutdown() throws IOException {
         File temp = tempFile();
-        FileRecords fileRecords = FileRecords.open(temp, false, 512 * 1024 * 1024, true);
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
         append(fileRecords, values);
 
         int oldPosition = (int) fileRecords.channel().position();
@@ -360,7 +359,7 @@ public class FileRecordsTest extends EasyMockSupport {
         fileRecords.close();
 
         File tempReopen = new File(temp.getAbsolutePath());
-        FileRecords setReopen = FileRecords.open(tempReopen, true, 512 * 1024 * 1024, true);
+        FileRecords setReopen = FileRecords.open(tempReopen, true, 1024 * 1024, true);
         int position = (int) setReopen.channel().position();
         int size = setReopen.sizeInBytes();
 
@@ -382,8 +381,57 @@ public class FileRecordsTest extends EasyMockSupport {
         // Lazy down-conversion will not return any messages for a partial input batch
         TopicPartition tp = new TopicPartition("topic-1", 0);
         LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, slice, RecordBatch.MAGIC_VALUE_V0, 0, Time.SYSTEM);
-        Iterator<ConvertedRecords> it = lazyRecords.iterator(16 * 1024L);
+        Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(16 * 1024L);
         assertTrue("No messages should be returned", !it.hasNext());
+    }
+
+    @Test
+    public void testSearchForTimestamp() throws IOException {
+        for (RecordVersion version : RecordVersion.values()) {
+            testSearchForTimestamp(version);
+        }
+    }
+
+    private void testSearchForTimestamp(RecordVersion version) throws IOException {
+        File temp = tempFile();
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
+        appendWithOffsetAndTimestamp(fileRecords, version, 10L, 5, 0);
+        appendWithOffsetAndTimestamp(fileRecords, version, 11L, 6, 1);
+
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
+                fileRecords.searchForTimestamp(9L, 0, 0L), version);
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(10L, 5, Optional.of(0)),
+                fileRecords.searchForTimestamp(10L, 0, 0L), version);
+        assertFoundTimestamp(new FileRecords.TimestampAndOffset(11L, 6, Optional.of(1)),
+                fileRecords.searchForTimestamp(11L, 0, 0L), version);
+        assertNull(fileRecords.searchForTimestamp(12L, 0, 0L));
+    }
+
+    private void assertFoundTimestamp(FileRecords.TimestampAndOffset expected,
+                                      FileRecords.TimestampAndOffset actual,
+                                      RecordVersion version) {
+        if (version == RecordVersion.V0) {
+            assertNull("Expected no match for message format v0", actual);
+        } else {
+            assertNotNull("Expected to find timestamp for message format " + version, actual);
+            assertEquals("Expected matching timestamps for message format" + version, expected.timestamp, actual.timestamp);
+            assertEquals("Expected matching offsets for message format " + version, expected.offset, actual.offset);
+            Optional<Integer> expectedLeaderEpoch = version.value >= RecordVersion.V2.value ?
+                    expected.leaderEpoch : Optional.empty();
+            assertEquals("Non-matching leader epoch for version " + version, expectedLeaderEpoch, actual.leaderEpoch);
+        }
+    }
+
+    private void appendWithOffsetAndTimestamp(FileRecords fileRecords,
+                                              RecordVersion recordVersion,
+                                              long timestamp,
+                                              long offset,
+                                              int leaderEpoch) throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(128);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, recordVersion.value,
+                CompressionType.NONE, TimestampType.CREATE_TIME, offset, timestamp, leaderEpoch);
+        builder.append(new SimpleRecord(timestamp, new byte[0], new byte[0]));
+        fileRecords.append(builder.build());
     }
 
     @Test
@@ -490,7 +538,7 @@ public class FileRecordsTest extends EasyMockSupport {
         for (long readSize : maximumReadSize) {
             TopicPartition tp = new TopicPartition("topic-1", 0);
             LazyDownConversionRecords lazyRecords = new LazyDownConversionRecords(tp, fileRecords, toMagic, firstOffset, Time.SYSTEM);
-            Iterator<ConvertedRecords> it = lazyRecords.iterator(readSize);
+            Iterator<ConvertedRecords<?>> it = lazyRecords.iterator(readSize);
             while (it.hasNext())
                 convertedRecords.add(it.next().records());
             verifyConvertedRecords(initialRecords, initialOffsets, convertedRecords, compressionType, toMagic);

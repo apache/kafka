@@ -198,6 +198,7 @@ public class AbstractProcessorContextTest {
             return null;
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
             return null;
@@ -216,9 +217,11 @@ public class AbstractProcessorContextTest {
         @Override
         public <K, V> void forward(final K key, final V value, final To to) {}
 
+        @SuppressWarnings("deprecation")
         @Override
         public <K, V> void forward(final K key, final V value, final int childIndex) {}
 
+        @SuppressWarnings("deprecation")
         @Override
         public <K, V> void forward(final K key, final V value, final String childName) {}
 

@@ -61,13 +61,13 @@ public class WorkerConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceVariable() throws Exception {
+    public void testReplaceVariable() {
         Map<String, String> result = configTransformer.transform(MY_CONNECTOR, Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
         assertEquals(TEST_RESULT, result.get(MY_KEY));
     }
 
     @Test
-    public void testReplaceVariableWithTTL() throws Exception {
+    public void testReplaceVariableWithTTL() {
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.NONE);
 
@@ -78,7 +78,7 @@ public class WorkerConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceVariableWithTTLAndScheduleRestart() throws Exception {
+    public void testReplaceVariableWithTTLAndScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
@@ -90,7 +90,7 @@ public class WorkerConfigTransformerTest {
     }
 
     @Test
-    public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() throws Exception {
+    public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() {
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andReturn(Herder.ConfigReloadAction.RESTART);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);

@@ -209,7 +209,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     val readCommittedConsumer = createReadCommittedConsumer(props = consumerProps)
 
     readCommittedConsumer.assign(Set(new TopicPartition(topic1, 0)).asJava)
-    val records = consumeRecords(readCommittedConsumer, numMessages = 2)
+    val records = consumeRecords(readCommittedConsumer, numRecords = 2)
     assertEquals(2, records.size)
 
     val first = records.head

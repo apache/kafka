@@ -89,7 +89,7 @@ public final class SessionWindows {
      * @return a new window specification with default maintain duration of 1 day
      *
      * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative
-     * @deprecated User {@link #with(Duration)} instead.
+     * @deprecated Use {@link #with(Duration)} instead.
      */
     @Deprecated
     public static SessionWindows with(final long inactivityGapMs) {

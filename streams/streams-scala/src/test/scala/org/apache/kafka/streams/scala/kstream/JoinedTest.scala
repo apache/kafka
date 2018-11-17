@@ -34,4 +34,14 @@ class JoinedTest extends FlatSpec with Matchers {
     joined.valueSerde.getClass shouldBe Serdes.Long.getClass
     joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
   }
+
+  "Create a Joined" should "create a Joined with Serdes and repartition topic name" in {
+    val repartitionTopicName = "repartition-topic"
+    val joined: Joined[String, Long, Int] = Joined.`with`(repartitionTopicName)
+
+    joined.keySerde.getClass shouldBe Serdes.String.getClass
+    joined.valueSerde.getClass shouldBe Serdes.Long.getClass
+    joined.otherValueSerde.getClass shouldBe Serdes.Integer.getClass
+    joined.name() shouldBe repartitionTopicName
+  }
 }

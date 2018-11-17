@@ -43,11 +43,7 @@ trait DecodeJson[T] {
   def decode(node: JsonNode): T =
     decodeEither(node) match {
       case Right(x) => x
-      case Left(x) =>
-        // Non-deprecated constructors were only introduced in Jackson 2.7, so stick with the deprecated one in case
-        // people have older versions of Jackson in their classpath. Once the Scala clients are removed, we can loosen
-        // this restriction.
-        throw new JsonMappingException(x)
+      case Left(x) => throw new JsonMappingException(null, x)
     }
 
 }

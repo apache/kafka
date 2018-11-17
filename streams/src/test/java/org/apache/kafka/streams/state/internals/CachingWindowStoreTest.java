@@ -53,7 +53,7 @@ import java.util.UUID;
 import static java.time.Duration.ofHours;
 import static java.time.Duration.ofMinutes;
 import static java.time.Instant.ofEpochMilli;
-import static org.apache.kafka.common.utils.Utils.mkList;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
@@ -114,7 +114,25 @@ public class CachingWindowStoreTest {
 
         builder.stream(topic,
             Consumed.with(Serdes.String(), Serdes.String()))
-            .transform(new TransformerSupplier<String, String, KeyValue<String, String>>() {
+            .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
+                private WindowStore<String, String> store;
+                private int numRecordsProcessed;
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public void init(final ProcessorContext processorContext) {
+                    this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
+                    int count = 0;
+
+                    final KeyValueIterator<Windowed<String>, String> all = store.all();
+                    while (all.hasNext()) {
+                        count++;
+                        all.next();
+                    }
+
+                    assertThat(count, equalTo(0));
+                }
+
                 @Override
                 public Transformer<String, String, KeyValue<String, String>> get() {
                     return new Transformer<String, String, KeyValue<String, String>>() {
@@ -419,7 +437,7 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        final List<KeyValue<Long, byte[]>> expected = mkList(
+        final List<KeyValue<Long, byte[]>> expected = asList(
             KeyValue.pair(0L, bytesValue("0001")),
             KeyValue.pair(1L, bytesValue("0003")),
             KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
@@ -437,7 +455,7 @@ public class CachingWindowStoreTest {
         cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
         verifyKeyValueList(
-            mkList(
+            asList(
                 windowedPair("a", "0001", 0),
                 windowedPair("a", "0003", 1),
                 windowedPair("a", "0005", SEGMENT_INTERVAL)
@@ -446,12 +464,12 @@ public class CachingWindowStoreTest {
         );
 
         verifyKeyValueList(
-            mkList(windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)),
+            asList(windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)),
             toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
         );
 
         verifyKeyValueList(
-            mkList(
+            asList(
                 windowedPair("a", "0001", 0),
                 windowedPair("a", "0003", 1),
                 windowedPair("aa", "0002", 0),

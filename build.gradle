@@ -29,11 +29,11 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
-    classpath 'org.scoverage:gradle-scoverage:2.4.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.0'
-    classpath 'org.owasp:dependency-check-gradle:3.3.2'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.15.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.4"
+    classpath 'org.scoverage:gradle-scoverage:2.5.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.2'
+    classpath 'org.owasp:dependency-check-gradle:3.3.4'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.16.0"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.5"
   }
 }
 
@@ -155,9 +155,14 @@ subprojects {
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
 
-  compileJava {
+  tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
-    options.compilerArgs << "-Xlint:deprecation,unchecked"
+    options.compilerArgs << "-Xlint:all"
+    // temporary exclusions until all the warnings are fixed
+    options.compilerArgs << "-Xlint:-rawtypes"
+    options.compilerArgs << "-Xlint:-serial"
+    options.compilerArgs << "-Xlint:-try"
+    options.compilerArgs << "-Werror"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
@@ -369,8 +374,7 @@ subprojects {
 
   if (!JavaVersion.current().isJava11Compatible()) {
     spotbugs {
-      // 3.1.6 has a regression that breaks our build, seems to be https://github.com/spotbugs/spotbugs/pull/688
-      toolVersion = '3.1.5'
+      toolVersion = '3.1.8'
       excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
       ignoreFailures = false
     }
@@ -581,6 +585,7 @@ project(':core') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
+    testCompile libs.mockitoCore
     testCompile libs.easymock
     testCompile(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
@@ -820,6 +825,7 @@ project(':clients') {
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
+    compile libs.zstd
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
@@ -829,9 +835,7 @@ project(':clients') {
 
     testCompile libs.bcpkix
     testCompile libs.junit
-    testCompile libs.easymock
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
@@ -974,6 +978,7 @@ project(':streams') {
     testCompile libs.junit
     testCompile libs.easymock
     testCompile libs.bcpkix
+    testCompile libs.hamcrest
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntime libs.slf4jlog4j

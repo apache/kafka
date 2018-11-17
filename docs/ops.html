@@ -257,7 +257,7 @@
     </li>
   </ul>
 
-  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is 
+  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is
   of 15, then, offset at 10 will actually be selected.
 
   <p>
@@ -969,6 +969,16 @@
         <td>between 0 and 1, ideally &gt 0.3</td>
       </tr>
       <tr>
+        <td>The number of connections disconnected on a processor due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[SASL_PLAINTEXT|SASL_SSL],networkProcessor=&lt;#&gt;,name=expired-connections-killed-count</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this (listener, processor) combination</td>
+      </tr>
+      <tr>
+        <td>The total number of connections disconnected, across all processors, due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this broker</td>
+      </tr>
+      <tr>
         <td>The average fraction of time the request handler threads are idle</td>
         <td>kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent</td>
         <td>between 0 and 1, ideally &gt 0.3</td>
@@ -1150,6 +1160,41 @@
       <tr>
         <td>failed-authentication-total</td>
         <td>Total connections that failed authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-reauthentication-rate</td>
+        <td>Connections per second that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-reauthentication-total</td>
+        <td>Total connections that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-max</td>
+        <td>The maximum latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-avg</td>
+        <td>The average latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-rate</td>
+        <td>Connections per second that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-total</td>
+        <td>Total connections that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-no-reauth-total</td>
+        <td>Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication.  May only be non-zero </td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
     </tbody>
@@ -1544,6 +1589,16 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>commit-total</td>
         <td>The total number of commit calls. </td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-avg</td>
+        <td>The average observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-max</td>
+        <td>The max observed lateness of records.</td>
         <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
  </tbody>

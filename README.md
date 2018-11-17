@@ -6,7 +6,9 @@ You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://
 
 Kafka requires Gradle 4.7 or higher.
 
-Java 8 should be used for building in order to support both Java 8 and Java 10 at runtime.
+Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
+
+Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
 
 ### First bootstrap and download the wrapper ###
     cd kafka_source_dir
@@ -64,26 +66,33 @@ Generate coverage for a single module, i.e.:
     ./gradlew clients:reportCoverage
     
 ### Building a binary release gzipped tar ball ###
-    ./gradlew clean
-    ./gradlew releaseTarGz
+    ./gradlew clean releaseTarGz
 
 The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
 
-    ./gradlew releaseTarGz -x signArchives
+    ./gradlew clean releaseTarGz -x signArchives
 
 The release file can be found inside `./core/build/distributions/`.
 
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
-*Note that if building the jars with a version other than 2.11.12, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+### Running a task with a particular version of Scala (either 2.11.x or 2.12.x) ###
+*Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.12):
+You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
-    ./gradlew -PscalaVersion=2.11 jar
-    ./gradlew -PscalaVersion=2.11 test
-    ./gradlew -PscalaVersion=2.11 releaseTarGz
+    ./gradlew -PscalaVersion=2.12 jar
+    ./gradlew -PscalaVersion=2.12 test
+    ./gradlew -PscalaVersion=2.12 releaseTarGz
+
+### Running a task with all scala versions ###
+
+Append `All` to the task name:
+
+    ./gradlew testAll
+    ./gradlew jarAll
+    ./gradlew releaseTarGzAll
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -103,15 +112,6 @@ This is for `core`, `examples` and `clients`
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
-
-### Building the jar for all scala versions and for all projects ###
-    ./gradlew jarAll
-
-### Running unit/integration tests for all scala versions and for all projects ###
-    ./gradlew testAll
-
-### Building a binary release gzipped tar ball for all scala versions ###
-    ./gradlew releaseTarGzAll
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
     ./gradlew uploadArchivesAll

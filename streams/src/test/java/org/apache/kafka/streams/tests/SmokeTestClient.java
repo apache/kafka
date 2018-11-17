@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
@@ -33,7 +34,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -125,8 +125,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         data.process(SmokeTestUtil.printProcessorSupplier("data"));
 
         // min
-        final KGroupedStream<String, Integer> groupedData =
-            data.groupByKey(Serialized.with(stringSerde, intSerde));
+        final KGroupedStream<String, Integer> groupedData = data.groupByKey(Grouped.with(stringSerde, intSerde));
 
         groupedData
             .windowedBy(TimeWindows.of(Duration.ofDays(1)))
@@ -239,7 +238,7 @@ public class SmokeTestClient extends SmokeTestUtil {
 
         // test repartition
         final Agg agg = new Agg();
-        cntTable.groupBy(agg.selector(), Serialized.with(stringSerde, longSerde))
+        cntTable.groupBy(agg.selector(), Grouped.with(stringSerde, longSerde))
             .aggregate(agg.init(), agg.adder(), agg.remover(),
                 Materialized.<String, Long>as(Stores.inMemoryKeyValueStore("cntByCnt"))
                     .withKeySerde(Serdes.String())

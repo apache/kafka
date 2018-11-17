@@ -28,6 +28,7 @@
   <allow pkg="org.slf4j" />
   <allow pkg="org.junit" />
   <allow pkg="org.hamcrest" />
+  <allow pkg="org.mockito" />
   <allow pkg="org.easymock" />
   <allow pkg="org.powermock" />
   <allow pkg="java.security" />
@@ -130,7 +131,6 @@
     </subpackage>
 
     <subpackage name="requests">
-      <allow pkg="org.apache.kafka.clients.admin" />
       <allow pkg="org.apache.kafka.common.acl" />
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.network" />

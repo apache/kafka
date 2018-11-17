@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.time.Instant;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -180,6 +178,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
@@ -205,13 +204,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
     }
 
-    @Override
-    public WindowStoreIterator<byte[]> fetch(final Bytes key, final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
-    }
-
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
@@ -241,16 +234,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         );
     }
 
-    @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
-                                                           final Bytes to,
-                                                           final Instant fromTime,
-                                                           final Instant toTime) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondInstant(toTime, "toTime");
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
-    }
-
     private V fetchPrevious(final Bytes key, final long timestamp) {
         final byte[] value = underlying.fetch(key, timestamp);
         if (value != null) {
@@ -274,7 +257,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             cacheFunction
         );
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         validateStoreOpen();
@@ -293,12 +277,5 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                 windowSize,
                 cacheFunction
         );
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
     }
 }

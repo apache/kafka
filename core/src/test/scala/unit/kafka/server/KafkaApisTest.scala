@@ -17,16 +17,15 @@
 
 package kafka.server
 
-import java.lang.{Long => JLong}
 import java.net.InetAddress
 import java.util
 import java.util.{Collections, Optional}
+import java.util.Arrays.asList
 
 import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
-import kafka.log.TimestampOffset
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.SendResponse
 import kafka.security.auth.Authorizer
@@ -39,13 +38,13 @@ import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.UpdateMetadataRequest.{Broker, EndPoint}
 import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
-import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Test}
@@ -55,24 +54,24 @@ import scala.collection.Map
 
 class KafkaApisTest {
 
-  private val requestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
-  private val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
-  private val replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
-  private val groupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
-  private val adminManager = EasyMock.createNiceMock(classOf[AdminManager])
-  private val txnCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
-  private val controller = EasyMock.createNiceMock(classOf[KafkaController])
-  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val requestChannel: RequestChannel = EasyMock.createNiceMock(classOf[RequestChannel])
+  private val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+  private val replicaManager: ReplicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
+  private val groupCoordinator: GroupCoordinator = EasyMock.createNiceMock(classOf[GroupCoordinator])
+  private val adminManager: AdminManager = EasyMock.createNiceMock(classOf[AdminManager])
+  private val txnCoordinator: TransactionCoordinator = EasyMock.createNiceMock(classOf[TransactionCoordinator])
+  private val controller: KafkaController = EasyMock.createNiceMock(classOf[KafkaController])
+  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
   private val metadataCache = new MetadataCache(brokerId)
   private val authorizer: Option[Authorizer] = None
-  private val clientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
-  private val clientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
-  private val replicaQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
+  private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
+  private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
+  private val replicaQuotaManager: ReplicationQuotaManager = EasyMock.createNiceMock(classOf[ReplicationQuotaManager])
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
     replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
-  private val fetchManager = EasyMock.createNiceMock(classOf[FetchManager])
+  private val fetchManager: FetchManager = EasyMock.createNiceMock(classOf[FetchManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
@@ -117,7 +116,7 @@ class KafkaApisTest {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
       val invalidTopicPartition = new TopicPartition(topic, invalidPartitionId)
-      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, 23, "")
+      val partitionOffsetCommitData = new OffsetCommitRequest.PartitionData(15L, Optional.empty[Integer](), "")
       val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder("groupId",
         Map(invalidTopicPartition -> partitionOffsetCommitData).asJava))
 
@@ -214,7 +213,7 @@ class KafkaApisTest {
   @Test
   def shouldRespondWithUnsupportedForMessageFormatOnHandleWriteTxnMarkersWhenMagicLowerThanRequired(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT).asJava
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
 
@@ -233,7 +232,7 @@ class KafkaApisTest {
   @Test
   def shouldRespondWithUnknownTopicWhenPartitionIsNotHosted(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(topicPartition))
     val expectedErrors = Map(topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION).asJava
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
 
@@ -253,7 +252,7 @@ class KafkaApisTest {
   def shouldRespondWithUnsupportedMessageFormatForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
@@ -292,7 +291,7 @@ class KafkaApisTest {
   def shouldRespondWithUnknownTopicOrPartitionForBadPartitionAndNoErrorsForGoodPartition(): Unit = {
     val tp1 = new TopicPartition("t", 0)
     val tp2 = new TopicPartition("t1", 0)
-    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(Utils.mkList(tp1, tp2))
+    val (writeTxnMarkersRequest, request) = createWriteTxnMarkersRequest(asList(tp1, tp2))
     val expectedErrors = Map(tp1 -> Errors.UNKNOWN_TOPIC_OR_PARTITION, tp2 -> Errors.NONE).asJava
 
     val capturedResponse: Capture[RequestChannel.Response] = EasyMock.newCapture()
@@ -330,7 +329,7 @@ class KafkaApisTest {
   @Test
   def shouldAppendToLogOnWriteTxnMarkersWhenCorrectMagicVersion(): Unit = {
     val topicPartition = new TopicPartition("t", 0)
-    val request = createWriteTxnMarkersRequest(Utils.mkList(topicPartition))._2
+    val request = createWriteTxnMarkersRequest(asList(topicPartition))._2
     EasyMock.expect(replicaManager.getMagic(topicPartition))
       .andReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
@@ -465,7 +464,7 @@ class KafkaApisTest {
 
     EasyMock.expect(replicaManager.fetchOffsetForTimestamp(tp, ListOffsetRequest.LATEST_TIMESTAMP,
       Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true))
-      .andReturn(TimestampOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset))
+      .andReturn(Some(new TimestampAndOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 
     val capturedResponse = expectNoThrottling()
     EasyMock.replay(replicaManager, clientRequestQuotaManager, requestChannel)
@@ -487,7 +486,7 @@ class KafkaApisTest {
   }
 
   private def createWriteTxnMarkersRequest(partitions: util.List[TopicPartition]) = {
-    val requestBuilder = new WriteTxnMarkersRequest.Builder(Utils.mkList(
+    val requestBuilder = new WriteTxnMarkersRequest.Builder(asList(
       new TxnMarkerEntry(1, 1.toShort, 0, TransactionResult.COMMIT, partitions)))
     buildRequest(requestBuilder)
   }

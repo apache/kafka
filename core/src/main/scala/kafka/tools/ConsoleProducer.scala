@@ -39,7 +39,7 @@ object ConsoleProducer {
 
     try {
         val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
+        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
@@ -120,7 +120,7 @@ object ConsoleProducer {
       .describedAs("broker-list")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
-    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', or 'lz4'." +
+    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', 'lz4', or 'zstd'." +
                                                                   "If specified without value, then it defaults to 'gzip'")
                                     .withOptionalArg()
                                     .describedAs("compression-codec")

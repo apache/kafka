@@ -113,7 +113,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain transformationChain;
+    @Mock private TransformationChain<SinkRecord> transformationChain;
     private WorkerSinkTask workerTask;
     @Mock private KafkaConsumer<byte[], byte[]> consumer;
     private Capture<ConsumerRebalanceListener> rebalanceListener = EasyMock.newCapture();
@@ -141,7 +141,7 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
                 WorkerSinkTask.class, new String[]{"createConsumer"},
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
                 valueConverter, headerConverter,
-                new TransformationChain(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
+                new TransformationChain<>(Collections.emptyList(), RetryWithToleranceOperatorTest.NOOP_OPERATOR),
                 pluginLoader, time, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
 
         recordsReturned = 0;
@@ -578,12 +578,8 @@ public class WorkerSinkTaskThreadedTest extends ThreadedTest {
         EasyMock.expect(valueConverter.toConnectData(TOPIC, RAW_VALUE)).andReturn(new SchemaAndValue(VALUE_SCHEMA, VALUE)).anyTimes();
 
         final Capture<SinkRecord> recordCapture = EasyMock.newCapture();
-        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(new IAnswer<SinkRecord>() {
-            @Override
-            public SinkRecord answer() {
-                return recordCapture.getValue();
-            }
-        }).anyTimes();
+        EasyMock.expect(transformationChain.apply(EasyMock.capture(recordCapture))).andAnswer(
+            (IAnswer<SinkRecord>) () -> recordCapture.getValue()).anyTimes();
 
         Capture<Collection<SinkRecord>> capturedRecords = EasyMock.newCapture(CaptureType.ALL);
         sinkTask.put(EasyMock.capture(capturedRecords));

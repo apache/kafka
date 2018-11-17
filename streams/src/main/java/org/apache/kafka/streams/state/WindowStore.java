@@ -17,8 +17,11 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
+
+import java.time.Instant;
 
 /**
  * A windowed store interface extending {@link StateStore}.
@@ -85,7 +88,15 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
      */
+    @SuppressWarnings("deprecation")
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
+
+    @Override
+    default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondInstant(to, "to");
+        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+    }
 
     /**
      * Get all the key-value pairs in the given key range and time range from all the existing windows.
@@ -100,7 +111,15 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for any key.
      */
+    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
+
+    @Override
+    default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
+        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
+        ApiUtils.validateMillisecondInstant(toTime, "toTime");
+        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+    }
 
     /**
      * Gets all the key-value pairs that belong to the windows within in the given time range.
@@ -111,5 +130,13 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if {@code null} is used for any key
      */
+    @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
+
+    @Override
+    default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
+        ApiUtils.validateMillisecondInstant(from, "from");
+        ApiUtils.validateMillisecondInstant(to, "to");
+        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+    }
 }

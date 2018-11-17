@@ -192,7 +192,9 @@ class PartitionStateMachineTest extends JUnitSuite {
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
     EasyMock.expect(mockZkClient.updateLeaderAndIsr(Map(partition -> leaderAndIsrAfterElection), controllerEpoch, controllerContext.epochZkVersion))
       .andReturn(UpdateLeaderAndIsrResult(Map(partition -> updatedLeaderAndIsr), Seq.empty, Map.empty))
-    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(otherBrokerId),
+
+    // The leaderAndIsr request should be sent to both brokers, including the shutting down one
+    EasyMock.expect(mockControllerBrokerRequestBatch.addLeaderAndIsrRequestForBrokers(Seq(brokerId, otherBrokerId),
       partition, LeaderIsrAndControllerEpoch(updatedLeaderAndIsr, controllerEpoch), Seq(brokerId, otherBrokerId),
       isNew = false))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
@@ -431,7 +433,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       mockZkClient, partitionState, mockControllerBrokerRequestBatch)
 
     def createMockController() = {
-      val mockController = EasyMock.createMock(classOf[KafkaController])
+      val mockController: KafkaController = EasyMock.createMock(classOf[KafkaController])
       EasyMock.expect(mockController.controllerContext).andReturn(controllerContext).anyTimes()
       EasyMock.expect(mockController.config).andReturn(customConfig).anyTimes()
       EasyMock.expect(mockController.partitionStateMachine).andReturn(partitionStateMachine).anyTimes()
@@ -442,7 +444,7 @@ class PartitionStateMachineTest extends JUnitSuite {
     }
 
     val mockController = createMockController()
-    val mockEventManager = EasyMock.createMock(classOf[ControllerEventManager])
+    val mockEventManager: ControllerEventManager = EasyMock.createMock(classOf[ControllerEventManager])
     EasyMock.replay(mockController, replicaStateMachine, mockEventManager)
 
     val topicDeletionManager = new TopicDeletionManager(mockController, mockEventManager, mockZkClient)
@@ -455,5 +457,4 @@ class PartitionStateMachineTest extends JUnitSuite {
     topicDeletionManager.enqueueTopicsForDeletion(Set(topic))
     assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
   }
-
 }

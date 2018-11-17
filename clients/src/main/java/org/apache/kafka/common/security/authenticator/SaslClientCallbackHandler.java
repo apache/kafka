@@ -84,6 +84,7 @@ public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
                     ac.setAuthorizedID(authzId);
             } else if (callback instanceof ScramExtensionsCallback) {
                 if (ScramMechanism.isScram(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                    @SuppressWarnings("unchecked")
                     Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
                     ((ScramExtensionsCallback) callback).extensions(extensions);
                 }

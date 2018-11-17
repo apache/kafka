@@ -175,10 +175,10 @@ object ZkUtils {
         Map(
           "topic" -> tp.topic,
           "partition" -> tp.partition,
-          "replicas" -> replicas
-        )
-      }
-    ))
+          "replicas" -> replicas.asJava
+        ).asJava
+      }.asJava
+    ).asJava)
   }
 }
 
@@ -220,7 +220,7 @@ class ZkUtils(val zkClient: ZkClient,
           + "Probably this controller is still using the old format [%s] to store the broker id in zookeeper".format(controllerInfoString))
         try controllerInfoString.toInt
         catch {
-          case t: Throwable => throw new KafkaException("Failed to parse the controller info: " + controllerInfoString + ". This is neither the new or the old format.", t)
+          case t: Throwable => throw new KafkaException(s"Failed to parse the controller info: $controllerInfoString. This is neither the new or the old format.", t)
         }
     }
   }
@@ -415,11 +415,11 @@ class ZkUtils(val zkClient: ZkClient,
           case _: ZkNoNodeException => // the node disappeared; treat as if node existed and let caller handles this
         }
         if (storedData == null || storedData != data) {
-          info("conflict in " + path + " data: " + data + " stored data: " + storedData)
+          info(s"conflict in $path data: $data stored data: $storedData")
           throw e
         } else {
           // otherwise, the creation succeeded, return normally
-          info(path + " exists with value " + data + " during connection loss; this is ok")
+          info(s"$path exists with value $data during connection loss; this is ok")
         }
     }
   }

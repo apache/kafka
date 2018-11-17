@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNull;
 
@@ -36,6 +37,7 @@ import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
@@ -101,6 +103,15 @@ public class OAuthBearerSaslServerTest {
                 .evaluateResponse(clientInitialResponse(null));
         // also asserts that no authentication error is thrown if OAuthBearerExtensionsValidatorCallback is not supported
         assertTrue("Next challenge is not empty", nextChallenge.length == 0);
+    }
+
+    @Test
+    public void negotiatedProperty() throws Exception {
+        saslServer.evaluateResponse(clientInitialResponse(USER));
+        OAuthBearerToken token = (OAuthBearerToken) saslServer.getNegotiatedProperty("OAUTHBEARER.token");
+        assertNotNull(token);
+        assertEquals(token.lifetimeMs(),
+                saslServer.getNegotiatedProperty(SaslInternalConfigs.CREDENTIAL_LIFETIME_MS_SASL_NEGOTIATED_PROPERTY_KEY));
     }
 
     /**

@@ -23,6 +23,7 @@ import kafka.coordinator.group.GroupOverview
 import kafka.utils.Logging
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.consumer.internals.{ConsumerNetworkClient, ConsumerProtocol, RequestFuture}
+import org.apache.kafka.common.config.ConfigDef.ValidString._
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
@@ -35,7 +36,7 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
-import org.apache.kafka.common.{Cluster, Node, TopicPartition}
+import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
@@ -385,6 +386,14 @@ object AdminClient {
         Type.LIST,
         Importance.HIGH,
         CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
+      .define(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG,
+        Type.STRING,
+        ClientDnsLookup.DEFAULT.toString,
+        in(ClientDnsLookup.DEFAULT.toString,
+           ClientDnsLookup.USE_ALL_DNS_IPS.toString,
+           ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString),
+        Importance.MEDIUM,
+        CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
       .define(
         CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
         ConfigDef.Type.STRING,
@@ -423,14 +432,14 @@ object AdminClient {
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
     val metadata = new Metadata(100L, 60 * 60 * 1000L, true)
-    val channelBuilder = ClientUtils.createChannelBuilder(config)
+    val channelBuilder = ClientUtils.createChannelBuilder(config, time)
     val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
 
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
-    val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
-    val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, Collections.emptySet(), 0)
+    val clientDnsLookup = config.getString(CommonClientConfigs.CLIENT_DNS_LOOKUP_CONFIG)
+    val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
+    metadata.bootstrap(brokerAddresses, time.milliseconds())
 
     val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
 
@@ -452,6 +461,7 @@ object AdminClient {
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       requestTimeoutMs,
+      ClientDnsLookup.DEFAULT,
       time,
       true,
       new ApiVersions,
@@ -471,6 +481,6 @@ object AdminClient {
       requestTimeoutMs,
       retryBackoffMs,
       highLevelClient,
-      bootstrapCluster.nodes.asScala.toList)
+      metadata.fetch.nodes.asScala.toList)
   }
 }
