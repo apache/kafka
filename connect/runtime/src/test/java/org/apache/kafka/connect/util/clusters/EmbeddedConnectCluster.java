@@ -29,9 +29,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
 import java.net.HttpURLConnection;
-import java.net.ServerSocket;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
@@ -110,6 +108,7 @@ public class EmbeddedConnectCluster {
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
+        workerProps.put(REST_PORT_CONFIG, "0"); // use a random available port
 
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
         putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + connectClusterName);
@@ -121,13 +120,7 @@ public class EmbeddedConnectCluster {
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
 
-        int[] ports = new int[connectCluster.length];
-        for (int i = 0; i < ports.length; i++) {
-            ports[i] = findFreePort();
-        }
-        log.debug("Found available ports: {}", Arrays.toString(ports));
         for (int i = 0; i < connectCluster.length; i++) {
-            workerProps.put(REST_PORT_CONFIG, String.valueOf(ports[i]));
             connectCluster[i] = new ConnectDistributed().startConnect(workerProps);
         }
     }
@@ -240,30 +233,6 @@ public class EmbeddedConnectCluster {
         httpCon.setRequestMethod("DELETE");
         httpCon.connect();
         return httpCon.getResponseCode();
-    }
-
-
-    private int findFreePort() {
-        ServerSocket socket = null;
-        try {
-            socket = new ServerSocket(0);
-            // make this port available to bind during timeout state after connection is released
-            socket.setReuseAddress(true);
-            int port = socket.getLocalPort();
-            try {
-                socket.close();
-            } catch (IOException ignored) {
-            }
-            return port;
-        } catch (Exception e) {
-            if (socket != null) {
-                try {
-                    socket.close();
-                } catch (IOException ignored) {
-                }
-            }
-        }
-        throw new IllegalStateException("Could not find a free TCP/IP port");
     }
 
     public static class Builder {
