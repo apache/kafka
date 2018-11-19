@@ -56,7 +56,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  * If logging is left enabled, log output on stdout can be easily ignored by checking
  * whether a given line is valid JSON.
  */
-public class VerifiableProducer {
+public class VerifiableProducer implements AutoCloseable {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String topic;

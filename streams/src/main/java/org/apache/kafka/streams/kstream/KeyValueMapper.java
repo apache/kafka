@@ -39,9 +39,9 @@ import org.apache.kafka.streams.KeyValue;
  * @see KStream#flatMap(KeyValueMapper)
  * @see KStream#selectKey(KeyValueMapper)
  * @see KStream#groupBy(KeyValueMapper)
- * @see KStream#groupBy(KeyValueMapper, Serialized)
+ * @see KStream#groupBy(KeyValueMapper, Grouped)
  * @see KTable#groupBy(KeyValueMapper)
- * @see KTable#groupBy(KeyValueMapper, Serialized)
+ * @see KTable#groupBy(KeyValueMapper, Grouped)
  * @see KTable#toStream(KeyValueMapper)
  */
 public interface KeyValueMapper<K, V, VR> {

@@ -21,7 +21,7 @@ from kafkatest.services.trogdor.task_spec import TaskSpec
 class ConsumeBenchWorkloadSpec(TaskSpec):
     def __init__(self, start_ms, duration_ms, consumer_node, bootstrap_servers,
                  target_messages_per_sec, max_messages, active_topics,
-                 consumer_conf, common_client_conf, admin_client_conf, consumer_group=None):
+                 consumer_conf, common_client_conf, admin_client_conf, consumer_group=None, threads_per_worker=1):
         super(ConsumeBenchWorkloadSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.workload.ConsumeBenchSpec"
         self.message["consumerNode"] = consumer_node
@@ -32,6 +32,7 @@ class ConsumeBenchWorkloadSpec(TaskSpec):
         self.message["adminClientConf"] = admin_client_conf
         self.message["commonClientConf"] = common_client_conf
         self.message["activeTopics"] = active_topics
+        self.message["threadsPerWorker"] = threads_per_worker
         if consumer_group is not None:
             self.message["consumerGroup"] = consumer_group
 

@@ -98,10 +98,10 @@ public class CoordinatorRestResource {
     @GET
     @Path("/tasks")
     public TasksResponse tasks(@QueryParam("taskId") List<String> taskId,
-            @DefaultValue("0") @QueryParam("firstStartMs") int firstStartMs,
-            @DefaultValue("0") @QueryParam("lastStartMs") int lastStartMs,
-            @DefaultValue("0") @QueryParam("firstEndMs") int firstEndMs,
-            @DefaultValue("0") @QueryParam("lastEndMs") int lastEndMs) throws Throwable {
+            @DefaultValue("0") @QueryParam("firstStartMs") long firstStartMs,
+            @DefaultValue("0") @QueryParam("lastStartMs") long lastStartMs,
+            @DefaultValue("0") @QueryParam("firstEndMs") long firstEndMs,
+            @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs) throws Throwable {
         return coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs));
     }
 

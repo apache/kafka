@@ -26,6 +26,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -51,14 +52,13 @@ public class KStreamWindowReduceTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldLogAndMeterOnNullKey() {
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder
             .stream("TOPIC", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .reduce((value1, value2) -> value1 + "+" + value2);
 
@@ -80,7 +80,7 @@ public class KStreamWindowReduceTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder
             .stream("TOPIC", Consumed.with(Serdes.String(), Serdes.String()))
-            .groupByKey(org.apache.kafka.streams.kstream.Serialized.with(Serdes.String(), Serdes.String()))
+            .groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
             .windowedBy(TimeWindows.of(ofMillis(5L)).until(100))
             .reduce((value1, value2) -> value1 + "+" + value2)
             .toStream()
