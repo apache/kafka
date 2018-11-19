@@ -46,6 +46,8 @@ object ReassignPartitionsCommand extends Logging {
 
   private[admin] val EarliestVersion = 1
 
+  val helpText = "This tool helps to moves topic partitions between replicas."
+
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
     val zkConnect = opts.options.valueOf(opts.zkConnectOpt)
@@ -413,7 +415,7 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to moves topic partitions between replicas.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, helpText)
 
     // Should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
