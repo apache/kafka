@@ -59,16 +59,16 @@ public class UtilsTest {
 
     @Test
     public void testMurmur2() {
-        Map<byte[],Integer> cases = new java.util.HashMap<>();
+        Map<byte[], Integer> cases = new java.util.HashMap<>();
         cases.put("21".getBytes(), -973932308);
         cases.put("foobar".getBytes(), -790332482);
         cases.put("a-little-bit-long-string".getBytes(), -985981536);
         cases.put("a-little-bit-longer-string".getBytes(), -1486304829);
         cases.put("lkjh234lh9fiuh90y23oiuhsafujhadof229phr9h19h89h8".getBytes(), -58897971);
-        cases.put(new byte[]{'a','b','c'}, 479470107);
+        cases.put(new byte[]{'a', 'b', 'c'}, 479470107);
 
         for (Map.Entry c : cases.entrySet()) {
-            assertEquals((int)c.getValue(), murmur2((byte[])c.getKey()));
+            assertEquals((int) c.getValue(), murmur2((byte[]) c.getKey()));
         }
     }
 
