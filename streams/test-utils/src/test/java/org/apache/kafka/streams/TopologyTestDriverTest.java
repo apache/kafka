@@ -779,7 +779,7 @@ public class TopologyTestDriverTest {
         topology.addStateStore(Stores.keyValueStoreBuilder(
             Stores.inMemoryKeyValueStore("aggStore"),
             Serdes.String(),
-            Serdes.Long()).withCachingEnabled(), // intentionally turn on caching to achieve better test coverage
+            Serdes.Long()),
             "aggregator");
         topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
@@ -887,6 +887,23 @@ public class TopologyTestDriverTest {
 
         @Override
         public void close() {}
+    }
+
+    @Test
+    public void shouldAllowPrePopulatingStatesStoresWithCachingEnabled() {
+        final Topology topology = new Topology();
+        topology.addSource("sourceProcessor", "input-topic");
+        topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
+        topology.addStateStore(Stores.keyValueStoreBuilder(
+            Stores.inMemoryKeyValueStore("aggStore"),
+            Serdes.String(),
+            Serdes.Long()).withCachingEnabled(), // intentionally turn on caching to achieve better test coverage
+            "aggregator");
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        store = testDriver.getKeyValueStore("aggStore");
+        store.put("a", 21L);
     }
 
     @Test
