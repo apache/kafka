@@ -149,7 +149,7 @@ if (file('.git').exists()) {
         'gradlew',
         'gradlew.bat',
         'TROGDOR.md',
-        '**/README.md',
+        '**/*README.md',
         '**/id_rsa',
         '**/id_rsa.pub',
         'checkstyle/suppressions.xml',
