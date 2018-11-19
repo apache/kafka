@@ -103,6 +103,7 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    @SuppressWarnings("deprecation")
     public void startConnect() {
         log.info("Starting Connect cluster with {} workers. clusterName {}", connectCluster.length, connectClusterName);
 
