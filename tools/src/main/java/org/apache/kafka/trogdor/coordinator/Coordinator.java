@@ -21,14 +21,17 @@ import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
+import org.apache.kafka.trogdor.rest.CreateMultipleTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
+import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
@@ -37,7 +40,9 @@ import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.BadRequestException;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.Collectors;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
@@ -91,7 +96,16 @@ public final class Coordinator {
     }
 
     public void createTask(CreateTaskRequest request) throws Throwable {
-        taskManager.createTask(request.id(), request.spec());
+        taskManager.createAndScheduleTask(new TaskManager.TaskDetail(request.id(), request.spec()));
+    }
+
+    public void createMultipleTasks(CreateMultipleTasksRequest request)
+        throws InvalidRequestException, RequestConflictException, BadRequestException {
+        taskManager.createAndScheduleTasksAtomic(
+            request.tasks().stream()
+                .map(req -> new TaskManager.TaskDetail(req.id(), req.spec()))
+                .collect(Collectors.toList())
+        );
     }
 
     public void stopTask(StopTaskRequest request) throws Throwable {

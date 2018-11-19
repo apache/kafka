@@ -34,6 +34,7 @@ import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
 
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
+import org.apache.kafka.trogdor.rest.CreateMultipleTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
@@ -85,6 +86,84 @@ public class CoordinatorTest {
     }
 
     @Test
+    public void testCreateMultipleTasks() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            new ExpectedTasks().waitFor(cluster.coordinatorClient());
+
+            // should create all tasks
+            NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
+            CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
+            CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
+            CreateTaskRequest taskReq3 = new CreateTaskRequest("foobar", fooSpec1);
+            cluster.coordinatorClient().createMultipleTasks(
+                new CreateMultipleTasksRequest(Arrays.asList(taskReq1, taskReq2, taskReq3))
+            );
+            new ExpectedTasks()
+                .addTask(new ExpectedTaskBuilder("foo")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .addTask(new ExpectedTaskBuilder("bar")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .addTask(new ExpectedTaskBuilder("foobar")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .waitFor(cluster.coordinatorClient());
+        }
+    }
+
+    /**
+     * If one tasks fails to be created, none should be scheduled
+     */
+    @Test
+    public void testCreateMultipleTasksFailsAtomically() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            new ExpectedTasks().waitFor(cluster.coordinatorClient());
+
+            // should create all tasks
+            NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
+            CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
+            CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
+            CreateTaskRequest taskReq3 = new CreateTaskRequest("foobar", fooSpec1);
+            CreateTaskRequest taskReq4 = new CreateTaskRequest("foo", fooSpec1); // conflicting ids
+            try {
+                cluster.coordinatorClient().createMultipleTasks(
+                    new CreateMultipleTasksRequest(Arrays.asList(taskReq1, taskReq2, taskReq3, taskReq4))
+                );
+                fail("Expected to get an exception when submitting duplicate tasks.");
+            } catch (RequestConflictException exception) {
+            }
+            try {
+                new ExpectedTasks()
+                    .addTask(new ExpectedTaskBuilder("foo")
+                        .taskState(new TaskPending(fooSpec1))
+                        .build())
+                    .addTask(new ExpectedTaskBuilder("bar")
+                        .taskState(new TaskPending(fooSpec1))
+                        .build())
+                    .addTask(new ExpectedTaskBuilder("foobar")
+                        .taskState(new TaskPending(fooSpec1))
+                        .build())
+                    .waitFor(cluster.coordinatorClient(), 0);
+                fail("Expected assertionError since no tasks should exist");
+            } catch (AssertionError e) {
+            }
+        }
+    }
+
+    @Test
     public void testCreateTask() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
@@ -104,9 +183,13 @@ public class CoordinatorTest {
                     build()).
                 waitFor(cluster.coordinatorClient());
 
-            // Re-creating a task with the same arguments is not an error.
-            cluster.coordinatorClient().createTask(
-                new CreateTaskRequest("foo", fooSpec));
+            // Re-creating a task with the same arguments gives a RequestConflictException.
+            try {
+                cluster.coordinatorClient().createTask(new CreateTaskRequest("foo", fooSpec));
+                fail("Expected to get an exception when re-creating the same task");
+            } catch (RequestConflictException exception) {
+            }
+
 
             // Re-creating a task with different arguments gives a RequestConflictException.
             try {
