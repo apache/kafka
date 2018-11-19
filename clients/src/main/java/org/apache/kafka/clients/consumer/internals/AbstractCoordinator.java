@@ -933,7 +933,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    private class HeartbeatThread extends KafkaThread {
+    private class HeartbeatThread extends KafkaThread implements AutoCloseable {
         private boolean enabled = false;
         private boolean closed = false;
         private AtomicReference<RuntimeException> failed = new AtomicReference<>(null);
