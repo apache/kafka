@@ -37,9 +37,12 @@ public class Min extends SampledStat {
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         double min = Double.MAX_VALUE;
-        for (Sample sample : samples)
+        long count = 0;
+        for (Sample sample : samples) {
             min = Math.min(min, sample.value);
-        return min;
+            count += sample.eventCount;
+        }
+        return count == 0 ? Double.NaN : min;
     }
 
 }

@@ -198,7 +198,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("status", "paused");
         assertTaskMetricValue("running-ratio", 0.0);
         assertTaskMetricValue("pause-ratio", 1.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
 
         PowerMock.verifyAll();
     }
@@ -272,7 +272,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
         assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
         assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 
@@ -350,7 +350,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 0.0);
         assertTaskMetricValue("batch-size-avg", 0.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
         assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
         assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 

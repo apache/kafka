@@ -179,12 +179,14 @@ public class NioEchoServer extends Thread {
             long currentElapsedMs = time.milliseconds() - startMs;
             long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
             String metricName = namePrefix + metricType.metricNameSuffix();
-            if (expectedValue == 0.0)
-                assertEquals(
-                        "Metric not updated " + metricName + " expected:<" + expectedValue + "> but was:<"
-                                + metricValue(metricName) + ">",
-                        metricType == MetricType.MAX ? Double.NEGATIVE_INFINITY : 0d, metricValue(metricName), EPS);
-            else if (metricType == MetricType.TOTAL)
+            if (expectedValue == 0.0) {
+                Double expected = expectedValue;
+                if (metricType == MetricType.MAX || metricType == MetricType.AVG)
+                    expected = Double.NaN;
+
+                assertEquals("Metric not updated " + metricName + " expected:<" + expectedValue + "> but was:<"
+                    + metricValue(metricName) + ">", expected, metricValue(metricName), EPS);
+            } else if (metricType == MetricType.TOTAL)
                 TestUtils.waitForCondition(() -> Math.abs(metricValue(metricName) - expectedValue) <= EPS,
                         thisMaxWaitMs, () -> "Metric not updated " + metricName + " expected:<" + expectedValue
                                 + "> but was:<" + metricValue(metricName) + ">");
