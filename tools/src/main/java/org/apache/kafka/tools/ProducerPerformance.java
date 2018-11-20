@@ -151,7 +151,12 @@ public class ProducerPerformance {
 				 */
 				if (synchronousSend) {
 					int iteration = stats.updateIteration();
-					RecordMetadata result = producer.send(record).get();
+					try {
+						RecordMetadata result = producer.send(record).get();
+					} catch (Exception exception) {
+						exception.printStackTrace();
+					}
+
 					long now = System.currentTimeMillis();
 					int latency = (int) (now - sendStartMs);
 					stats.record(iteration, latency, payload.length, now);
