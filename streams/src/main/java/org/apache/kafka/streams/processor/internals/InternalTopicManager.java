@@ -68,9 +68,9 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-	    final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
-	    retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
-	    retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
+        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
+        retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
+        retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -118,7 +118,7 @@ public class InternalTopicManager {
 
             // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
             int remainingRetries = retries;
-	        boolean retryBackOff = false;
+            boolean retryBackOff = false;
             boolean retry;
             do {
                 retry = false;
