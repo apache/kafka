@@ -183,9 +183,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
         // update the consumed offset
         final Map<TopicPartition, List<ConsumerRecord<K, V>>> results = new HashMap<>();
-        for (final TopicPartition topicPartition : records.keySet()) {
-            results.put(topicPartition, new ArrayList<ConsumerRecord<K, V>>());
-        }
 
         for (Map.Entry<TopicPartition, List<ConsumerRecord<K, V>>> entry : this.records.entrySet()) {
             if (!subscriptions.isPaused(entry.getKey())) {
@@ -196,7 +193,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                     }
 
                     if (assignment().contains(entry.getKey()) && rec.offset() >= subscriptions.position(entry.getKey())) {
-                        results.get(entry.getKey()).add(rec);
+                        results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         subscriptions.position(entry.getKey(), rec.offset() + 1);
                     }
                 }
