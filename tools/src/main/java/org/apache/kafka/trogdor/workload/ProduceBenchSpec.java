@@ -31,7 +31,8 @@ import java.util.Set;
 /**
  * The specification for a benchmark that produces messages to a set of topics.
  *
- * If the "messagesPerTransaction" field is present, the producer will group and produce messages as separate transactions using the producer transactional API.
+ * To configure a transactional producer, a #{@link TransactionActionGenerator} must be passed in.
+ * Said generator works in lockstep with the producer by instructing it what action to take next in regards to a transaction.
  *
  * An example JSON representation which will result in a producer that creates three topics (foo1, foo2, foo3)
  * with three partitions each and produces to them:
@@ -62,11 +63,10 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
-    private final int messagesPerTransaction;
     private final int maxMessages;
-    private final boolean useTransactions;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
+    private final TransactionActionGenerator transactionGenerator;
     private final Map<String, String> producerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -79,10 +79,10 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("producerNode") String producerNode,
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                         @JsonProperty("messagesPerTransaction") int messagesPerTransaction,
                          @JsonProperty("maxMessages") int maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+                         @JsonProperty("transactionGenerator") TransactionActionGenerator txGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -92,13 +92,13 @@ public class ProduceBenchSpec extends TaskSpec {
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
-        this.useTransactions = messagesPerTransaction != 0;
-        this.messagesPerTransaction = messagesPerTransaction;
         this.maxMessages = maxMessages;
         this.keyGenerator = keyGenerator == null ?
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
+        this.transactionGenerator = txGenerator == null ?
+            new ZeroTransactionsGenerator() : txGenerator;
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
@@ -124,15 +124,6 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int messagesPerTransaction() {
-        return messagesPerTransaction;
-    }
-
-    public boolean useTransactions() {
-        return useTransactions;
-    }
-
-    @JsonProperty
     public int maxMessages() {
         return maxMessages;
     }
@@ -145,6 +136,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public PayloadGenerator valueGenerator() {
         return valueGenerator;
+    }
+
+    @JsonProperty
+    public TransactionActionGenerator transactionGenerator() {
+        return transactionGenerator;
     }
 
     @JsonProperty

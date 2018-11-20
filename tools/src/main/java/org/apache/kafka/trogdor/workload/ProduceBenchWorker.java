@@ -36,6 +36,7 @@ import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+import org.apache.kafka.trogdor.workload.TransactionActionGenerator.TransactionActions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -181,23 +182,32 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final PayloadIterator values;
 
+        private final TransactionActionGenerator txActionGenerator;
+
         private final Throttle throttle;
 
         private Iterator<TopicPartition> partitionsIterator;
         private Future<RecordMetadata> sendFuture;
         private AtomicInteger transactionsCommitted;
+        private boolean toUseTransactions = false;
 
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;
             this.partitionsIterator = activePartitions.iterator();
             this.histogram = new Histogram(5000);
+
+            this.txActionGenerator = spec.transactionGenerator();
             this.transactionsCommitted = new AtomicInteger();
+            if (txActionGenerator.nextAction() == TransactionActions.INIT_TRANSACTIONS)
+                toUseTransactions = true;
+
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
                 new StatusUpdater(histogram, transactionsCommitted), 30, 30, TimeUnit.SECONDS);
+
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            if (spec.useTransactions())
+            if (toUseTransactions)
                 props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transaction-id-" + UUID.randomUUID());
             // add common client configs to producer properties, and then user-specified producer configs
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
@@ -212,20 +222,22 @@ public class ProduceBenchWorker implements TaskWorker {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
                 try {
-                    if (spec.useTransactions()) {
+                    if (toUseTransactions)
                         producer.initTransactions();
 
-                        for (int m = 0; m < spec.maxMessages() / spec.messagesPerTransaction(); m++) {
-                            sendMessages(spec.messagesPerTransaction());
+                    int sentMessages = 0;
+                    while (sentMessages < spec.maxMessages()) {
+                        if (toUseTransactions) {
+                            boolean tookAction = takeTransactionAction();
+                            if (tookAction)
+                                continue;
                         }
-                        int leftOver = spec.maxMessages() % spec.messagesPerTransaction();
-                        if (leftOver > 0)
-                            sendMessages(leftOver);
-                    } else {
-                        sendMessages(spec.maxMessages());
+                        sendMessage();
+                        sentMessages++;
                     }
+                    takeTransactionAction(); // give the transactionGenerator a chance to commit if configured evenly
                 } catch (Exception e) {
-                    if (spec.useTransactions())
+                    if (toUseTransactions)
                         producer.abortTransaction();
                     throw e;
                 } finally {
@@ -247,26 +259,42 @@ public class ProduceBenchWorker implements TaskWorker {
             return null;
         }
 
-        private void sendMessages(int messageCount) throws InterruptedException {
-            if (spec.useTransactions())
-                producer.beginTransaction();
-
-            for (int i = 0; i < messageCount; i++) {
-                if (!partitionsIterator.hasNext())
-                    partitionsIterator = activePartitions.iterator();
-
-                TopicPartition partition = partitionsIterator.next();
-                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                    partition.topic(), partition.partition(), keys.next(), values.next());
-                sendFuture = producer.send(record,
-                    new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
-                throttle.increment();
+        private boolean takeTransactionAction() {
+            boolean tookAction = true;
+            TransactionActions nextAction = txActionGenerator.nextAction();
+            switch (nextAction) {
+                case INIT_TRANSACTIONS:
+                    throw new IllegalStateException("Cannot initiate transactions twice");
+                case BEGIN_TRANSACTION:
+                    log.debug("Beginning transaction.");
+                    producer.beginTransaction();
+                    break;
+                case COMMIT_TRANSACTION:
+                    log.debug("Committing transaction.");
+                    producer.commitTransaction();
+                    transactionsCommitted.getAndIncrement();
+                    break;
+                case ABORT_TRANSACTION:
+                    log.debug("Aborting transaction.");
+                    producer.abortTransaction();
+                    break;
+                case NO_OP:
+                    tookAction = false;
+                    break;
             }
+            return tookAction;
+        }
 
-            if (spec.useTransactions()) {
-                producer.commitTransaction();
-                transactionsCommitted.getAndIncrement();
-            }
+        private void sendMessage() throws InterruptedException {
+            if (!partitionsIterator.hasNext())
+                partitionsIterator = activePartitions.iterator();
+
+            TopicPartition partition = partitionsIterator.next();
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                partition.topic(), partition.partition(), keys.next(), values.next());
+            sendFuture = producer.send(record,
+                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+            throttle.increment();
         }
 
         void recordDuration(long durationMs) {

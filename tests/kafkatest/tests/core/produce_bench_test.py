@@ -71,7 +71,11 @@ class ProduceBenchTest(Test):
                                         common_client_conf={},
                                         inactive_topics=self.inactive_topics,
                                         active_topics=self.active_topics,
-                                        messages_per_transaction=10000) # 10 transactions with 10k messages
+                                        transaction_generator={
+                                            # 10 transactions with 10k messages
+                                            "type": "uniform",
+                                            "messagesPerTransaction": "10000"
+                                        })
         workload1 = self.trogdor.create_task("workload1", spec)
         workload1.wait_for_done(timeout_sec=360)
         tasks = self.trogdor.tasks()
