@@ -70,15 +70,17 @@ public final class MappedByteBuffers {
     private MappedByteBuffers() {}
 
     public static void unmap(String resourceDescription, MappedByteBuffer buffer) throws IOException {
-        if (!buffer.isDirect())
-            throw new IllegalArgumentException("Unmapping only works with direct buffers");
-        if (UNMAP == null)
-            throw UNMAP_NOT_SUPPORTED_EXCEPTION;
+        if (buffer != null){
+            if (!buffer.isDirect())
+                throw new IllegalArgumentException("Unmapping only works with direct buffers");
+            if (UNMAP == null)
+                throw UNMAP_NOT_SUPPORTED_EXCEPTION;
 
-        try {
-            UNMAP.invokeExact((ByteBuffer) buffer);
-        } catch (Throwable throwable) {
-            throw new IOException("Unable to unmap the mapped buffer: " + resourceDescription, throwable);
+            try {
+                UNMAP.invokeExact((ByteBuffer) buffer);
+            } catch (Throwable throwable) {
+                throw new IOException("Unable to unmap the mapped buffer: " + resourceDescription, throwable);
+            }
         }
     }
 

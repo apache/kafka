@@ -1835,6 +1835,7 @@ class Log(@volatile var dir: File,
   private def deleteSegment(segment: LogSegment) {
     info(s"Scheduling log segment [baseOffset ${segment.baseOffset}, size ${segment.size}] for deletion.")
     lock synchronized {
+      segment.closeHandlers()
       segments.remove(segment.baseOffset)
       asyncDeleteSegment(segment)
     }
