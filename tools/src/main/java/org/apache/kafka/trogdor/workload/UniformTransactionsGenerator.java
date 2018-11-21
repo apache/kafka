@@ -22,7 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 /**
  * A uniform transactions generator where every N records are grouped in a separate transaction
  */
-public class UniformTransactionsGenerator implements TransactionActionGenerator {
+public class UniformTransactionsGenerator implements TransactionGenerator {
 
     private final int messagesPerTransaction;
     private boolean initialized = false;
@@ -42,7 +42,7 @@ public class UniformTransactionsGenerator implements TransactionActionGenerator 
     }
 
     @Override
-    public synchronized TransactionAction nextAction() {
+    public synchronized TransactionAction action() {
         if (!initialized) {
             initialized = true;
             return TransactionAction.INIT_TRANSACTIONS;

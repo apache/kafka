@@ -18,12 +18,12 @@ package org.apache.kafka.trogdor.workload;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 
-public class ZeroTransactionsGenerator implements TransactionActionGenerator {
+public class ZeroTransactionsGenerator implements TransactionGenerator {
     @JsonCreator
     public ZeroTransactionsGenerator() {}
 
     @Override
-    public TransactionAction nextAction() {
+    public TransactionAction action() {
         return TransactionAction.NO_OP;
     }
 }

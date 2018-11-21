@@ -31,7 +31,7 @@ import java.util.Set;
 /**
  * The specification for a benchmark that produces messages to a set of topics.
  *
- * To configure a transactional producer, a #{@link TransactionActionGenerator} must be passed in.
+ * To configure a transactional producer, a #{@link TransactionGenerator} must be passed in.
  * Said generator works in lockstep with the producer by instructing it what action to take next in regards to a transaction.
  *
  * An example JSON representation which will result in a producer that creates three topics (foo1, foo2, foo3)
@@ -66,7 +66,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final int maxMessages;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
-    private final TransactionActionGenerator transactionGenerator;
+    private final TransactionGenerator transactionGenerator;
     private final Map<String, String> producerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -82,7 +82,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("maxMessages") int maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-                         @JsonProperty("transactionGenerator") TransactionActionGenerator txGenerator,
+                         @JsonProperty("transactionGenerator") TransactionGenerator txGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -139,7 +139,7 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public TransactionActionGenerator transactionGenerator() {
+    public TransactionGenerator transactionGenerator() {
         return transactionGenerator;
     }
 

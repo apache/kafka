@@ -29,7 +29,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     @JsonSubTypes.Type(value = ZeroTransactionsGenerator.class, name = "zero"),
     @JsonSubTypes.Type(value = UniformTransactionsGenerator.class, name = "uniform"),
 })
-public interface TransactionActionGenerator {
+public interface TransactionGenerator {
     enum TransactionAction {
         INIT_TRANSACTIONS, BEGIN_TRANSACTION, COMMIT_TRANSACTION, ABORT_TRANSACTION, NO_OP
     }
@@ -43,5 +43,5 @@ public interface TransactionActionGenerator {
      * The first returned action of every generator should be #{@link TransactionAction#INIT_TRANSACTIONS},
      * in order to signal to the producer that it should be configured for using transactions
      */
-    TransactionAction nextAction();
+    TransactionAction action();
 }
