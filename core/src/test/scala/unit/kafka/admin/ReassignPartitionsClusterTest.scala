@@ -51,7 +51,8 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   def startBrokers(brokerIds: Seq[Int]) {
-    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3))
+    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3,
+      replicaFetchBackoff = 100))
       .map(c => createServer(KafkaConfig.fromProps(c)))
   }
 
@@ -300,7 +301,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     //Then command should have taken longer than the throttle rate
     assertTrue(s"Expected replication to be > ${expectedDurationSecs * 0.9 * 1000} but was $took",
       took > expectedDurationSecs * 0.9 * 1000)
-    assertTrue(s"Expected replication to be < ${expectedDurationSecs * 3 * 1000} but was $took",
+    assertTrue(s"Expected replication to be < ${expectedDurationSecs * 2 * 1000} but was $took",
       took < expectedDurationSecs * 2 * 1000)
   }
 
