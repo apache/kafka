@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.Before;
@@ -32,12 +33,24 @@ import org.junit.Test;
 
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
+
+    private static final String KEY = "key";
+    private static final long VAL = 42L;
+    private static final String STORE_NAME = "underlying-store";
+
+    private boolean initExecuted;
+    private boolean closeExecuted;
+    private KeyValueIterator<String, Long> rangeIter;
+    private KeyValueIterator<String, Long> allIter;
 
     @Before
     public void setup() {
@@ -47,9 +60,37 @@ public class ProcessorContextImplTest {
         expect(streamsConfig.defaultKeySerde()).andReturn(Serdes.ByteArray());
         replay(streamsConfig);
 
+        rangeIter = mock(KeyValueIterator.class);
+        allIter = mock(KeyValueIterator.class);
+
+        final KeyValueStore<String, Long> globalStoreMock = mock(KeyValueStore.class);
+
+        expect(globalStoreMock.get(KEY)).andReturn(VAL);
+        expect(globalStoreMock.approximateNumEntries()).andReturn(VAL);
+        expect(globalStoreMock.name()).andReturn(STORE_NAME);
+        expect(globalStoreMock.persistent()).andReturn(true);
+        expect(globalStoreMock.isOpen()).andReturn(true);
+
+        expect(globalStoreMock.range("one", "two")).andReturn(rangeIter);
+        expect(globalStoreMock.all()).andReturn(allIter);
+
+        globalStoreMock.init(null, null);
+        expectLastCall().andAnswer(() -> {
+            initExecuted = true;
+            return null;
+        });
+
+        globalStoreMock.close();
+        expectLastCall().andAnswer(() -> {
+            closeExecuted = true;
+            return null;
+        });
+
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
-        expect(stateManager.getGlobalStore(anyString())).andReturn(mock(KeyValueStore.class));
-        replay(stateManager);
+
+        expect(stateManager.getGlobalStore(anyString())).andReturn(globalStoreMock);
+
+        replay(globalStoreMock, stateManager);
 
         context = new ProcessorContextImpl(
             mock(TaskId.class),
@@ -82,6 +123,20 @@ public class ProcessorContextImplTest {
                 checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete");
 
                 checkThrowsUnsupportedOperation(store::flush, "flush");
+
+                assertEquals((Long)VAL, store.get(KEY));
+                assertEquals(rangeIter, store.range("one", "two"));
+                assertEquals(allIter, store.all());
+                assertEquals(VAL, store.approximateNumEntries());
+                assertEquals(STORE_NAME, store.name());
+                assertTrue(store.persistent());
+                assertTrue(store.isOpen());
+
+                store.init(null, null);
+                assertTrue(initExecuted);
+
+                store.close();
+                assertTrue(closeExecuted);
             }
 
             @Override
