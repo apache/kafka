@@ -38,8 +38,4 @@ public enum TaskStateType {
             PENDING_VALUE, RUNNING_VALUE, STOPPING_VALUE, DONE_VALUE
         };
     }
-
-    public static boolean isValid(String taskType) {
-        return Arrays.stream(Constants.values).anyMatch(taskType::equals);
-    }
 }

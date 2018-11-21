@@ -76,7 +76,7 @@ public class TasksRequest extends Message {
         this.lastStartMs = Math.max(0, lastStartMs);
         this.firstEndMs = Math.max(0, firstEndMs);
         this.lastEndMs = Math.max(0, lastEndMs);
-        this.state = state;
+        this.state = state == null ? Optional.empty() : state;
     }
 
     @JsonProperty

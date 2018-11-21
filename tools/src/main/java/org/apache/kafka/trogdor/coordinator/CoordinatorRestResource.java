@@ -110,11 +110,16 @@ public class CoordinatorRestResource {
             @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
             @DefaultValue("") @QueryParam("state") String state) throws Throwable {
         boolean isEmptyState = state.equals("");
-        if (!isEmptyState && !TaskStateType.isValid(state))
-            return Response.status(400).entity(
-                String.format("State %s is invalid. Must be one of %s",
-                    state, Arrays.toString(TaskStateType.Constants.values))
-            ).build();
+        if (!isEmptyState) {
+            try {
+                TaskStateType.valueOf(state);
+            } catch (IllegalArgumentException e) {
+                return Response.status(400).entity(
+                    String.format("State %s is invalid. Must be one of %s",
+                        state, Arrays.toString(TaskStateType.Constants.values))
+                ).build();
+            }
+        }
 
         Optional<TaskStateType> givenState = Optional.ofNullable(isEmptyState ? null : TaskStateType.valueOf(state));
         TasksResponse resp = coordinator().tasks(new TasksRequest(taskId, firstStartMs, lastStartMs, firstEndMs, lastEndMs, givenState));
