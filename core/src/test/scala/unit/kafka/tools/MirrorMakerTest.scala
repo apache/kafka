@@ -17,8 +17,9 @@
 
 package kafka.tools
 
-import kafka.consumer.BaseConsumerRecord
+import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.record.{RecordBatch, TimestampType}
+
 import scala.collection.JavaConverters._
 import org.junit.Assert._
 import org.junit.Test
@@ -28,7 +29,19 @@ class MirrorMakerTest {
   @Test
   def testDefaultMirrorMakerMessageHandler() {
     val now = 12345L
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
+    val consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]] = new ConsumerRecord[Array[Byte], Array[Byte]](
+        "topic",
+        0,
+        1L,
+        now,
+        TimestampType.CREATE_TIME,
+        ConsumerRecord.NULL_CHECKSUM,
+        "key".getBytes.size,
+        "value".getBytes.size,
+        "key".getBytes,
+        "value".getBytes)
+
+    ("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes, "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)
@@ -43,8 +56,17 @@ class MirrorMakerTest {
 
   @Test
   def testDefaultMirrorMakerMessageHandlerWithNoTimestampInSourceMessage() {
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, RecordBatch.NO_TIMESTAMP, TimestampType.CREATE_TIME,
-      "key".getBytes, "value".getBytes)
+    val consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]] = new ConsumerRecord[Array[Byte], Array[Byte]](
+        "topic",
+        0,
+        1L,
+        RecordBatch.NO_TIMESTAMP,
+        TimestampType.CREATE_TIME,
+        ConsumerRecord.NULL_CHECKSUM,
+        "key".getBytes.size,
+        "value".getBytes.size,
+        "key".getBytes,
+        "value".getBytes)
 
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)
@@ -60,8 +82,17 @@ class MirrorMakerTest {
   @Test
   def testDefaultMirrorMakerMessageHandlerWithHeaders() {
     val now = 12345L
-    val consumerRecord = BaseConsumerRecord("topic", 0, 1L, now, TimestampType.CREATE_TIME, "key".getBytes,
-      "value".getBytes)
+    val consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]] = new ConsumerRecord[Array[Byte], Array[Byte]](
+        "topic",
+        0,
+        1L,
+        now,
+        TimestampType.CREATE_TIME,
+        ConsumerRecord.NULL_CHECKSUM,
+        "key".getBytes.size,
+        "value".getBytes.size,
+        "key".getBytes,
+        "value".getBytes)
     consumerRecord.headers.add("headerKey", "headerValue".getBytes)
     val result = MirrorMaker.defaultMirrorMakerMessageHandler.handle(consumerRecord)
     assertEquals(1, result.size)
