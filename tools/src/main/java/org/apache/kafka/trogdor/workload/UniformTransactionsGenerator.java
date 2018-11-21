@@ -42,21 +42,21 @@ public class UniformTransactionsGenerator implements TransactionActionGenerator 
     }
 
     @Override
-    public TransactionActions nextAction() {
+    public synchronized TransactionAction nextAction() {
         if (!initialized) {
             initialized = true;
-            return TransactionActions.INIT_TRANSACTIONS;
+            return TransactionAction.INIT_TRANSACTIONS;
         }
         if (messagesInTransaction == -1) {
             messagesInTransaction = 0;
-            return TransactionActions.BEGIN_TRANSACTION;
+            return TransactionAction.BEGIN_TRANSACTION;
         }
         if (messagesInTransaction == messagesPerTransaction) {
             messagesInTransaction = -1;
-            return TransactionActions.COMMIT_TRANSACTION;
+            return TransactionAction.COMMIT_TRANSACTION;
         }
 
         messagesInTransaction += 1;
-        return TransactionActions.NO_OP;
+        return TransactionAction.NO_OP;
     }
 }

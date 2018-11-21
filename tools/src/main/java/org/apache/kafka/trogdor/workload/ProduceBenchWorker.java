@@ -36,7 +36,7 @@ import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
-import org.apache.kafka.trogdor.workload.TransactionActionGenerator.TransactionActions;
+import org.apache.kafka.trogdor.workload.TransactionActionGenerator.TransactionAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -198,7 +198,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
             this.txActionGenerator = spec.transactionGenerator();
             this.transactionsCommitted = new AtomicInteger();
-            if (txActionGenerator.nextAction() == TransactionActions.INIT_TRANSACTIONS)
+            if (txActionGenerator.nextAction() == TransactionAction.INIT_TRANSACTIONS)
                 toUseTransactions = true;
 
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
@@ -261,7 +261,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private boolean takeTransactionAction() {
             boolean tookAction = true;
-            TransactionActions nextAction = txActionGenerator.nextAction();
+            TransactionAction nextAction = txActionGenerator.nextAction();
             switch (nextAction) {
                 case INIT_TRANSACTIONS:
                     throw new IllegalStateException("Cannot initiate transactions twice");

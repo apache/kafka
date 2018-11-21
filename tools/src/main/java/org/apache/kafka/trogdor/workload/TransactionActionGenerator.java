@@ -26,22 +26,22 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
     include = JsonTypeInfo.As.PROPERTY,
     property = "type")
 @JsonSubTypes(value = {
-    @JsonSubTypes.Type(value = ZeroTransactionsGenerator.class, name = "zeroTransactions"),
+    @JsonSubTypes.Type(value = ZeroTransactionsGenerator.class, name = "zero"),
     @JsonSubTypes.Type(value = UniformTransactionsGenerator.class, name = "uniform"),
 })
 public interface TransactionActionGenerator {
-    enum TransactionActions {
+    enum TransactionAction {
         INIT_TRANSACTIONS, BEGIN_TRANSACTION, COMMIT_TRANSACTION, ABORT_TRANSACTION, NO_OP
     }
 
     /**
      * Returns the next action that the producer should take in regards to transactions.
      * This method should be called every time before a producer sends a message.
-     * This means that most of the time it should return #{@link TransactionActions#NO_OP}
+     * This means that most of the time it should return #{@link TransactionAction#NO_OP}
      * to signal the producer that its next step should be to send a message.
      *
-     * The first returned action of every generator should be #{@link TransactionActions#INIT_TRANSACTIONS},
+     * The first returned action of every generator should be #{@link TransactionAction#INIT_TRANSACTIONS},
      * in order to signal to the producer that it should be configured for using transactions
      */
-    TransactionActions nextAction();
+    TransactionAction nextAction();
 }

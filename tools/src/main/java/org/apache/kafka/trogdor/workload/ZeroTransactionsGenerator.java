@@ -23,7 +23,7 @@ public class ZeroTransactionsGenerator implements TransactionActionGenerator {
     public ZeroTransactionsGenerator() {}
 
     @Override
-    public TransactionActions nextAction() {
-        return TransactionActions.NO_OP;
+    public TransactionAction nextAction() {
+        return TransactionAction.NO_OP;
     }
 }
