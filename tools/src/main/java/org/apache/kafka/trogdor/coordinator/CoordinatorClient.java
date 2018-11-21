@@ -44,6 +44,7 @@ import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.UriBuilder;
 
 import java.util.Optional;
+import java.util.List;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -130,7 +131,7 @@ public class CoordinatorClient {
 
     public void createMultipleTasks(CreateMultipleTasksRequest request) throws Exception {
         HttpResponse<Empty> resp =
-            JsonRestServer.httpRequest(log, url("/coordinator/task/mass_create"), "POST",
+            JsonRestServer.httpRequest(log, url("/coordinator/task/creates"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
         resp.body();
     }
@@ -213,6 +214,12 @@ public class CoordinatorClient {
             .dest("create_task")
             .metavar("TASK_SPEC_JSON")
             .help("Create a new task from a task spec.");
+        actions.addArgument("--create-tasks")
+            .action(store())
+            .type(List.class)
+            .dest("create_tasks")
+            .metavar("TASK_SPECS_JSON")
+            .help("Create new tasks from multiple task specs.");
         actions.addArgument("--stop-task")
             .action(store())
             .type(String.class)
@@ -269,9 +276,9 @@ public class CoordinatorClient {
                 readValue(res.getString("create_task"), CreateTaskRequest.class);
             client.createTask(req);
             System.out.printf("Sent CreateTaskRequest for task %s.", req.id());
-        } else if (res.getString("create_multiple_task") != null) {
+        } else if (res.getString("create_tasks") != null) {
             CreateMultipleTasksRequest req = JsonUtil.JSON_SERDE.
-                readValue(res.getString("create_multiple_task"), CreateMultipleTasksRequest.class);
+                readValue(res.getString("create_tasks"), CreateMultipleTasksRequest.class);
             client.createMultipleTasks(req);
             System.out.print("Sent CreateMultipleTasksRequest for multiple tasks.");
         } else if (res.getString("stop_task") != null) {

@@ -30,6 +30,7 @@ import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -86,8 +87,13 @@ public class CoordinatorRestResource {
     }
 
     @POST
-    @Path("/task/mass_create")
-    public Response createMultipleTask(CreateMultipleTasksRequest request) throws Throwable {
+    @Path("/task/creates")
+    public Response createMultipleTasks(CreateMultipleTasksRequest request) throws Throwable {
+        if (request.tasks().size() == 0)
+            throw new BadRequestException("No tasks were given.");
+        if (request.tasks().stream().anyMatch(task -> task.id() == null || task.id().isEmpty()))
+            throw new BadRequestException("Tasks must have an ID");
+
         coordinator().createMultipleTasks(request);
         return Response.status(201).entity(Empty.INSTANCE).build();
     }

@@ -47,7 +47,6 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.ws.rs.BadRequestException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -298,27 +297,31 @@ public final class TaskManager {
             throws Throwable {
         ManagedTask managedTask = createTask(task);
 
-        long delayMs = scheduleTask(managedTask);
-        log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
+        if (managedTask != null) {
+            long delayMs = scheduleTask(managedTask);
+            log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
+        }
     }
 
     /**
-     * Atomically creates and schedules the given tasks. If any task fails creation, none get scheduled.
+     * Creates and schedules the given tasks.
      *
-     * @throws RequestConflictException - if a task with that ID already exists
-     * @throws BadRequestException - if there was any generic failure in creating the task
+     * @throws RequestConflictException - if a task with that ID and a different spec already exists
      */
-    public void createAndScheduleTasksAtomic(List<TaskDetail> tasks) throws Throwable {
+    public void createAndScheduleTasks(List<TaskDetail> tasks) throws RequestConflictException, InvalidRequestException {
         List<ManagedTask> managedTasks = new ArrayList<>();
         if (tasks.stream().map(task -> task.id).collect(Collectors.toSet()).size() < tasks.size())
             throw new RequestConflictException("Duplicate task IDs given");
 
         for (TaskDetail task: tasks) {
             try {
-                managedTasks.add(createTask(task));
+                ManagedTask createdTask = createTask(task);
+                if (createdTask != null)
+                    managedTasks.add(createdTask);
+            } catch (RequestConflictException | InvalidRequestException e) {
+                throw e;
             } catch (Throwable e) {
                 log.info("Failed to create createTask(id={}, spec={}) error:", task.id, task.spec, e);
-                throw e;
             }
         }
 
@@ -337,24 +340,37 @@ public final class TaskManager {
         return delayMs;
     }
 
+    /**
+     * @return a #{@link ManagedTask} instance or #{@code null} if there was an error creating the task
+     *  or if the task already exists
+     * @throws InvalidRequestException if the task has an invalid ID
+     * @throws RequestConflictException if a task with the given ID already exists but has a different specification
+     */
     private ManagedTask createTask(TaskDetail task) throws Throwable {
         try {
-            if (task.id.isEmpty()) {
+            if (task.id.isEmpty())
                 throw new InvalidRequestException("Invalid empty ID in createTask request.");
-            }
+
             ManagedTask duplicateTask = tasks.get(task.id);
             if (duplicateTask != null) {
-                log.info("Task {} already exists with spec {}", duplicateTask.id, duplicateTask.spec);
-                throw new RequestConflictException("Task ID " + duplicateTask.id + " already exists");
+                if (!duplicateTask.spec.equals(task.spec))
+                    throw new RequestConflictException("Task ID " + task.id + " already " +
+                        "exists, and has a different spec " + duplicateTask.spec);
+
+                log.info("Task {} already exists with spec {}", task.id, task.spec);
+                return null;
             }
+
             return executor.submit(new CreateTask(task.id, task.spec)).get();
         } catch (ExecutionException e) {
             log.info("createTask(id={}, spec={}) error", task.id, task.spec, e);
             throw e.getCause();
-        } catch (BadRequestException e) {
+        } catch (RequestConflictException e) {
+            throw e;
+        } catch (Exception e) {
             log.info("Failed to create a new task {} with spec {}: {}",
                 task.id, task.spec, e.getMessage());
-            throw e;
+            return null;
         }
     }
 
@@ -386,7 +402,7 @@ public final class TaskManager {
                 TaskController controller = spec.newController(id);
                 return new ManagedTask(id, spec, controller, TaskStateType.PENDING);
             } catch (Exception t) {
-                throw new BadRequestException("Failed to create TaskController: " + t.getMessage());
+                throw new Exception("Failed to create TaskController: " + t.getMessage());
             }
         }
     }

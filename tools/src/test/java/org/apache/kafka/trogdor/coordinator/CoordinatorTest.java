@@ -134,10 +134,11 @@ public class CoordinatorTest {
 
             // should not any tasks, since they have duplicate IDs in the request
             NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
+            NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(1, 3);
             CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
             CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
             CreateTaskRequest taskReq3 = new CreateTaskRequest("foobar", fooSpec1);
-            CreateTaskRequest taskReq4 = new CreateTaskRequest("foo", fooSpec1); // conflicting ids
+            CreateTaskRequest taskReq4 = new CreateTaskRequest("foo", fooSpec2); // conflicting ids and different spec
             try {
                 cluster.coordinatorClient().createMultipleTasks(
                     new CreateMultipleTasksRequest(Arrays.asList(taskReq1, taskReq2, taskReq3, taskReq4))
@@ -174,7 +175,7 @@ public class CoordinatorTest {
                 .waitFor(cluster.coordinatorClient());
 
             try {
-                // taskReq4 has a duplicate ID
+                // taskReq4 has a duplicate ID and spec
                 cluster.coordinatorClient().createMultipleTasks(
                     new CreateMultipleTasksRequest(Arrays.asList(taskReq2, taskReq3, taskReq4))
                 );
@@ -222,9 +223,12 @@ public class CoordinatorTest {
                     build()).
                 waitFor(cluster.coordinatorClient());
 
-            // Re-creating a task with the same arguments gives a RequestConflictException.
+            // Re-creating a task with the same arguments does not throw an exception nor re-create the task
+            cluster.coordinatorClient().createTask(new CreateTaskRequest("foo", fooSpec));
+
+            // Re-creating a task with the same ID but a different spec throws an exception
             try {
-                cluster.coordinatorClient().createTask(new CreateTaskRequest("foo", fooSpec));
+                cluster.coordinatorClient().createTask(new CreateTaskRequest("foo", new NoOpTaskSpec(3, 3)));
                 fail("Expected to get an exception when re-creating the same task");
             } catch (RequestConflictException exception) {
             }
