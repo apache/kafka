@@ -165,7 +165,10 @@ public class StandbyTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        task.close(true, false);
+        if (task != null) {
+            task.close(true, false);
+            task = null;
+        }
         Utils.delete(baseDir);
     }
 
@@ -599,6 +602,7 @@ public class StandbyTaskTest {
             fail("should have thrown exception");
         } catch (final Exception e) {
             // expected
+            task = null;
         }
         assertTrue(closedStateManager.get());
     }
