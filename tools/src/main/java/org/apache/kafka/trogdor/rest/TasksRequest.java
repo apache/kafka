@@ -24,6 +24,7 @@ import org.apache.kafka.trogdor.coordinator.TaskManager;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -60,7 +61,7 @@ public class TasksRequest extends Message {
      * The desired state of the tasks.
      * An empty string will match all states.
      */
-    private final String state;
+    private final Optional<TaskStateType> state;
 
     @JsonCreator
     public TasksRequest(@JsonProperty("taskIds") Collection<String> taskIds,
@@ -68,7 +69,7 @@ public class TasksRequest extends Message {
             @JsonProperty("lastStartMs") long lastStartMs,
             @JsonProperty("firstEndMs") long firstEndMs,
             @JsonProperty("lastEndMs") long lastEndMs,
-            @JsonProperty("state") String state) {
+            @JsonProperty("state") Optional<TaskStateType> state) {
         this.taskIds = Collections.unmodifiableSet((taskIds == null) ?
             new HashSet<String>() : new HashSet<>(taskIds));
         this.firstStartMs = Math.max(0, firstStartMs);
@@ -104,7 +105,7 @@ public class TasksRequest extends Message {
     }
 
     @JsonProperty
-    public String state() {
+    public Optional<TaskStateType> state() {
         return state;
     }
 
@@ -116,7 +117,7 @@ public class TasksRequest extends Message {
      * @param endMs     The task end time, or -1 if the task hasn't ended.
      * @return          True if information about the task should be returned.
      */
-    public boolean matches(String taskId, long startMs, long endMs, TaskManager.ManagedTaskState state) {
+    public boolean matches(String taskId, long startMs, long endMs, TaskStateType state) {
         if ((!taskIds.isEmpty()) && (!taskIds.contains(taskId))) {
             return false;
         }
@@ -133,7 +134,7 @@ public class TasksRequest extends Message {
             return false;
         }
 
-        if (!this.state.equals("") && TaskManager.ManagedTaskState.valueOf(this.state) != state) {
+        if (this.state.isPresent() && !this.state.get().equals(state)) {
             return false;
         }
 
