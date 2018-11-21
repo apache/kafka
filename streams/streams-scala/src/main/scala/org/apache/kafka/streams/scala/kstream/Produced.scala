@@ -16,31 +16,31 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Produced => ProducedJ}
 import org.apache.kafka.streams.processor.StreamPartitioner
+import org.apache.kafka.streams.scala.{KeySerde, ValueSerde}
 
 object Produced {
 
   /**
    * Create a Produced instance with provided keySerde and valueSerde.
    *
-   * @tparam K         key type
-   * @tparam V         value type
+   * @tparam K key type
+   * @tparam V value type
    * @param keySerde   Serde to use for serializing the key
    * @param valueSerde Serde to use for serializing the value
    * @return A new [[Produced]] instance configured with keySerde and valueSerde
    * @see KStream#through(String, Produced)
    * @see KStream#to(String, Produced)
    */
-  def `with`[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): ProducedJ[K, V] =
-    ProducedJ.`with`(keySerde, valueSerde)
+  def `with`[K, V](implicit keySerde: KeySerde[K], valueSerde: ValueSerde[V]): ProducedJ[K, V] =
+    ProducedJ.`with`(keySerde.serde, valueSerde.serde)
 
   /**
    * Create a Produced instance with provided keySerde, valueSerde, and partitioner.
    *
-   * @tparam K          key type
-   * @tparam V          value type
+   * @tparam K key type
+   * @tparam V value type
    * @param partitioner the function used to determine how records are distributed among partitions of the topic,
    *                    if not specified and `keySerde` provides a
    *                    [[org.apache.kafka.streams.kstream.internals.WindowedSerializer]] for the key
@@ -53,7 +53,7 @@ object Produced {
    * @see KStream#through(String, Produced)
    * @see KStream#to(String, Produced)
    */
-  def `with`[K, V](partitioner: StreamPartitioner[K, V])(implicit keySerde: Serde[K],
-                                                         valueSerde: Serde[V]): ProducedJ[K, V] =
-    ProducedJ.`with`(keySerde, valueSerde, partitioner)
+  def `with`[K, V](partitioner: StreamPartitioner[K, V])(implicit keySerde: KeySerde[K],
+                                                         valueSerde: ValueSerde[V]): ProducedJ[K, V] =
+    ProducedJ.`with`(keySerde.serde, valueSerde.serde, partitioner)
 }

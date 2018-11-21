@@ -47,6 +47,7 @@ private[scala] object FunctionsCompatConversions {
     def asKeyValueMapper: KeyValueMapper[T, U, VR] = new KeyValueMapper[T, U, VR] {
       override def apply(key: T, value: U): VR = f(key, value)
     }
+
     def asValueJoiner: ValueJoiner[T, U, VR] = new ValueJoiner[T, U, VR] {
       override def apply(value1: T, value2: U): VR = f(value1, value2)
     }
@@ -114,4 +115,5 @@ private[scala] object FunctionsCompatConversions {
       override def get(): Transformer[K, V, VO] = f()
     }
   }
+
 }

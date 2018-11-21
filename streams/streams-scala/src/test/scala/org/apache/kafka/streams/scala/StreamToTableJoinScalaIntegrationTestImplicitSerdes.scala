@@ -44,6 +44,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     // Consumed and Joined instances. So all APIs below that accept Grouped, Produced, Consumed or Joined will
     // get these instances automatically
     import Serdes._
+    import KeyValueAgnostic._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 
@@ -84,6 +85,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     // Consumed and Joined instances. So all APIs below that accept Grouped, Produced, Consumed or Joined will
     // get these instances automatically
     import Serdes._
+    import KeyValueAgnostic._
 
     val streamsConfiguration: Properties = getStreamsConfiguration()
 

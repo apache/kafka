@@ -36,6 +36,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.test.{IntegrationTest, TestUtils}
 import ImplicitConversions._
+import org.apache.kafka.streams.scala.Serdes.KeyValueAgnostic
 import org.junit.experimental.categories.Category
 
 /**
@@ -49,6 +50,8 @@ import org.junit.experimental.categories.Category
  */
 @Category(Array(classOf[IntegrationTest]))
 class WordCountTest extends JUnitSuite with WordCountTestData {
+
+  import KeyValueAgnostic._
 
   private val privateCluster: EmbeddedKafkaCluster = new EmbeddedKafkaCluster(1)
 

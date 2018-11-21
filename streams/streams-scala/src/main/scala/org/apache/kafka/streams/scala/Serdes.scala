@@ -60,13 +60,30 @@ object Serdes {
     JSerdes.serdeFrom(
       new Serializer[T] {
         override def serialize(topic: String, data: T): Array[Byte] = serializer(topic, data)
+
         override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = ()
+
         override def close(): Unit = ()
       },
       new Deserializer[T] {
         override def deserialize(topic: String, data: Array[Byte]): T = deserializer(topic, data).orNull
+
         override def configure(configs: util.Map[String, _], isKey: Boolean): Unit = ()
+
         override def close(): Unit = ()
       }
     )
+
+  object KeyValueAgnostic {
+    implicit def keySerdeFromSerde[T](implicit inner: Serde[T]): KeySerde[T] = KeySerde[T](inner)
+
+    implicit def valueSerdeFromSerde[T](implicit inner: Serde[T]): ValueSerde[T] = ValueSerde[T](inner)
+  }
+
+  implicit class SerdeExtensions[T](serde: Serde[T]) {
+    def asKeySerde: KeySerde[T] = KeySerde(serde)
+
+    def asValueSerde: ValueSerde[T] = ValueSerde(serde)
+  }
+
 }

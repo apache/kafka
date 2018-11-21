@@ -48,6 +48,8 @@ import _root_.scala.collection.JavaConverters._
  */
 class TopologyTest extends JUnitSuite {
 
+  import KeyValueAgnostic._
+
   val inputTopic = "input-topic"
   val userClicksTopic = "user-clicks-topic"
   val userRegionsTopic = "user-regions-topic"
