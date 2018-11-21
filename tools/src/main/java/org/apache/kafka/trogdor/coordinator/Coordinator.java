@@ -100,7 +100,7 @@ public final class Coordinator {
     }
 
     public void createMultipleTasks(CreateMultipleTasksRequest request)
-        throws InvalidRequestException, RequestConflictException, BadRequestException {
+        throws Throwable {
         taskManager.createAndScheduleTasksAtomic(
             request.tasks().stream()
                 .map(req -> new TaskManager.TaskDetail(req.id(), req.spec()))

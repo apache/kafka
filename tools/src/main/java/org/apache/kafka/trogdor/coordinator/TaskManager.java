@@ -304,8 +304,11 @@ public final class TaskManager {
 
     /**
      * Atomically creates and schedules the given tasks. If any task fails creation, none get scheduled.
+     *
+     * @throws RequestConflictException - if a task with that ID already exists
+     * @throws BadRequestException - if there was any generic failure in creating the task
      */
-    public void createAndScheduleTasksAtomic(List<TaskDetail> tasks) throws BadRequestException, RequestConflictException {
+    public void createAndScheduleTasksAtomic(List<TaskDetail> tasks) throws Throwable {
         List<ManagedTask> managedTasks = new ArrayList<>();
         if (tasks.stream().map(task -> task.id).collect(Collectors.toSet()).size() < tasks.size())
             throw new RequestConflictException("Duplicate task IDs given");
@@ -315,6 +318,7 @@ public final class TaskManager {
                 managedTasks.add(createTask(task));
             } catch (Throwable e) {
                 log.info("Failed to create createTask(id={}, spec={}) error:", task.id, task.spec, e);
+                throw e;
             }
         }
 

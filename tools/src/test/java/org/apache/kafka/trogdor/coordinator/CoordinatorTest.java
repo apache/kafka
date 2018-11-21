@@ -132,7 +132,7 @@ public class CoordinatorTest {
             build()) {
             new ExpectedTasks().waitFor(cluster.coordinatorClient());
 
-            // should create all tasks
+            // should not any tasks, since they have duplicate IDs in the request
             NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
             CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
             CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
@@ -160,6 +160,45 @@ public class CoordinatorTest {
                 fail("Expected assertionError since no tasks should exist");
             } catch (AssertionError e) {
             }
+
+            // send an ID that is already stored by the coordinator - should still fail
+            taskReq1 = new CreateTaskRequest("foo", fooSpec1);
+            cluster.coordinatorClient().createMultipleTasks(
+                new CreateMultipleTasksRequest(Arrays.asList(taskReq1))
+            );
+            // should store foo
+            new ExpectedTasks()
+                .addTask(new ExpectedTaskBuilder("foo")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .waitFor(cluster.coordinatorClient());
+
+            try {
+                // taskReq4 has a duplicate ID
+                cluster.coordinatorClient().createMultipleTasks(
+                    new CreateMultipleTasksRequest(Arrays.asList(taskReq2, taskReq3, taskReq4))
+                );
+                fail("Expected to get an exception when submitting duplicate tasks.");
+            } catch (RequestConflictException exception) {
+            }
+            new ExpectedTasks()
+                .addTask(new ExpectedTaskBuilder("foo")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .waitFor(cluster.coordinatorClient());
+            try {
+                new ExpectedTasks()
+                    .addTask(new ExpectedTaskBuilder("bar")
+                        .taskState(new TaskPending(fooSpec1))
+                        .build())
+                    .addTask(new ExpectedTaskBuilder("foobar")
+                        .taskState(new TaskPending(fooSpec1))
+                        .build())
+                    .waitFor(cluster.coordinatorClient(), 0);
+                fail("Expected assertionError since those tasks should not exist");
+            } catch (AssertionError e) {
+            }
+
         }
     }
 

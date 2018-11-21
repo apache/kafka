@@ -29,7 +29,7 @@ public class CreateMultipleTasksRequest extends Message {
     private final List<CreateTaskRequest> tasks;
 
     @JsonCreator
-    public CreateMultipleTasksRequest(@JsonProperty("tasks") List<CreateTaskRequest> tasks) {
+    public CreateMultipleTasksRequest(@JsonProperty(value = "tasks", required = true) List<CreateTaskRequest> tasks) {
         this.tasks = tasks;
     }
 
