@@ -216,7 +216,7 @@ public class CoordinatorClient {
             .help("Create a new task from a task spec.");
         actions.addArgument("--create-tasks")
             .action(store())
-            .type(List.class)
+            .type(String.class)
             .dest("create_tasks")
             .metavar("TASK_SPECS_JSON")
             .help("Create new tasks from multiple task specs.");
