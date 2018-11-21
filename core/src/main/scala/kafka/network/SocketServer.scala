@@ -146,7 +146,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
     info(s"Started processors for ${acceptors.size} acceptors")
   }
 
-  private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
+  private def endpoints = config.listeners.map(endpoint => endpoint.listenerName -> endpoint).toMap
 
   private def createAcceptorAndProcessors(processorsPerListener: Int,
                                           endpoints: Seq[EndPoint]): Unit = synchronized {
