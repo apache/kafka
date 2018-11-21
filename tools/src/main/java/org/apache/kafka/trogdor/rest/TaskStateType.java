@@ -34,8 +34,5 @@ public enum TaskStateType {
         static final String RUNNING_VALUE = "RUNNING";
         static final String STOPPING_VALUE = "STOPPING";
         static final String DONE_VALUE = "DONE";
-        public static final String[] values = new String[]{
-            PENDING_VALUE, RUNNING_VALUE, STOPPING_VALUE, DONE_VALUE
-        };
     }
 }
