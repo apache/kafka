@@ -342,7 +342,7 @@ public class AbstractConfig {
      * @param configOverrides Configuration overrides to use.
      * @return The list of configured instances
      */
-    public <T> List<T> getConfiguredInstances(List<String> classNames, Class<T> t, Map<String, Object> configOverrides) {
+    public <T> List<T> getConfiguredInstances(List<?> classNames, Class<T> t, Map<String, Object> configOverrides) {
         List<T> objects = new ArrayList<>();
         if (classNames == null)
             return objects;
