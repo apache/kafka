@@ -32,6 +32,7 @@ import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -620,7 +621,7 @@ public class KafkaStreamsTest {
         final String storeName = testName.getMethodName() + "-counts";
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
-        startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, false);
+        startStreamsAndCheckDirExists(topology, asList(inputTopic, globalTopicName), outputTopic, false);
     }
 
     @Test
@@ -631,7 +632,7 @@ public class KafkaStreamsTest {
         final String storeName = testName.getMethodName() + "-counts";
         final String globalStoreName = testName.getMethodName() + "-globalStore";
         final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
-        startStreamsAndCheckDirExists(topology, Arrays.asList(inputTopic, globalTopicName), outputTopic, true);
+        startStreamsAndCheckDirExists(topology, asList(inputTopic, globalTopicName), outputTopic, true);
     }
 
     @SuppressWarnings("unchecked")
