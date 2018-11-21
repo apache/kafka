@@ -124,7 +124,7 @@ public class ProcessorContextImplTest {
 
                 checkThrowsUnsupportedOperation(store::flush, "flush");
 
-                assertEquals((Long)VAL, store.get(KEY));
+                assertEquals((Long) VAL, store.get(KEY));
                 assertEquals(rangeIter, store.range("one", "two"));
                 assertEquals(allIter, store.all());
                 assertEquals(VAL, store.approximateNumEntries());
