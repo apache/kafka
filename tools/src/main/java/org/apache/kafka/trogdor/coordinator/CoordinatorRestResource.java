@@ -23,12 +23,10 @@ import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TasksRequest;
-import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -39,12 +37,11 @@ import javax.ws.rs.NotFoundException;
 import javax.ws.rs.POST;
 import javax.ws.rs.PUT;
 import javax.ws.rs.Path;
+import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
-import javax.ws.rs.PathParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -110,15 +107,11 @@ public class CoordinatorRestResource {
             @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
             @DefaultValue("") @QueryParam("state") String state) throws Throwable {
         boolean isEmptyState = state.equals("");
-        if (!isEmptyState) {
-            try {
-                TaskStateType.valueOf(state);
-            } catch (IllegalArgumentException e) {
-                return Response.status(400).entity(
-                    String.format("State %s is invalid. Must be one of %s",
-                        state, Arrays.toString(TaskStateType.Constants.values))
-                ).build();
-            }
+        if (!isEmptyState && !TaskStateType.Constants.values.contains(state)) {
+            return Response.status(400).entity(
+                String.format("State %s is invalid. Must be one of %s",
+                    state, TaskStateType.Constants.values)
+            ).build();
         }
 
         Optional<TaskStateType> givenState = Optional.ofNullable(isEmptyState ? null : TaskStateType.valueOf(state));
