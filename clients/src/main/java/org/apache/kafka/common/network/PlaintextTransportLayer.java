@@ -20,20 +20,27 @@ package org.apache.kafka.common.network;
  * Transport layer for PLAINTEXT communication
  */
 
+import org.apache.kafka.common.security.auth.KafkaPrincipal;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
-import java.nio.channels.SocketChannel;
 import java.nio.channels.SelectionKey;
-
+import java.nio.channels.SocketChannel;
 import java.security.Principal;
-
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import java.util.Arrays;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
+    private boolean completedRead = false;
+
+    // First byte is Record type (0x15 - ALERT)
+    // Second and third bytes represent the version (TLSv1 - 0x0301, TLSv2 - 0x0302, TLSv3 - 0x0303)
+    private static byte[] tlsAlertV11Header = new byte[] { 0x15, 0x03, 0x01 };
+    private static byte[] tlsAlertV12Header = new byte[] { 0x15, 0x03, 0x02 };
+    private static byte[] tlsAlertV13Header = new byte[] { 0x15, 0x03, 0x03 };
 
     public PlaintextTransportLayer(SelectionKey key) throws IOException {
         this.key = key;
@@ -100,7 +107,21 @@ public class PlaintextTransportLayer implements TransportLayer {
     */
     @Override
     public int read(ByteBuffer dst) throws IOException {
-        return socketChannel.read(dst);
+        int readSize = socketChannel.read(dst);
+
+        if (!completedRead && isTlsResponse(dst))
+            throw new InvalidTransportLayerException("Received a TLS response on a plaintext-configured channel");
+
+        completedRead = true;
+        return readSize;
+    }
+
+    private boolean isTlsResponse(ByteBuffer readBuffer) {
+        byte[] receivedBytes = readBuffer.array();
+        byte[] header = new byte[] {receivedBytes[0], receivedBytes[1], receivedBytes[2]};
+        return (Arrays.equals(header, tlsAlertV11Header)
+             || Arrays.equals(header, tlsAlertV12Header)
+             || Arrays.equals(header, tlsAlertV13Header));
     }
 
     /**
