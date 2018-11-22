@@ -445,7 +445,7 @@ object ReassignPartitionsCommand extends Logging {
 
   class ReassignPartitionsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args)  {
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping. REQUIRED if " +
-                      "an absolution path of the log directory is specified for any replica in the reassignment json file")
+                      "an absolute path of the log directory is specified for any replica in the reassignment json file")
                       .withRequiredArg
                       .describedAs("Server(s) to use for bootstrapping")
                       .ofType(classOf[String])
