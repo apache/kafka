@@ -127,17 +127,17 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
   private val zkSecurityMigratorUtils = new ZkSecurityMigratorUtils(zkClient)
   private val futures = new Queue[Future[String]]
 
-  private def setAcl(path: String, setPromise: Promise[String]) = {
+  private def setAcl(path: String, setPromise: Promise[String]): Unit = {
     info("Setting ACL for path %s".format(path))
     zkSecurityMigratorUtils.currentZooKeeper.setACL(path, zkClient.defaultAcls(path).asJava, -1, SetACLCallback, setPromise)
   }
 
-  private def getChildren(path: String, childrenPromise: Promise[String]) = {
+  private def getChildren(path: String, childrenPromise: Promise[String]): Unit = {
     info("Getting children to set ACLs for path %s".format(path))
     zkSecurityMigratorUtils.currentZooKeeper.getChildren(path, false, GetChildrenCallback, childrenPromise)
   }
 
-  private def setAclIndividually(path: String) = {
+  private def setAclIndividually(path: String): Unit = {
     val setPromise = Promise[String]
     futures.synchronized {
       futures += setPromise.future
@@ -145,7 +145,7 @@ class ZkSecurityMigrator(zkClient: KafkaZkClient) extends Logging {
     setAcl(path, setPromise)
   }
 
-  private def setAclsRecursively(path: String) = {
+  private def setAclsRecursively(path: String): Unit = {
     val setPromise = Promise[String]
     val childrenPromise = Promise[String]
     futures.synchronized {
