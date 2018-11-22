@@ -27,8 +27,8 @@ import java.util.{Collections, Locale, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
@@ -189,8 +189,7 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  class ConsumerConfig(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ConsumerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
       .describedAs("topic")
@@ -275,11 +274,11 @@ object ConsoleConsumer extends Logging {
       .describedAs("consumer group id")
       .ofType(classOf[String])
 
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+    options = tryParse(parser, args)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
 
     var groupIdPassed = true
-    val options: OptionSet = tryParse(parser, args)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.

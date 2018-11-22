@@ -38,110 +38,9 @@ import scala.collection.JavaConverters._
 object DumpLogSegments {
 
   def main(args: Array[String]) {
-    val parser = new OptionParser(false)
-    val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
-    val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
-    val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
-      "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.")
-    val filesOpt = parser.accepts("files", "REQUIRED: The comma separated list of data and index log files to be dumped.")
-                           .withRequiredArg
-                           .describedAs("file1, file2, ...")
-                           .ofType(classOf[String])
-    val maxMessageSizeOpt = parser.accepts("max-message-size", "Size of largest message.")
-                                  .withRequiredArg
-                                  .describedAs("size")
-                                  .ofType(classOf[java.lang.Integer])
-                                  .defaultsTo(5 * 1024 * 1024)
-    val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
-    val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
-                               .withOptionalArg()
-                               .ofType(classOf[java.lang.String])
-                               .defaultsTo("kafka.serializer.StringDecoder")
-    val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
-                               .withOptionalArg()
-                               .ofType(classOf[java.lang.String])
-                               .defaultsTo("kafka.serializer.StringDecoder")
-    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
-      "__consumer_offsets topic.")
-    val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
-      "transaction metadata from the __transaction_state topic.")
-
-    val helpOpt = parser.accepts("help", "Print usage information.")
-
-    val options = parser.parse(args : _*)
-
-    if(args.length == 0 || options.has(helpOpt))
-      CommandLineUtils.printUsageAndDie(parser, "Parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
-
-    CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
-
-    val printDataLog = options.has(printOpt) ||
-      options.has(offsetsOpt) ||
-      options.has(transactionLogOpt) ||
-      options.has(valueDecoderOpt) ||
-      options.has(keyDecoderOpt)
-    val verifyOnly = options.has(verifyOpt)
-    val indexSanityOnly = options.has(indexSanityOpt)
-
-    val files = options.valueOf(filesOpt).split(",")
-    val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
-    val isDeepIteration = options.has(deepIterationOpt) || printDataLog
-
-    val messageParser = if (options.has(offsetsOpt)) {
-      new OffsetsMessageParser
-    } else if (options.has(transactionLogOpt)) {
-      new TransactionLogMessageParser
-    } else {
-      val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
-      val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
-      new DecoderMessageParser(keyDecoder, valueDecoder)
-    }
-
-    val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
-    val timeIndexDumpErrors = new TimeIndexDumpErrors
-    val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
-
-    for(arg <- files) {
-      val file = new File(arg)
-      println(s"Dumping $file")
-
-      val filename = file.getName
-      val suffix = filename.substring(filename.lastIndexOf("."))
-      suffix match {
-        case Log.LogFileSuffix =>
-          dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
-        case Log.IndexFileSuffix =>
-          dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
-        case Log.TimeIndexFileSuffix =>
-          dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
-        case Log.ProducerSnapshotFileSuffix =>
-          dumpProducerIdSnapshot(file)
-        case Log.TxnIndexFileSuffix =>
-          dumpTxnIndex(file)
-        case _ =>
-          System.err.println(s"Ignoring unknown file $file")
-      }
-    }
-
-    misMatchesForIndexFilesMap.foreach {
-      case (fileName, listOfMismatches) => {
-        System.err.println("Mismatches in :" + fileName)
-        listOfMismatches.foreach(m => {
-          System.err.println("  Index offset: %d, log offset: %d".format(m._1, m._2))
-        })
-      }
-    }
-
-    timeIndexDumpErrors.printErrors()
-
-    nonConsecutivePairsForLogFilesMap.foreach {
-      case (fileName, listOfNonConsecutivePairs) => {
-        System.err.println("Non-consecutive offsets in :" + fileName)
-        listOfNonConsecutivePairs.foreach(m => {
-          System.err.println("  %d is followed by %d".format(m._1, m._2))
-        })
-      }
-    }
+    val opts = new DumpLogSegmentsOptions(args)
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
+    opts.checkArgs()
   }
 
   private def dumpTxnIndex(file: File): Unit = {
@@ -495,4 +394,104 @@ object DumpLogSegments {
     }
   }
 
+  class DumpLogSegmentsOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val printOpt = parser.accepts("print-data-log", "if set, printing the messages content when dumping data logs. Automatically set if any decoder option is specified.")
+    val verifyOpt = parser.accepts("verify-index-only", "if set, just verify the index log without printing its content.")
+    val indexSanityOpt = parser.accepts("index-sanity-check", "if set, just checks the index sanity without printing its content. " +
+      "This is the same check that is executed on broker startup to determine if an index needs rebuilding or not.")
+    val filesOpt = parser.accepts("files", "REQUIRED: The comma separated list of data and index log files to be dumped.")
+      .withRequiredArg
+      .describedAs("file1, file2, ...")
+      .ofType(classOf[String])
+    val maxMessageSizeOpt = parser.accepts("max-message-size", "Size of largest message.")
+      .withRequiredArg
+      .describedAs("size")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(5 * 1024 * 1024)
+    val deepIterationOpt = parser.accepts("deep-iteration", "if set, uses deep instead of shallow iteration. Automatically set if print-data-log is enabled.")
+    val valueDecoderOpt = parser.accepts("value-decoder-class", "if set, used to deserialize the messages. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+      .withOptionalArg()
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("kafka.serializer.StringDecoder")
+    val keyDecoderOpt = parser.accepts("key-decoder-class", "if set, used to deserialize the keys. This class should implement kafka.serializer.Decoder trait. Custom jar should be available in kafka/libs directory.")
+      .withOptionalArg()
+      .ofType(classOf[java.lang.String])
+      .defaultsTo("kafka.serializer.StringDecoder")
+    val offsetsOpt = parser.accepts("offsets-decoder", "if set, log data will be parsed as offset data from the " +
+      "__consumer_offsets topic.")
+    val transactionLogOpt = parser.accepts("transaction-log-decoder", "if set, log data will be parsed as " +
+      "transaction metadata from the __transaction_state topic.")
+    options = parser.parse(args : _*)
+
+    def checkArgs() = {
+      CommandLineUtils.checkRequiredArgs(parser, options, filesOpt)
+
+      val printDataLog = options.has(printOpt) ||
+        options.has(offsetsOpt) ||
+        options.has(transactionLogOpt) ||
+        options.has(valueDecoderOpt) ||
+        options.has(keyDecoderOpt)
+      val verifyOnly = options.has(verifyOpt)
+      val indexSanityOnly = options.has(indexSanityOpt)
+
+      val files = options.valueOf(filesOpt).split(",")
+      val maxMessageSize = options.valueOf(maxMessageSizeOpt).intValue()
+      val isDeepIteration = options.has(deepIterationOpt) || printDataLog
+
+      val messageParser = if (options.has(offsetsOpt)) {
+        new OffsetsMessageParser
+      } else if (options.has(transactionLogOpt)) {
+        new TransactionLogMessageParser
+      } else {
+        val valueDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(valueDecoderOpt), new VerifiableProperties)
+        val keyDecoder: Decoder[_] = CoreUtils.createObject[Decoder[_]](options.valueOf(keyDecoderOpt), new VerifiableProperties)
+        new DecoderMessageParser(keyDecoder, valueDecoder)
+      }
+      val misMatchesForIndexFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
+      val timeIndexDumpErrors = new TimeIndexDumpErrors
+      val nonConsecutivePairsForLogFilesMap = new mutable.HashMap[String, List[(Long, Long)]]
+
+      for(arg <- files) {
+        val file = new File(arg)
+        println(s"Dumping $file")
+
+        val filename = file.getName
+        val suffix = filename.substring(filename.lastIndexOf("."))
+        suffix match {
+          case Log.LogFileSuffix =>
+            dumpLog(file, printDataLog, nonConsecutivePairsForLogFilesMap, isDeepIteration, maxMessageSize , messageParser)
+          case Log.IndexFileSuffix =>
+            dumpIndex(file, indexSanityOnly, verifyOnly, misMatchesForIndexFilesMap, maxMessageSize)
+          case Log.TimeIndexFileSuffix =>
+            dumpTimeIndex(file, indexSanityOnly, verifyOnly, timeIndexDumpErrors, maxMessageSize)
+          case Log.ProducerSnapshotFileSuffix =>
+            dumpProducerIdSnapshot(file)
+          case Log.TxnIndexFileSuffix =>
+            dumpTxnIndex(file)
+          case _ =>
+            System.err.println(s"Ignoring unknown file $file")
+        }
+      }
+
+      misMatchesForIndexFilesMap.foreach {
+        case (fileName, listOfMismatches) => {
+          System.err.println("Mismatches in :" + fileName)
+          listOfMismatches.foreach(m => {
+            System.err.println("  Index offset: %d, log offset: %d".format(m._1, m._2))
+          })
+        }
+      }
+
+      timeIndexDumpErrors.printErrors()
+
+      nonConsecutivePairsForLogFilesMap.foreach {
+        case (fileName, listOfNonConsecutivePairs) => {
+          System.err.println("Non-consecutive offsets in :" + fileName)
+          listOfNonConsecutivePairs.foreach(m => {
+            System.err.println("  %d is followed by %d".format(m._1, m._2))
+          })
+        }
+      }
+    }
+  }
 }
