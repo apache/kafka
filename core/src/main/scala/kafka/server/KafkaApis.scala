@@ -399,10 +399,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-      else if (request.header.apiVersion() < 7 && memoryRecords.batches().asScala.exists(_.compressionType() == CompressionType.ZSTD))
-        invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       else
-        authorizedRequestInfo += (topicPartition -> memoryRecords)
+        try {
+          ProduceRequest.validateRecords(request.header.apiVersion(), memoryRecords)
+          authorizedRequestInfo += (topicPartition -> memoryRecords)
+        } catch {
+          case e: ApiException =>
+            invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
+        }
     }
 
     // the callback for sending a produce response
