@@ -699,7 +699,7 @@ http://kafka.apache.org/KEYS
 http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 
 * Maven artifacts to be voted upon:
-https://repository.apache.org/content/groups/staging/
+https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
 * Javadoc:
 http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/

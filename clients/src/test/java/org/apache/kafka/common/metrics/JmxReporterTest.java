@@ -46,7 +46,7 @@ public class JmxReporterTest {
             sensor.add(metrics.metricName("pack.bean2.total", "grp2"), new Total());
 
             assertTrue(server.isRegistered(new ObjectName(":type=grp1")));
-            assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp1"), "pack.bean1.avg"));
+            assertEquals(Double.NaN, server.getAttribute(new ObjectName(":type=grp1"), "pack.bean1.avg"));
             assertTrue(server.isRegistered(new ObjectName(":type=grp2")));
             assertEquals(0.0, server.getAttribute(new ObjectName(":type=grp2"), "pack.bean2.total"));
 

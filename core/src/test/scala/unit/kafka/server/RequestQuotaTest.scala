@@ -121,14 +121,14 @@ class RequestQuotaTest extends BaseRequestTest {
 
   @Test
   def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated() {
-    val apiKey = ApiKeys.PRODUCE;
+    val apiKey = ApiKeys.PRODUCE
     submitTest(apiKey, () => checkSmallQuotaProducerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
 
   @Test
   def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated() {
-    val apiKey = ApiKeys.FETCH;
+    val apiKey = ApiKeys.FETCH
     submitTest(apiKey, () => checkSmallQuotaConsumerRequestThrottleTime(apiKey))
     waitAndCheckResults()
   }
@@ -475,7 +475,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Throttle time metrics for produce quota not updated: $smallQuotaProducerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Produce) > 0)
     assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaProducerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request) == 0)
+      throttleTimeMetricValueForQuotaType(smallQuotaProducerClientId, QuotaType.Request).isNaN)
   }
 
   private def checkSmallQuotaConsumerRequestThrottleTime(apiKey: ApiKeys) {
@@ -488,7 +488,7 @@ class RequestQuotaTest extends BaseRequestTest {
     assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClientId",
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0)
     assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient",
-      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request) == 0)
+      throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN)
   }
 
   private def checkUnthrottledClient(apiKey: ApiKeys) {
@@ -497,7 +497,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val unthrottledClient = Client(unthrottledClientId, apiKey)
     unthrottledClient.runUntil(response => responseThrottleTime(apiKey, response) <= 0.0)
     assertEquals(1, unthrottledClient.correlationId)
-    assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId) <= 0.0)
+    assertTrue(s"Client should not have been throttled: $unthrottledClient", throttleTimeMetricValue(unthrottledClientId).isNaN)
   }
 
   private def checkExemptRequestMetric(apiKey: ApiKeys) {
@@ -507,7 +507,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val updated = client.runUntil(response => exemptRequestMetricValue > exemptTarget)
 
     assertTrue(s"Exempt-request-time metric not updated: $client", updated)
-    assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId) <= 0.0)
+    assertTrue(s"Client should not have been throttled: $client", throttleTimeMetricValue(clientId).isNaN)
   }
 
   private def checkUnauthorizedRequestThrottle(apiKey: ApiKeys) {
