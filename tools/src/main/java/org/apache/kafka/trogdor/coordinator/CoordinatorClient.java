@@ -44,7 +44,6 @@ import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.UriBuilder;
 
 import java.util.Optional;
-import java.util.List;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
