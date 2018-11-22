@@ -1314,19 +1314,19 @@
             <td>PRODUCE (0)</td>
             <td>Write</td>
             <td>TransactionalId</td>
-            <td></td>
+            <td>An transactional producer which has its transactional.id set requires this privilege.</td>
         </tr>
         <tr>
             <td>PRODUCE (0)</td>
             <td>IdempotentWrite</td>
             <td>Cluster</td>
-            <td></td>
+            <td>An idempotent produce action requires this privilege.</td>
         </tr>
         <tr>
             <td>PRODUCE (0)</td>
             <td>Write</td>
             <td>Topic</td>
-            <td></td>
+            <td>This applies to a normal produce action.</td>
         </tr>
         <tr>
             <td>FETCH (1)</td>
@@ -1356,13 +1356,15 @@
             <td>METADATA (3)</td>
             <td>Create</td>
             <td>Cluster</td>
-            <td></td>
+            <td>If topic auto-creation is enabled, then the broker-side API will check for the existence of a Cluster
+            level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the
+            Topic level privileges (see the next one).</td>
         </tr>
         <tr>
             <td>METADATA (3)</td>
             <td>Create</td>
-            <td>Cluster</td>
-            <td>This authorizes auto topic creation if enabled.</td>
+            <td>Topic</td>
+            <td>This authorizes topic auto-creation on Topic resources if enabled.</td>
         </tr>
         <tr>
             <td>METADATA (3)</td>
@@ -1429,7 +1431,8 @@
             <td>FIND_COORDINATOR (10)</td>
             <td>Describe</td>
             <td>TransactionalId</td>
-            <td></td>
+            <td>This applies only on transactional producers and checked when a producer tries to find the transaction
+                coordinator.</td>
         </tr>
         <tr>
             <td>JOIN_GROUP (11)</td>
@@ -1474,7 +1477,8 @@
             <td>Describe</td>
             <td>Group</td>
             <td>If none of the groups are authorized, then just an empty response will be sent back instead
-                of an error. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED.</td>
+                of an error. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED. This is applicable from the
+                2.1 release.</td>
         </tr>
         <tr>
             <td>SASL_HANDSHAKE (17)</td>
@@ -1501,7 +1505,7 @@
             <td>CREATE_TOPICS (19)</td>
             <td>Create</td>
             <td>Topic</td>
-            <td></td>
+            <td>This is applicable from the 2.0 release.</td>
         </tr>
         <tr>
             <td>DELETE_TOPICS (20)</td>
@@ -1537,7 +1541,7 @@
             <td>OFFSET_FOR_LEADER_EPOCH (23)</td>
             <td>Describe</td>
             <td>Topic</td>
-            <td></td>
+            <td>This is applicable from the 2.1 release.</td>
         </tr>
         <tr>
             <td>ADD_PARTITIONS_TO_TXN (24)</td>
@@ -1615,25 +1619,25 @@
             <td>DESCRIBE_CONFIGS (32)</td>
             <td>DescribeConfigs</td>
             <td>Cluster</td>
-            <td>If broker configs are requested, then the broker will check topic level privileges.</td>
+            <td>If broker configs are requested, then the broker will check cluster level privileges.</td>
         </tr>
         <tr>
             <td>DESCRIBE_CONFIGS (32)</td>
             <td>DescribeConfigs</td>
             <td>Topic</td>
-            <td></td>
+            <td>If topic configs are requested, then the broker will check topic level privileges.</td>
         </tr>
         <tr>
             <td>ALTER_CONFIGS (33)</td>
             <td>AlterConfigs</td>
             <td>Cluster</td>
-            <td>If broker configs are altered, then the broker will check topic level privileges.</td>
+            <td>If broker configs are altered, then the broker will check cluster level privileges.</td>
         </tr>
         <tr>
             <td>ALTER_CONFIGS (33)</td>
             <td>AlterConfigs</td>
             <td>Topic</td>
-            <td></td>
+            <td>If topic configs are altered, then the broker will check topic level privileges.</td>
         </tr>
         <tr>
             <td>ALTER_REPLICA_LOG_DIRS (34)</td>
