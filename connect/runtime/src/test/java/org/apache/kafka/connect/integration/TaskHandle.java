@@ -70,10 +70,14 @@ public class TaskHandle {
      * @param numPartitions number of partitions
      */
     public void partitionsAssigned(int numPartitions) {
-        if (numPartitions > 1) {
-            throw new IllegalStateException("Expected only one partition. But, assigned " + numPartitions + ".");
+        if (numPartitions != 1) {
+            // this can happen if all tasks have not started, and more partitions are assigned
+            // to the first task. Subsequent rebalances should allocate the right number of
+            // partitions to each task.
+            log.warn("Expected only one partition. But, assigned " + numPartitions + ".");
+        } else {
+            expectedPartitionsLatch.countDown();
         }
-        expectedPartitionsLatch.countDown();
     }
 
     /**
