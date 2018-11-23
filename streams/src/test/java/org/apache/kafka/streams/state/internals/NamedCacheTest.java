@@ -60,18 +60,18 @@ public class NamedCacheTest {
 
     @Test
     public void shouldKeepTrackOfMostRecentlyAndLeastRecentlyUsed() throws IOException {
-        List<KeyValue<String, String>> toInsert = Arrays.asList(
+        final List<KeyValue<String, String>> toInsert = Arrays.asList(
                 new KeyValue<>("K1", "V1"),
                 new KeyValue<>("K2", "V2"),
                 new KeyValue<>("K3", "V3"),
                 new KeyValue<>("K4", "V4"),
                 new KeyValue<>("K5", "V5"));
         for (int i = 0; i < toInsert.size(); i++) {
-            byte[] key = toInsert.get(i).key.getBytes();
-            byte[] value = toInsert.get(i).value.getBytes();
+            final byte[] key = toInsert.get(i).key.getBytes();
+            final byte[] value = toInsert.get(i).value.getBytes();
             cache.put(Bytes.wrap(key), new LRUCacheEntry(value, null, true, 1, 1, 1, ""));
-            LRUCacheEntry head = cache.first();
-            LRUCacheEntry tail = cache.last();
+            final LRUCacheEntry head = cache.first();
+            final LRUCacheEntry tail = cache.last();
             assertEquals(new String(head.value()), toInsert.get(i).value);
             assertEquals(new String(tail.value()), toInsert.get(0).value);
             assertEquals(cache.flushes(), 0);
@@ -190,7 +190,7 @@ public class NamedCacheTest {
 
         assertEquals(2, flushed.size());
         assertEquals(Bytes.wrap(new byte[] {0}), flushed.get(0).key());
-        assertEquals(headers, flushed.get(0).recordContext().headers());
+        assertEquals(headers, flushed.get(0).entry().context().headers());
         assertArrayEquals(new byte[] {10}, flushed.get(0).newValue());
         assertEquals(Bytes.wrap(new byte[] {2}), flushed.get(1).key());
         assertArrayEquals(new byte[] {30}, flushed.get(1).newValue());

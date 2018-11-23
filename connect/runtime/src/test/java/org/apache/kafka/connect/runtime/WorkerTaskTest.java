@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerTask.TaskMetricsGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.common.utils.MockTime;
@@ -62,7 +63,7 @@ public class WorkerTaskTest {
     @Before
     public void setup() {
         metrics = new MockConnectMetrics();
-        retryWithToleranceOperator = new RetryWithToleranceOperator();
+        retryWithToleranceOperator = RetryWithToleranceOperatorTest.NOOP_OPERATOR;
     }
 
     @After

@@ -51,15 +51,15 @@ public class KStreamTransformValuesTest {
     private String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private ProcessorContext context;
 
     @Test
     public void testTransform() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
+        final ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
             new ValueTransformerSupplier<Number, Integer>() {
                 public ValueTransformer<Number, Integer> get() {
                     return new ValueTransformer<Number, Integer>() {
@@ -67,11 +67,11 @@ public class KStreamTransformValuesTest {
                         private int total = 0;
 
                         @Override
-                        public void init(ProcessorContext context) {
+                        public void init(final ProcessorContext context) {
                         }
 
                         @Override
-                        public Integer transform(Number value) {
+                        public Integer transform(final Number value) {
                             total += value.intValue();
                             return total;
                         }
@@ -85,25 +85,25 @@ public class KStreamTransformValuesTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, Integer> stream;
+        final KStream<Integer, Integer> stream;
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transformValues(valueTransformerSupplier).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
             }
         }
-        String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
+        final String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
     @Test
     public void testTransformWithKey() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        ValueTransformerWithKeySupplier<Integer, Number, Integer> valueTransformerSupplier =
+        final ValueTransformerWithKeySupplier<Integer, Number, Integer> valueTransformerSupplier =
                 new ValueTransformerWithKeySupplier<Integer, Number, Integer>() {
             public ValueTransformerWithKey<Integer, Number, Integer> get() {
                 return new ValueTransformerWithKey<Integer, Number, Integer>() {
@@ -128,20 +128,21 @@ public class KStreamTransformValuesTest {
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
-        KStream<Integer, Integer> stream;
+        final KStream<Integer, Integer> stream;
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transformValues(valueTransformerSupplier).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-            for (int expectedKey : expectedKeys) {
+            for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
             }
         }
-        String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
+        final String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();

@@ -41,19 +41,19 @@ public class KStreamForeachTest {
 
     private final String topicName = "topic";
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testForeach() {
         // Given
-        List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
+        final List<KeyValue<Integer, String>> inputRecords = Arrays.asList(
             new KeyValue<>(0, "zero"),
             new KeyValue<>(1, "one"),
             new KeyValue<>(2, "two"),
             new KeyValue<>(3, "three")
         );
 
-        List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
+        final List<KeyValue<Integer, String>> expectedRecords = Arrays.asList(
             new KeyValue<>(0, "ZERO"),
             new KeyValue<>(2, "ONE"),
             new KeyValue<>(4, "TWO"),
@@ -61,39 +61,39 @@ public class KStreamForeachTest {
         );
 
         final List<KeyValue<Integer, String>> actualRecords = new ArrayList<>();
-        ForeachAction<Integer, String> action =
+        final ForeachAction<Integer, String> action =
             new ForeachAction<Integer, String>() {
                 @Override
-                public void apply(Integer key, String value) {
+                public void apply(final Integer key, final String value) {
                     actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
                 }
             };
 
         // When
-        StreamsBuilder builder = new StreamsBuilder();
-        KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.foreach(action);
 
         // Then
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (KeyValue<Integer, String> record : inputRecords) {
+            for (final KeyValue<Integer, String> record : inputRecords) {
                 driver.pipeInput(recordFactory.create(topicName, record.key, record.value));
             }
         }
 
         assertEquals(expectedRecords.size(), actualRecords.size());
         for (int i = 0; i < expectedRecords.size(); i++) {
-            KeyValue<Integer, String> expectedRecord = expectedRecords.get(i);
-            KeyValue<Integer, String> actualRecord = actualRecords.get(i);
+            final KeyValue<Integer, String> expectedRecord = expectedRecords.get(i);
+            final KeyValue<Integer, String> actualRecord = actualRecords.get(i);
             assertEquals(expectedRecord, actualRecord);
         }
     }
 
     @Test
     public void testTypeVariance() {
-        ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
+        final ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
-            public void apply(Number key, Object value) {}
+            public void apply(final Number key, final Object value) {}
         };
 
         new StreamsBuilder()

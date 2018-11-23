@@ -35,6 +35,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.HashMap;
+import java.util.regex.Pattern;
 
 /**
  * Manages the directories where the state of Tasks owned by a {@link StreamThread} are
@@ -42,6 +43,8 @@ import java.util.HashMap;
  * thread-safe.
  */
 public class StateDirectory {
+
+    private static final Pattern PATH_NAME = Pattern.compile("\\d+_\\d+");
 
     static final String LOCK_FILE_NAME = ".lock";
     private static final Logger log = LoggerFactory.getLogger(StateDirectory.class);
@@ -91,7 +94,7 @@ public class StateDirectory {
      * @return directory for the {@link TaskId}
      * @throws ProcessorStateException if the task directory does not exists and could not be created
      */
-    File directoryForTask(final TaskId taskId) {
+    public File directoryForTask(final TaskId taskId) {
         final File taskDir = new File(stateDir, taskId.toString());
         if (!taskDir.exists() && !taskDir.mkdir()) {
             throw new ProcessorStateException(
@@ -139,7 +142,7 @@ public class StateDirectory {
 
         try {
             lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
-        } catch (ProcessorStateException e) {
+        } catch (final ProcessorStateException e) {
             // directoryForTask could be throwing an exception if another thread
             // has concurrently deleted the directory
             return false;
@@ -149,7 +152,7 @@ public class StateDirectory {
 
         try {
             channel = getOrCreateFileChannel(taskId, lockFile.toPath());
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             // FileChannel.open(..) could throw NoSuchFileException when there is another thread
             // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
             // file, in this case we will return immediately indicating locking failed.
@@ -175,7 +178,7 @@ public class StateDirectory {
         final FileChannel channel;
         try {
             channel = FileChannel.open(lockFile.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE);
-        } catch (NoSuchFileException e) {
+        } catch (final NoSuchFileException e) {
             // FileChannel.open(..) could throw NoSuchFileException when there is another thread
             // concurrently deleting the parent directory (i.e. the directory of the taskId) of the lock
             // file, in this case we will return immediately indicating locking failed.
@@ -320,8 +323,7 @@ public class StateDirectory {
         return stateDir.listFiles(new FileFilter() {
             @Override
             public boolean accept(final File pathname) {
-                final String name = pathname.getName();
-                return pathname.isDirectory() && name.matches("\\d+_\\d+");
+                return pathname.isDirectory() && PATH_NAME.matcher(pathname.getName()).matches();
             }
         });
     }
@@ -337,7 +339,7 @@ public class StateDirectory {
     private FileLock tryLock(final FileChannel channel) throws IOException {
         try {
             return channel.tryLock();
-        } catch (OverlappingFileLockException e) {
+        } catch (final OverlappingFileLockException e) {
             return null;
         }
     }

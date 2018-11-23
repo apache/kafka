@@ -19,7 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigProvider;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
@@ -62,13 +62,8 @@ public class Plugins {
     }
 
     private static DelegatingClassLoader newDelegatingClassLoader(final List<String> paths) {
-        return (DelegatingClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    @Override
-                    public Object run() {
-                        return new DelegatingClassLoader(paths);
-                    }
-                }
+        return AccessController.doPrivileged(
+                (PrivilegedAction<DelegatingClassLoader>) () -> new DelegatingClassLoader(paths)
         );
     }
 
@@ -102,6 +97,7 @@ public class Plugins {
         );
     }
 
+    @SuppressWarnings("deprecation")
     protected static boolean isInternalConverter(String classPropertyName) {
         return classPropertyName.equals(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG)
             || classPropertyName.equals(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG);
@@ -243,6 +239,7 @@ public class Plugins {
         }
 
         // Determine whether this is a key or value converter based upon the supplied property name ...
+        @SuppressWarnings("deprecation")
         final boolean isKeyConverter = WorkerConfig.KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName)
                                      || WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG.equals(classPropertyName);
 

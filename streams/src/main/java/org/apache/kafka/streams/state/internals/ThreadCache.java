@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
@@ -50,7 +49,7 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final LogContext logContext, long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
+    public ThreadCache(final LogContext logContext, final long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
         this.log = logContext.logger(getClass());
@@ -89,7 +88,7 @@ public class ThreadCache {
      * @return
      */
     public static String taskIDfromCacheName(final String cacheName) {
-        String[] tokens = cacheName.split("-", 2);
+        final String[] tokens = cacheName.split("-", 2);
         return tokens[0];
     }
 
@@ -99,7 +98,7 @@ public class ThreadCache {
      * @return
      */
     public static String underlyingStoreNamefromCacheName(final String cacheName) {
-        String[] tokens = cacheName.split("-", 2);
+        final String[] tokens = cacheName.split("-", 2);
         return tokens[1];
     }
 
@@ -110,7 +109,7 @@ public class ThreadCache {
      * @param namespace
      * @param listener
      */
-    public void addDirtyEntryFlushListener(final String namespace, DirtyEntryFlushListener listener) {
+    public void addDirtyEntryFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         final NamedCache cache = getOrCreateCache(namespace);
         cache.setListener(listener);
     }
@@ -129,7 +128,7 @@ public class ThreadCache {
         }
     }
 
-    public LRUCacheEntry get(final String namespace, Bytes key) {
+    public LRUCacheEntry get(final String namespace, final Bytes key) {
         numGets++;
 
         if (key == null) {
@@ -143,7 +142,7 @@ public class ThreadCache {
         return cache.get(key);
     }
 
-    public void put(final String namespace, Bytes key, LRUCacheEntry value) {
+    public void put(final String namespace, final Bytes key, final LRUCacheEntry value) {
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
@@ -151,7 +150,7 @@ public class ThreadCache {
         maybeEvict(namespace);
     }
 
-    public LRUCacheEntry putIfAbsent(final String namespace, Bytes key, LRUCacheEntry value) {
+    public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
         final NamedCache cache = getOrCreateCache(namespace);
 
         final LRUCacheEntry result = cache.putIfAbsent(key, value);
@@ -164,7 +163,7 @@ public class ThreadCache {
     }
 
     public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {
-        for (KeyValue<Bytes, LRUCacheEntry> entry : entries) {
+        for (final KeyValue<Bytes, LRUCacheEntry> entry : entries) {
             put(namespace, entry.key, entry.value);
         }
     }
@@ -196,7 +195,7 @@ public class ThreadCache {
     
     public long size() {
         long size = 0;
-        for (NamedCache cache : caches.values()) {
+        for (final NamedCache cache : caches.values()) {
             size += cache.size();
             if (isOverflowing(size)) {
                 return Long.MAX_VALUE;
@@ -309,7 +308,7 @@ public class ThreadCache {
         }
 
         private void internalNext() {
-            Bytes cacheKey = keys.next();
+            final Bytes cacheKey = keys.next();
             final LRUCacheEntry entry = cache.get(cacheKey);
             if (entry == null) {
                 return;
@@ -332,9 +331,9 @@ public class ThreadCache {
     static class DirtyEntry {
         private final Bytes key;
         private final byte[] newValue;
-        private final ProcessorRecordContext recordContext;
+        private final LRUCacheEntry recordContext;
 
-        DirtyEntry(final Bytes key, final byte[] newValue, final ProcessorRecordContext recordContext) {
+        DirtyEntry(final Bytes key, final byte[] newValue, final LRUCacheEntry recordContext) {
             this.key = key;
             this.newValue = newValue;
             this.recordContext = recordContext;
@@ -348,7 +347,7 @@ public class ThreadCache {
             return newValue;
         }
 
-        public ProcessorRecordContext recordContext() {
+        public LRUCacheEntry entry() {
             return recordContext;
         }
     }

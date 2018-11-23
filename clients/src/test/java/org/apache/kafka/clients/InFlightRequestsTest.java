@@ -19,10 +19,14 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -65,6 +69,24 @@ public class InFlightRequestsTest {
     }
 
     @Test
+    public void testTimedOutNodes() {
+        Time time = new MockTime();
+
+        addRequest("A", time.milliseconds(), 50);
+        addRequest("B", time.milliseconds(), 200);
+        addRequest("B", time.milliseconds(), 100);
+
+        time.sleep(50);
+        assertEquals(Collections.emptyList(), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+
+        time.sleep(25);
+        assertEquals(Collections.singletonList("A"), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+
+        time.sleep(50);
+        assertEquals(Arrays.asList("A", "B"), inFlightRequests.nodesWithTimedOutRequests(time.milliseconds()));
+    }
+
+    @Test
     public void testCompleteNext() {
         int correlationId1 = addRequest(dest);
         int correlationId2 = addRequest(dest);
@@ -88,12 +110,16 @@ public class InFlightRequestsTest {
     }
 
     private int addRequest(String destination) {
+        return addRequest(destination, 0, 10000);
+    }
+
+    private int addRequest(String destination, long sendTimeMs, int requestTimeoutMs) {
         int correlationId = this.correlationId;
         this.correlationId += 1;
 
         RequestHeader requestHeader = new RequestHeader(ApiKeys.METADATA, (short) 0, "clientId", correlationId);
-        NetworkClient.InFlightRequest ifr = new NetworkClient.InFlightRequest(requestHeader, 0,
-                destination, null, false, false, null, null, 0);
+        NetworkClient.InFlightRequest ifr = new NetworkClient.InFlightRequest(requestHeader, requestTimeoutMs, 0,
+                destination, null, false, false, null, null, sendTimeMs);
         inFlightRequests.add(ifr);
         return correlationId;
     }

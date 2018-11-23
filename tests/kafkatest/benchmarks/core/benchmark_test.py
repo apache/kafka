@@ -189,16 +189,14 @@ class Benchmark(Test):
         return latency(self.perf.results[0]['latency_50th_ms'],  self.perf.results[0]['latency_99th_ms'], self.perf.results[0]['latency_999th_ms'])
 
     @cluster(num_nodes=6)
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_producer_and_consumer(self, compression_type="none", security_protocol="PLAINTEXT",
-                                   interbroker_security_protocol=None, new_consumer=True,
+                                   interbroker_security_protocol=None,
                                    client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
         """
         Setup: 1 node zk + 3 node kafka cluster
         Concurrently produce and consume 10e6 messages with a single producer and a single consumer,
-        using new consumer if new_consumer == True
 
         Return aggregate throughput statistics for both producer and consumer.
 
@@ -224,7 +222,7 @@ class Benchmark(Test):
             }
         )
         self.consumer = ConsumerPerformanceService(
-            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
+            self.test_context, 1, self.kafka, topic=TOPIC_REP_THREE, messages=num_records)
         Service.run_parallel(self.producer, self.consumer)
 
         data = {
@@ -238,15 +236,14 @@ class Benchmark(Test):
         return data
 
     @cluster(num_nodes=6)
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @parametrize(security_protocol='SSL', interbroker_security_protocol='PLAINTEXT')
     @matrix(security_protocol=['PLAINTEXT', 'SSL'], compression_type=["none", "snappy"])
     def test_consumer_throughput(self, compression_type="none", security_protocol="PLAINTEXT",
-                                 interbroker_security_protocol=None, new_consumer=True, num_consumers=1,
+                                 interbroker_security_protocol=None, num_consumers=1,
                                  client_version=str(DEV_BRANCH), broker_version=str(DEV_BRANCH)):
         """
         Consume 10e6 100-byte messages with 1 or more consumers from a topic with 6 partitions
-        (using new consumer iff new_consumer == True), and report throughput.
+        and report throughput.
         """
         client_version = KafkaVersion(client_version)
         broker_version = KafkaVersion(broker_version)
@@ -273,7 +270,7 @@ class Benchmark(Test):
         # consume
         self.consumer = ConsumerPerformanceService(
             self.test_context, num_consumers, self.kafka,
-            topic=TOPIC_REP_THREE, new_consumer=new_consumer, messages=num_records)
+            topic=TOPIC_REP_THREE, messages=num_records)
         self.consumer.group = "test-consumer-group"
         self.consumer.run()
         return compute_aggregate_throughput(self.consumer)

@@ -36,6 +36,7 @@ import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStopping;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerReceiving;
@@ -625,6 +626,36 @@ public final class TaskManager {
                 }
             }
             return new TasksResponse(states);
+        }
+    }
+
+    /**
+     * Get information about a single task being managed.
+     *
+     * Returns #{@code null} if the task does not exist
+     */
+    public TaskState task(TaskRequest request) throws ExecutionException, InterruptedException {
+        return executor.submit(new GetTaskState(request)).get();
+    }
+
+    /**
+     * Gets information about the tasks being managed.  Processed by the state change thread.
+     */
+    class GetTaskState implements Callable<TaskState> {
+        private final TaskRequest request;
+
+        GetTaskState(TaskRequest request) {
+            this.request = request;
+        }
+
+        @Override
+        public TaskState call() throws Exception {
+            ManagedTask task = tasks.get(request.taskId());
+            if (task == null) {
+                return null;
+            }
+
+            return task.taskState();
         }
     }
 

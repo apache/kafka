@@ -16,53 +16,36 @@
  */
 package kafka.admin
 
-import joptsimple.OptionParser
-import kafka.utils._
 import kafka.common.AdminCommandFailedException
+import kafka.utils._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.security.JaasUtils
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import collection._
-import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.TopicPartition
-import org.apache.zookeeper.KeeperException.NodeExistsException
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser(false)
-    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
-      "for which preferred replica leader election should be done, in the following format - \n" +
-       "{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\n" +
-      "Defaults to all existing partitions")
-      .withRequiredArg
-      .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
-      .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
-      "form host:port. Multiple URLS can be given to allow fail-over.")
-      .withRequiredArg
-      .describedAs("urls")
-      .ofType(classOf[String])
-      
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," + 
-                                                " it can be used to balance leadership among the servers.")
+    val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
+    CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
+      " it can be used to balance leadership among the servers.")
 
-    val options = parser.parse(args : _*)
+    CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options, commandOpts.zkConnectOpt)
 
-    CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-
-    val zkConnect = options.valueOf(zkConnectOpt)
+    val zkConnect = commandOpts.options.valueOf(commandOpts.zkConnectOpt)
     var zkClient: KafkaZkClient = null
     try {
       val time = Time.SYSTEM
       zkClient = KafkaZkClient(zkConnect, JaasUtils.isZkSecurityEnabled, 30000, 30000, Int.MaxValue, time)
 
       val partitionsForPreferredReplicaElection =
-        if (!options.has(jsonFileOpt))
+        if (!commandOpts.options.has(commandOpts.jsonFileOpt))
           zkClient.getAllPartitions()
         else
-          parsePreferredReplicaElectionData(Utils.readFileAsString(options.valueOf(jsonFileOpt)))
+          parsePreferredReplicaElectionData(Utils.readFileAsString(commandOpts.options.valueOf(commandOpts.jsonFileOpt)))
       val preferredReplicaElectionCommand = new PreferredReplicaLeaderElectionCommand(zkClient, partitionsForPreferredReplicaElection)
 
       preferredReplicaElectionCommand.moveLeaderToPreferredReplica()
@@ -109,13 +92,30 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
+
+  class PreferredReplicaLeaderElectionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+    val jsonFileOpt = parser.accepts("path-to-json-file", "The JSON file with the list of partitions " +
+      "for which preferred replica leader election should be done, in the following format - \n" +
+      "{\"partitions\":\n\t[{\"topic\": \"foo\", \"partition\": 1},\n\t {\"topic\": \"foobar\", \"partition\": 2}]\n}\n" +
+      "Defaults to all existing partitions")
+      .withRequiredArg
+      .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
+      .ofType(classOf[String])
+    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
+      "form host:port. Multiple URLS can be given to allow fail-over.")
+      .withRequiredArg
+      .describedAs("urls")
+      .ofType(classOf[String])
+
+    options = parser.parse(args: _*)
+  }
 }
 
 class PreferredReplicaLeaderElectionCommand(zkClient: KafkaZkClient, partitionsFromUser: scala.collection.Set[TopicPartition]) {
   def moveLeaderToPreferredReplica() = {
     try {
       val topics = partitionsFromUser.map(_.topic).toSet
-      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap{ case (topic, partitions) =>
+      val partitionsFromZk = zkClient.getPartitionsForTopics(topics).flatMap { case (topic, partitions) =>
         partitions.map(new TopicPartition(topic, _))
       }.toSet
 

@@ -48,7 +48,7 @@ import java.util.TreeSet;
  * with 1, 2, and 3 partitions, respectively. Therefore, the partitions are t0p0, t1p0, t1p1, t2p0,
  * t2p1, t2p2. C0 is subscribed to t0; C1 is subscribed to t0, t1; and C2 is subscribed to t0, t1, t2.
  *
- * Tha assignment will be:
+ * That assignment will be:
  * C0: [t0p0]
  * C1: [t1p0]
  * C2: [t1p1, t2p0, t2p1, t2p2]
@@ -60,7 +60,7 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
                                                     Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> assignment = new HashMap<>();
         for (String memberId : subscriptions.keySet())
-            assignment.put(memberId, new ArrayList<TopicPartition>());
+            assignment.put(memberId, new ArrayList<>());
 
         CircularIterator<String> assigner = new CircularIterator<>(Utils.sorted(subscriptions.keySet()));
         for (TopicPartition partition : allPartitionsSorted(partitionsPerTopic, subscriptions)) {
@@ -71,7 +71,6 @@ public class RoundRobinAssignor extends AbstractPartitionAssignor {
         }
         return assignment;
     }
-
 
     public List<TopicPartition> allPartitionsSorted(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {

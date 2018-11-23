@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.common.Configurable;
-
 /**
  * Report an error using the information contained in the {@link ProcessingContext}.
  */
-public interface ErrorReporter extends Configurable {
+public interface ErrorReporter {
 
     /**
      * Report an error.
@@ -29,13 +27,5 @@ public interface ErrorReporter extends Configurable {
      * @param context the processing context (cannot be null).
      */
     void report(ProcessingContext context);
-
-    /**
-     * Provides the container for error handling metrics to implementations. This method will be called once the error
-     * reporter object is instantiated.
-     *
-     * @param errorHandlingMetrics metrics for error handling (cannot be null).
-     */
-    void metrics(ErrorHandlingMetrics errorHandlingMetrics);
 
 }

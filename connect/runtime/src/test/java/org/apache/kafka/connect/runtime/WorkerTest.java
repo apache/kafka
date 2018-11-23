@@ -70,6 +70,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest.NOOP_OPERATOR;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.eq;
 import static org.junit.Assert.assertEquals;
@@ -131,7 +132,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartAndStopConnector() throws Exception {
+    public void testStartAndStopConnector() {
         expectConverters();
         expectStartStorage();
 
@@ -200,7 +201,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartConnectorFailure() throws Exception {
+    public void testStartConnectorFailure() {
         expectConverters();
         expectStartStorage();
 
@@ -244,7 +245,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testAddConnectorByAlias() throws Exception {
+    public void testAddConnectorByAlias() {
         expectConverters();
         expectStartStorage();
 
@@ -308,7 +309,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testAddConnectorByShortAlias() throws Exception {
+    public void testAddConnectorByShortAlias() {
         expectConverters();
         expectStartStorage();
 
@@ -384,7 +385,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testReconfigureConnectorTasks() throws Exception {
+    public void testReconfigureConnectorTasks() {
         expectConverters();
         expectStartStorage();
 
@@ -487,7 +488,7 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
-                EasyMock.eq(new TransformationChain(Collections.emptyList(), RetryWithToleranceOperator.NOOP_OPERATOR)),
+                EasyMock.eq(new TransformationChain<>(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
@@ -566,7 +567,7 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
-    public void testStartTaskFailure() throws Exception {
+    public void testStartTaskFailure() {
         expectConverters();
         expectStartStorage();
 
@@ -626,7 +627,7 @@ public class WorkerTest extends ThreadedTest {
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
                 anyObject(JsonConverter.class),
-                EasyMock.eq(new TransformationChain(Collections.emptyList(), RetryWithToleranceOperator.NOOP_OPERATOR)),
+                EasyMock.eq(new TransformationChain<>(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
@@ -719,7 +720,7 @@ public class WorkerTest extends ThreadedTest {
                 EasyMock.capture(keyConverter),
                 EasyMock.capture(valueConverter),
                 EasyMock.capture(headerConverter),
-                EasyMock.eq(new TransformationChain(Collections.emptyList(), RetryWithToleranceOperator.NOOP_OPERATOR)),
+                EasyMock.eq(new TransformationChain<>(Collections.emptyList(), NOOP_OPERATOR)),
                 anyObject(KafkaProducer.class),
                 anyObject(OffsetStorageReader.class),
                 anyObject(OffsetStorageWriter.class),
@@ -858,6 +859,7 @@ public class WorkerTest extends ThreadedTest {
         expectConverters(JsonConverter.class, expectDefaultConverters);
     }
 
+    @SuppressWarnings("deprecation")
     private void expectConverters(Class<? extends Converter> converterClass, Boolean expectDefaultConverters) {
         // As default converters are instantiated when a task starts, they are expected only if the `startTask` method is called
         if (expectDefaultConverters) {

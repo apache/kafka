@@ -363,78 +363,20 @@ object AdminUtils extends Logging with AdminUtilities {
 
   @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def deleteTopic(zkUtils: ZkUtils, topic: String) {
-      if (topicExists(zkUtils, topic)) {
-        try {
-          zkUtils.createPersistentPath(getDeleteTopicPath(topic))
-        } catch {
-          case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
-            "topic %s is already marked for deletion".format(topic))
-          case e2: Throwable => throw new AdminOperationException(e2)
-        }
-      } else {
-        throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
+    if (topicExists(zkUtils, topic)) {
+      try {
+        zkUtils.createPersistentPath(getDeleteTopicPath(topic))
+      } catch {
+        case _: ZkNodeExistsException => throw new TopicAlreadyMarkedForDeletionException(
+          "topic %s is already marked for deletion".format(topic))
+        case e2: Throwable => throw new AdminOperationException(e2)
       }
+    } else {
+      throw new UnknownTopicOrPartitionException(s"Topic `$topic` to delete does not exist")
     }
-
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def isConsumerGroupActive(zkUtils: ZkUtils, group: String) = {
-    zkUtils.getConsumersInGroup(group).nonEmpty
   }
 
-  /**
-   * Delete the whole directory of the given consumer group if the group is inactive.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param group Consumer group
-   * @return whether or not we deleted the consumer group information
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteConsumerGroupInZK(zkUtils: ZkUtils, group: String) = {
-    if (!isConsumerGroupActive(zkUtils, group)) {
-      val dir = new ZKGroupDirs(group)
-      zkUtils.deletePathRecursive(dir.consumerGroupDir)
-      true
-    }
-    else false
-  }
-
-  /**
-   * Delete the given consumer group's information for the given topic in Zookeeper if the group is inactive.
-   * If the consumer group consumes no other topics, delete the whole consumer group directory.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param group Consumer group
-   * @param topic Topic of the consumer group information we wish to delete
-   * @return whether or not we deleted the consumer group information for the given topic
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, group: String, topic: String) = {
-    val topics = zkUtils.getTopicsByConsumerGroup(group)
-    if (topics == Seq(topic)) {
-      deleteConsumerGroupInZK(zkUtils, group)
-    }
-    else if (!isConsumerGroupActive(zkUtils, group)) {
-      val dir = new ZKGroupTopicDirs(group, topic)
-      zkUtils.deletePathRecursive(dir.consumerOwnerDir)
-      zkUtils.deletePathRecursive(dir.consumerOffsetDir)
-      true
-    }
-    else false
-  }
-
-  /**
-   * Delete every inactive consumer group's information about the given topic in Zookeeper.
-   *
-   * @param zkUtils Zookeeper utilities
-   * @param topic Topic of the consumer group information we wish to delete
-   */
-  @deprecated("This method has been deprecated and will be removed in a future release.", "0.11.0.0")
-  def deleteAllConsumerGroupInfoForTopicInZK(zkUtils: ZkUtils, topic: String): Set[String] = {
-    val groups = zkUtils.getAllConsumerGroupsForTopic(topic)
-    groups.foreach(group => deleteConsumerGroupInfoForTopicInZK(zkUtils, group, topic))
-    groups
-  }
-
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def topicExists(zkUtils: ZkUtils, topic: String): Boolean =
     zkUtils.pathExists(getTopicPath(topic))
 
@@ -526,16 +468,17 @@ object AdminUtils extends Logging with AdminUtilities {
     writeTopicPartitionAssignment(zkUtils, topic, partitionReplicaAssignment, update)
   }
 
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   private def writeTopicPartitionAssignment(zkUtils: ZkUtils, topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
     try {
       val zkPath = getTopicPath(topic)
       val jsonPartitionData = zkUtils.replicaAssignmentZkData(replicaAssignment.map(e => e._1.toString -> e._2))
 
       if (!update) {
-        info("Topic creation " + jsonPartitionData.toString)
+        info(s"Topic creation $jsonPartitionData")
         zkUtils.createPersistentPath(zkPath, jsonPartitionData)
       } else {
-        info("Topic update " + jsonPartitionData.toString)
+        info(s"Topic update $jsonPartitionData")
         zkUtils.updatePersistentPath(zkPath, jsonPartitionData)
       }
       debug("Updated path %s with %s for replica assignment".format(zkPath, jsonPartitionData))
@@ -582,6 +525,7 @@ object AdminUtils extends Logging with AdminUtilities {
     changeEntityConfig(zkUtils, ConfigType.User, sanitizedEntityName, configs)
   }
 
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def validateTopicConfig(zkUtils: ZkUtils, topic: String, configs: Properties): Unit = {
     Topic.validate(topic)
     if (!topicExists(zkUtils, topic))
@@ -621,6 +565,7 @@ object AdminUtils extends Logging with AdminUtilities {
     }
   }
 
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   private def changeEntityConfig(zkUtils: ZkUtils, rootEntityType: String, fullSanitizedEntityName: String, configs: Properties) {
     val sanitizedEntityPath = rootEntityType + '/' + fullSanitizedEntityName
     val entityConfigPath = getEntityConfigPath(rootEntityType, fullSanitizedEntityName)
@@ -633,13 +578,14 @@ object AdminUtils extends Logging with AdminUtilities {
     zkUtils.createSequentialPersistentPath(seqNode, content)
   }
 
-  def getConfigChangeZnodeData(sanitizedEntityPath: String) : Map[String, Any] = {
+  def getConfigChangeZnodeData(sanitizedEntityPath: String): Map[String, Any] = {
     Map("version" -> 2, "entity_path" -> sanitizedEntityPath)
   }
 
   /**
    * Write out the entity config to zk, if there is any
    */
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   private def writeEntityConfig(zkUtils: ZkUtils, entityPath: String, config: Properties) {
     val map = Map("version" -> 1, "config" -> config.asScala)
     zkUtils.updatePersistentPath(entityPath, Json.legacyEncodeAsString(map))
@@ -649,7 +595,7 @@ object AdminUtils extends Logging with AdminUtilities {
    * Read the entity (topic, broker, client, user or <user, client>) config (if any) from zk
    * sanitizedEntityName is <topic>, <broker>, <client-id>, <user> or <user>/clients/<client-id>.
    */
-   @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
+  @deprecated("This method is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
   def fetchEntityConfig(zkUtils: ZkUtils, rootEntityType: String, sanitizedEntityName: String): Properties = {
     val entityConfigPath = getEntityConfigPath(rootEntityType, sanitizedEntityName)
     // readDataMaybeNull returns Some(null) if the path exists, but there is no data

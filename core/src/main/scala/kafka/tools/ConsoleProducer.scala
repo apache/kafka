@@ -17,17 +17,17 @@
 
 package kafka.tools
 
-import kafka.common._
-import kafka.message._
-import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
-import kafka.utils.Implicits._
-import java.util.Properties
 import java.io._
 import java.nio.charset.StandardCharsets
+import java.util.Properties
 
-import joptsimple._
+import kafka.common._
+import kafka.message._
+import kafka.utils.Implicits._
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
@@ -38,7 +38,7 @@ object ConsoleProducer {
 
     try {
         val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
+        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
@@ -108,8 +108,7 @@ object ConsoleProducer {
     props
   }
 
-  class ProducerConfig(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ProducerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
       .withRequiredArg
       .describedAs("topic")
@@ -119,7 +118,7 @@ object ConsoleProducer {
       .describedAs("broker-list")
       .ofType(classOf[String])
     val syncOpt = parser.accepts("sync", "If set message send requests to the brokers are synchronously, one at a time as they arrive.")
-    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', or 'lz4'." +
+    val compressionCodecOpt = parser.accepts("compression-codec", "The compression codec: either 'none', 'gzip', 'snappy', 'lz4', or 'zstd'." +
                                                                   "If specified without value, then it defaults to 'gzip'")
                                     .withOptionalArg()
                                     .describedAs("compression-codec")
@@ -203,9 +202,9 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
 
-    val options = parser.parse(args : _*)
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
+    options = parser.parse(args : _*)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     val topic = options.valueOf(topicOpt)
@@ -228,7 +227,6 @@ object ConsoleProducer {
     val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
-    /* new producer related configs */
     val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
     val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
     val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)

@@ -18,9 +18,8 @@
 package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
-
 import org.apache.kafka.common.TopicPartition
-
+import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -40,7 +39,7 @@ class GroupMetadataTest extends JUnitSuite {
 
   @Before
   def setUp() {
-    group = new GroupMetadata("groupId", initialState = Empty)
+    group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
   }
 
   @Test
@@ -267,8 +266,7 @@ class GroupMetadataTest extends JUnitSuite {
       protocolType, List(("roundrobin", Array.empty[Byte])))
 
     group.transitionTo(PreparingRebalance)
-    member.awaitingJoinCallback = _ => ()
-    group.add(member)
+    group.add(member, _ => ())
 
     assertEquals(0, group.generationId)
     assertNull(group.protocolOrNull)
@@ -295,7 +293,7 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testOffsetCommit(): Unit = {
     val partition = new TopicPartition("foo", 0)
-    val offset = OffsetAndMetadata(37)
+    val offset = offsetAndMetadata(37)
     val commitRecordOffset = 3
 
     group.prepareOffsetCommit(Map(partition -> offset))
@@ -310,7 +308,7 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testOffsetCommitFailure(): Unit = {
     val partition = new TopicPartition("foo", 0)
-    val offset = OffsetAndMetadata(37)
+    val offset = offsetAndMetadata(37)
 
     group.prepareOffsetCommit(Map(partition -> offset))
     assertTrue(group.hasOffsets)
@@ -324,8 +322,8 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testOffsetCommitFailureWithAnotherPending(): Unit = {
     val partition = new TopicPartition("foo", 0)
-    val firstOffset = OffsetAndMetadata(37)
-    val secondOffset = OffsetAndMetadata(57)
+    val firstOffset = offsetAndMetadata(37)
+    val secondOffset = offsetAndMetadata(57)
 
     group.prepareOffsetCommit(Map(partition -> firstOffset))
     assertTrue(group.hasOffsets)
@@ -346,8 +344,8 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testOffsetCommitWithAnotherPending(): Unit = {
     val partition = new TopicPartition("foo", 0)
-    val firstOffset = OffsetAndMetadata(37)
-    val secondOffset = OffsetAndMetadata(57)
+    val firstOffset = offsetAndMetadata(37)
+    val secondOffset = offsetAndMetadata(57)
 
     group.prepareOffsetCommit(Map(partition -> firstOffset))
     assertTrue(group.hasOffsets)
@@ -369,8 +367,8 @@ class GroupMetadataTest extends JUnitSuite {
   def testConsumerBeatsTransactionalOffsetCommit(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val producerId = 13232L
-    val txnOffsetCommit = OffsetAndMetadata(37)
-    val consumerOffsetCommit = OffsetAndMetadata(57)
+    val txnOffsetCommit = offsetAndMetadata(37)
+    val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(partition -> txnOffsetCommit))
     assertTrue(group.hasOffsets)
@@ -394,8 +392,8 @@ class GroupMetadataTest extends JUnitSuite {
   def testTransactionBeatsConsumerOffsetCommit(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val producerId = 13232L
-    val txnOffsetCommit = OffsetAndMetadata(37)
-    val consumerOffsetCommit = OffsetAndMetadata(57)
+    val txnOffsetCommit = offsetAndMetadata(37)
+    val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(partition -> txnOffsetCommit))
     assertTrue(group.hasOffsets)
@@ -421,8 +419,8 @@ class GroupMetadataTest extends JUnitSuite {
   def testTransactionalCommitIsAbortedAndConsumerCommitWins(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val producerId = 13232L
-    val txnOffsetCommit = OffsetAndMetadata(37)
-    val consumerOffsetCommit = OffsetAndMetadata(57)
+    val txnOffsetCommit = offsetAndMetadata(37)
+    val consumerOffsetCommit = offsetAndMetadata(57)
 
     group.prepareTxnOffsetCommit(producerId, Map(partition -> txnOffsetCommit))
     assertTrue(group.hasOffsets)
@@ -449,7 +447,7 @@ class GroupMetadataTest extends JUnitSuite {
   def testFailedTxnOffsetCommitLeavesNoPendingState(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val producerId = 13232L
-    val txnOffsetCommit = OffsetAndMetadata(37)
+    val txnOffsetCommit = offsetAndMetadata(37)
 
     group.prepareTxnOffsetCommit(producerId, Map(partition -> txnOffsetCommit))
     assertTrue(group.hasPendingOffsetCommitsFromProducer(producerId))
@@ -473,4 +471,9 @@ class GroupMetadataTest extends JUnitSuite {
     }
     assertTrue(group.is(targetState))
   }
+
+  private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
+    OffsetAndMetadata(offset, "", Time.SYSTEM.milliseconds())
+  }
+
 }

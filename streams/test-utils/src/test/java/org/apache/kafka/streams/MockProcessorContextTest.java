@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
@@ -156,9 +157,9 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildIndex() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
-                //noinspection deprecation
                 context().forward(key, value, 0);
             }
         };
@@ -178,9 +179,9 @@ public class MockProcessorContextTest {
     @Test
     public void shouldThrowIfForwardedWithDeprecatedChildName() {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
+            @SuppressWarnings("deprecation")
             @Override
             public void process(final String key, final Long value) {
-                //noinspection deprecation
                 context().forward(key, value, "child1");
             }
         };
@@ -231,7 +232,7 @@ public class MockProcessorContextTest {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                //noinspection unchecked
+                @SuppressWarnings("unchecked")
                 final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
@@ -345,14 +346,9 @@ public class MockProcessorContextTest {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
-                    1000L,
+                    Duration.ofSeconds(1L),
                     PunctuationType.WALL_CLOCK_TIME,
-                    new Punctuator() {
-                        @Override
-                        public void punctuate(final long timestamp) {
-                            context.commit();
-                        }
-                    }
+                    timestamp -> context.commit()
                 );
             }
 

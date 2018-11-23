@@ -20,9 +20,11 @@ import kafka.common.{BaseEnum, KafkaException}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 
-sealed trait ResourceType extends BaseEnum {
+sealed trait ResourceType extends BaseEnum with Ordered[ ResourceType ] {
   def error: Errors
   def toJava: JResourceType
+
+  override def compare(that: ResourceType): Int = this.name compare that.name
 }
 
 case object Topic extends ResourceType {

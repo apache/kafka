@@ -102,8 +102,6 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testTopologyMetadata() {
-        topology.setApplicationId("X");
-
         topology.addSource("source-1", "topic-1");
         topology.addSource("source-2", "topic-2", "topic-3");
         topology.addProcessor("processor-1", new MockProcessorSupplier<>(), "source-1");
@@ -111,7 +109,7 @@ public class ProcessorTopologyTest {
         topology.addSink("sink-1", "topic-3", "processor-1");
         topology.addSink("sink-2", "topic-4", "processor-1", "processor-2");
 
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("X").build();
 
         assertEquals(6, processorTopology.processors().size());
 
@@ -130,7 +128,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingSimpleTopology() {
-        int partition = 10;
+        final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition);
@@ -196,7 +194,7 @@ public class ProcessorTopologyTest {
 
     @Test
     public void testDrivingStatefulTopology() {
-        String storeName = "entries";
+        final String storeName = "entries";
         driver = new TopologyTestDriver(createStatefulTopology(storeName), props);
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
         driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
@@ -498,7 +496,7 @@ public class ProcessorTopologyTest {
                 .addSink("sink-2", OUTPUT_TOPIC_2, "source-2");
     }
 
-    private Topology createSimpleMultiSourceTopology(int partition) {
+    private Topology createSimpleMultiSourceTopology(final int partition) {
         return topology.addSource("source-1", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
                 .addProcessor("processor-1", define(new ForwardingProcessor()), "source-1")
                 .addSink("sink-1", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor-1")

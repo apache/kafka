@@ -16,15 +16,15 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.KafkaException
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.KafkaException
 import org.easymock.{Capture, EasyMock, IAnswer}
 import org.junit.{After, Test}
 import org.junit.Assert._
 
 class ProducerIdManagerTest {
 
-  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
   @After
   def tearDown(): Unit = {

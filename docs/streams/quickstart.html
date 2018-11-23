@@ -165,7 +165,7 @@ The created topic can be described with the same <b>kafka-topics</b> tool:
 
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
     Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
-Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:
+Topic:streams-wordcount-output	PartitionCount:1	ReplicationFactor:1	Configs:cleanup.policy=compact
 	Topic: streams-wordcount-output	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
 </pre>
 
@@ -372,10 +372,10 @@ $(function() {
     var $navbar = $(".sub-nav-sticky"),
                y_pos = $navbar.offset().top,
                height = $navbar.height();
-       
+
            $(window).scroll(function() {
                var scrollTop = $(window).scrollTop();
-           
+
                if (scrollTop > y_pos - height) {
                    $navbar.addClass("navbar-fixed")
                } else if (scrollTop <= y_pos) {

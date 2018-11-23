@@ -25,6 +25,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -34,27 +35,29 @@ import static org.junit.Assert.assertEquals;
 public class SerializationTest {
 
     final private String topic = "testTopic";
-    final private Map<Class<Object>, List<Object>> testData = new HashMap() {
+    final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
             put(String.class, Arrays.asList("my string"));
             put(Short.class, Arrays.asList((short) 32767, (short) -32768));
-            put(Integer.class, Arrays.asList((int) 423412424, (int) -41243432));
+            put(Integer.class, Arrays.asList(423412424, -41243432));
             put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
             put(byte[].class, Arrays.asList("my string".getBytes()));
             put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
             put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
+            put(UUID.class, Arrays.asList(UUID.randomUUID()));
         }
     };
 
     private class DummyClass {
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void allSerdesShouldRoundtripInput() {
-        for (Map.Entry<Class<Object>, List<Object>> test : testData.entrySet()) {
-            try (Serde<Object> serde = Serdes.serdeFrom(test.getKey())) {
+        for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
+            try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
                     assertEquals("Should get the original " + test.getKey().getSimpleName() +
                                     " after serialization and deserialization", value,

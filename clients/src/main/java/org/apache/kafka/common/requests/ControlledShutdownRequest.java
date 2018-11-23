@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Field;
@@ -64,12 +63,12 @@ public class ControlledShutdownRequest extends AbstractRequest {
     private final int brokerId;
 
     private ControlledShutdownRequest(int brokerId, short version) {
-        super(version);
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
         this.brokerId = brokerId;
     }
 
     public ControlledShutdownRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.CONTROLLED_SHUTDOWN, version);
         brokerId = struct.getInt(BROKER_ID_KEY_NAME);
     }
 
@@ -79,10 +78,10 @@ public class ControlledShutdownRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new ControlledShutdownResponse(Errors.forException(e), Collections.<TopicPartition>emptySet());
+                return new ControlledShutdownResponse(Errors.forException(e), Collections.emptySet());
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
+                    versionId, this.getClass().getSimpleName(), ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()));
         }
     }
 

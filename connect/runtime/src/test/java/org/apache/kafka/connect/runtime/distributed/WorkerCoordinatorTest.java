@@ -19,7 +19,6 @@ package org.apache.kafka.connect.runtime.distributed;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -74,8 +73,7 @@ public class WorkerCoordinatorTest {
     private long retryBackoffMs = 100;
     private MockTime time;
     private MockClient client;
-    private Cluster cluster = TestUtils.singletonCluster("topic", 1);
-    private Node node = cluster.nodes().get(0);
+    private Node node;
     private Metadata metadata;
     private Metrics metrics;
     private ConsumerNetworkClient consumerClient;
@@ -92,15 +90,14 @@ public class WorkerCoordinatorTest {
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
-        this.client = new MockClient(time);
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
-        this.metadata.update(cluster, Collections.<String>emptySet(), time.milliseconds());
+        this.client = new MockClient(time, metadata);
+        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
+        this.node = metadata.fetch().nodes().get(0);
         this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
-
-        client.setNode(node);
 
         this.coordinator = new WorkerCoordinator(
                 loggerFactory,
@@ -208,7 +205,7 @@ public class WorkerCoordinatorTest {
         final String consumerId = "leader";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
         Map<String, Long> memberConfigOffsets = new HashMap<>();
@@ -248,7 +245,7 @@ public class WorkerCoordinatorTest {
         final String memberId = "member";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // normal join group
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
@@ -289,7 +286,7 @@ public class WorkerCoordinatorTest {
         final String memberId = "member";
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // config mismatch results in assignment error
         client.prepareResponse(joinGroupFollowerResponse(1, memberId, "leader", Errors.NONE));
@@ -320,7 +317,7 @@ public class WorkerCoordinatorTest {
         PowerMock.replayAll();
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(Long.MAX_VALUE);
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // join the group once
         client.prepareResponse(joinGroupFollowerResponse(1, "consumer", "leader", Errors.NONE));

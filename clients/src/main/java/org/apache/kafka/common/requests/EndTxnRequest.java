@@ -89,7 +89,7 @@ public class EndTxnRequest extends AbstractRequest {
     private final TransactionResult result;
 
     private EndTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, TransactionResult result) {
-        super(version);
+        super(ApiKeys.END_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -97,7 +97,7 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     public EndTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.END_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);

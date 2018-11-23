@@ -19,7 +19,7 @@ package org.apache.kafka.common.internals;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -36,10 +36,17 @@ import java.util.Set;
  * topic would "wrap around" and appear twice. However, as partitions are fetched in different orders and partition
  * leadership changes, we will deviate from the optimal. If this turns out to be an issue in practice, we can improve
  * it by tracking the partitions per node or calling `set` every so often.
+ *
+ * Note that this class is not thread-safe with the exception of {@link #size()} which returns the number of
+ * partitions currently tracked.
  */
 public class PartitionStates<S> {
 
     private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
+    private final Set<TopicPartition> partitionSetView = Collections.unmodifiableSet(map.keySet());
+
+    /* the number of partitions that are currently assigned available in a thread safe manner */
+    private volatile int size = 0;
 
     public PartitionStates() {}
 
@@ -52,21 +59,25 @@ public class PartitionStates<S> {
     public void updateAndMoveToEnd(TopicPartition topicPartition, S state) {
         map.remove(topicPartition);
         map.put(topicPartition, state);
+        updateSize();
     }
 
     public void remove(TopicPartition topicPartition) {
         map.remove(topicPartition);
+        updateSize();
     }
 
     /**
-     * Returns the partitions in random order.
+     * Returns an unmodifiable view of the partitions in random order.
+     * changes to this PartitionStates instance will be reflected in this view.
      */
     public Set<TopicPartition> partitionSet() {
-        return new HashSet<>(map.keySet());
+        return partitionSetView;
     }
 
     public void clear() {
         map.clear();
+        updateSize();
     }
 
     public boolean contains(TopicPartition topicPartition) {
@@ -84,6 +95,10 @@ public class PartitionStates<S> {
         return result;
     }
 
+    public LinkedHashMap<TopicPartition, S> partitionStateMap() {
+        return new LinkedHashMap<>(map);
+    }
+
     /**
      * Returns the partition state values in order.
      */
@@ -95,8 +110,11 @@ public class PartitionStates<S> {
         return map.get(topicPartition);
     }
 
+    /**
+     * Get the number of partitions that are currently being tracked. This is thread-safe.
+     */
     public int size() {
-        return map.size();
+        return size;
     }
 
     /**
@@ -108,16 +126,17 @@ public class PartitionStates<S> {
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
         update(partitionToState);
+        updateSize();
+    }
+
+    private void updateSize() {
+        size = map.size();
     }
 
     private void update(Map<TopicPartition, S> partitionToState) {
         LinkedHashMap<String, List<TopicPartition>> topicToPartitions = new LinkedHashMap<>();
         for (TopicPartition tp : partitionToState.keySet()) {
-            List<TopicPartition> partitions = topicToPartitions.get(tp.topic());
-            if (partitions == null) {
-                partitions = new ArrayList<>();
-                topicToPartitions.put(tp.topic(), partitions);
-            }
+            List<TopicPartition> partitions = topicToPartitions.computeIfAbsent(tp.topic(), k -> new ArrayList<>());
             partitions.add(tp);
         }
         for (Map.Entry<String, List<TopicPartition>> entry : topicToPartitions.entrySet()) {

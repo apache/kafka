@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -76,7 +77,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     private final short version;
 
-    public AbstractRequest(short version) {
+    public AbstractRequest(ApiKeys api, short version) {
+        if (!api.isVersionSupported(version))
+            throw new UnsupportedVersionException("The " + api + " protocol does not support version " + version);
         this.version = version;
     }
 

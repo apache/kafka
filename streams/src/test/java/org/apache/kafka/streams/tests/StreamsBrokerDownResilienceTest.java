@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.tests;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
@@ -33,7 +34,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 public class StreamsBrokerDownResilienceTest {
 
@@ -99,7 +99,7 @@ public class StreamsBrokerDownResilienceTest {
             public void uncaughtException(final Thread t, final Throwable e) {
                 System.err.println("FATAL: An unexpected exception " + e);
                 System.err.flush();
-                streams.close(30, TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(30));
             }
         });
         System.out.println("Start Kafka Streams");
@@ -108,7 +108,7 @@ public class StreamsBrokerDownResilienceTest {
         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run() {
-                streams.close(30, TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(30));
                 System.out.println("Complete shutdown of streams resilience test app now");
                 System.out.flush();
             }
@@ -117,7 +117,7 @@ public class StreamsBrokerDownResilienceTest {
 
     }
 
-    private static boolean confirmCorrectConfigs(Properties properties) {
+    private static boolean confirmCorrectConfigs(final Properties properties) {
         return properties.containsKey(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.RETRIES_CONFIG)) &&
                properties.containsKey(StreamsConfig.producerPrefix(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG)) &&
@@ -131,11 +131,11 @@ public class StreamsBrokerDownResilienceTest {
      * @param formattedConfigs the formatted config string
      * @return HashMap with keys and values inserted
      */
-    private static Map<String, String> updatedConfigs(String formattedConfigs) {
-        String[] parts = formattedConfigs.split(",");
-        Map<String, String> updatedConfigs = new HashMap<>();
-        for (String part : parts) {
-            String[] keyValue = part.split("=");
+    private static Map<String, String> updatedConfigs(final String formattedConfigs) {
+        final String[] parts = formattedConfigs.split(",");
+        final Map<String, String> updatedConfigs = new HashMap<>();
+        for (final String part : parts) {
+            final String[] keyValue = part.split("=");
             updatedConfigs.put(keyValue[KEY], keyValue[VALUE]);
         }
         return updatedConfigs;

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.RecordContext;
 
@@ -76,6 +77,23 @@ public class ProcessorRecordContext implements RecordContext {
     @Override
     public Headers headers() {
         return headers;
+    }
+
+    public long sizeBytes() {
+        long size = 0L;
+        size += 8; // value.context.timestamp
+        size += 8; // value.context.offset
+        if (topic != null) {
+            size += topic.toCharArray().length;
+        }
+        size += 4; // partition
+        if (headers != null) {
+            for (final Header header : headers) {
+                size += header.key().toCharArray().length;
+                size += header.value().length;
+            }
+        }
+        return size;
     }
 
     @Override

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.time.Duration;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -34,7 +35,7 @@ import java.util.Properties;
 
 public class NoOpProcessorContext extends AbstractProcessorContext {
     public boolean initialized;
-    public Map forwardedValues = new HashMap();
+    public Map<Object, Object> forwardedValues = new HashMap<>();
 
     public NoOpProcessorContext() {
         super(new TaskId(1, 1), streamsConfig(), new MockStreamsMetrics(new Metrics()), null, null);
@@ -52,7 +53,16 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         return null;
     }
 
-    @Override public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @SuppressWarnings("deprecation")
+    @Override
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        return null;
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         return null;
     }
 
@@ -66,11 +76,13 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
         forwardedValues.put(key, value);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         forward(key, value);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value);
@@ -81,8 +93,13 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
         initialized = true;
+    }
+
+    @Override
+    public long streamTime() {
+        throw new RuntimeException("streamTime is not implemented for NoOpProcessorContext");
     }
 
     @Override
