@@ -156,8 +156,9 @@ public class InternalTopicManager {
                             } else {
                                 retry = true;
                                 retryBackOff = true;
-                                log.info("Topic {} seems existing already but it doesn't, it is probably marked for deletion: {} " +
-                                    "will try again in {} ms", topicName, couldNotCreateTopic.toString(), retryBackOffMs);
+                                log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
+                                        "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
+                                        "Error message was: {}", topicName, retryBackOffMs, couldNotCreateTopic.toString());
                             }
                         } else {
                             throw new StreamsException(String.format("Could not create topic %s.", topicName),
