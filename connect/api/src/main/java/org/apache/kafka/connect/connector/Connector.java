@@ -29,14 +29,15 @@ import java.util.Map;
  * <p>
  * Connectors manage integration of Kafka Connect with another system, either as an input that ingests
  * data into Kafka or an output that passes data to an external system. Implementations should
- * not use this class directly; they should inherit from SourceConnector or SinkConnector.
+ * not use this class directly; they should inherit from {@link org.apache.kafka.connect.source.SourceConnector SourceConnector}
+ * or {@link org.apache.kafka.connect.sink.SinkConnector SinkConnector}.
  * </p>
  * <p>
  * Connectors have two primary tasks. First, given some configuration, they are responsible for
  * creating configurations for a set of {@link Task}s that split up the data processing. For
  * example, a database Connector might create Tasks by dividing the set of tables evenly among
  * tasks. Second, they are responsible for monitoring inputs for changes that require
- * reconfiguration and notifying the Kafka Connect runtime via the ConnectorContext. Continuing the
+ * reconfiguration and notifying the Kafka Connect runtime via the {@link ConnectorContext}. Continuing the
  * previous example, the connector might periodically check for new tables and notify Kafka Connect of
  * additions and deletions. Kafka Connect will then request new configurations and update the running
  * Tasks.
