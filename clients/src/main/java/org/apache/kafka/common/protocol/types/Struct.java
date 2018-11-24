@@ -282,6 +282,16 @@ public class Struct {
         return (ByteBuffer) result;
     }
 
+    public byte[] getByteArray(String name) {
+        Object result = get(name);
+        if (result instanceof byte[])
+            return (byte[]) result;
+        ByteBuffer buf = (ByteBuffer) result;
+        byte[] arr = new byte[buf.remaining()];
+        buf.get(arr);
+        return arr;
+    }
+
     /**
      * Set the given field to the specified value
      *
@@ -344,6 +354,11 @@ public class Struct {
 
     public Struct set(Field.ComplexArray def, Object[] value) {
         return set(def.name, value);
+    }
+
+    public Struct setByteArray(String name, byte[] value) {
+        ByteBuffer buf = value == null ? null : ByteBuffer.wrap(value);
+        return set(name, buf);
     }
 
     public Struct setIfExists(Field.Array def, Object[] value) {

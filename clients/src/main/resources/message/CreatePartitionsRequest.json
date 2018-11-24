@@ -1,0 +1,40 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 37,
+  "type": "request",
+  "name": "CreatePartitionsRequest",
+  // Version 1 is the same as version 0.
+  "validVersions": "0-1",
+  "fields": [
+    { "name": "Topics", "type": "[]CreatePartitionsTopic", "versions": "0+",
+      "about": "Each topic that we want to create new partitions inside.",  "fields": [
+      { "name": "Name", "type": "string", "versions": "0+",
+        "about": "The topic name." },
+      { "name": "Count", "type": "int32", "versions": "0+",
+        "about": "The new partition count." },
+      { "name": "Assignments", "type": "[]CreatePartitionsAssignment", "versions": "0+", "nullableVersions": "0+", 
+        "about": "The new partition assignments.", "fields": [
+        { "name": "BrokerIds", "type": "[]int32", "versions": "0+",
+          "about": "The assigned broker IDs." }
+      ]}
+    ]},
+    { "name": "TimeoutMs", "type": "int32", "versions": "0+",
+      "about": "The time in ms to wait for the partitions to be created." },
+    { "name": "ValidateOnly", "type": "bool", "versions": "0+",
+      "about": "If true, then validate the request, but don't actually increase the number of partitions." }
+  ]
+}

@@ -1,0 +1,77 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 1,
+  "type": "response",
+  "name": "FetchResponse",
+  //
+  // Version 1 adds throttle time.
+  //
+  // Version 2 and 3 are the same as version 1. 
+  //
+  // Version 4 adds features for transactional consumption.
+  //
+  // Version 5 adds LogStartOffset to indicate the earliest available offset of
+  // partition data that can be consumed.
+  //
+  // Starting in version 6, we may return KAFKA_STORAGE_ERROR as an error code.
+  //
+  // Version 7 adds incremental fetch request support.
+  //
+  // Starting in version 8, on quota violation, brokers send out responses before throttling.
+  //
+  // Version 9 is the same as version 8.
+  //
+  // Version 10 indicates that the response data can use the ZStd compression
+  // algorithm, as described in KIP-110.
+  //
+  "validVersions": "0-10",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "1+", "ignorable": true,
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "ErrorCode", "type": "int16", "versions": "7+", "ignorable": false,
+      "about": "The top level response error code." },
+    { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
+      "about": "The fetch session ID, or 0 if this is not part of a fetch session." },
+    { "name": "Topics", "type": "[]FetchableTopicResponse", "versions": "0+",
+      "about": "The response topics.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]FetchablePartitionResponse", "versions": "0+",
+        "about": "The topic partitions.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partiiton index." },
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The error code, or 0 if there was no fetch error." },
+        { "name": "HighWatermark", "type": "int64", "versions": "0+",
+          "about": "The current high water mark." },
+        { "name": "LastStableOffset", "type": "int64", "versions": "4+", "default": "-1", "ignorable": true,
+          "about": "The last stable offset (or LSO) of the partition. This is the last offset such that the state of all transactional records prior to this offset have been decided (ABORTED or COMMITTED)" },
+        { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": true,
+          "about": "The current log start offset." },
+        { "name": "Aborted", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": false,
+          "about": "The aborted transactions.",  "fields": [
+          { "name": "ProducerId", "type": "int64", "versions": "4+",
+            "about": "The producer id associated with the aborted transaction." },
+          { "name": "FirstOffset", "type": "int64", "versions": "4+",
+            "about": "The first offset in the aborted transaction." }
+        ]},
+        { "name": "Records", "type": "bytes", "versions": "0+", "nullableVersions": "0+",
+          "about": "The record data." }
+      ]}
+    ]}
+  ]
+}
