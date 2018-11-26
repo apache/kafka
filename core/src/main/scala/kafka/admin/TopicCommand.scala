@@ -202,7 +202,44 @@ object TopicCommand extends Logging {
         }}.toMap.asJava).all().get()
     }
 
-    override def describeTopic(opts: TopicCommandOptions): Unit = ???
+    override def describeTopic(opts: TopicCommandOptions): Unit = {
+      val topics = getTopics(opts.topic, opts.excludeInternalTopics)
+      val allConfigs = adminClient.describeConfigs(topics.map(new ConfigResource(Type.TOPIC, _)).asJavaCollection).values()
+      val liveBrokers = adminClient.describeCluster().nodes().get().asScala.map(_.id())
+      val topicDescriptions = adminClient.describeTopics(topics.asJavaCollection).all().get().values().asScala
+      val describeOptions = new DescribeOptions(opts, liveBrokers.toSet)
+
+      for (td <- topicDescriptions) {
+        val sortedPartitions = td.partitions().asScala.sortBy(_.partition())
+        if (describeOptions.describeConfigs) {
+          val config = allConfigs.get(new ConfigResource(Type.TOPIC, td.name())).get()
+          val hasNonDefault = config.entries().asScala.exists(!_.isDefault)
+          if (!opts.reportOverriddenConfigs || hasNonDefault) {
+            val numPartitions = td.partitions().size
+            val replicationFactor = td.partitions().iterator().next().replicas().size
+            val configsAsString = config.entries().asScala.filter(!_.isDefault).map { ce => s"${ce.name()}=${ce.value()}" }.mkString(",")
+            println(s"Topic:${td.name()}\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString")
+          }
+        }
+        if (describeOptions.describePartitions) {
+          for (partition <- sortedPartitions) {
+            val partitionDesc = PartitionDescription(
+              topic = td.name(),
+              partition.partition(),
+              leader = Option(partition.leader()).map(_.id()),
+              assignedReplicas = partition.replicas().asScala.map(_.id()),
+              isr = partition.isr().asScala.map(_.id()),
+              markedForDeletion = false,
+              describeOptions.describeConfigs
+            )
+
+            if (describeOptions.shouldPrintTopicPartition(partitionDesc)) {
+              printPartition(partitionDesc)
+            }
+          }
+        }
+      }
+    }
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -289,7 +326,51 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def describeTopic(opts: TopicCommandOptions): Unit = ???
+    override def describeTopic(opts: TopicCommandOptions): Unit = {
+      val topics = getTopics(opts.topic, opts.excludeInternalTopics)
+      val topicOptWithExits = opts.options.has(opts.topicOpt) && opts.options.has(opts.ifExistsOpt)
+      ensureTopicExists(opts, topics, topicOptWithExits)
+      val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
+      val describeOptions = new DescribeOptions(opts, liveBrokers)
+      val adminZkClient = new AdminZkClient(zkClient)
+
+      for (topic <- topics) {
+        zkClient.getPartitionAssignmentForTopics(immutable.Set(topic)).get(topic) match {
+          case Some(topicPartitionAssignment) =>
+            val markedForDeletion = zkClient.isTopicMarkedForDeletion(topic)
+            if (describeOptions.describeConfigs) {
+              val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
+              if (!opts.reportOverriddenConfigs || configs.nonEmpty) {
+                val numPartitions = topicPartitionAssignment.size
+                val replicationFactor = topicPartitionAssignment.head._2.size
+                val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
+                val markedForDeletionString = if (markedForDeletion) "\tMarkedForDeletion:true" else ""
+                println(s"Topic:$topic\tPartitionCount:$numPartitions\tReplicationFactor:$replicationFactor\tConfigs:$configsAsString$markedForDeletionString")
+              }
+            }
+            if (describeOptions.describePartitions) {
+              for ((partitionId, assignedReplicas) <- topicPartitionAssignment.toSeq.sortBy(_._1)) {
+                val leaderIsrEpoch = zkClient.getTopicPartitionState(new TopicPartition(topic, partitionId))
+                val partitionDesc = PartitionDescription(
+                  topic,
+                  partitionId,
+                  leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
+                  assignedReplicas,
+                  isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
+                  markedForDeletion,
+                  describeOptions.describeConfigs
+                )
+
+                if (describeOptions.shouldPrintTopicPartition(partitionDesc)) {
+                  printPartition(partitionDesc)
+                }
+              }
+            }
+          case None =>
+            println("Topic " + topic + " doesn't exist!")
+        }
+      }
+    }
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -299,6 +380,18 @@ object TopicCommand extends Logging {
     }
 
     override def close(): Unit = zkClient.close()
+  }
+
+  private def printPartition(tp: PartitionDescription): Unit = {
+    val markedForDeletionString =
+      if (tp.markedForDeletion && !tp.describeConfigs) "\tMarkedForDeletion: true" else ""
+    print("\tTopic: " + tp.topic)
+    print("\tPartition: " + tp.partition)
+    print("\tLeader: " + (if(tp.leader.isDefined) tp.leader.get else "none"))
+    print("\tReplicas: " + tp.assignedReplicas.mkString(","))
+    print("\tIsr: " + tp.isr.mkString(","))
+    print(markedForDeletionString)
+    println()
   }
 
   private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
@@ -340,62 +433,6 @@ object TopicCommand extends Logging {
           throw e
         case _: Throwable =>
           throw new AdminOperationException("Error while deleting topic %s".format(topic))
-      }
-    }
-  }
-
-  def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
-    val topics = getTopics(zkClient, opts)
-    val topicOptWithExits = opts.options.has(opts.topicOpt) && opts.options.has(opts.ifExistsOpt)
-    ensureTopicExists(opts, topics, topicOptWithExits)
-    val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
-    val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
-    val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
-    val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
-    val adminZkClient = new AdminZkClient(zkClient)
-
-    for (topic <- topics) {
-       zkClient.getPartitionAssignmentForTopics(immutable.Set(topic)).get(topic) match {
-        case Some(topicPartitionAssignment) =>
-          val describeConfigs: Boolean = !reportUnavailablePartitions && !reportUnderReplicatedPartitions
-          val describePartitions: Boolean = !reportOverriddenConfigs
-          val sortedPartitions = topicPartitionAssignment.toSeq.sortBy(_._1)
-          val markedForDeletion = zkClient.isTopicMarkedForDeletion(topic)
-          if (describeConfigs) {
-            val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic).asScala
-            if (!reportOverriddenConfigs || configs.nonEmpty) {
-              val numPartitions = topicPartitionAssignment.size
-              val replicationFactor = topicPartitionAssignment.head._2.size
-              val configsAsString = configs.map { case (k, v) => s"$k=$v" }.mkString(",")
-              val markedForDeletionString = if (markedForDeletion) "\tMarkedForDeletion:true" else ""
-              println("Topic:%s\tPartitionCount:%d\tReplicationFactor:%d\tConfigs:%s%s"
-                .format(topic, numPartitions, replicationFactor, configsAsString, markedForDeletionString))
-            }
-          }
-          if (describePartitions) {
-            for ((partitionId, assignedReplicas) <- sortedPartitions) {
-              val leaderIsrEpoch = zkClient.getTopicPartitionState(new TopicPartition(topic, partitionId))
-              val inSyncReplicas = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr
-              val leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader)
-
-              if ((!reportUnderReplicatedPartitions && !reportUnavailablePartitions) ||
-                  (reportUnderReplicatedPartitions && inSyncReplicas.size < assignedReplicas.size) ||
-                  (reportUnavailablePartitions && (leader.isEmpty || !liveBrokers.contains(leader.get)))) {
-
-                val markedForDeletionString =
-                  if (markedForDeletion && !describeConfigs) "\tMarkedForDeletion: true" else ""
-                print("\tTopic: " + topic)
-                print("\tPartition: " + partitionId)
-                print("\tLeader: " + (if(leader.isDefined) leader.get else "none"))
-                print("\tReplicas: " + assignedReplicas.mkString(","))
-                print("\tIsr: " + inSyncReplicas.mkString(","))
-                print(markedForDeletionString)
-                println()
-              }
-            }
-          }
-        case None =>
-          println("Topic " + topic + " doesn't exist!")
       }
     }
   }

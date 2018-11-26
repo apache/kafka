@@ -395,13 +395,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // describe topic that does not exist
     val describeOpts = new TopicCommandOptions(Array("--topic", "test"))
     intercept[IllegalArgumentException] {
-      TopicCommand.describeTopic(zkClient, describeOpts)
+      topicService.describeTopic(describeOpts)
     }
 
     // describe topic that does not exist with --if-exists
     val describeOptsWithExists = new TopicCommandOptions(Array("--topic", "test", "--if-exists"))
     // should not throw any error
-    TopicCommand.describeTopic(zkClient, describeOptsWithExists)
+    topicService.describeTopic(describeOptsWithExists)
   }
 
   @Test
