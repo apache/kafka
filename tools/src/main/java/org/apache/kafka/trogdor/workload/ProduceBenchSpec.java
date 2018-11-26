@@ -26,6 +26,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -66,7 +67,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final int maxMessages;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
-    private final TransactionGenerator transactionGenerator;
+    private final Optional<TransactionGenerator> transactionGenerator;
     private final Map<String, String> producerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -82,7 +83,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("maxMessages") int maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-                         @JsonProperty("transactionGenerator") TransactionGenerator txGenerator,
+                         @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -97,8 +98,7 @@ public class ProduceBenchSpec extends TaskSpec {
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
-        this.transactionGenerator = txGenerator == null ?
-            new ZeroTransactionsGenerator() : txGenerator;
+        this.transactionGenerator = txGenerator;
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
@@ -139,7 +139,7 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public TransactionGenerator transactionGenerator() {
+    public Optional<TransactionGenerator> transactionGenerator() {
         return transactionGenerator;
     }
 

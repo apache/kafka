@@ -44,8 +44,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.UUID;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -182,7 +183,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final PayloadIterator values;
 
-        private final TransactionGenerator transactionGenerator;
+        private final Optional<TransactionGenerator> transactionGenerator;
 
         private final Throttle throttle;
 
@@ -197,9 +198,8 @@ public class ProduceBenchWorker implements TaskWorker {
             this.histogram = new Histogram(5000);
 
             this.transactionGenerator = spec.transactionGenerator();
+            this.toUseTransactions = this.transactionGenerator.isPresent();
             this.transactionsCommitted = new AtomicInteger();
-            if (transactionGenerator.action() == TransactionAction.INIT_TRANSACTIONS)
-                toUseTransactions = true;
 
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
@@ -235,7 +235,8 @@ public class ProduceBenchWorker implements TaskWorker {
                         sendMessage();
                         sentMessages++;
                     }
-                    takeTransactionAction(); // give the transactionGenerator a chance to commit if configured evenly
+                    if (toUseTransactions)
+                        takeTransactionAction(); // give the transactionGenerator a chance to commit if configured evenly
                 } catch (Exception e) {
                     if (toUseTransactions)
                         producer.abortTransaction();
@@ -261,10 +262,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private boolean takeTransactionAction() {
             boolean tookAction = true;
-            TransactionAction nextAction = transactionGenerator.action();
+            TransactionAction nextAction = transactionGenerator.get().action();
             switch (nextAction) {
-                case INIT_TRANSACTIONS:
-                    throw new IllegalStateException("Cannot initiate transactions twice");
                 case BEGIN_TRANSACTION:
                     log.debug("Beginning transaction.");
                     producer.beginTransaction();

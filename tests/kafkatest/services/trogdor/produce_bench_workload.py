@@ -24,8 +24,6 @@ class ProduceBenchWorkloadSpec(TaskSpec):
                  common_client_conf, inactive_topics, active_topics,
                  transaction_generator=None):
         super(ProduceBenchWorkloadSpec, self).__init__(start_ms, duration_ms)
-        if transaction_generator is None:
-            transaction_generator = {"type": "zeroTransactions"}
         self.message["class"] = "org.apache.kafka.trogdor.workload.ProduceBenchSpec"
         self.message["producerNode"] = producer_node
         self.message["bootstrapServers"] = bootstrap_servers

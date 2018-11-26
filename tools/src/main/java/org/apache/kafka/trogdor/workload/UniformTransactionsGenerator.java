@@ -25,7 +25,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public class UniformTransactionsGenerator implements TransactionGenerator {
 
     private final int messagesPerTransaction;
-    private boolean initialized = false;
     private int messagesInTransaction = -1;
 
     @JsonCreator
@@ -43,10 +42,6 @@ public class UniformTransactionsGenerator implements TransactionGenerator {
 
     @Override
     public synchronized TransactionAction action() {
-        if (!initialized) {
-            initialized = true;
-            return TransactionAction.INIT_TRANSACTIONS;
-        }
         if (messagesInTransaction == -1) {
             messagesInTransaction = 0;
             return TransactionAction.BEGIN_TRANSACTION;
