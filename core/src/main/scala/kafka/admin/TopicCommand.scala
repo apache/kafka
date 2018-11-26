@@ -27,6 +27,8 @@ import kafka.server.ConfigType
 import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.CommonClientConfigs
+import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
@@ -43,42 +45,152 @@ object TopicCommand extends Logging {
   def main(args: Array[String]): Unit = {
 
     val opts = new TopicCommandOptions(args)
-
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to create, delete, describe, or change a topic.")
-
-    // should have exactly one action
-    val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
-    if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
-
     opts.checkArgs()
 
-    val time = Time.SYSTEM
-    val zkClient = KafkaZkClient(opts.options.valueOf(opts.zkConnectOpt), JaasUtils.isZkSecurityEnabled, 30000, 30000,
-      Int.MaxValue, time)
+    val topicService = if (opts.zkConnect.isDefined)
+      ZookeeperTopicService(opts.zkConnect)
+    else
+      AdminClientTopicService(opts.commandConfig, opts.bootstrapServer)
 
     var exitCode = 0
     try {
-      if(opts.options.has(opts.createOpt))
-        createTopic(zkClient, opts)
-      else if(opts.options.has(opts.alterOpt))
-        alterTopic(zkClient, opts)
-      else if(opts.options.has(opts.listOpt))
-        listTopics(zkClient, opts)
-      else if(opts.options.has(opts.describeOpt))
-        describeTopic(zkClient, opts)
-      else if(opts.options.has(opts.deleteOpt))
-        deleteTopic(zkClient, opts)
+      if (opts.hasCreateOption)
+        topicService.createTopic(opts)
+      else if (opts.hasAlterOption)
+        topicService.alterTopic(opts)
+      else if (opts.hasListOption)
+        topicService.listTopics(opts)
+      else if (opts.hasDescribeOption)
+        topicService.describeTopic(opts)
+      else if (opts.hasDeleteOption)
+        topicService.deleteTopic(opts)
     } catch {
       case e: Throwable =>
         println("Error while executing topic command : " + e.getMessage)
         error(Utils.stackTrace(e))
         exitCode = 1
     } finally {
-      zkClient.close()
+      topicService.close()
       Exit.exit(exitCode)
     }
+  }
 
+
+
+  class CommandTopicPartition(opts: TopicCommandOptions) {
+    val name: String = opts.topic.get
+    val partitions: Option[Integer] = opts.partitions
+    val replicationFactor: Integer = opts.replicationFactor.getOrElse(-1)
+    val replicaAssignment: Option[Map[Int, List[Int]]] = opts.replicaAssignment
+    val configsToAdd: Properties = parseTopicConfigsToBeAdded(opts)
+    val configsToDelete: Seq[String] = parseTopicConfigsToBeDeleted(opts)
+    val rackAwareMode: RackAwareMode = opts.rackAwareMode
+
+    def hasReplicaAssignment: Boolean = replicaAssignment.isDefined
+    def hasPartitions: Boolean = partitions.isDefined
+    def ifTopicDoesntExist(): Boolean = opts.ifNotExists
+  }
+
+  case class PartitionDescription(
+                                   topic: String,
+                                   partition: Int,
+                                   leader: Option[Int],
+                                   assignedReplicas: Seq[Int],
+                                   isr: Seq[Int],
+                                   markedForDeletion: Boolean,
+                                   describeConfigs: Boolean)
+
+  class DescribeOptions(opts: TopicCommandOptions, liveBrokers: Set[Int]) {
+    val describeConfigs: Boolean = !opts.reportUnavailablePartitions && !opts.reportUnderReplicatedPartitions
+    val describePartitions: Boolean = !opts.reportOverriddenConfigs
+    private def hasUnderreplicatedPartitions(partitionDescription: PartitionDescription) = {
+      partitionDescription.isr.size < partitionDescription.assignedReplicas.size
+    }
+    private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription) = {
+      opts.reportUnderReplicatedPartitions && hasUnderreplicatedPartitions(partitionDescription)
+    }
+    private def hasUnavailablePartitions(partitionDescription: PartitionDescription) = {
+      partitionDescription.leader.isEmpty || !liveBrokers.contains(partitionDescription.leader.get)
+    }
+    private def shouldPrintUnavailablePartitions(partitionDescription: PartitionDescription) = {
+      opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
+    }
+
+    def shouldPrintTopicPartition(partitionDesc: PartitionDescription): Boolean = {
+      describeConfigs ||
+        shouldPrintUnderReplicatedPartitions(partitionDesc) ||
+        shouldPrintUnavailablePartitions(partitionDesc)
+    }
+  }
+
+  trait TopicService extends AutoCloseable {
+    def createTopic(opts: TopicCommandOptions): Unit = {
+      val topic = new CommandTopicPartition(opts)
+      if (Topic.hasCollisionChars(topic.name))
+        println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could " +
+          "collide. To avoid issues it is best to use either, but not both.")
+      createTopic(topic)
+    }
+    def createTopic(topic: CommandTopicPartition)
+    def listTopics(opts: TopicCommandOptions)
+    def alterTopic(opts: TopicCommandOptions)
+    def describeTopic(opts: TopicCommandOptions)
+    def deleteTopic(opts: TopicCommandOptions)
+    def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String]
+  }
+
+  object AdminClientTopicService {
+    def createAdminClient(commandConfig: Properties, bootstrapServer: Option[String]): JAdminClient = {
+      bootstrapServer match {
+        case Some(serverList) => commandConfig.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, serverList)
+        case None =>
+      }
+      JAdminClient.create(commandConfig)
+    }
+
+    def apply(adminClient: JAdminClient): AdminClientTopicService =
+      new AdminClientTopicService(adminClient)
+    def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =
+      new AdminClientTopicService(createAdminClient(commandConfig, bootstrapServer))
+  }
+
+  case class AdminClientTopicService private (adminClient: JAdminClient) extends TopicService {
+    override def createTopic(topic: CommandTopicPartition): Unit = ???
+
+    override def listTopics(opts: TopicCommandOptions): Unit = ???
+
+    override def alterTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def describeTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def deleteTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = ???
+
+    override def close(): Unit = ???
+  }
+
+  object ZookeeperTopicService {
+    def apply(zkClient: KafkaZkClient): ZookeeperTopicService = new ZookeeperTopicService(zkClient)
+    def apply(zkConnect: Option[String]): ZookeeperTopicService =
+      new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
+        Int.MaxValue, Time.SYSTEM))
+  }
+
+  case class ZookeeperTopicService(zkClient: KafkaZkClient) extends TopicService {
+    override def createTopic(topic: CommandTopicPartition): Unit = ???
+
+    override def listTopics(opts: TopicCommandOptions): Unit = ???
+
+    override def alterTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def describeTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def deleteTopic(opts: TopicCommandOptions): Unit = ???
+
+    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = ???
+
+    override def close(): Unit = ???
   }
 
   private def getTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions): Seq[String] = {
