@@ -242,7 +242,7 @@ class Log(@volatile var dir: File,
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
     if (isMemoryMappedBufferClosed)
-      throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
+      warn(s"The memory mapped buffer for log of $topicPartition is already closed")
   }
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
