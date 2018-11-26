@@ -107,10 +107,10 @@ public class CoordinatorRestResource {
             @DefaultValue("0") @QueryParam("lastEndMs") long lastEndMs,
             @DefaultValue("") @QueryParam("state") String state) throws Throwable {
         boolean isEmptyState = state.equals("");
-        if (!isEmptyState && !TaskStateType.Constants.values.contains(state)) {
+        if (!isEmptyState && !TaskStateType.Constants.VALUES.contains(state)) {
             return Response.status(400).entity(
                 String.format("State %s is invalid. Must be one of %s",
-                    state, TaskStateType.Constants.values)
+                    state, TaskStateType.Constants.VALUES)
             ).build();
         }
 

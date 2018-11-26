@@ -36,7 +36,7 @@ public enum TaskStateType {
         static final String RUNNING_VALUE = "RUNNING";
         static final String STOPPING_VALUE = "STOPPING";
         static final String DONE_VALUE = "DONE";
-        public static final List<String> values = Collections.unmodifiableList(
+        public static final List<String> VALUES = Collections.unmodifiableList(
             Arrays.asList(PENDING_VALUE, RUNNING_VALUE, STOPPING_VALUE, DONE_VALUE));
     }
 }
