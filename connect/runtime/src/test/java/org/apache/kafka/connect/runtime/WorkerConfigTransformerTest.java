@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import junit.framework.AssertionFailedError;
 import org.apache.kafka.common.config.ConfigChangeCallback;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.provider.ConfigProvider;
@@ -36,6 +37,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACT
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONFIG_RELOAD_ACTION_NONE;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.powermock.api.easymock.PowerMock.expectLastCall;
 import static org.powermock.api.easymock.PowerMock.replayAll;
 
 @RunWith(PowerMockRunner.class)
@@ -71,6 +73,9 @@ public class WorkerConfigTransformerTest {
 
     @Test
     public void testReplaceVariableWithTTL() {
+        // Raise error if connectorConfigReloadAction is called, since it results in infinite recursion
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andThrow(new AssertionFailedError()).anyTimes();
+
         EasyMock.expect(worker.herder()).andReturn(herder);
 
         replayAll();
@@ -83,6 +88,9 @@ public class WorkerConfigTransformerTest {
 
     @Test
     public void testReplaceVariableWithTTLAndScheduleRestart() {
+        // Raise error if connectorConfigReloadAction is called, since it results in infinite recursion
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andThrow(new AssertionFailedError()).anyTimes();
+
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
 
@@ -94,6 +102,9 @@ public class WorkerConfigTransformerTest {
 
     @Test
     public void testReplaceVariableWithTTLFirstCancelThenScheduleRestart() {
+        // Raise error if connectorConfigReloadAction is called, since it results in infinite recursion
+        EasyMock.expect(herder.connectorConfigReloadAction(MY_CONNECTOR)).andThrow(new AssertionFailedError()).anyTimes();
+
         EasyMock.expect(worker.herder()).andReturn(herder);
         EasyMock.expect(herder.restartConnector(1L, MY_CONNECTOR, null)).andReturn(requestId);
 
