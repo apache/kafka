@@ -30,6 +30,7 @@ from kafkatest.version import DEV_BRANCH
 class ZookeeperService(KafkaPathResolverMixin, Service):
     ROOT = "/mnt/zookeeper"
     DATA = os.path.join(ROOT, "data")
+    LOG4J_CONFIG = os.path.join(ROOT, "zookeeper-log4j.properties")
 
     logs = {
         "zk_log": {
@@ -75,9 +76,11 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         self.logger.info("zookeeper.properties:")
         self.logger.info(config_file)
         node.account.create_file("%s/zookeeper.properties" % ZookeeperService.ROOT, config_file)
+        node.account.create_file(self.LOG4J_CONFIG, self.render('log4j.properties'))
 
-        start_cmd = "export KAFKA_OPTS=\"%s\";" % (self.kafka_opts + ' ' + self.security_system_properties) \
+        start_cmd = "export KAFKA_OPTS=\"%s\"; " % (self.kafka_opts + ' ' + self.security_system_properties) \
             if self.security_config.zk_sasl else self.kafka_opts
+        start_cmd += "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG
         start_cmd += "%s " % self.path.script("zookeeper-server-start.sh", node)
         start_cmd += "%s/zookeeper.properties &>> %s &" % (ZookeeperService.ROOT, self.logs["zk_log"]["path"])
         node.account.ssh(start_cmd)
