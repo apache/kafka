@@ -17,6 +17,7 @@
 
 package kafka.admin
 
+import java.util
 import java.util.Properties
 
 import joptsimple._
@@ -309,11 +310,20 @@ object TopicCommand extends Logging {
   }
 
   class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
-                                      "Multiple hosts can be given to allow fail-over.")
-                           .withRequiredArg
-                           .describedAs("hosts")
-                           .ofType(classOf[String])
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: The Kafka server to connect to. In case of providing this, a direct Zookeeper connection won't be required.")
+      .withRequiredArg
+      .describedAs("server to connect to")
+      .ofType(classOf[String])
+    val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
+      "This is used only with --bootstrap-server option for describing and altering broker configs.")
+      .withRequiredArg
+      .describedAs("command config property file")
+      .ofType(classOf[String])
+    val zkConnectOpt = parser.accepts("zookeeper", "DEPRECATED, The connection string for the zookeeper connection in the form host:port. " +
+      "Multiple hosts can be given to allow fail-over.")
+      .withRequiredArg
+      .describedAs("hosts")
+      .ofType(classOf[String])
     val listOpt = parser.accepts("list", "List all available topics.")
     val createOpt = parser.accepts("create", "Create a new topic.")
     val deleteOpt = parser.accepts("delete", "Delete a topic")
@@ -371,13 +381,62 @@ object TopicCommand extends Logging {
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
+    def has(builder: OptionSpec[_]): Boolean = options.has(builder)
+    def valueAsOption[A](option: OptionSpec[A], defaultValue: Option[A] = None): Option[A] = if (has(option)) Some(options.valueOf(option)) else defaultValue
+    def valuesAsOption[A](option: OptionSpec[A], defaultValue: Option[util.List[A]] = None): Option[util.List[A]] = if (has(option)) Some(options.valuesOf(option)) else defaultValue
+
+    def hasCreateOption: Boolean = has(createOpt)
+    def hasAlterOption: Boolean = has(alterOpt)
+    def hasListOption: Boolean = has(listOpt)
+    def hasDescribeOption: Boolean = has(describeOpt)
+    def hasDeleteOption: Boolean = has(deleteOpt)
+
+    def zkConnect: Option[String] = valueAsOption(zkConnectOpt)
+    def bootstrapServer: Option[String] = valueAsOption(bootstrapServerOpt)
+    def commandConfig: Properties = if (has(commandConfigOpt)) Utils.loadProps(options.valueOf(commandConfigOpt)) else new Properties()
+    def topic: Option[String] = valueAsOption(topicOpt)
+    def partitions: Option[Integer] = valueAsOption(partitionsOpt)
+    def replicationFactor: Option[Integer] = valueAsOption(replicationFactorOpt)
+    def replicaAssignment: Option[Map[Int, List[Int]]] =
+      if (has(replicaAssignmentOpt) && !Option(options.valueOf(replicaAssignmentOpt)).getOrElse("").isEmpty)
+        Some(parseReplicaAssignment(options.valueOf(replicaAssignmentOpt)))
+      else
+        None
+    def rackAwareMode: RackAwareMode = if (has(disableRackAware)) RackAwareMode.Disabled else RackAwareMode.Enforced
+    def reportUnderReplicatedPartitions: Boolean = has(reportUnderReplicatedPartitionsOpt)
+    def reportUnavailablePartitions: Boolean = has(reportUnavailablePartitionsOpt)
+    def reportOverriddenConfigs: Boolean = has(topicsWithOverridesOpt)
+    def ifExists: Boolean = has(ifExistsOpt)
+    def ifNotExists: Boolean = has(ifNotExistsOpt)
+    def excludeInternalTopics: Boolean = has(excludeInternalTopicOpt)
+    def topicConfig: Option[util.List[String]] = valuesAsOption(configOpt)
+    def configsToDelete: Option[util.List[String]] = valuesAsOption(deleteConfigOpt)
+
     def checkArgs() {
+      if (args.length == 0)
+        CommandLineUtils.printUsageAndDie(parser, "Create, delete, describe, or change a topic.")
+
+      CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to create, delete, describe, or change a topic.")
+
+      // should have exactly one action
+      val actions = Seq(createOpt, listOpt, alterOpt, describeOpt, deleteOpt).count(options.has)
+      if (actions != 1)
+        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
+
       // check required args
-      CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+      if (options.has(bootstrapServerOpt) == options.has(zkConnectOpt))
+        throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+
+      if (!options.has(bootstrapServerOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
       if(options.has(describeOpt) && options.has(ifExistsOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (!options.has(listOpt) && !options.has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
+      if (has(createOpt) && !has(replicaAssignmentOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
+      if (has(alterOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
