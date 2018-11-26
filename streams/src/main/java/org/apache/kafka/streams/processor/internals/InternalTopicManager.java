@@ -125,7 +125,7 @@ public class InternalTopicManager {
 
                 final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
 
-                final Set<String> createTopicNames = new HashSet<>();
+                final Set<String> createdTopicNames = new HashSet<>();
                 for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
                     try {
                         if (retryBackOff) {
@@ -133,7 +133,7 @@ public class InternalTopicManager {
                             Thread.sleep(retryBackOffMs);
                         }
                         createTopicResult.getValue().get();
-                        createTopicNames.add(createTopicResult.getKey());
+                        createdTopicNames.add(createTopicResult.getKey());
                     } catch (final ExecutionException couldNotCreateTopic) {
                         final Throwable cause = couldNotCreateTopic.getCause();
                         final String topicName = createTopicResult.getKey();
@@ -149,7 +149,7 @@ public class InternalTopicManager {
 
                             if (existingTopicPartition.containsKey(topicName)
                                     && validateTopicPartitions(Collections.singleton(topics.get(topicName)), existingTopicPartition).isEmpty()) {
-                                createTopicNames.add(createTopicResult.getKey());
+                                createdTopicNames.add(createTopicResult.getKey());
                                 log.info("Topic {} exists already and has the right number of partitions: {}",
                                         topicName,
                                         couldNotCreateTopic.toString());
@@ -172,7 +172,7 @@ public class InternalTopicManager {
                 }
 
                 if (retry) {
-                    newTopics.removeIf(newTopic -> createTopicNames.contains(newTopic.name()));
+                    newTopics.removeIf(newTopic -> createdTopicNames.contains(newTopic.name()));
 
                     continue;
                 }
