@@ -180,7 +180,7 @@ object TopicCommand extends Logging {
     }
 
     override def listTopics(opts: TopicCommandOptions): Unit = {
-      print(getTopics(opts.topic, opts.excludeInternalTopics).mkString("\n"))
+      println(getTopics(opts.topic, opts.excludeInternalTopics).mkString("\n"))
     }
 
     override def alterTopic(opts: TopicCommandOptions): Unit = {
