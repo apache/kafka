@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Config, ConfigEntry, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Config, ConfigEntry, ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -179,7 +179,9 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def listTopics(opts: TopicCommandOptions): Unit = ???
+    override def listTopics(opts: TopicCommandOptions): Unit = {
+      print(getTopics(opts.topic, opts.excludeInternalTopics).mkString("\n"))
+    }
 
     override def alterTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -187,9 +189,16 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = ???
 
-    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = ???
+    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+      val allTopics = if (excludeInternalTopics) {
+        adminClient.listTopics()
+      } else {
+        adminClient.listTopics(new ListTopicsOptions().listInternal(true))
+      }
+      doGetTopics(allTopics.names().get().asScala.toSeq.sorted, topicWhitelist, excludeInternalTopics)
+    }
 
-    override def close(): Unit = ???
+    override def close(): Unit = adminClient.close()
   }
 
   object ZookeeperTopicService {
@@ -214,7 +223,15 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def listTopics(opts: TopicCommandOptions): Unit = ???
+    override def listTopics(opts: TopicCommandOptions): Unit = {
+      val topics = getTopics(opts.topic, opts.excludeInternalTopics)
+      for(topic <- topics) {
+        if (zkClient.isTopicMarkedForDeletion(topic))
+          println(s"$topic - marked for deletion")
+        else
+          println(topic)
+      }
+    }
 
     override def alterTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -222,9 +239,20 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = ???
 
-    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = ???
+    override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+      val allTopics = zkClient.getAllTopicsInCluster.sorted
+      doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
+    }
 
-    override def close(): Unit = ???
+    override def close(): Unit = zkClient.close()
+  }
+
+  private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+    if (topicWhitelist.isDefined) {
+      val topicsFilter = Whitelist(topicWhitelist.get)
+      allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
+    } else
+      allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
   private def getTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions): Seq[String] = {
@@ -279,17 +307,6 @@ object TopicCommand extends Logging {
         val allBrokers = adminZkClient.getBrokerMetadatas()
         adminZkClient.addPartitions(topic, existingAssignment, allBrokers, nPartitions, newAssignment)
         println("Adding partitions succeeded!")
-      }
-    }
-  }
-
-  def listTopics(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
-    val topics = getTopics(zkClient, opts)
-    for(topic <- topics) {
-      if (zkClient.isTopicMarkedForDeletion(topic)) {
-        println("%s - marked for deletion".format(topic))
-      } else {
-        println(topic)
       }
     }
   }
