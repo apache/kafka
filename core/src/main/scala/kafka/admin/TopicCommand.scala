@@ -18,7 +18,7 @@
 package kafka.admin
 
 import java.util
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
@@ -28,8 +28,10 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Config, ConfigEntry, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
@@ -155,7 +157,27 @@ object TopicCommand extends Logging {
   }
 
   case class AdminClientTopicService private (adminClient: JAdminClient) extends TopicService {
-    override def createTopic(topic: CommandTopicPartition): Unit = ???
+
+    override def createTopic(topic: CommandTopicPartition): Unit = {
+      if (topic.replicationFactor > Short.MaxValue)
+        throw new IllegalArgumentException(s"The replication factor's maximum value must be smaller or equal to ${Short.MaxValue}")
+
+      if (!(topic.ifTopicDoesntExist() && adminClient.listTopics().names().get().contains(topic.name))) {
+        val newTopic = if (topic.hasReplicaAssignment)
+          new NewTopic(topic.name, asJavaReplicaReassignment(topic.replicaAssignment.get))
+        else
+          new NewTopic(topic.name, topic.partitions.get, topic.replicationFactor.shortValue())
+
+        val createResult = adminClient.createTopics(Collections.singleton(newTopic))
+        createResult.all().get()
+        val topicConfigResource = new ConfigResource(Type.TOPIC, topic.name)
+        val config = new Config(topic.configsToAdd.asScala.map(cfg => new ConfigEntry(cfg._1, cfg._2)).asJavaCollection)
+        if (!topic.configsToAdd.isEmpty) {
+          val configResult = adminClient.alterConfigs(Map(topicConfigResource -> config).asJava)
+          configResult.all().get()
+        }
+      }
+    }
 
     override def listTopics(opts: TopicCommandOptions): Unit = ???
 
@@ -178,7 +200,19 @@ object TopicCommand extends Logging {
   }
 
   case class ZookeeperTopicService(zkClient: KafkaZkClient) extends TopicService {
-    override def createTopic(topic: CommandTopicPartition): Unit = ???
+
+    override def createTopic(topic: CommandTopicPartition): Unit = {
+      val adminZkClient = new AdminZkClient(zkClient)
+      try {
+        if (topic.hasReplicaAssignment)
+          adminZkClient.createTopicWithAssignment(topic.name, topic.configsToAdd, topic.replicaAssignment.get)
+        else
+          adminZkClient.createTopic(topic.name, topic.partitions.get, topic.replicationFactor, topic.configsToAdd, topic.rackAwareMode)
+        println(s"Created topic ${topic.name}.")
+      } catch  {
+        case e: TopicExistsException => if (!topic.ifTopicDoesntExist()) throw e
+      }
+    }
 
     override def listTopics(opts: TopicCommandOptions): Unit = ???
 
@@ -202,31 +236,6 @@ object TopicCommand extends Logging {
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
       allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
-  }
-
-  def createTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
-    val topic = opts.options.valueOf(opts.topicOpt)
-    val configs = parseTopicConfigsToBeAdded(opts)
-    val ifNotExists = opts.options.has(opts.ifNotExistsOpt)
-    if (Topic.hasCollisionChars(topic))
-      println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could collide. To avoid issues it is best to use either, but not both.")
-    val adminZkClient = new AdminZkClient(zkClient)
-    try {
-      if (opts.options.has(opts.replicaAssignmentOpt)) {
-        val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        adminZkClient.createTopicWithAssignment(topic, configs, assignment)
-      } else {
-        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
-        val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
-        val replicas = opts.options.valueOf(opts.replicationFactorOpt).intValue
-        val rackAwareMode = if (opts.options.has(opts.disableRackAware)) RackAwareMode.Disabled
-                            else RackAwareMode.Enforced
-        adminZkClient.createTopic(topic, partitions, replicas, configs, rackAwareMode)
-      }
-      println("Created topic \"%s\".".format(topic))
-    } catch  {
-      case e: TopicExistsException => if (!ifNotExists) throw e
-    }
   }
 
   def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
@@ -419,6 +428,10 @@ object TopicCommand extends Logging {
         throw new AdminOperationException("Partition " + i + " has different replication factor: " + brokerList)
     }
     ret.toMap
+  }
+
+  def asJavaReplicaReassignment(original: Map[Int, List[Int]]): util.Map[Integer, util.List[Integer]] = {
+    original.map(f => Integer.valueOf(f._1) -> f._2.map(e => Integer.valueOf(e)).asJava).asJava
   }
 
   class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
