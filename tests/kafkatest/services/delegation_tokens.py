@@ -26,7 +26,7 @@ class DelegationTokens(KafkaPathResolverMixin):
         self.client_properties_content = """
 security.protocol=SASL_PLAINTEXT
 sasl.kerberos.service.name=kafka
--"""
+"""
         self.context = context
         self.command_path = self.path.script("kafka-delegation-tokens.sh")
         self.kafka_opts = "KAFKA_OPTS=\"-Djava.security.auth.login.config=/mnt/security/jaas.conf " \

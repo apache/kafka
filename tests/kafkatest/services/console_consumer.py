@@ -62,7 +62,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
-                 kafka_opts_override="", consumer_properties={}, client_prop_file_override=""):
+                 kafka_opts_override="", client_prop_file_override=""):
         """
         Args:
             context:                    standard context
@@ -220,10 +220,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         # Create and upload config file
         self.logger.info("console_consumer.properties:")
 
+        self.security_config = self.kafka.security_config.client_config(node=node,
+                                                                        jaas_override_variables=self.jaas_override_variables)
+        self.security_config.setup_node(node)
+
         if self.client_prop_file_override:
             prop_file = self.client_prop_file_override
-            self.security_config = self.kafka.security_config.client_config(prop_file, node)
-            self.security_config.setup_node(node)
         else:
             prop_file = self.prop_file(node)
 
