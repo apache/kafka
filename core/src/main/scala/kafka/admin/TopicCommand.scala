@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Config, ConfigEntry, ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{Config, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -183,7 +183,24 @@ object TopicCommand extends Logging {
       print(getTopics(opts.topic, opts.excludeInternalTopics).mkString("\n"))
     }
 
-    override def alterTopic(opts: TopicCommandOptions): Unit = ???
+    override def alterTopic(opts: TopicCommandOptions): Unit = {
+      val topic = new CommandTopicPartition(opts)
+      val topics = getTopics(opts.topic, opts.excludeInternalTopics)
+      val ifExists = opts.options.has(opts.ifExistsOpt)
+      ensureTopicExists(opts, topics, ifExists)
+      val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
+      adminClient.createPartitions(topics.map {topicName =>
+        if (topic.hasReplicaAssignment) {
+          val startPartitionId = topicsInfo.get(topicName).get().partitions().size()
+          val newAssignment = {
+            val replicaMap = topic.replicaAssignment.get.drop(startPartitionId)
+            new util.ArrayList(replicaMap.map(p => p._2.asJava).asJavaCollection).asInstanceOf[util.List[util.List[Integer]]]
+          }
+          topicName -> NewPartitions.increaseTo(topic.partitions.get, newAssignment)
+        } else {
+          topicName -> NewPartitions.increaseTo(topic.partitions.get)
+        }}.toMap.asJava).all().get()
+    }
 
     override def describeTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -233,7 +250,44 @@ object TopicCommand extends Logging {
       }
     }
 
-    override def alterTopic(opts: TopicCommandOptions): Unit = ???
+    override def alterTopic(opts: TopicCommandOptions): Unit = {
+      val topics = getTopics(opts.topic, opts.excludeInternalTopics)
+      val tp = new CommandTopicPartition(opts)
+      val ifExists = opts.options.has(opts.ifExistsOpt)
+      ensureTopicExists(opts, topics, ifExists)
+      val adminZkClient = new AdminZkClient(zkClient)
+      topics.foreach { topic =>
+        val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+        if(opts.topicConfig.isDefined || opts.configsToDelete.isDefined) {
+          println("WARNING: Altering topic configuration from this script has been deprecated and may be removed in future releases.")
+          println("         Going forward, please use kafka-configs.sh for this functionality")
+
+          // compile the final set of configs
+          configs ++= tp.configsToAdd
+          tp.configsToDelete.foreach(config => configs.remove(config))
+          adminZkClient.changeTopicConfig(topic, configs)
+          println(s"Updated config for topic $topic.")
+        }
+
+        if(tp.hasPartitions) {
+          if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
+            throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
+          }
+          println("WARNING: If partitions are increased for a topic that has a key, the partition " +
+            "logic or ordering of the messages will be affected")
+          val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
+            case (topicPartition, replicas) => topicPartition.partition -> replicas
+          }
+          if (existingAssignment.isEmpty)
+            throw new InvalidTopicException(s"The topic $topic does not exist")
+          val newAssignment = tp.replicaAssignment.getOrElse(Map()).drop(existingAssignment.size)
+          val allBrokers = adminZkClient.getBrokerMetadatas()
+          val partitions: Integer = tp.partitions.getOrElse(1)
+          adminZkClient.addPartitions(topic, existingAssignment, allBrokers, partitions, Option(newAssignment).filter(_.nonEmpty))
+          println("Adding partitions succeeded!")
+        }
+      }
+    }
 
     override def describeTopic(opts: TopicCommandOptions): Unit = ???
 
@@ -264,51 +318,6 @@ object TopicCommand extends Logging {
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
       allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
-  }
-
-  def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
-    val topics = getTopics(zkClient, opts)
-    val ifExists = opts.options.has(opts.ifExistsOpt)
-    ensureTopicExists(opts, topics, ifExists)
-    val adminZkClient = new AdminZkClient(zkClient)
-    topics.foreach { topic =>
-      val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-      if(opts.options.has(opts.configOpt) || opts.options.has(opts.deleteConfigOpt)) {
-        println("WARNING: Altering topic configuration from this script has been deprecated and may be removed in future releases.")
-        println("         Going forward, please use kafka-configs.sh for this functionality")
-
-        val configsToBeAdded = parseTopicConfigsToBeAdded(opts)
-        val configsToBeDeleted = parseTopicConfigsToBeDeleted(opts)
-        // compile the final set of configs
-        configs ++= configsToBeAdded
-        configsToBeDeleted.foreach(config => configs.remove(config))
-        adminZkClient.changeTopicConfig(topic, configs)
-        println("Updated config for topic \"%s\".".format(topic))
-      }
-
-      if(opts.options.has(opts.partitionsOpt)) {
-        if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
-          throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
-        }
-        println("WARNING: If partitions are increased for a topic that has a key, the partition " +
-          "logic or ordering of the messages will be affected")
-        val nPartitions = opts.options.valueOf(opts.partitionsOpt).intValue
-        val existingAssignment = zkClient.getReplicaAssignmentForTopics(immutable.Set(topic)).map {
-          case (topicPartition, replicas) => topicPartition.partition -> replicas
-        }
-        if (existingAssignment.isEmpty)
-          throw new InvalidTopicException(s"The topic $topic does not exist")
-        val replicaAssignmentStr = opts.options.valueOf(opts.replicaAssignmentOpt)
-        val newAssignment = Option(replicaAssignmentStr).filter(_.nonEmpty).map { replicaAssignmentString =>
-          val startPartitionId = existingAssignment.size
-          val partitionList = replicaAssignmentString.split(",").drop(startPartitionId)
-          AdminUtils.parseReplicaAssignment(partitionList.mkString(","), startPartitionId)
-        }
-        val allBrokers = adminZkClient.getBrokerMetadatas()
-        adminZkClient.addPartitions(topic, existingAssignment, allBrokers, nPartitions, newAssignment)
-        println("Adding partitions succeeded!")
-      }
-    }
   }
 
   def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {

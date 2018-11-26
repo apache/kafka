@@ -24,6 +24,7 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import java.util.Properties
 
+import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaDeletionSuccessful}
 import org.apache.kafka.common.TopicPartition
@@ -204,7 +205,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
     // increase the partition count for topic
     val topicCommandOptions = new TopicCommand.TopicCommandOptions(Array("--zookeeper", zkConnect, "--alter", "--topic", topic, "--partitions", "2"))
-    TopicCommand.alterTopic(zkClient, topicCommandOptions)
+    new ZookeeperTopicService(zkClient).alterTopic(topicCommandOptions)
 
     // trigger a controller switch now
     val previousControllerId = controllerId
