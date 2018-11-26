@@ -52,7 +52,7 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
         this(inner, windowSize, false);
     }
 
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize, boolean isChangelogTopic) {
+    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize, final boolean isChangelogTopic) {
         this.inner = inner;
         this.windowSize = windowSize;
         this.isChangelogTopic = isChangelogTopic;

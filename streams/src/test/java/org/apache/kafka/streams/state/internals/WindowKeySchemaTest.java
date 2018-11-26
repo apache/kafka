@@ -201,8 +201,27 @@ public class WindowKeySchemaTest {
     public void shouldSerializeDeserializeExpectedWindowSize() {
         final byte[] bytes = keySerde.serializer().serialize(topic, windowedKey);
         final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), endTime - startTime)
-                .deserialize(topic, bytes);
+            .deserialize(topic, bytes);
         assertEquals(windowedKey, result);
+    }
+
+    @Test
+    public void shouldSerializeDeserializeExpectedChangelogWindowSize() {
+        // Key-value containing serialized store key binary and the key's window size
+        final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0}), new TimeWindow(0, 1)), 0), 1),
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0}), new TimeWindow(0, 10)), 0), 10),
+            KeyValue.pair(WindowKeySchema.toStoreKeyBinary(new Windowed<>(Bytes.wrap(new byte[]{0, 0, 0}), new TimeWindow(10, 30)), 6), 20));
+
+        final List<Long> results = new ArrayList<>();
+        for (final KeyValue<Bytes, Integer> keyValue : keys) {
+            final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), keyValue.value, true)
+                .deserialize(topic, keyValue.key.get());
+            final Window resultWindow = result.window();
+            results.add(resultWindow.end() - resultWindow.start());
+        }
+
+        assertThat(results, equalTo(Arrays.asList(1L, 10L, 20L)));
     }
 
     @Test
@@ -211,12 +230,12 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void shouldDeSerializeEmtpyByteArrayToNull() {
+    public void shouldDeserializeEmptyByteArrayToNull() {
         assertNull(keySerde.deserializer().deserialize(topic, new byte[0]));
     }
 
     @Test
-    public void shouldDeSerializeNullToNull() {
+    public void shouldDeserializeNullToNull() {
         assertNull(keySerde.deserializer().deserialize(topic, null));
     }
 
@@ -240,7 +259,7 @@ public class WindowKeySchemaTest {
     }
 
     @Test
-    public void shouldExtractWindowFromBindary() {
+    public void shouldExtractWindowFromBinary() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
         assertEquals(window, WindowKeySchema.extractStoreWindow(serialized.get(), endTime - startTime));
     }
