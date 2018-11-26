@@ -182,7 +182,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final PayloadIterator values;
 
-        private final TransactionGenerator txActionGenerator;
+        private final TransactionGenerator transactionGenerator;
 
         private final Throttle throttle;
 
@@ -196,9 +196,9 @@ public class ProduceBenchWorker implements TaskWorker {
             this.partitionsIterator = activePartitions.iterator();
             this.histogram = new Histogram(5000);
 
-            this.txActionGenerator = spec.transactionGenerator();
+            this.transactionGenerator = spec.transactionGenerator();
             this.transactionsCommitted = new AtomicInteger();
-            if (txActionGenerator.action() == TransactionAction.INIT_TRANSACTIONS)
+            if (transactionGenerator.action() == TransactionAction.INIT_TRANSACTIONS)
                 toUseTransactions = true;
 
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
@@ -261,7 +261,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private boolean takeTransactionAction() {
             boolean tookAction = true;
-            TransactionAction nextAction = txActionGenerator.action();
+            TransactionAction nextAction = transactionGenerator.action();
             switch (nextAction) {
                 case INIT_TRANSACTIONS:
                     throw new IllegalStateException("Cannot initiate transactions twice");
@@ -338,7 +338,7 @@ public class ProduceBenchWorker implements TaskWorker {
         private final int p50LatencyMs;
         private final int p95LatencyMs;
         private final int p99LatencyMs;
-        private final int transactionsCommitted ;
+        private final int transactionsCommitted;
 
         /**
          * The percentiles to use when calculating the histogram data.
