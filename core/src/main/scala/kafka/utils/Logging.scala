@@ -74,11 +74,4 @@ trait Logging {
   def error(msg: => String): Unit = logger.error(msgWithLogIdent(msg))
 
   def error(msg: => String, e: => Throwable): Unit = logger.error(msgWithLogIdent(msg),e)
-
-  def fatal(msg: => String): Unit =
-    logger.error(Logging.FatalMarker, msgWithLogIdent(s"FATAL $msg"))  // explicitly attach fatal marker, since log4j does not support markers
-
-  def fatal(msg: => String, e: => Throwable): Unit = {
-    logger.error(Logging.FatalMarker, msgWithLogIdent(s"FATAL $msg"), e)  // explicitly attach fatal marker, since log4j does not support markers
-  }
 }

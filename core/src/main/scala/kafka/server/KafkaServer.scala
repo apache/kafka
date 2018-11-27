@@ -324,7 +324,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
     catch {
       case e: Throwable =>
-        fatal("Fatal error during KafkaServer startup. Prepare to shutdown", e)
+        error("Fatal error during KafkaServer startup. Prepare to shutdown", e)
         isStartingUp.set(false)
         shutdown()
         throw e
@@ -637,7 +637,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
     }
     catch {
       case e: Throwable =>
-        fatal("Fatal error during KafkaServer shutdown.", e)
+        error("Fatal error during KafkaServer shutdown.", e)
         isShuttingDown.set(false)
         throw e
     }

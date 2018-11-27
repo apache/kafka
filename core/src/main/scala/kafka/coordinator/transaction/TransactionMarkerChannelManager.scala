@@ -257,13 +257,13 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
             case Right(None) =>
               val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
                 s"no metadata in the cache; this is not expected"
-              fatal(errorMsg)
+              error(errorMsg)
               throw new IllegalStateException(errorMsg)
           }
 
         case other =>
           val errorMsg = s"Unexpected error ${other.exceptionName} before appending to txn log for $transactionalId"
-          fatal(errorMsg)
+          error(errorMsg)
           throw new IllegalStateException(errorMsg)
       }
     }
@@ -297,7 +297,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
 
         case other: Errors =>
           val errorMsg = s"Unexpected error ${other.exceptionName} while appending to transaction log for ${txnLogAppend.transactionalId}"
-          fatal(errorMsg)
+          error(errorMsg)
           throw new IllegalStateException(errorMsg)
       }
 
@@ -355,7 +355,7 @@ class TransactionMarkerChannelManager(config: KafkaConfig,
             case Right(None) =>
               val errorMsg = s"The coordinator still owns the transaction partition for $transactionalId, but there is " +
                 s"no metadata in the cache; this is not expected"
-              fatal(errorMsg)
+              error(errorMsg)
               throw new IllegalStateException(errorMsg)
 
           }
