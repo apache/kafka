@@ -112,7 +112,7 @@ public class GlobalStateManagerImplTest {
                 put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
             }
         });
-        stateDirectory = new StateDirectory(streamsConfig, time);
+        stateDirectory = new StateDirectory(streamsConfig, time, true);
         consumer = new MockConsumer<>(OffsetResetStrategy.NONE);
         stateManager = new GlobalStateManagerImpl(
             new LogContext("test"),
@@ -139,7 +139,7 @@ public class GlobalStateManagerImplTest {
 
     @Test(expected = LockException.class)
     public void shouldThrowLockExceptionIfCantGetLock() throws IOException {
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, time);
+        final StateDirectory stateDir = new StateDirectory(streamsConfig, time, true);
         try {
             stateDir.lockGlobalState();
             stateManager.initialize();
@@ -357,8 +357,8 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
         stateManager.initialize();
-        stateManager.close(Collections.<TopicPartition, Long>emptyMap());
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime());
+        stateManager.close(Collections.emptyMap());
+        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
         try {
             // should be able to get the lock now as it should've been released in close
             assertTrue(stateDir.lockGlobalState());
@@ -419,7 +419,7 @@ public class GlobalStateManagerImplTest {
         } catch (final StreamsException e) {
             // expected
         }
-        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime());
+        final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
         try {
             // should be able to get the lock now as it should've been released
             assertTrue(stateDir.lockGlobalState());
@@ -511,7 +511,7 @@ public class GlobalStateManagerImplTest {
             new LogContext("mock"),
             topology,
             consumer,
-            new StateDirectory(streamsConfig, time) {
+            new StateDirectory(streamsConfig, time, true) {
                 @Override
                 public boolean lockGlobalState() throws IOException {
                     throw new IOException("KABOOM!");

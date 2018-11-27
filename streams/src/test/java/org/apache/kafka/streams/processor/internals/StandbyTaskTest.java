@@ -160,7 +160,7 @@ public class StandbyTaskTest {
             new PartitionInfo(storeChangelogTopicName2, 2, Node.noNode(), new Node[0], new Node[0])
         ));
         baseDir = TestUtils.tempDirectory();
-        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime());
+        stateDirectory = new StateDirectory(createConfig(baseDir), new MockTime(), true);
     }
 
     @After
