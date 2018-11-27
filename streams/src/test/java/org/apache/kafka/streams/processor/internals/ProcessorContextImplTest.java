@@ -18,9 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Consumer;
 
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,6 +38,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.Before;
 import org.junit.Test;
 
+import static java.util.Collections.emptySet;
 import static org.easymock.EasyMock.anyLong;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
@@ -71,8 +70,9 @@ public class ProcessorContextImplTest {
         allIter = mock(KeyValueIterator.class);
         windowStoreIter = mock(WindowStoreIterator.class);
 
-        for (int i = 0; i < 7; i++)
+        for (int i = 0; i < 7; i++) {
             iters.add(i, mock(KeyValueIterator.class));
+        }
 
         final StreamsConfig streamsConfig = mock(StreamsConfig.class);
         expect(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG)).andReturn("add-id");
@@ -98,11 +98,7 @@ public class ProcessorContextImplTest {
             mock(ThreadCache.class)
         );
 
-        final Set<String> stateStores = new HashSet<>();
-
-        stateStores.add("KeyValueStore");
-
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null, stateStores));
+        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null, emptySet()));
     }
 
     @Test

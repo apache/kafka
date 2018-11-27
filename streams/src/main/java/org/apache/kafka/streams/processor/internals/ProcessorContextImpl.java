@@ -79,12 +79,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueStore)
+            if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
-            else if (global instanceof WindowStore)
+            } else if (global instanceof WindowStore) {
                 return new WindowStoreReadOnlyDecorator((WindowStore) global);
-            else if (global instanceof SessionStore)
+            } else if (global instanceof SessionStore) {
                 return new SessionStoreReadOnlyDecorator((SessionStore) global);
+            }
 
             return global;
         }
@@ -193,9 +194,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> implements StateStore {
-        static final String ERR_MSG = "Global store is read only";
+        static final String ERROR_MESSAGE = "Global store is read only";
 
-        protected final T underlying;
+        final T underlying;
 
         StateStoreReadOnlyDecorator(final T underlying) {
             this.underlying = underlying;
@@ -213,7 +214,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void flush() {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
@@ -259,22 +260,22 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void put(final K key, final V value) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public V putIfAbsent(final K key, final V value) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public void putAll(final List entries) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public V delete(final K key) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
     }
 
@@ -285,12 +286,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void put(final K key, final V value) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public void put(final K key, final V value, final long windowStartTimestamp) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
@@ -339,12 +340,12 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void remove(final Windowed sessionKey) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
         public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-            throw new UnsupportedOperationException(ERR_MSG);
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
