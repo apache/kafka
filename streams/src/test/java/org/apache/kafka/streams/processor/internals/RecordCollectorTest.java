@@ -230,7 +230,7 @@ public class RecordCollectorTest {
         });
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         assertEquals(1.0, metrics.metrics().get(metricName).metricValue());
-        assertTrue(logCaptureAppender.getMessages().contains("test Error sending records to topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error. Enable TRACE logging to view failed messages key and value."));
+        assertTrue(logCaptureAppender.getMessages().contains("test Error sending records topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error. Enable TRACE logging to view failed messages key and value."));
         LogCaptureAppender.unregister(logCaptureAppender);
     }
 

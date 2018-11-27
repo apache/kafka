@@ -201,10 +201,15 @@ public class RecordCollectorImpl implements RecordCollector {
                                     recordSendError(key, value, timestamp, topic, exception);
                                 } else {
                                     log.warn(
-                                        "Error sending records (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
-                                            "The exception handler chose to CONTINUE processing in spite of this error.",
-                                        key, value, timestamp, topic, partition, exception
+                                        "Error sending records topic=[{}] and partition=[{}]; " +
+                                            "The exception handler chose to CONTINUE processing in spite of this error. " +
+                                            "Enable TRACE logging to view failed messages key and value.",
+                                        topic, partition, exception
                                     );
+
+                                    // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
+                                    log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
+
                                     skippedRecordsSensor.record();
                                 }
                             }
