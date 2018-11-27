@@ -103,6 +103,10 @@ public class StateDirectory {
         return taskDir;
     }
 
+    File stateDir() {
+        return stateDir;
+    }
+
     /**
      * Get or create the directory for the global stores.
      * @return directory for the global stores
@@ -141,7 +145,7 @@ public class StateDirectory {
         }
 
         try {
-            lockFile = new File(directoryForTask(taskId), LOCK_FILE_NAME);
+            lockFile = new File(stateDir, taskId + LOCK_FILE_NAME);
         } catch (final ProcessorStateException e) {
             // directoryForTask could be throwing an exception if another thread
             // has concurrently deleted the directory
@@ -222,6 +226,10 @@ public class StateDirectory {
             final FileChannel fileChannel = channels.remove(taskId);
             if (fileChannel != null) {
                 fileChannel.close();
+                final File lockFile = new File(stateDir, taskId + LOCK_FILE_NAME);
+                if (!lockFile.delete()) {
+                  log.debug("{} was not deleted", lockFile.toString());
+                }
             }
         }
     }
@@ -331,7 +339,8 @@ public class StateDirectory {
     private FileChannel getOrCreateFileChannel(final TaskId taskId,
                                                final Path lockPath) throws IOException {
         if (!channels.containsKey(taskId)) {
-            channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE, StandardOpenOption.WRITE));
+            channels.put(taskId, FileChannel.open(lockPath, StandardOpenOption.CREATE,
+                StandardOpenOption.WRITE));
         }
         return channels.get(taskId);
     }
