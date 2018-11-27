@@ -98,7 +98,7 @@ public class ProduceBenchSpec extends TaskSpec {
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
-        this.transactionGenerator = txGenerator;
+        this.transactionGenerator = txGenerator == null ? Optional.empty() : txGenerator;
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
