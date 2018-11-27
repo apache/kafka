@@ -89,7 +89,7 @@ import static org.junit.Assert.fail;
 public class StandbyTaskTest {
 
     private final TaskId taskId = new TaskId(0, 1);
-
+    private StandbyTask task;
     private final Serializer<Integer> intSerializer = new IntegerSerializer();
 
     private final String applicationId = "test-application";
@@ -165,13 +165,17 @@ public class StandbyTaskTest {
 
     @After
     public void cleanup() throws IOException {
+        if (task != null) {
+            task.close(true, false);
+            task = null;
+        }
         Utils.delete(baseDir);
     }
 
     @Test
     public void testStorePartitions() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        final StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initializeStateStores();
         assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
@@ -180,7 +184,7 @@ public class StandbyTaskTest {
     @Test
     public void testUpdateNonInitializedStore() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        final StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
@@ -198,7 +202,7 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        final StandbyTask task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
         task.initializeStateStores();
         final Set<TopicPartition> partition = Collections.singleton(partition2);
         restoreStateConsumer.assign(partition);
@@ -228,7 +232,7 @@ public class StandbyTaskTest {
 
         final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
 
-        final List<TopicPartition> partitions = asList(topicPartition);
+        final List<TopicPartition> partitions = Collections.singletonList(topicPartition);
 
         consumer.assign(partitions);
 
@@ -244,7 +248,7 @@ public class StandbyTaskTest {
 
         builder.buildAndOptimizeTopology();
 
-        final StandbyTask task = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             partitions,
             internalTopologyBuilder.build(0),
@@ -329,7 +333,7 @@ public class StandbyTaskTest {
         final String changelogName = applicationId + "-" + storeName + "-changelog";
 
         final TopicPartition topicPartition = new TopicPartition(changelogName, 1);
-        final List<TopicPartition> partitions = asList(topicPartition);
+        final List<TopicPartition> partitions = Collections.singletonList(topicPartition);
 
         final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder().setApplicationId(applicationId);
 
@@ -342,7 +346,7 @@ public class StandbyTaskTest {
 
         consumer.assign(partitions);
 
-        final StandbyTask task = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             partitions,
             internalTopologyBuilder.build(0),
@@ -393,10 +397,10 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldRestoreToKTable() throws IOException {
-        consumer.assign(asList(globalTopicPartition));
+        consumer.assign(Collections.singletonList(globalTopicPartition));
         consumer.commitSync(mkMap(mkEntry(globalTopicPartition, new OffsetAndMetadata(0L))));
 
-        final StandbyTask task = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             ktablePartitions,
             ktableTopology,
@@ -495,7 +499,7 @@ public class StandbyTaskTest {
         final InternalTopologyBuilder internalTopologyBuilder = InternalStreamsBuilderTest.internalTopologyBuilder(builder);
         final ProcessorTopology topology = internalTopologyBuilder.setApplicationId(applicationId).build(0);
 
-        final StandbyTask standbyTask = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             emptySet(),
             topology,
@@ -506,27 +510,27 @@ public class StandbyTaskTest {
             stateDirectory
         );
 
-        standbyTask.initializeStateStores();
+        task.initializeStateStores();
 
-        assertTrue(standbyTask.hasStateStores());
+        assertTrue(task.hasStateStores());
     }
 
     @Test
     public void shouldCheckpointStoreOffsetsOnCommit() throws IOException {
-        consumer.assign(asList(globalTopicPartition));
+        consumer.assign(Collections.singletonList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(100L));
         consumer.commitSync(committedOffsets);
 
         restoreStateConsumer.updatePartitions(
             globalStoreName,
-            asList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
+            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
         );
 
         final TaskId taskId = new TaskId(0, 0);
         final MockTime time = new MockTime();
         final StreamsConfig config = createConfig(baseDir);
-        final StandbyTask task = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             ktablePartitions,
             ktableTopology,
@@ -560,19 +564,19 @@ public class StandbyTaskTest {
 
     @Test
     public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
-        consumer.assign(asList(globalTopicPartition));
+        consumer.assign(Collections.singletonList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()), new OffsetAndMetadata(100L));
         consumer.commitSync(committedOffsets);
 
         restoreStateConsumer.updatePartitions(
             globalStoreName,
-            asList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
+            Collections.singletonList(new PartitionInfo(globalStoreName, 0, Node.noNode(), new Node[0], new Node[0]))
         );
 
         final StreamsConfig config = createConfig(baseDir);
         final AtomicBoolean closedStateManager = new AtomicBoolean(false);
-        final StandbyTask task = new StandbyTask(
+        task = new StandbyTask(
             taskId,
             ktablePartitions,
             ktableTopology,
@@ -598,6 +602,7 @@ public class StandbyTaskTest {
             fail("should have thrown exception");
         } catch (final Exception e) {
             // expected
+            task = null;
         }
         assertTrue(closedStateManager.get());
     }
