@@ -565,6 +565,7 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scalaLibrary
@@ -830,6 +831,7 @@ project(':clients') {
     compile libs.snappy
     compile libs.slf4jApi
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+    compileOnly libs.jacksonJDK8Datatypes
 
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
@@ -839,6 +841,7 @@ project(':clients') {
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
+    testRuntime libs.jacksonJDK8Datatypes
   }
 
   task determineCommitId {
@@ -918,6 +921,7 @@ project(':tools') {
     compile project(':log4j-appender')
     compile libs.argparse4j
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.slf4jApi
 
     compile libs.jacksonJaxrsJsonProvider
@@ -1347,6 +1351,7 @@ project(':connect:json') {
   dependencies {
     compile project(':connect:api')
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.slf4jApi
 
     testCompile libs.easymock

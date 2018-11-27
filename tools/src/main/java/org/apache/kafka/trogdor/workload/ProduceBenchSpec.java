@@ -26,10 +26,39 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
+ *
+ * To configure a transactional producer, a #{@link TransactionGenerator} must be passed in.
+ * Said generator works in lockstep with the producer by instructing it what action to take next in regards to a transaction.
+ *
+ * An example JSON representation which will result in a producer that creates three topics (foo1, foo2, foo3)
+ * with three partitions each and produces to them:
+ * #{@code
+ *   {
+ *      "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+ *      "durationMs": 10000000,
+ *      "producerNode": "node0",
+ *      "bootstrapServers": "localhost:9092",
+ *      "targetMessagesPerSec": 10,
+ *      "maxMessages": 100,
+ *      "activeTopics": {
+ *        "foo[1-3]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      },
+ *      "inactiveTopics": {
+ *        "foo[4-5]": {
+ *          "numPartitions": 3,
+ *          "replicationFactor": 1
+ *        }
+ *      }
+ *   }
+ * }
  */
 public class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
@@ -38,6 +67,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final int maxMessages;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
+    private final Optional<TransactionGenerator> transactionGenerator;
     private final Map<String, String> producerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -53,6 +83,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("maxMessages") int maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+                         @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
                          @JsonProperty("producerConf") Map<String, String> producerConf,
                          @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                          @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
@@ -67,6 +98,7 @@ public class ProduceBenchSpec extends TaskSpec {
             new SequentialPayloadGenerator(4, 0) : keyGenerator;
         this.valueGenerator = valueGenerator == null ?
             new ConstantPayloadGenerator(512, new byte[0]) : valueGenerator;
+        this.transactionGenerator = txGenerator == null ? Optional.empty() : txGenerator;
         this.producerConf = configOrEmptyMap(producerConf);
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.adminClientConf = configOrEmptyMap(adminClientConf);
@@ -104,6 +136,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public PayloadGenerator valueGenerator() {
         return valueGenerator;
+    }
+
+    @JsonProperty
+    public Optional<TransactionGenerator> transactionGenerator() {
+        return transactionGenerator;
     }
 
     @JsonProperty
