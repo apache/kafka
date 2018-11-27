@@ -419,6 +419,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
+    /** visible for testing */
+    Map<Sensor, Sensor> getParentSensors() {
+        return Collections.unmodifiableMap(parentSensors);
+    }
+
     private static String groupNameFromScope(final String scopeName) {
         return "stream-" + scopeName + "-metrics";
     }
