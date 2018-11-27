@@ -109,7 +109,6 @@ public class StoreChangelogReader implements ChangelogReader {
 
                 final StateRestorer restorer = stateRestorers.get(partition);
                 restorer.setCheckpointOffset(StateRestorer.NO_CHECKPOINT);
-				
                 task.reinitializeStateStoresForPartitions(recoverableException.partitions());
             }
             restoreConsumer.seekToBeginning(partitions);
