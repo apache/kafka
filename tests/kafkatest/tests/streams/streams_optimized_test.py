@@ -73,7 +73,7 @@ class StreamsOptimizedTest(Test):
             processor.CLEAN_NODE_ENABLED = False
             self.verify_running_repartition_topic_count(processor, 4)
 
-        self.verify_processing(processors, False)
+        self.verify_processing(processors, verify_individual_operations=False)
 
         self.stop_processors(processors)
 
@@ -82,7 +82,7 @@ class StreamsOptimizedTest(Test):
             processor.OPTIMIZED_CONFIG = 'all'
             self.verify_running_repartition_topic_count(processor, 1)
 
-        self.verify_processing(processors, True)
+        self.verify_processing(processors, verify_individual_operations=True)
 
         self.stop_processors(processors)
 
