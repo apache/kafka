@@ -83,7 +83,8 @@ object EndToEndLatency {
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
     // sends a dummy message to create the topic if it doesn't exist
-    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, Array[Byte]())).get()
+    val dummyRecord = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, Array[Byte]())).get()
+    val tpWithDummyRecord = new TopicPartition(dummyRecord.topic(), dummyRecord.partition())
 
     def finalise() {
       consumer.commitSync()
@@ -91,12 +92,22 @@ object EndToEndLatency {
       consumer.close()
     }
 
-
     val topicPartitions = consumer.partitionsFor(topic).asScala
       .map(p => new TopicPartition(p.topic(), p.partition())).asJava
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
     consumer.assignment().asScala.foreach(consumer.position)
+
+    // if producerAcks == 1, it is possible that the consumer position on the topic partition with
+    // the dummy record is on dummy record. Make sure that we consume the dummy record before starting
+    // the produce-consume loop below.
+    if (consumer.position(tpWithDummyRecord) <= dummyRecord.offset()) {
+      consumer.poll(Duration.ofMillis(timeout))
+      if (consumer.position(tpWithDummyRecord) <= dummyRecord.offset()) {
+        finalise()
+        throw new RuntimeException("poll() timed out when trying to fetch the dummy record.")
+      }
+    }
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
