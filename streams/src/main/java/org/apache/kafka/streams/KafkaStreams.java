@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.time.Duration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -63,6 +62,7 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -77,7 +77,6 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -135,7 +134,6 @@ public class KafkaStreams implements AutoCloseable {
     // usage only and should not be exposed to users at all.
     private final Time time;
     private final Logger log;
-    private final UUID processId;
     private final String clientId;
     private final Metrics metrics;
     private final StreamsConfig config;
@@ -214,11 +212,11 @@ public class KafkaStreams implements AutoCloseable {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnState(final State targetState, final long waitMs) {
+    private boolean waitOnNoRunningState(final long waitMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             long elapsedMs = 0L;
-            while (state != targetState) {
+            while (state != State.NOT_RUNNING) {
                 if (waitMs > elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
@@ -227,7 +225,7 @@ public class KafkaStreams implements AutoCloseable {
                         // it is ok: just move on to the next iteration
                     }
                 } else {
-                    log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
+                    log.debug("Cannot transit to NOT_RUNNING within {}ms", waitMs);
                     return false;
                 }
                 elapsedMs = time.milliseconds() - begin;
@@ -386,7 +384,9 @@ public class KafkaStreams implements AutoCloseable {
             result.putAll(thread.consumerMetrics());
             result.putAll(thread.adminClientMetrics());
         }
-        if (globalStreamThread != null) result.putAll(globalStreamThread.consumerMetrics());
+        if (globalStreamThread != null) {
+            result.putAll(globalStreamThread.consumerMetrics());
+        }
         result.putAll(metrics.metrics());
         return Collections.unmodifiableMap(result);
     }
@@ -633,7 +633,7 @@ public class KafkaStreams implements AutoCloseable {
         this.time = time;
 
         // The application ID is a required config and hence should always have value
-        processId = UUID.randomUUID();
+        final UUID processId = UUID.randomUUID();
         final String userClientId = config.getString(StreamsConfig.CLIENT_ID_CONFIG);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         if (userClientId.length() <= 0) {
@@ -733,13 +733,10 @@ public class KafkaStreams implements AutoCloseable {
         final GlobalStateStoreProvider globalStateStoreProvider = new GlobalStateStoreProvider(internalTopologyBuilder.globalStateStores());
         queryableStoreProvider = new QueryableStoreProvider(storeProviders, globalStateStoreProvider);
 
-        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(new ThreadFactory() {
-            @Override
-            public Thread newThread(final Runnable r) {
-                final Thread thread = new Thread(r, clientId + "-CleanupThread");
-                thread.setDaemon(true);
-                return thread;
-            }
+        stateDirCleaner = Executors.newSingleThreadScheduledExecutor(r -> {
+            final Thread thread = new Thread(r, clientId + "-CleanupThread");
+            thread.setDaemon(true);
+            return thread;
         });
     }
 
@@ -791,12 +788,9 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             final Long cleanupDelay = config.getLong(StreamsConfig.STATE_CLEANUP_DELAY_MS_CONFIG);
-            stateDirCleaner.scheduleAtFixedRate(new Runnable() {
-                @Override
-                public void run() {
-                    if (state == State.RUNNING) {
-                        stateDirectory.cleanRemovedTasks(cleanupDelay);
-                    }
+            stateDirCleaner.scheduleAtFixedRate(() -> {
+                if (state == State.RUNNING) {
+                    stateDirectory.cleanRemovedTasks(cleanupDelay);
                 }
             }, cleanupDelay, cleanupDelay, TimeUnit.MILLISECONDS);
 
@@ -813,6 +807,7 @@ public class KafkaStreams implements AutoCloseable {
      * Shutdown this {@code KafkaStreams} instance by signaling all the threads to stop, and then wait for them to join.
      * This will block until all threads have stopped.
      */
+    @SuppressWarnings("deprecation")
     public void close() {
         close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
     }
@@ -856,52 +851,49 @@ public class KafkaStreams implements AutoCloseable {
             // wait for all threads to join in a separate thread;
             // save the current thread so that if it is a stream thread
             // we don't attempt to join it and cause a deadlock
-            final Thread shutdownThread = new Thread(new Runnable() {
-                @Override
-                public void run() {
-                    // notify all the threads to stop; avoid deadlocks by stopping any
-                    // further state reports from the thread since we're shutting down
-                    for (final StreamThread thread : threads) {
-                        thread.setStateListener(null);
-                        thread.shutdown();
-                    }
-
-                    for (final StreamThread thread : threads) {
-                        try {
-                            if (!thread.isRunning()) {
-                                thread.join();
-                            }
-                        } catch (final InterruptedException ex) {
-                            Thread.currentThread().interrupt();
-                        }
-                    }
-
-                    if (globalStreamThread != null) {
-                        globalStreamThread.setStateListener(null);
-                        globalStreamThread.shutdown();
-                    }
-
-                    if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
-                        try {
-                            globalStreamThread.join();
-                        } catch (final InterruptedException e) {
-                            Thread.currentThread().interrupt();
-                        }
-                        globalStreamThread = null;
-                    }
-
-                    adminClient.close();
-
-                    metrics.close();
-                    setState(State.NOT_RUNNING);
+            final Thread shutdownThread = new Thread(() -> {
+                // notify all the threads to stop; avoid deadlocks by stopping any
+                // further state reports from the thread since we're shutting down
+                for (final StreamThread thread : threads) {
+                    thread.setStateListener(null);
+                    thread.shutdown();
                 }
+
+                for (final StreamThread thread : threads) {
+                    try {
+                        if (!thread.isRunning()) {
+                            thread.join();
+                        }
+                    } catch (final InterruptedException ex) {
+                        Thread.currentThread().interrupt();
+                    }
+                }
+
+                if (globalStreamThread != null) {
+                    globalStreamThread.setStateListener(null);
+                    globalStreamThread.shutdown();
+                }
+
+                if (globalStreamThread != null && !globalStreamThread.stillRunning()) {
+                    try {
+                        globalStreamThread.join();
+                    } catch (final InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                    }
+                    globalStreamThread = null;
+                }
+
+                adminClient.close();
+
+                metrics.close();
+                setState(State.NOT_RUNNING);
             }, "kafka-streams-close-thread");
 
             shutdownThread.setDaemon(true);
             shutdownThread.start();
         }
 
-        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
+        if (waitOnNoRunningState(timeoutMs)) {
             log.info("Streams client stopped completely");
             return true;
         } else {
@@ -923,9 +915,7 @@ public class KafkaStreams implements AutoCloseable {
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
-        ApiUtils.validateMillisecondDuration(timeout, msgPrefix);
-
-        final long timeoutMs = timeout.toMillis();
+        final long timeoutMs = ApiUtils.validateMillisecondDuration(timeout, msgPrefix);
         if (timeoutMs < 0) {
             throw new IllegalArgumentException("Timeout can't be negative.");
         }

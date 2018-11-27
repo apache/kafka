@@ -250,9 +250,9 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        ApiUtils.validateMillisecondDuration(retention, msgPrefix);
+        final long retenationMs = ApiUtils.validateMillisecondDuration(retention, msgPrefix);
 
-        if (retention.toMillis() < 0) {
+        if (retenationMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;

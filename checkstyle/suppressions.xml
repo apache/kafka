@@ -154,6 +154,8 @@
     <!-- suppress FinalLocalVariable outside of the streams package. -->
     <suppress checks="FinalLocalVariable"
               files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
+    <suppress checks="NeedBraces"
+              files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"

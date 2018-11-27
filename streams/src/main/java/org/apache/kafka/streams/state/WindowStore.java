@@ -95,9 +95,10 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+        return fetch(
+            key,
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     /**
@@ -118,9 +119,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
-        ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
-        ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+        return fetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
     }
 
     /**
@@ -137,8 +140,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 }

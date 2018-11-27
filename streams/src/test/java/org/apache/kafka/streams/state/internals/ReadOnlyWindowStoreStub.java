@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.time.Instant;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -28,6 +27,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -48,7 +48,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     private final Map<Long, NavigableMap<K, V>> data = new HashMap<>();
     private boolean open  = true;
 
-    public ReadOnlyWindowStoreStub(final long windowSize) {
+    ReadOnlyWindowStoreStub(final long windowSize) {
         this.windowSize = windowSize;
     }
 
@@ -80,9 +80,10 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+        return fetch(
+            key, 
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     @Override
@@ -138,7 +139,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
         final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
         for (final long now : data.keySet()) {
-            if (!(now >= timeFrom && now <= timeTo)) continue;
+            if (!(now >= timeFrom && now <= timeTo)) {
+                continue;
+            }
             final NavigableMap<K, V> kvMap = data.get(now);
             if (kvMap != null) {
                 for (final Entry<K, V> entry : kvMap.entrySet()) {
@@ -179,9 +182,9 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     @SuppressWarnings("deprecation")
@@ -234,14 +237,16 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
                                                             final K to,
                                                             final Instant fromTime,
                                                             final Instant toTime) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
-        ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+        return fetch(
+            from,
+            to, 
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
     public void put(final K key, final V value, final long timestamp) {
         if (!data.containsKey(timestamp)) {
-            data.put(timestamp, new TreeMap<K, V>());
+            data.put(timestamp, new TreeMap<>());
         }
         data.get(timestamp).put(key, value);
     }
@@ -252,19 +257,13 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-
-    }
+    public void init(final ProcessorContext context, final StateStore root) {}
 
     @Override
-    public void flush() {
-
-    }
+    public void flush() {}
 
     @Override
-    public void close() {
-
-    }
+    public void close() {}
 
     @Override
     public boolean persistent() {
@@ -276,8 +275,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         return open;
     }
 
-    public void setOpen(final boolean open) {
-        this.open = open;
+    void setOpenToFalse() {
+        this.open = false;
     }
 
     private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {

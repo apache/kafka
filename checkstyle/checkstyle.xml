@@ -77,6 +77,12 @@
       <property name="validateEnhancedForLoopVariable" value="true"/>
     </module>
 
+    <!-- if/else/for/while/do blocks should use braces (suppressed except for Streams) -->
+    <module name="NeedBraces">
+      <property name="tokens" value="LITERAL_IF, LITERAL_ELSE, LITERAL_FOR, LITERAL_WHILE, LITERAL_DO"/>
+    </module>
+
+
     <!-- dependencies -->
     <module name="ImportControl">
       <property name="file" value="${importControlFile}"/>

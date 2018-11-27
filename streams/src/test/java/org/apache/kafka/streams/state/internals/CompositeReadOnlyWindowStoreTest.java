@@ -127,7 +127,7 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() {
-        underlyingWindowStore.setOpen(false);
+        underlyingWindowStore.setOpenToFalse();
         final CompositeReadOnlyWindowStore<Object, Object> store =
                 new CompositeReadOnlyWindowStore<>(stubProviderOne, QueryableStoreTypes.windowStore(), "window-store");
         try {
