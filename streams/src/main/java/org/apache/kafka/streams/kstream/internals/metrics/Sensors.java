@@ -29,10 +29,10 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+
 public class Sensors {
-
-    private static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
-
     private Sensors() {}
 
     public static Sensor lateRecordDropSensor(final InternalProcessorContext context) {
@@ -46,7 +46,7 @@ public class Sensors {
         StreamsMetricsImpl.addInvocationRateAndCount(
             sensor,
             PROCESSOR_NODE_METRICS_GROUP,
-            metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", context.currentNode().name()),
+            metrics.tagMap("task-id", context.taskId().toString(), PROCESSOR_NODE_ID_TAG, context.currentNode().name()),
             "late-record-drop"
         );
         return sensor;
@@ -95,7 +95,7 @@ public class Sensors {
 
         final Map<String, String> tags = metrics.tagMap(
             "task-id", context.taskId().toString(),
-            "processor-node-id", context.currentNode().name()
+            PROCESSOR_NODE_ID_TAG, context.currentNode().name()
         );
 
         sensor.add(

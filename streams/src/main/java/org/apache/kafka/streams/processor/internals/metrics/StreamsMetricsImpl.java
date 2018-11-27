@@ -51,6 +51,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
 
+    public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
+    public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
+
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         this.threadName = threadName;
