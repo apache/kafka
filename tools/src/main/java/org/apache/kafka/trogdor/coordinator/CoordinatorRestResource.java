@@ -18,7 +18,7 @@ package org.apache.kafka.trogdor.coordinator;
 
 import org.apache.kafka.trogdor.rest.CoordinatorShutdownRequest;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateMultipleTasksRequest;
+import org.apache.kafka.trogdor.rest.CreateTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
@@ -88,11 +88,9 @@ public class CoordinatorRestResource {
 
     @POST
     @Path("/task/creates")
-    public Response createMultipleTasks(CreateMultipleTasksRequest request) throws Throwable {
+    public Response createMultipleTasks(CreateTasksRequest request) throws Throwable {
         if (request.tasks().size() == 0)
             throw new BadRequestException("No tasks were given.");
-        if (request.tasks().stream().anyMatch(task -> task.id() == null || task.id().isEmpty()))
-            throw new BadRequestException("Tasks must have an ID");
 
         coordinator().createMultipleTasks(request);
         return Response.status(201).entity(Empty.INSTANCE).build();

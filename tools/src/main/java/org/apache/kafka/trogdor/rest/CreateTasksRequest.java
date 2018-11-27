@@ -19,22 +19,23 @@ package org.apache.kafka.trogdor.rest;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import org.apache.kafka.trogdor.task.TaskSpec;
 
-import java.util.List;
+import java.util.Map;
 
 /**
  * A request to the Trogdor coordinator to create mulitple tasks.
  */
-public class CreateMultipleTasksRequest extends Message {
-    private final List<CreateTaskRequest> tasks;
+public class CreateTasksRequest extends Message {
+    private final Map<String, TaskSpec> tasks;
 
     @JsonCreator
-    public CreateMultipleTasksRequest(@JsonProperty(value = "tasks", required = true) List<CreateTaskRequest> tasks) {
+    public CreateTasksRequest(@JsonProperty(value = "tasks", required = true) Map<String, TaskSpec>  tasks) {
         this.tasks = tasks;
     }
 
     @JsonProperty
-    public List<CreateTaskRequest> tasks() {
+    public Map<String, TaskSpec> tasks() {
         return tasks;
     }
 }

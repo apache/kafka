@@ -31,37 +31,38 @@ import org.apache.kafka.trogdor.common.CapturingCommandRunner;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
 import org.apache.kafka.trogdor.common.MiniTrogdorCluster;
-
 import org.apache.kafka.trogdor.fault.NetworkPartitionFaultSpec;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateMultipleTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
+import org.apache.kafka.trogdor.rest.CreateTasksRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
-import org.apache.kafka.trogdor.rest.TaskRunning;
 import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TasksRequest;
-import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+import org.apache.kafka.trogdor.task.TaskSpec;
 import org.junit.Rule;
+import org.junit.Test;
 import org.junit.rules.Timeout;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.junit.Test;
 
 import javax.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
@@ -98,11 +99,12 @@ public class CoordinatorTest {
 
             // should create all tasks
             NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
-            CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
-            CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
-            CreateTaskRequest taskReq3 = new CreateTaskRequest("foobar", fooSpec1);
+            Map<String, TaskSpec> tasks = new HashMap<>();
+            tasks.put("foo", fooSpec1);
+            tasks.put("bar", fooSpec1);
+            tasks.put("foobar", fooSpec1);
             cluster.coordinatorClient().createMultipleTasks(
-                new CreateMultipleTasksRequest(Arrays.asList(taskReq1, taskReq2, taskReq3))
+                new CreateTasksRequest(tasks)
             );
             new ExpectedTasks()
                 .addTask(new ExpectedTaskBuilder("foo")
@@ -132,67 +134,68 @@ public class CoordinatorTest {
             build()) {
             new ExpectedTasks().waitFor(cluster.coordinatorClient());
 
-            // should not any tasks, since they have duplicate IDs in the request
             NoOpTaskSpec fooSpec1 = new NoOpTaskSpec(1, 2);
             NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(1, 3);
-            CreateTaskRequest taskReq1 = new CreateTaskRequest("foo", fooSpec1);
-            CreateTaskRequest taskReq2 = new CreateTaskRequest("bar", fooSpec1);
-            CreateTaskRequest taskReq3 = new CreateTaskRequest("foobar", fooSpec1);
-            CreateTaskRequest taskReq4 = new CreateTaskRequest("foo", fooSpec2); // conflicting ids and different spec
-            try {
-                cluster.coordinatorClient().createMultipleTasks(
-                    new CreateMultipleTasksRequest(Arrays.asList(taskReq1, taskReq2, taskReq3, taskReq4))
-                );
-                fail("Expected to get an exception when submitting duplicate tasks.");
-            } catch (RequestConflictException exception) {
-            }
-            try {
-                new ExpectedTasks()
-                    .addTask(new ExpectedTaskBuilder("foo")
-                        .taskState(new TaskPending(fooSpec1))
-                        .build())
-                    .addTask(new ExpectedTaskBuilder("bar")
-                        .taskState(new TaskPending(fooSpec1))
-                        .build())
-                    .addTask(new ExpectedTaskBuilder("foobar")
-                        .taskState(new TaskPending(fooSpec1))
-                        .build())
-                    .waitFor(cluster.coordinatorClient(), 0);
-                fail("Expected assertionError since no tasks should exist");
-            } catch (AssertionError e) {
-            }
-
-            // send an ID that is already stored by the coordinator - should still fail
-            taskReq1 = new CreateTaskRequest("foo", fooSpec1);
+            Map<String, TaskSpec> tasks = new HashMap<>();
+            tasks.put("foo", fooSpec2);
+            tasks.put("bar", fooSpec1);
+            tasks.put("foobar", fooSpec1);
             cluster.coordinatorClient().createMultipleTasks(
-                new CreateMultipleTasksRequest(Arrays.asList(taskReq1))
+                new CreateTasksRequest(tasks)
             );
-            // should store foo
+
             new ExpectedTasks()
                 .addTask(new ExpectedTaskBuilder("foo")
+                    .taskState(new TaskPending(fooSpec2))
+                    .build())
+                .addTask(new ExpectedTaskBuilder("bar")
                     .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .addTask(new ExpectedTaskBuilder("foobar")
+                    .taskState(new TaskPending(fooSpec1))
+                    .build())
+                .waitFor(cluster.coordinatorClient(), 0);
+
+            // send an ID that is already stored by the coordinator with a different spec - should fail
+            Map<String, TaskSpec> duplicateTasks = new HashMap<>();
+            duplicateTasks.put("foo", fooSpec1);
+            try {
+                cluster.coordinatorClient().createMultipleTasks(
+                    new CreateTasksRequest(duplicateTasks)
+                );
+                fail("Expected to get an exception when submitting duplicate tasks.");
+            } catch (RequestConflictException exception) {
+            }
+            // should have the original foo
+            new ExpectedTasks()
+                .addTask(new ExpectedTaskBuilder("foo")
+                    .taskState(new TaskPending(fooSpec2))
                     .build())
                 .waitFor(cluster.coordinatorClient());
 
+            // adding two different and one duplicate with a different spec should not create any new
+            Map<String, TaskSpec> differentAndDuplicateTasks = new HashMap<>();
+            differentAndDuplicateTasks.put("barfoo", fooSpec1);
+            differentAndDuplicateTasks.put("barfoo2", fooSpec1);
+            differentAndDuplicateTasks.put("foo", fooSpec1); // duplicate id, different spec
             try {
-                // taskReq4 has a duplicate ID and spec
                 cluster.coordinatorClient().createMultipleTasks(
-                    new CreateMultipleTasksRequest(Arrays.asList(taskReq2, taskReq3, taskReq4))
+                    new CreateTasksRequest(differentAndDuplicateTasks)
                 );
                 fail("Expected to get an exception when submitting duplicate tasks.");
             } catch (RequestConflictException exception) {
             }
             new ExpectedTasks()
                 .addTask(new ExpectedTaskBuilder("foo")
-                    .taskState(new TaskPending(fooSpec1))
+                    .taskState(new TaskPending(fooSpec2))
                     .build())
                 .waitFor(cluster.coordinatorClient());
             try {
                 new ExpectedTasks()
-                    .addTask(new ExpectedTaskBuilder("bar")
+                    .addTask(new ExpectedTaskBuilder("barfoo")
                         .taskState(new TaskPending(fooSpec1))
                         .build())
-                    .addTask(new ExpectedTaskBuilder("foobar")
+                    .addTask(new ExpectedTaskBuilder("barfoo2")
                         .taskState(new TaskPending(fooSpec1))
                         .build())
                     .waitFor(cluster.coordinatorClient(), 0);

@@ -26,7 +26,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
-import org.apache.kafka.trogdor.rest.CreateMultipleTasksRequest;
+import org.apache.kafka.trogdor.rest.CreateTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
@@ -128,7 +128,7 @@ public class CoordinatorClient {
         resp.body();
     }
 
-    public void createMultipleTasks(CreateMultipleTasksRequest request) throws Exception {
+    public void createMultipleTasks(CreateTasksRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/creates"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
@@ -276,10 +276,10 @@ public class CoordinatorClient {
             client.createTask(req);
             System.out.printf("Sent CreateTaskRequest for task %s.", req.id());
         } else if (res.getString("create_tasks") != null) {
-            CreateMultipleTasksRequest req = JsonUtil.JSON_SERDE.
-                readValue(res.getString("create_tasks"), CreateMultipleTasksRequest.class);
+            CreateTasksRequest req = JsonUtil.JSON_SERDE.
+                readValue(res.getString("create_tasks"), CreateTasksRequest.class);
             client.createMultipleTasks(req);
-            System.out.print("Sent CreateMultipleTasksRequest for multiple tasks.");
+            System.out.print("Sent CreateTasksRequest for multiple tasks.");
         } else if (res.getString("stop_task") != null) {
             String taskId = res.getString("stop_task");
             client.stopTask(new StopTaskRequest(taskId));

@@ -49,6 +49,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -61,7 +62,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 
 /**
  * The TaskManager is responsible for managing tasks inside the Trogdor coordinator.
@@ -291,43 +291,50 @@ public final class TaskManager {
     }
 
     /**
-     * Creates and schedules a task.
-     */
-    public void createAndScheduleTask(TaskDetail task)
-            throws Throwable {
-        ManagedTask managedTask = createTask(task);
-
-        if (managedTask != null) {
-            long delayMs = scheduleTask(managedTask);
-            log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
-        }
-    }
-
-    /**
      * Creates and schedules the given tasks.
      *
      * @throws RequestConflictException - if a task with that ID and a different spec already exists
      */
-    public void createAndScheduleTasks(List<TaskDetail> tasks) throws RequestConflictException, InvalidRequestException {
+    public void createAndScheduleTasks(Map<String, TaskSpec> tasks) throws RequestConflictException, InvalidRequestException {
         List<ManagedTask> managedTasks = new ArrayList<>();
-        if (tasks.stream().map(task -> task.id).collect(Collectors.toSet()).size() < tasks.size())
-            throw new RequestConflictException("Duplicate task IDs given");
 
-        for (TaskDetail task: tasks) {
+        Iterator<Map.Entry<String, TaskSpec>> it = tasks.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, TaskSpec> idAndSpec = it.next();
+            String id = idAndSpec.getKey();
+            if (id.isEmpty())
+                throw new InvalidRequestException("Invalid empty ID in createTask request.");
+
+            TaskSpec spec = idAndSpec.getValue();
+            ManagedTask duplicateTask = this.tasks.get(id);
+            if (duplicateTask != null) {
+                if (!duplicateTask.spec.equals(spec))
+                    throw new RequestConflictException("Task ID " + id + " already " +
+                        "exists, and has a different spec " + duplicateTask.spec);
+                log.info("Task {} already exists with spec {}", id, spec);
+                if (tasks.size() == 1)
+                    return;
+                else
+                    it.remove();
+            }
+        }
+        for (Map.Entry<String, TaskSpec> idAndSpec: tasks.entrySet()) {
             try {
-                ManagedTask createdTask = createTask(task);
+                ManagedTask createdTask = createTask(idAndSpec.getKey(), idAndSpec.getValue());
                 if (createdTask != null)
                     managedTasks.add(createdTask);
-            } catch (RequestConflictException | InvalidRequestException e) {
-                throw e;
             } catch (Throwable e) {
-                log.info("Failed to create createTask(id={}, spec={}) error:", task.id, task.spec, e);
+                log.info("Failed to create createTask(id={}, spec={}) error:", idAndSpec.getKey(), idAndSpec.getValue(), e);
             }
         }
 
+        boolean infoLogEnabled = managedTasks.size() < 5;
         for (ManagedTask task: managedTasks) {
             long delayMs = scheduleTask(task);
-            log.debug("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
+            if (infoLogEnabled)
+                log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
+            else
+                log.debug("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
         }
 
         log.info("Created {} tasks.", managedTasks.size());
@@ -343,44 +350,17 @@ public final class TaskManager {
     /**
      * @return a #{@link ManagedTask} instance or #{@code null} if there was an error creating the task
      *  or if the task already exists
-     * @throws InvalidRequestException if the task has an invalid ID
-     * @throws RequestConflictException if a task with the given ID already exists but has a different specification
      */
-    private ManagedTask createTask(TaskDetail task) throws Throwable {
+    private ManagedTask createTask(String id, TaskSpec spec) throws Throwable {
         try {
-            if (task.id.isEmpty())
-                throw new InvalidRequestException("Invalid empty ID in createTask request.");
-
-            ManagedTask duplicateTask = tasks.get(task.id);
-            if (duplicateTask != null) {
-                if (!duplicateTask.spec.equals(task.spec))
-                    throw new RequestConflictException("Task ID " + task.id + " already " +
-                        "exists, and has a different spec " + duplicateTask.spec);
-
-                log.info("Task {} already exists with spec {}", task.id, task.spec);
-                return null;
-            }
-
-            return executor.submit(new CreateTask(task.id, task.spec)).get();
+            return executor.submit(new CreateTask(id, spec)).get();
         } catch (ExecutionException e) {
-            log.info("createTask(id={}, spec={}) error", task.id, task.spec, e);
+            log.info("createTask(id={}, spec={}) error", id, spec, e);
             throw e.getCause();
-        } catch (RequestConflictException e) {
-            throw e;
         } catch (Exception e) {
             log.info("Failed to create a new task {} with spec {}: {}",
-                task.id, task.spec, e.getMessage());
+                id, spec, e.getMessage());
             return null;
-        }
-    }
-
-    public static class TaskDetail {
-        public final String id;
-        public TaskSpec spec;
-
-        public TaskDetail(final String id, TaskSpec spec) {
-            this.id = id;
-            this.spec = spec;
         }
     }
 
