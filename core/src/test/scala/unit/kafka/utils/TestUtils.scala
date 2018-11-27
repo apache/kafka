@@ -216,7 +216,6 @@ object TestUtils extends Logging {
                          saslSslPort: Int = RandomPort,
                          rack: Option[String] = None,
                          logDirCount: Int = 1,
-                         replicaFetchBackoff: Int = 1000,
                          enableToken: Boolean = false): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
@@ -254,7 +253,6 @@ object TestUtils extends Logging {
     props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
     props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
-    props.put(KafkaConfig.ReplicaFetchBackoffMsProp, replicaFetchBackoff.toString)
     props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
     props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
     props.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, Long.MaxValue.toString)
