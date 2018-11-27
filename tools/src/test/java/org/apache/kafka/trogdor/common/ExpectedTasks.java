@@ -158,16 +158,13 @@ public class ExpectedTasks {
                 throw new RuntimeException(e);
             }
             StringBuilder errors = new StringBuilder();
-            if (tasks.tasks().size() < expected.size()) {
-                errors.append("We expected {} tasks but received {}", tasks.tasks().size(), expected.size());
-            } else {
-                for (Map.Entry<String, ExpectedTask> entry : expected.entrySet()) {
-                    String id = entry.getKey();
-                    ExpectedTask task = entry.getValue();
-                    String differences = task.compare(tasks.tasks().get(id));
-                    if (differences != null) {
-                        errors.append(differences);
-                    }
+
+            for (Map.Entry<String, ExpectedTask> entry : expected.entrySet()) {
+                String id = entry.getKey();
+                ExpectedTask task = entry.getValue();
+                String differences = task.compare(tasks.tasks().get(id));
+                if (differences != null) {
+                    errors.append(differences);
                 }
             }
 
