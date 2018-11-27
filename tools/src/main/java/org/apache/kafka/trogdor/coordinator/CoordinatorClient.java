@@ -42,6 +42,8 @@ import org.slf4j.LoggerFactory;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.UriBuilder;
 
+import java.util.Optional;
+
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
 
@@ -244,7 +246,7 @@ public class CoordinatorClient {
         } else if (res.getBoolean("show_tasks")) {
             System.out.println("Got coordinator tasks: " +
                 JsonUtil.toPrettyJsonString(client.tasks(
-                    new TasksRequest(null, 0, 0, 0, 0))));
+                    new TasksRequest(null, 0, 0, 0, 0, Optional.empty()))));
         } else if (res.getString("show_task") != null) {
             String taskId = res.getString("show_task");
             TaskRequest req = new TaskRequest(res.getString("show_task"));
