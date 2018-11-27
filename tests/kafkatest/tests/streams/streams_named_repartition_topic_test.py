@@ -41,7 +41,7 @@ class StreamsNamedRepartitionTopicTest(Test):
         }
 
         self.zookeeper = ZookeeperService(self.test_context, num_nodes=1)
-        self.kafka = KafkaService(self.test_context, num_nodes=3,
+        self.kafka = KafkaService(self.test_context, num_nodes=1,
                                   zk=self.zookeeper, topics=self.topics)
 
         self.producer = VerifiableProducer(self.test_context,
@@ -77,7 +77,7 @@ class StreamsNamedRepartitionTopicTest(Test):
             #  will tell app to add operations before repartition topic
             processor.ADD_ADDITIONAL_OPS = 'true'
             processor.start()
-            self.verify_running(processor, 'REBALANCING -> RUNNING with UPDATED Topology')
+            self.verify_running(processor, 'UPDATED Topology')
 
         self.verify_processing(processors)
 

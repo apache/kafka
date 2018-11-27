@@ -97,7 +97,7 @@ public class StreamsNamedRepartitionTest {
         streams.setStateListener((oldState, newState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 if (addOperators) {
-                    System.out.println("REBALANCING -> RUNNING with UPDATED Topology");
+                    System.out.println("UPDATED Topology");
                 } else {
                     System.out.println("REBALANCING -> RUNNING");
                 }
