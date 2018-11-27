@@ -41,7 +41,7 @@ public class UniformTransactionsGenerator implements TransactionGenerator {
     }
 
     @Override
-    public synchronized TransactionAction action() {
+    public synchronized TransactionAction nextAction() {
         if (messagesInTransaction == -1) {
             messagesInTransaction = 0;
             return TransactionAction.BEGIN_TRANSACTION;

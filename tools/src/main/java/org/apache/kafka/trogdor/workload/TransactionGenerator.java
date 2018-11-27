@@ -39,5 +39,5 @@ public interface TransactionGenerator {
      * This means that most of the time it should return #{@link TransactionAction#NO_OP}
      * to signal the producer that its next step should be to send a message.
      */
-    TransactionAction action();
+    TransactionAction nextAction();
 }

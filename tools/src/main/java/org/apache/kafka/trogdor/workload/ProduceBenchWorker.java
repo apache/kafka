@@ -53,7 +53,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
@@ -189,8 +189,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private Iterator<TopicPartition> partitionsIterator;
         private Future<RecordMetadata> sendFuture;
-        private AtomicInteger transactionsCommitted;
-        private boolean toUseTransactions = false;
+        private AtomicLong transactionsCommitted;
+        private boolean enableTransactions;
 
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;
@@ -198,8 +198,8 @@ public class ProduceBenchWorker implements TaskWorker {
             this.histogram = new Histogram(5000);
 
             this.transactionGenerator = spec.transactionGenerator();
-            this.toUseTransactions = this.transactionGenerator.isPresent();
-            this.transactionsCommitted = new AtomicInteger();
+            this.enableTransactions = this.transactionGenerator.isPresent();
+            this.transactionsCommitted = new AtomicLong();
 
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
@@ -207,8 +207,8 @@ public class ProduceBenchWorker implements TaskWorker {
 
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            if (toUseTransactions)
-                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "transaction-id-" + UUID.randomUUID());
+            if (enableTransactions)
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "produce-bench-transaction-id-" + UUID.randomUUID());
             // add common client configs to producer properties, and then user-specified producer configs
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
@@ -222,12 +222,12 @@ public class ProduceBenchWorker implements TaskWorker {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
                 try {
-                    if (toUseTransactions)
+                    if (enableTransactions)
                         producer.initTransactions();
 
                     int sentMessages = 0;
                     while (sentMessages < spec.maxMessages()) {
-                        if (toUseTransactions) {
+                        if (enableTransactions) {
                             boolean tookAction = takeTransactionAction();
                             if (tookAction)
                                 continue;
@@ -235,10 +235,10 @@ public class ProduceBenchWorker implements TaskWorker {
                         sendMessage();
                         sentMessages++;
                     }
-                    if (toUseTransactions)
+                    if (enableTransactions)
                         takeTransactionAction(); // give the transactionGenerator a chance to commit if configured evenly
                 } catch (Exception e) {
-                    if (toUseTransactions)
+                    if (enableTransactions)
                         producer.abortTransaction();
                     throw e;
                 } finally {
@@ -262,7 +262,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private boolean takeTransactionAction() {
             boolean tookAction = true;
-            TransactionAction nextAction = transactionGenerator.get().action();
+            TransactionAction nextAction = transactionGenerator.get().nextAction();
             switch (nextAction) {
                 case BEGIN_TRANSACTION:
                     log.debug("Beginning transaction.");
@@ -303,9 +303,9 @@ public class ProduceBenchWorker implements TaskWorker {
 
     public class StatusUpdater implements Runnable {
         private final Histogram histogram;
-        private final AtomicInteger transactionsCommitted;
+        private final AtomicLong transactionsCommitted;
 
-        StatusUpdater(Histogram histogram, AtomicInteger transactionsCommitted) {
+        StatusUpdater(Histogram histogram, AtomicLong transactionsCommitted) {
             this.histogram = histogram;
             this.transactionsCommitted = transactionsCommitted;
         }
@@ -337,7 +337,7 @@ public class ProduceBenchWorker implements TaskWorker {
         private final int p50LatencyMs;
         private final int p95LatencyMs;
         private final int p99LatencyMs;
-        private final int transactionsCommitted;
+        private final long transactionsCommitted;
 
         /**
          * The percentiles to use when calculating the histogram data.
@@ -351,7 +351,7 @@ public class ProduceBenchWorker implements TaskWorker {
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
                    @JsonProperty("p95LatencyMs") int p95latencyMs,
                    @JsonProperty("p99LatencyMs") int p99latencyMs,
-                   @JsonProperty("transactionsCommitted") int transactionsCommitted) {
+                   @JsonProperty("transactionsCommitted") long transactionsCommitted) {
             this.totalSent = totalSent;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
