@@ -498,8 +498,13 @@ private[log] object LogCleanerManager extends Logging {
       case Some(segment) =>
         if (largestCleanTimestamp > 0)
           largestCleanTimestamp
-        else
-          segment.getFirstBatchTimestamp()
+        else {
+          val firstBatchTimestamp = log.getFirstBatchTimestampForSegment(segment)
+          // if timestamp of the first batch is unavailable,
+          // use largestTimestamp instead
+          if (firstBatchTimestamp > 0) firstBatchTimestamp
+          else segment.largestTimestamp
+        }
     }
     firstDirtySegmentCreateTime
   }
