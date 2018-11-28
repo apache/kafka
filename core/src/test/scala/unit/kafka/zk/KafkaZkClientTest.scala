@@ -1162,12 +1162,12 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     }
 
     intercept[NoNodeException] {
-      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
+      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
     }
 
     zkClient.createRecursive(mockPath)
 
-    zkClient.setAcl(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala, ZkVersion.MatchAnyVersion)
+    zkClient.setAcl(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala)
 
     assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getAcl(mockPath))
   }

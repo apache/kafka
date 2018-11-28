@@ -124,12 +124,12 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     val seqPath = zkClient.createSequentialPersistentPath("/c", "".getBytes(StandardCharsets.UTF_8))
     verify(seqPath)
 
-    // Test that updates Ephemeral node
+    // Test that can update Ephemeral node
     val updatedBrokerInfo = createBrokerInfo(1, "test.host2", 9995, SecurityProtocol.SSL)
     zkClient.updateBrokerInfo(updatedBrokerInfo)
     assertEquals(Some(updatedBrokerInfo.broker), zkClient.getBroker(1))
 
-    // Test that updates persistent nodes
+    // Test that can update persistent nodes
     val updatedAssignment = assignment - new TopicPartition(topic1, 2)
     zkClient.setTopicAssignment(topic1, updatedAssignment)
     assertEquals(updatedAssignment.size, zkClient.getTopicPartitionCount(topic1).get)
@@ -190,7 +190,7 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
       zkClient.makeSurePersistentPathExists(path)
       zkClient.createRecursive(s"$path/fpjwashere", "".getBytes(StandardCharsets.UTF_8))
     }
-    zkClient.setAcl("/", zkClient.defaultAcls("/"), -1)
+    zkClient.setAcl("/", zkClient.defaultAcls("/"))
     deleteAllUnsecure()
   }
 
