@@ -72,7 +72,7 @@ public class StreamsMetricsImplTest {
         final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
 
-        assertEquals(Collections.emptyMap(), streamsMetrics.getParentSensors());
+        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
     }
 
     @Test

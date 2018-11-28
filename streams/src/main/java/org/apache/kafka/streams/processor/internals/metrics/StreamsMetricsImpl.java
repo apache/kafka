@@ -408,13 +408,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         final Sensor parent = parentSensors.remove(sensor);
         if (parent != null) {
-
             metrics.removeSensor(parent.name());
         }
     }
 
-    /** visible for testing */
-    Map<Sensor, Sensor> getParentSensors() {
+    /**
+     * Visible for testing
+     */
+    Map<Sensor, Sensor> parentSensors() {
         return Collections.unmodifiableMap(parentSensors);
     }
 
