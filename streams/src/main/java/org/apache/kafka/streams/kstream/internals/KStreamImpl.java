@@ -753,7 +753,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         builder.addGraphNode(this.streamsGraphNode, streamTableJoinNode);
 
         // do not have serde for joined result
-        return new KStreamImpl<>(name, keySerde, null, sourceNodes, false, streamTableJoinNode, builder);
+        return new KStreamImpl<>(name, keySerde, null, sourceNodes, repartitionRequired, streamTableJoinNode, builder);
     }
 
     @SuppressWarnings("unchecked")
