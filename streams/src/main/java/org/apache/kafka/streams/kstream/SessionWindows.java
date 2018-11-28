@@ -23,6 +23,7 @@ import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import java.time.Duration;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 
@@ -108,7 +109,8 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static SessionWindows with(final Duration inactivityGap) {
-        ApiUtils.validateMillisecondDuration(inactivityGap, "inactivityGap");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
+        ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix);
         return with(inactivityGap.toMillis());
     }
 
@@ -145,7 +147,9 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if the {@code afterWindowEnd} is negative of can't be represented as {@code long milliseconds}
      */
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
+
         if (afterWindowEnd.toMillis() < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }

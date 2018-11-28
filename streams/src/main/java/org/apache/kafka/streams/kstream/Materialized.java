@@ -34,6 +34,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * Used to describe how a {@link StateStore} should be materialized.
  * You can either provide a custom {@link StateStore} backend through one of the provided methods accepting a supplier
@@ -247,7 +249,9 @@ public class Materialized<K, V, S extends StateStore> {
      * @throws IllegalArgumentException if retention is negative or can't be represented as {@code long milliseconds}
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(retention, "retention");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
+        ApiUtils.validateMillisecondDuration(retention, msgPrefix);
+
         if (retention.toMillis() < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }

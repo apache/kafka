@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.StateStore;
 
 import java.time.Instant;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * A windowed store interface extending {@link StateStore}.
  *
@@ -92,8 +94,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
+        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
         return fetch(key, from.toEpochMilli(), to.toEpochMilli());
     }
 
@@ -114,8 +116,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
-        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondInstant(toTime, "toTime");
+        ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
+        ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
         return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
     }
 
@@ -132,8 +134,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
+        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
+        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
         return fetchAll(from.toEpochMilli(), to.toEpochMilli());
     }
 }
