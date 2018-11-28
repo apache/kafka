@@ -65,10 +65,13 @@ object EndToEndLatency {
     if (!List("1", "all").contains(producerAcks))
       throw new IllegalArgumentException("Latency testing requires synchronous acknowledgement. Please use 1 or all")
 
-    def loadProps: Properties = propsFile.map(Utils.loadProps).getOrElse(new Properties())
+    def loadPropsWithBootstrapServers: Properties = {
+      val props = propsFile.map(Utils.loadProps).getOrElse(new Properties())
+      props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+      props
+    }
 
-    val consumerProps = loadProps
-    consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val consumerProps = loadPropsWithBootstrapServers
     consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test-group-" + System.currentTimeMillis())
     consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
@@ -77,8 +80,7 @@ object EndToEndLatency {
     consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0") //ensure we have no temporal batching
     val consumer = new KafkaConsumer[Array[Byte], Array[Byte]](consumerProps)
 
-    val producerProps = loadProps
-    producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val producerProps = loadPropsWithBootstrapServers
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "0") //ensure writes are synchronous
     producerProps.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
     producerProps.put(ProducerConfig.ACKS_CONFIG, producerAcks.toString)
@@ -95,7 +97,7 @@ object EndToEndLatency {
     // create topic if it does not exist
     if (!consumer.listTopics().containsKey(topic)) {
       try {
-        createTopic(topic, brokerList)
+        createTopic(topic, loadPropsWithBootstrapServers)
       } catch {
         case t: Throwable =>
           finalise()
@@ -165,12 +167,10 @@ object EndToEndLatency {
     Array.fill(len)((random.nextInt(26) + 65).toByte)
   }
 
-  def createTopic(topic: String, brokerList: String): Unit = {
+  def createTopic(topic: String, props: Properties): Unit = {
     println("Topic \"%s\" does not exist. Will create topic with %d partition(s) and replication factor = %d"
               .format(topic, defaultNumPartitions, defaultReplicationFactor))
 
-    val props = new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
     val adminClient = admin.AdminClient.create(props)
     val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
     try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
