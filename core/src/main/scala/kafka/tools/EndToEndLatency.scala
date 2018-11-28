@@ -19,9 +19,11 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util.{Arrays, Properties}
+import java.util.{Collections, Arrays, Properties}
 
 import kafka.utils.Exit
+import org.apache.kafka.clients.admin.NewTopic
+import org.apache.kafka.clients.{admin, CommonClientConfigs}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.TopicPartition
@@ -44,6 +46,8 @@ import scala.util.Random
 
 object EndToEndLatency {
   private val timeout: Long = 60000
+  private val defaultReplicationFactor: Short = 1
+  private val defaultNumPartitions: Int = 1
 
   def main(args: Array[String]) {
     if (args.length != 5 && args.length != 6) {
@@ -82,14 +86,21 @@ object EndToEndLatency {
     producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps)
 
-    // sends a dummy message to create the topic if it doesn't exist
-    val dummyRecord = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, Array[Byte]())).get()
-    val tpWithDummyRecord = new TopicPartition(dummyRecord.topic(), dummyRecord.partition())
-
     def finalise() {
       consumer.commitSync()
       producer.close()
       consumer.close()
+    }
+
+    // create topic if it does not exist
+    if (!consumer.listTopics().containsKey(topic)) {
+      try {
+        createTopic(topic, brokerList)
+      } catch {
+        case t: Throwable =>
+          finalise()
+          throw new RuntimeException(s"Failed to create topic $topic", t)
+      }
     }
 
     val topicPartitions = consumer.partitionsFor(topic).asScala
@@ -97,17 +108,6 @@ object EndToEndLatency {
     consumer.assign(topicPartitions)
     consumer.seekToEnd(topicPartitions)
     consumer.assignment().asScala.foreach(consumer.position)
-
-    // if producerAcks == 1, it is possible that the consumer position on the topic partition with
-    // the dummy record is on dummy record. Make sure that we consume the dummy record before starting
-    // the produce-consume loop below.
-    if (consumer.position(tpWithDummyRecord) <= dummyRecord.offset()) {
-      consumer.poll(Duration.ofMillis(timeout))
-      if (consumer.position(tpWithDummyRecord) <= dummyRecord.offset()) {
-        finalise()
-        throw new RuntimeException("poll() timed out when trying to fetch the dummy record.")
-      }
-    }
 
     var totalTime = 0.0
     val latencies = new Array[Long](numMessages)
@@ -163,5 +163,17 @@ object EndToEndLatency {
 
   def randomBytesOfLen(random: Random, len: Int): Array[Byte] = {
     Array.fill(len)((random.nextInt(26) + 65).toByte)
+  }
+
+  def createTopic(topic: String, brokerList: String): Unit = {
+    println("Topic \"%s\" does not exist. Will create topic with %d partition(s) and replication factor = %d"
+              .format(topic, defaultNumPartitions, defaultReplicationFactor))
+
+    val props = new Properties()
+    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, brokerList)
+    val adminClient = admin.AdminClient.create(props)
+    val newTopic = new NewTopic(topic, defaultNumPartitions, defaultReplicationFactor)
+    try adminClient.createTopics(Collections.singleton(newTopic)).all().get()
+    finally Utils.closeQuietly(adminClient, "AdminClient")
   }
 }
