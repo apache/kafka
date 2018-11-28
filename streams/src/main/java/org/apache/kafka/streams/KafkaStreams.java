@@ -212,11 +212,11 @@ public class KafkaStreams implements AutoCloseable {
     private final Object stateLock = new Object();
     protected volatile State state = State.CREATED;
 
-    private boolean waitOnNoRunningState(final long waitMs) {
+    private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
         synchronized (stateLock) {
             long elapsedMs = 0L;
-            while (state != State.NOT_RUNNING) {
+            while (state != targetState) {
                 if (waitMs > elapsedMs) {
                     final long remainingMs = waitMs - elapsedMs;
                     try {
@@ -225,7 +225,7 @@ public class KafkaStreams implements AutoCloseable {
                         // it is ok: just move on to the next iteration
                     }
                 } else {
-                    log.debug("Cannot transit to NOT_RUNNING within {}ms", waitMs);
+                    log.debug("Cannot transit to {} within {}ms", targetState, waitMs);
                     return false;
                 }
                 elapsedMs = time.milliseconds() - begin;
@@ -893,7 +893,7 @@ public class KafkaStreams implements AutoCloseable {
             shutdownThread.start();
         }
 
-        if (waitOnNoRunningState(timeoutMs)) {
+        if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
             log.info("Streams client stopped completely");
             return true;
         } else {

@@ -104,9 +104,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {
-
-            }
+            public void close() {}
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -153,9 +151,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {
-
-            }
+            public void close() {}
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -206,9 +202,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
 
         return new KeyValueIterator<Windowed<K>, V>() {
             @Override
-            public void close() {
-
-            }
+            public void close() {}
 
             @Override
             public Windowed<K> peekNextKey() {
@@ -275,8 +269,8 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         return open;
     }
 
-    void setOpenToFalse() {
-        this.open = false;
+    void setOpen(final boolean open) {
+        this.open = open;
     }
 
     private class TheWindowStoreIterator<E> implements WindowStoreIterator<E> {
@@ -288,9 +282,7 @@ public class ReadOnlyWindowStoreStub<K, V> implements ReadOnlyWindowStore<K, V>,
         }
 
         @Override
-        public void close() {
-
-        }
+        public void close() {}
 
         @Override
         public Long peekNextKey() {

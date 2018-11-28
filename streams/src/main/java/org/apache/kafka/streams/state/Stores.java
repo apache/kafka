@@ -74,7 +74,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * }</pre>
  */
 @InterfaceStability.Evolving
-public final class Stores {
+public class Stores {
 
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.

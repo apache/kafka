@@ -67,10 +67,12 @@ public class YahooBenchmark {
 
         /* other attributes */
         long eventTime;
-        //public String userID = UUID.randomUUID().toString(); // not used
-        //public String pageID = UUID.randomUUID().toString(); // not used
-        //public String addType = "banner78";  // not used
-        //public String ipAddress = "1.2.3.4"; // not used
+        /* not used
+        public String userID = UUID.randomUUID().toString();
+        public String pageID = UUID.randomUUID().toString();
+        public String addType = "banner78";
+        public String ipAddress = "1.2.3.4";
+         */
     }
 
     static class CampaignAd {

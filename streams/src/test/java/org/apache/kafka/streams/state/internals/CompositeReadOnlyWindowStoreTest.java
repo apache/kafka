@@ -50,8 +50,7 @@ public class CompositeReadOnlyWindowStoreTest {
     private CompositeReadOnlyWindowStore<String, String>
         windowStore;
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
-    private ReadOnlyWindowStoreStub<String, String>
-            otherUnderlyingStore;
+    private ReadOnlyWindowStoreStub<String, String> otherUnderlyingStore;
 
     @Rule
     public final ExpectedException windowStoreIteratorException = ExpectedException.none();
@@ -127,7 +126,7 @@ public class CompositeReadOnlyWindowStoreTest {
 
     @Test
     public void shouldThrowInvalidStateStoreExceptionIfFetchThrows() {
-        underlyingWindowStore.setOpenToFalse();
+        underlyingWindowStore.setOpen(false);
         final CompositeReadOnlyWindowStore<Object, Object> store =
                 new CompositeReadOnlyWindowStore<>(stubProviderOne, QueryableStoreTypes.windowStore(), "window-store");
         try {
