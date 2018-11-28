@@ -52,6 +52,7 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
                "} " + super.toString();
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();

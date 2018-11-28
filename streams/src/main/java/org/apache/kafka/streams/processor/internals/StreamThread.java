@@ -1020,7 +1020,7 @@ public class StreamThread extends Thread {
     boolean maybeCommit() {
         int committed = 0;
 
-        if (commitTimeMs >= 0 && now - lastCommitMs > commitTimeMs) {
+        if (now - lastCommitMs > commitTimeMs) {
             if (log.isTraceEnabled()) {
                 log.trace("Committing all active tasks {} and standby tasks {} since {}ms has elapsed (commit interval is {}ms)",
                     taskManager.activeTaskIds(), taskManager.standbyTaskIds(), now - lastCommitMs, commitTimeMs);

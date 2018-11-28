@@ -85,14 +85,21 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   }
 
   /**
-    * Returns the current Leader Epoch. This is the latest epoch
-    * which has messages assigned to it.
-    *
-    * @return
-    */
+   * Returns the current Leader Epoch. This is the latest epoch
+   * which has messages assigned to it.
+   */
   def latestEpoch: Int = {
     inReadLock(lock) {
       if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
+    }
+  }
+
+  /**
+   * Get the earliest cached entry if one exists.
+   */
+  def earliestEntry: Option[EpochEntry] = {
+    inReadLock(lock) {
+      epochs.headOption
     }
   }
 

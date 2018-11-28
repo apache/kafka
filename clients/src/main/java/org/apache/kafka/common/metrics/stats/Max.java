@@ -37,9 +37,12 @@ public final class Max extends SampledStat {
     @Override
     public double combine(List<Sample> samples, MetricConfig config, long now) {
         double max = Double.NEGATIVE_INFINITY;
-        for (Sample sample : samples)
+        long count = 0;
+        for (Sample sample : samples) {
             max = Math.max(max, sample.value);
-        return max;
+            count += sample.eventCount;
+        }
+        return count == 0 ? Double.NaN : max;
     }
 
 }

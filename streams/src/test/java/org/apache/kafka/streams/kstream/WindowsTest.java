@@ -42,19 +42,6 @@ public class WindowsTest {
 
     @SuppressWarnings("deprecation") // specifically testing deprecated APIs
     @Test
-    public void shouldSetNumberOfSegments() {
-        final int anySegmentSizeLargerThanOne = 5;
-        final TestWindows testWindow = new TestWindows();
-        final long maintainMs = testWindow.maintainMs();
-
-        assertEquals(
-            maintainMs / (anySegmentSizeLargerThanOne - 1),
-            testWindow.segments(anySegmentSizeLargerThanOne).segmentInterval()
-        );
-    }
-
-    @SuppressWarnings("deprecation") // specifically testing deprecated APIs
-    @Test
     public void shouldSetWindowRetentionTime() {
         final int anyNotNegativeRetentionTime = 42;
         assertEquals(anyNotNegativeRetentionTime, new TestWindows().until(anyNotNegativeRetentionTime).maintainMs());

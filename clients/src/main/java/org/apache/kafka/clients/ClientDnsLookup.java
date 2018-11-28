@@ -14,21 +14,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.clients;
 
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
+import java.util.Locale;
 
-class KStreamWindowReduce<K, V, W extends Window> extends KStreamWindowAggregate<K, V, V, W> {
-    KStreamWindowReduce(final Windows<W> windows,
-                        final String storeName,
-                        final Reducer<V> reducer) {
-        super(
-            windows,
-            storeName,
-            () -> null,
-            (key, newValue, oldValue) -> oldValue == null ? newValue : reducer.apply(oldValue, newValue)
-        );
+public enum ClientDnsLookup {
+
+    DEFAULT("default"),
+    USE_ALL_DNS_IPS("use_all_dns_ips"),
+    RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY("resolve_canonical_bootstrap_servers_only");
+
+    private String clientDnsLookup;
+
+    ClientDnsLookup(String clientDnsLookup) {
+        this.clientDnsLookup = clientDnsLookup;
+    }
+
+    @Override
+    public String toString() {
+        return clientDnsLookup;
+    }
+
+    public static ClientDnsLookup forConfig(String config) {
+        return ClientDnsLookup.valueOf(config.toUpperCase(Locale.ROOT));
     }
 }

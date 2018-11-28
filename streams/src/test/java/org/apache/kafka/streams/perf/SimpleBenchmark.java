@@ -473,10 +473,9 @@ public class SimpleBenchmark {
         final StoreBuilder<WindowStore<Integer, byte[]>> storeBuilder = Stores.windowStoreBuilder(
             Stores.persistentWindowStore(
                 "store",
-                AGGREGATE_WINDOW_SIZE * 3,
-                AGGREGATE_WINDOW_SIZE,
-                false,
-                60_000L
+                ofMillis(AGGREGATE_WINDOW_SIZE * 3),
+                ofMillis(AGGREGATE_WINDOW_SIZE),
+                false
             ),
             INTEGER_SERDE,
             BYTE_SERDE

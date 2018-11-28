@@ -53,8 +53,8 @@ import static org.junit.Assert.assertTrue;
 @RunWith(value = Parameterized.class)
 public class SaslAuthenticatorFailureDelayTest {
     private static final int BUFFER_SIZE = 4 * 1024;
-    private static MockTime time = new MockTime(50);
 
+    private final MockTime time = new MockTime(10);
     private NioEchoServer server;
     private Selector selector;
     private ChannelBuilder channelBuilder;
@@ -184,7 +184,7 @@ public class SaslAuthenticatorFailureDelayTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, true);
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true);
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 
@@ -221,7 +221,7 @@ public class SaslAuthenticatorFailureDelayTest {
             throws Exception {
         createClientConnection(securityProtocol, node);
         ChannelState finalState = NetworkTestUtils.waitForChannelClose(selector, node,
-                ChannelState.State.AUTHENTICATION_FAILED, time);
+                ChannelState.State.AUTHENTICATION_FAILED);
         selector.close();
         selector = null;
         return finalState;

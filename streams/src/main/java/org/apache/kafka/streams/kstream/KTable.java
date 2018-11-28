@@ -440,7 +440,7 @@ public interface KTable<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(K readOnlyKey, V value) {
@@ -515,7 +515,7 @@ public interface KTable<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = (KeyValueStore<String, String>)context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(K readOnlyKey, V value) {
@@ -573,7 +573,7 @@ public interface KTable<K, V> {
      * records to and rereading all updated records from it, such that the resulting {@link KGroupedTable} is partitioned
      * on the new key.
      * <p>
-     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)}
+     * If the key or value type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Grouped)}
      * instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new grouping key and value to be aggregated

@@ -24,7 +24,7 @@ import joptsimple._
 import kafka.common.Config
 import kafka.log.LogConfig
 import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{CommandLineUtils, Exit, PasswordEncoder}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
@@ -36,8 +36,8 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 
 
 /**
@@ -72,8 +72,7 @@ object ConfigCommand extends Config {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      if (args.length == 0)
-        CommandLineUtils.printUsageAndDie(opts.parser, "Add/Remove entity config for a topic, client, user or broker")
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manipulate and describe entity config for a topic, client, user or broker")
 
       opts.checkArgs()
 
@@ -464,8 +463,8 @@ object ConfigCommand extends Config {
     ConfigEntity(entities.head, if (entities.size > 1) Some(entities(1)) else None)
   }
 
-  class ConfigCommandOptions(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ConfigCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
             "Multiple URLS can be given to allow fail-over.")
             .withRequiredArg
@@ -504,9 +503,8 @@ object ConfigCommand extends Config {
             .withRequiredArg
             .ofType(classOf[String])
             .withValuesSeparatedBy(',')
-    val helpOpt = parser.accepts("help", "Print usage information.")
     val forceOpt = parser.accepts("force", "Suppress console prompts")
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
     val allOpts: Set[OptionSpec[_]] = Set(alterOpt, describeOpt, entityType, entityName, addConfig, deleteConfig, helpOpt)
 

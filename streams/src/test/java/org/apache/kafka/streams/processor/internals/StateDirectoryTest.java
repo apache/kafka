@@ -52,9 +52,8 @@ public class StateDirectoryTest {
     private StateDirectory directory;
     private File appDir;
 
-    @Before
-    public void before() {
-        stateDir = new File(TestUtils.IO_TMP_DIR, TestUtils.randomString(5));
+    private void initializeStateDirectory(final boolean createStateDirectory) {
+        stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         directory = new StateDirectory(
             new StreamsConfig(new Properties() {
                 {
@@ -63,8 +62,13 @@ public class StateDirectoryTest {
                     put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
                 }
             }),
-            time);
+            time, createStateDirectory);
         appDir = new File(stateDir, applicationId);
+    }
+
+    @Before
+    public void before() {
+        initializeStateDirectory(true);
     }
 
     @After
@@ -138,7 +142,7 @@ public class StateDirectoryTest {
     }
     
     @Test
-    public void shouldLockMulitpleTaskDirectories() throws IOException {
+    public void shouldLockMultipleTaskDirectories() throws IOException {
         final TaskId taskId = new TaskId(0, 0);
         final File task1Dir = directory.directoryForTask(taskId);
         final TaskId taskId2 = new TaskId(1, 0);
@@ -254,7 +258,7 @@ public class StateDirectoryTest {
                     put(StreamsConfig.STATE_DIR_CONFIG, stateDir.getPath());
                 }
             }),
-            time);
+            time, true);
         final File taskDir = stateDirectory.directoryForTask(new TaskId(0, 0));
         assertTrue(stateDir.exists());
         assertTrue(taskDir.exists());
@@ -296,14 +300,11 @@ public class StateDirectoryTest {
     public void shouldNotLockStateDirLockedByAnotherThread() throws IOException, InterruptedException {
         final TaskId taskId = new TaskId(0, 0);
         final AtomicReference<IOException> exceptionOnThread = new AtomicReference<>();
-        final Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    directory.lock(taskId);
-                } catch (final IOException e) {
-                    exceptionOnThread.set(e);
-                }
+        final Thread thread = new Thread(() -> {
+            try {
+                directory.lock(taskId);
+            } catch (final IOException e) {
+                exceptionOnThread.set(e);
             }
         });
         thread.start();
@@ -318,17 +319,14 @@ public class StateDirectoryTest {
         final CountDownLatch lockLatch = new CountDownLatch(1);
         final CountDownLatch unlockLatch = new CountDownLatch(1);
         final AtomicReference<Exception> exceptionOnThread = new AtomicReference<>();
-        final Thread thread = new Thread(new Runnable() {
-            @Override
-            public void run() {
-                try {
-                    directory.lock(taskId);
-                    lockLatch.countDown();
-                    unlockLatch.await();
-                    directory.unlock(taskId);
-                } catch (final Exception e) {
-                    exceptionOnThread.set(e);
-                }
+        final Thread thread = new Thread(() -> {
+            try {
+                directory.lock(taskId);
+                lockLatch.countDown();
+                unlockLatch.await();
+                directory.unlock(taskId);
+            } catch (final Exception e) {
+                exceptionOnThread.set(e);
             }
         });
         thread.start();
@@ -357,5 +355,40 @@ public class StateDirectoryTest {
 
         files = Arrays.asList(appDir.listFiles());
         assertEquals(0, files.size());
+    }
+
+    @Test
+    public void shouldNotCreateBaseDirectory() {
+        initializeStateDirectory(false);
+        assertFalse(stateDir.exists());
+        assertFalse(appDir.exists());
+    }
+
+    @Test
+    public void shouldNotCreateTaskStateDirectory() {
+        initializeStateDirectory(false);
+        final TaskId taskId = new TaskId(0, 0);
+        final File taskDirectory = directory.directoryForTask(taskId);
+        assertFalse(taskDirectory.exists());
+    }
+
+    @Test
+    public void shouldNotCreateGlobalStateDirectory() {
+        initializeStateDirectory(false);
+        final File globalStateDir = directory.globalStateDir();
+        assertFalse(globalStateDir.exists());
+    }
+
+    @Test
+    public void shouldLockTaskStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
+        initializeStateDirectory(false);
+        final TaskId taskId = new TaskId(0, 0);
+        assertTrue(directory.lock(taskId));
+    }
+
+    @Test
+    public void shouldLockGlobalStateDirectoryWhenDirectoryCreationDisabled() throws IOException {
+        initializeStateDirectory(false);
+        assertTrue(directory.lockGlobalState());
     }
 }

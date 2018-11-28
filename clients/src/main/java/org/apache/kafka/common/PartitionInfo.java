@@ -103,10 +103,12 @@ public class PartitionInfo {
     /* Extract the node ids from each item in the array and format for display */
     private String formatNodeIds(Node[] nodes) {
         StringBuilder b = new StringBuilder("[");
-        for (int i = 0; i < nodes.length; i++) {
-            b.append(nodes[i].idString());
-            if (i < nodes.length - 1)
-                b.append(',');
+        if (nodes != null) {
+            for (int i = 0; i < nodes.length; i++) {
+                b.append(nodes[i].idString());
+                if (i < nodes.length - 1)
+                    b.append(',');
+            }
         }
         b.append("]");
         return b.toString();
