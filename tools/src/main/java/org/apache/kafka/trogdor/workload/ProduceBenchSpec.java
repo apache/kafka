@@ -64,7 +64,7 @@ public class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
-    private final int maxMessages;
+    private final long maxMessages;
     private final PayloadGenerator keyGenerator;
     private final PayloadGenerator valueGenerator;
     private final Optional<TransactionGenerator> transactionGenerator;
@@ -80,7 +80,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("producerNode") String producerNode,
                          @JsonProperty("bootstrapServers") String bootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                         @JsonProperty("maxMessages") int maxMessages,
+                         @JsonProperty("maxMessages") long maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
                          @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
                          @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
@@ -124,7 +124,7 @@ public class ProduceBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int maxMessages() {
+    public long maxMessages() {
         return maxMessages;
     }
 
