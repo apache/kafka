@@ -1364,12 +1364,6 @@
             <td>METADATA (3)</td>
             <td>Create</td>
             <td>Topic</td>
-            <td>This authorizes topic auto-creation on Topic resources if enabled.</td>
-        </tr>
-        <tr>
-            <td>METADATA (3)</td>
-            <td>Create</td>
-            <td>Topic</td>
             <td>This authorizes auto topic creation if enabled but the given user doesn't have a cluster level
                 permission (above).</td>
         </tr>
@@ -1401,7 +1395,8 @@
             <td>OFFSET_COMMIT (8)</td>
             <td>Read</td>
             <td>Group</td>
-            <td></td>
+            <td>An offset can only be committed if it's authorized to the given group and the topic too (see below).
+                Group access is checked first, then Topic access.</td>
         </tr>
         <tr>
             <td>OFFSET_COMMIT (8)</td>
@@ -1413,7 +1408,9 @@
             <td>OFFSET_FETCH (9)</td>
             <td>Describe</td>
             <td>Group</td>
-            <td></td>
+            <td>Similarly to OFFSET_COMMIT, the application must have privileges on group and topic level too to be able
+                to fetch. However in this case it requires describe access instead of read. Group access is checked first,
+                then Topic access.</td>
         </tr>
         <tr>
             <td>OFFSET_FETCH (9)</td>
@@ -1425,7 +1422,8 @@
             <td>FIND_COORDINATOR (10)</td>
             <td>Describe</td>
             <td>Group</td>
-            <td></td>
+            <td>The FIND_COORDINATOR request can be of "Group" type in which case it is looking for consumergroup
+                coordinators. This privilege would represent the Group mode.</td>
         </tr>
         <tr>
             <td>FIND_COORDINATOR (10)</td>
@@ -1547,7 +1545,8 @@
             <td>ADD_PARTITIONS_TO_TXN (24)</td>
             <td>Write</td>
             <td>TransactionalId</td>
-            <td></td>
+            <td>This API is only applicable to transactional requests. It first checks for the Write action on the
+                TransactionalId resource, then it checks the Topic in subject (below).</td>
         </tr>
         <tr>
             <td>ADD_PARTITIONS_TO_TXN (24)</td>
@@ -1559,7 +1558,9 @@
             <td>ADD_OFFSETS_TO_TXN (25)</td>
             <td>Write</td>
             <td>TransactionalId</td>
-            <td></td>
+            <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks
+                for Write action on the TransactionalId resoure, then it checks whether it can Read on the given group
+                (below).</td>
         </tr>
         <tr>
             <td>ADD_OFFSETS_TO_TXN (25)</td>
