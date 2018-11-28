@@ -835,8 +835,8 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testProducerConfigsWithOverrides() {
         Map<String, String> props = new HashMap<>(workerProps);
-        props.put("consumer.auto.offset.reset", "latest");
-        props.put("consumer.max.poll.records", "1000");
+        props.put("producer.acks", "-1");
+        props.put("producer.linger.ms", "1000");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
