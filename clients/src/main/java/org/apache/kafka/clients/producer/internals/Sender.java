@@ -243,7 +243,7 @@ public class Sender implements Runnable {
         // okay we stopped accepting requests but there may still be
         // requests in the accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
+        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0 || transactionManager.hasOngoingTransaction())) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {

@@ -137,7 +137,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testSenderShutdownWithPendingAddPartitions() throws Exception {
+    public void testSenderShutdownWithPendingTransactions() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -151,6 +151,12 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
 
         sender.initiateClose();
+        sender.run(time.milliseconds());
+        TransactionalRequestResult result = transactionManager.beginCommit();
+        sender.run(time.milliseconds());
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertTrue(result.isCompleted());
         sender.run();
 
         assertTrue(sendFuture.isDone());

@@ -728,7 +728,6 @@ public class TransactionManager {
         return !pendingTxnOffsetCommits.isEmpty();
     }
 
-    // visible for testing
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
