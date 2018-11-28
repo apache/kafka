@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
@@ -52,7 +53,8 @@ public class WorkerConfigTransformer {
         if (configs == null) return null;
         ConfigTransformerResult result = configTransformer.transform(configs);
         if (connectorName != null) {
-            String action = configs.get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG);
+            String key = ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG;
+            String action = (String) ConfigDef.parseType(key, configs.get(key), ConfigDef.Type.STRING);
             if (action == null) {
                 // The default action is "restart".
                 action = ConnectorConfig.CONFIG_RELOAD_ACTION_RESTART;
