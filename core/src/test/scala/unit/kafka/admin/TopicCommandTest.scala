@@ -278,4 +278,37 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue(output.contains(topic))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
+
+  @Test
+  def testTopicOperationsWithRegexSymbolInTopicName(): Unit = {
+    val topic1 = "test.topic"
+    val topic2 = "test-topic"
+    val escapedTopic = "\"test\\.topic\""
+    val unescapedTopic = "test.topic"
+    val numPartitionsOriginal = 1
+
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the topics
+    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1", "--topic", topic1))
+    TopicCommand.createTopic(zkClient, createOpts)
+    val createOpts2 = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1", "--topic", topic2))
+    TopicCommand.createTopic(zkClient, createOpts2)
+
+    val escapedCommandOpts = new TopicCommandOptions(Array("--topic", escapedTopic))
+    val unescapedCommandOpts = new TopicCommandOptions(Array("--topic", unescapedTopic))
+
+    // topic actions with escaped regex do not affect 'test-topic'
+    // topic actions with unescaped topic affect 'test-topic'
+
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, unescapedCommandOpts)).contains(topic2))
+
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, unescapedCommandOpts)).contains(topic2))
+  }
 }

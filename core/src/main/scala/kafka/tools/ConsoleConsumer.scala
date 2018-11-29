@@ -509,9 +509,9 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(lineSeparator)
     }
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte]) {
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
+      val convertedBytes = deserializer.map(_.deserialize(topic, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
     }
@@ -527,12 +527,12 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     if (printKey) {
-      write(keyDeserializer, key)
+      write(keyDeserializer, key, topic)
       writeSeparator(printValue)
     }
 
     if (printValue) {
-      write(valueDeserializer, value)
+      write(valueDeserializer, value, topic)
       output.write(lineSeparator)
     }
   }

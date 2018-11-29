@@ -132,7 +132,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(INPUT_STREAM);
         setCommittedOffset(INPUT_STREAM, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime());
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 0), (long) offsetCheckpointed));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
@@ -199,7 +199,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(APPID + "-store-changelog");
         createStateForRestoration(INPUT_STREAM);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime());
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 0), (long) offsetCheckpointed));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))

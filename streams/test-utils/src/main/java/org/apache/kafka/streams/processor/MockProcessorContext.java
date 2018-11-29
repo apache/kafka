@@ -19,7 +19,9 @@ package org.apache.kafka.streams.processor;
 import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
@@ -208,7 +210,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
-        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context-virtual-thread");
+        final MetricConfig metricConfig = new MetricConfig();
+        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
+        this.metrics = new StreamsMetricsImpl(
+            new Metrics(metricConfig),
+            "mock-processor-context-virtual-thread"
+        );
     }
 
     @Override
