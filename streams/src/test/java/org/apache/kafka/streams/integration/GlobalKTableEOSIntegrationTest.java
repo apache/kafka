@@ -341,7 +341,7 @@ public class GlobalKTableEOSIntegrationTest {
                                 LongSerializer.class,
                                 StringSerializer.class,
                                 properties),
-                mockTime.milliseconds());
+                mockTime.absoluteMilliseconds());
     }
 
     private void produceInitialGlobalTableValues() throws Exception {

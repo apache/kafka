@@ -71,7 +71,7 @@ object ReplicaVerificationTool extends Logging {
   val dateFormat = new SimpleDateFormat(dateFormatString)
 
   def getCurrentTimeString() = {
-    ReplicaVerificationTool.dateFormat.format(new Date(Time.SYSTEM.milliseconds))
+    ReplicaVerificationTool.dateFormat.format(new Date(Time.SYSTEM.absoluteMilliseconds))
   }
 
   def main(args: Array[String]): Unit = {
@@ -258,7 +258,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
   private val recordsCache = new Pool[TopicPartition, Pool[Int, FetchResponse.PartitionData[MemoryRecords]]]
   private val fetcherBarrier = new AtomicReference(new CountDownLatch(expectedNumFetchers))
   private val verificationBarrier = new AtomicReference(new CountDownLatch(1))
-  @volatile private var lastReportTime = Time.SYSTEM.milliseconds
+  @volatile private var lastReportTime = Time.SYSTEM.absoluteMilliseconds
   private var maxLag: Long = -1L
   private var offsetWithMaxLag: Long = -1L
   private var maxLagTopicAndPartition: TopicPartition = null
@@ -363,7 +363,7 @@ private class ReplicaBuffer(expectedReplicasPerTopicPartition: Map[TopicPartitio
       }
       fetchResponsePerReplica.clear()
     }
-    val currentTimeMs = Time.SYSTEM.milliseconds
+    val currentTimeMs = Time.SYSTEM.absoluteMilliseconds
     if (currentTimeMs - lastReportTime > reportInterval) {
       println(ReplicaVerificationTool.dateFormat.format(new Date(currentTimeMs)) + ": max lag is "
         + maxLag + " for partition " + maxLagTopicAndPartition + " at offset " + offsetWithMaxLag
@@ -486,7 +486,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
       else {
         val clientRequest = networkClient.newClientRequest(sourceNode.id.toString, requestBuilder,
-          time.milliseconds(), true)
+          time.absoluteMilliseconds(), true)
         NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
       }
     }

@@ -231,7 +231,7 @@ public class ConsumeBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long messagesConsumed = 0;
             long bytesConsumed = 0;
-            long startTimeMs = Time.SYSTEM.milliseconds();
+            long startTimeMs = Time.SYSTEM.absoluteMilliseconds();
             long startBatchMs = startTimeMs;
             long maxMessages = spec.maxMessages();
             try {
@@ -240,7 +240,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                     if (records.isEmpty()) {
                         continue;
                     }
-                    long endBatchMs = Time.SYSTEM.milliseconds();
+                    long endBatchMs = Time.SYSTEM.absoluteMilliseconds();
                     long elapsedBatchMs = endBatchMs - startBatchMs;
                     for (ConsumerRecord<byte[], byte[]> record : records) {
                         messagesConsumed++;
@@ -259,7 +259,7 @@ public class ConsumeBenchWorker implements TaskWorker {
 
                         throttle.increment();
                     }
-                    startBatchMs = Time.SYSTEM.milliseconds();
+                    startBatchMs = Time.SYSTEM.absoluteMilliseconds();
                 }
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
@@ -267,7 +267,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
                     new ConsumeStatusUpdater(latencyHistogram, messageSizeHistogram, consumer).update();
-                long curTimeMs = Time.SYSTEM.milliseconds();
+                long curTimeMs = Time.SYSTEM.absoluteMilliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }

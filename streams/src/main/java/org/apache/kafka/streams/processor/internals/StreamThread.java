@@ -265,7 +265,7 @@ public class StreamThread extends Thread {
                 streamThread.setStateListener(null);
                 return;
             }
-            final long start = time.milliseconds();
+            final long start = time.absoluteMilliseconds();
             try {
                 if (streamThread.setState(State.PARTITIONS_ASSIGNED) == null) {
                     return;
@@ -285,7 +285,7 @@ public class StreamThread extends Thread {
                         "\tcurrent active tasks: {}\n" +
                         "\tcurrent standby tasks: {}\n" +
                         "\tprevious active tasks: {}\n",
-                    time.milliseconds() - start,
+                    time.absoluteMilliseconds() - start,
                     taskManager.activeTaskIds(),
                     taskManager.standbyTaskIds(),
                     taskManager.prevActiveTaskIds());
@@ -303,7 +303,7 @@ public class StreamThread extends Thread {
                 taskManager.standbyTaskIds());
 
             if (streamThread.setState(State.PARTITIONS_REVOKED) != null) {
-                final long start = time.milliseconds();
+                final long start = time.absoluteMilliseconds();
                 try {
                     // suspend active tasks
                     if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.VERSION_PROBING.code()) {
@@ -324,7 +324,7 @@ public class StreamThread extends Thread {
                     log.info("partition revocation took {} ms.\n" +
                             "\tsuspended active tasks: {}\n" +
                             "\tsuspended standby tasks: {}",
-                        time.milliseconds() - start,
+                        time.absoluteMilliseconds() - start,
                         taskManager.suspendedActiveTaskIds(),
                         taskManager.suspendedStandbyTaskIds());
                 }
@@ -806,7 +806,7 @@ public class StreamThread extends Thread {
     void runOnce() {
         final ConsumerRecords<byte[], byte[]> records;
 
-        now = time.milliseconds();
+        now = time.absoluteMilliseconds();
 
         if (state == State.PARTITIONS_ASSIGNED) {
             // try to fetch some records with zero poll millis
@@ -1084,7 +1084,7 @@ public class StreamThread extends Thread {
                     standbyRecords = remainingStandbyRecords;
 
                     if (log.isDebugEnabled()) {
-                        log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.milliseconds() - now);
+                        log.debug("Updated standby tasks {} in {}ms", taskManager.standbyTaskIds(), time.absoluteMilliseconds() - now);
                     }
                 }
                 processStandbyRecords = false;
@@ -1149,7 +1149,7 @@ public class StreamThread extends Thread {
      */
     private long advanceNowAndComputeLatency() {
         final long previous = now;
-        now = time.milliseconds();
+        now = time.absoluteMilliseconds();
 
         return Math.max(now - previous, 0);
     }

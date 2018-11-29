@@ -84,14 +84,14 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
 
         // register and possibly restore the state from the logs
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             inner.init(context, root);
         } finally {
             this.metrics.recordLatency(
                 restoreTime,
                 startNs,
-                time.nanoseconds()
+                time.relativeNanoseconds()
             );
         }
     }
@@ -140,7 +140,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     @Override
     public void remove(final Windowed<K> sessionKey) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
             inner.remove(new Windowed<>(key, sessionKey.window()));
@@ -148,14 +148,14 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
         } finally {
-            this.metrics.recordLatency(removeTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(removeTime, startNs, time.relativeNanoseconds());
         }
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
             this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
@@ -163,7 +163,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
         } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.putTime, startNs, time.relativeNanoseconds());
         }
     }
 
@@ -186,11 +186,11 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
 
     @Override
     public void flush() {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         try {
             this.inner.flush();
         } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
+            this.metrics.recordLatency(this.flushTime, startNs, time.relativeNanoseconds());
         }
     }
 }

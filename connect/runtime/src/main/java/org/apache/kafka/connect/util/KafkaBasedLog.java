@@ -132,10 +132,10 @@ public class KafkaBasedLog<K, V> {
 
         // We expect that the topics will have been created either manually by the user or automatically by the herder
         List<PartitionInfo> partitionInfos = null;
-        long started = time.milliseconds();
-        while (partitionInfos == null && time.milliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
+        long started = time.absoluteMilliseconds();
+        while (partitionInfos == null && time.absoluteMilliseconds() - started < CREATE_TOPIC_TIMEOUT_MS) {
             partitionInfos = consumer.partitionsFor(topic);
-            Utils.sleep(Math.min(time.milliseconds() - started, 1000));
+            Utils.sleep(Math.min(time.absoluteMilliseconds() - started, 1000));
         }
         if (partitionInfos == null)
             throw new ConnectException("Could not look up partition metadata for offset backing store topic in" +

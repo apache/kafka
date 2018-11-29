@@ -286,7 +286,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * next request is processed.
    */
   def recordNoThrottle(clientSensors: ClientSensors, value: Double) {
-    clientSensors.quotaSensor.record(value, time.milliseconds(), false)
+    clientSensors.quotaSensor.record(value, time.absoluteMilliseconds(), false)
   }
 
   /**
@@ -327,7 +327,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     val quota = config.quota()
     val difference = clientMetric.metricValue.asInstanceOf[Double] - quota.bound
     // Use the precise window used by the rate calculation
-    val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.milliseconds())
+    val throttleTimeMs = difference / quota.bound * rateMetric.windowSize(config, time.absoluteMilliseconds())
     throttleTimeMs.round
   }
 

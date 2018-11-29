@@ -378,7 +378,7 @@ class FullFetchContext(private val time: Time,
       })
       cachedPartitions
     }
-    val responseSessionId = cache.maybeCreateSession(time.milliseconds(), isFromFollower,
+    val responseSessionId = cache.maybeCreateSession(time.absoluteMilliseconds(), isFromFollower,
         updates.size, () => createNewSession)
     debug(s"Full fetch context with session id $responseSessionId returning " +
       s"${partitionsToLogString(updates.keySet)}")

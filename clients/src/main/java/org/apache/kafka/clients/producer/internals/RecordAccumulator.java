@@ -220,8 +220,8 @@ public final class RecordAccumulator {
                 }
 
                 MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.absoluteMilliseconds());
+                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.absoluteMilliseconds()));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
@@ -257,7 +257,7 @@ public final class RecordAccumulator {
                                          Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
-            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
+            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.absoluteMilliseconds());
             if (future == null)
                 last.closeForRecordAppends();
             else

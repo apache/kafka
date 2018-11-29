@@ -138,7 +138,7 @@ public class ErrorHandlingMetrics {
      * Record the time of error.
      */
     public void recordErrorTimestamp() {
-        this.lastErrorTime = time.milliseconds();
+        this.lastErrorTime = time.absoluteMilliseconds();
     }
 
     /**

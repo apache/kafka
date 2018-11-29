@@ -231,7 +231,7 @@ public class GlobalStreamThread extends Thread {
             for (final Map.Entry<TopicPartition, Long> entry : partitionOffsets.entrySet()) {
                 globalConsumer.seek(entry.getKey(), entry.getValue());
             }
-            lastFlush = time.milliseconds();
+            lastFlush = time.absoluteMilliseconds();
         }
 
         void pollAndUpdate() {
@@ -240,7 +240,7 @@ public class GlobalStreamThread extends Thread {
                 for (final ConsumerRecord<byte[], byte[]> record : received) {
                     stateMaintainer.update(record);
                 }
-                final long now = time.milliseconds();
+                final long now = time.absoluteMilliseconds();
                 if (now >= lastFlush + flushInterval) {
                     stateMaintainer.flushState();
                     lastFlush = now;

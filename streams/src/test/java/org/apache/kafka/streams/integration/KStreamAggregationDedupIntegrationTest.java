@@ -172,7 +172,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
     @Test
     public void shouldGroupByKey() throws Exception {
-        final long timestamp = mockTime.milliseconds();
+        final long timestamp = mockTime.absoluteMilliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 

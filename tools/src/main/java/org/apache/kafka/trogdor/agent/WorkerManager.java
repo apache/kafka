@@ -294,7 +294,7 @@ public final class WorkerManager {
 
         void transitionToDone() {
             state = State.DONE;
-            doneMs = time.milliseconds();
+            doneMs = time.absoluteMilliseconds();
             if (reference != null) {
                 reference.close();
                 reference = null;
@@ -310,7 +310,7 @@ public final class WorkerManager {
     public void createWorker(long workerId, String taskId, TaskSpec spec) throws Throwable {
         try (ShutdownManager.Reference ref = shutdownManager.takeReference()) {
             final Worker worker = stateChangeExecutor.
-                submit(new CreateWorker(workerId, taskId, spec, time.milliseconds())).get();
+                submit(new CreateWorker(workerId, taskId, spec, time.absoluteMilliseconds())).get();
             if (worker == null) {
                 log.info("{}: Ignoring request to create worker {}, because there is already " +
                     "a worker with that id.", nodeName, workerId);

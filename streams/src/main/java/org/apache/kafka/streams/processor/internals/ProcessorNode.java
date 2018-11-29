@@ -88,11 +88,11 @@ public class ProcessorNode<K, V> {
     public void init(final InternalProcessorContext context) {
         try {
             nodeMetrics = new NodeMetrics(context.metrics(), name, context);
-            final long startNs = time.nanoseconds();
+            final long startNs = time.relativeNanoseconds();
             if (processor != null) {
                 processor.init(context);
             }
-            nodeMetrics.nodeCreationSensor.record(time.nanoseconds() - startNs);
+            nodeMetrics.nodeCreationSensor.record(time.relativeNanoseconds() - startNs);
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to initialize processor %s", name), e);
         }
@@ -100,11 +100,11 @@ public class ProcessorNode<K, V> {
 
     public void close() {
         try {
-            final long startNs = time.nanoseconds();
+            final long startNs = time.relativeNanoseconds();
             if (processor != null) {
                 processor.close();
             }
-            nodeMetrics.nodeDestructionSensor.record(time.nanoseconds() - startNs);
+            nodeMetrics.nodeDestructionSensor.record(time.relativeNanoseconds() - startNs);
             nodeMetrics.removeAllSensors();
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
@@ -113,15 +113,15 @@ public class ProcessorNode<K, V> {
 
 
     public void process(final K key, final V value) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         processor.process(key, value);
-        nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
+        nodeMetrics.nodeProcessTimeSensor.record(time.relativeNanoseconds() - startNs);
     }
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
-        final long startNs = time.nanoseconds();
+        final long startNs = time.relativeNanoseconds();
         punctuator.punctuate(timestamp);
-        nodeMetrics.nodePunctuateTimeSensor.record(time.nanoseconds() - startNs);
+        nodeMetrics.nodePunctuateTimeSensor.record(time.relativeNanoseconds() - startNs);
     }
 
     /**

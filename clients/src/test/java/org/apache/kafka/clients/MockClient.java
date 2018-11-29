@@ -175,7 +175,7 @@ public class MockClient implements KafkaClient {
 
     @Override
     public void disconnect(String node) {
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         Iterator<ClientRequest> iter = requests.iterator();
         while (iter.hasNext()) {
             ClientRequest request = iter.next();
@@ -206,7 +206,7 @@ public class MockClient implements KafkaClient {
                 short version = nodeApiVersions.latestUsableVersion(request.apiKey(), builder.oldestAllowedVersion(),
                     builder.latestAllowedVersion());
                 ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), true, null,
+                    request.createdTimeMs(), time.absoluteMilliseconds(), true, null,
                         new AuthenticationException("Authentication failed"), null);
                 responses.add(resp);
                 return;
@@ -231,7 +231,7 @@ public class MockClient implements KafkaClient {
                         request.apiKey() + " with version " + version);
 
             ClientResponse resp = new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                    request.createdTimeMs(), time.milliseconds(), futureResp.disconnected,
+                    request.createdTimeMs(), time.absoluteMilliseconds(), futureResp.disconnected,
                     unsupportedVersionException, null, futureResp.responseBody);
             responses.add(resp);
             iterator.remove();
@@ -335,7 +335,7 @@ public class MockClient implements KafkaClient {
         requests.remove(clientRequest);
         short version = clientRequest.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(clientRequest.makeHeader(version), clientRequest.callback(), clientRequest.destination(),
-                clientRequest.createdTimeMs(), time.milliseconds(), false, null, null, response));
+                clientRequest.createdTimeMs(), time.absoluteMilliseconds(), false, null, null, response));
     }
 
 
@@ -345,7 +345,7 @@ public class MockClient implements KafkaClient {
         ClientRequest request = requests.poll();
         short version = request.requestBuilder().latestAllowedVersion();
         responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
+                request.createdTimeMs(), time.absoluteMilliseconds(), disconnected, null, null, response));
     }
 
     public void respondFrom(AbstractResponse response, Node node) {
@@ -360,7 +360,7 @@ public class MockClient implements KafkaClient {
                 iterator.remove();
                 short version = request.requestBuilder().latestAllowedVersion();
                 responses.add(new ClientResponse(request.makeHeader(version), request.callback(), request.destination(),
-                        request.createdTimeMs(), time.milliseconds(), disconnected, null, null, response));
+                        request.createdTimeMs(), time.absoluteMilliseconds(), disconnected, null, null, response));
                 return;
             }
         }
@@ -588,7 +588,7 @@ public class MockClient implements KafkaClient {
         }
 
         boolean contains(T element) {
-            return contains(element, time.milliseconds());
+            return contains(element, time.absoluteMilliseconds());
         }
 
         boolean contains(T element, long now) {
@@ -596,7 +596,7 @@ public class MockClient implements KafkaClient {
         }
 
         void add(T element, long durationMs) {
-            elements.put(element, time.milliseconds() + durationMs);
+            elements.put(element, time.absoluteMilliseconds() + durationMs);
         }
 
         long expirationDelayMs(T element, long now) {
@@ -667,7 +667,7 @@ public class MockClient implements KafkaClient {
                         + "Expected topics: " + update.topics()
                         + ", asked topics: " + metadata.topics());
             }
-            metadata.update(update.updateResponse, time.milliseconds());
+            metadata.update(update.updateResponse, time.absoluteMilliseconds());
             this.lastUpdate = update;
         }
 

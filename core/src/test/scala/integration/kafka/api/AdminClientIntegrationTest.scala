@@ -1062,11 +1062,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = AdminClient.create(config)
-    val startTimeMs = Time.SYSTEM.milliseconds()
+    val startTimeMs = Time.SYSTEM.absoluteMilliseconds()
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
       new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
-    val endTimeMs = Time.SYSTEM.milliseconds()
+    val endTimeMs = Time.SYSTEM.absoluteMilliseconds()
     assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
   }
 

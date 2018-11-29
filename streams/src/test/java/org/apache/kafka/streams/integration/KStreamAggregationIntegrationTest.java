@@ -153,7 +153,7 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldReduce() throws Exception {
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
         groupedStream
             .reduce(reducer, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("reduce-by-key"))
             .toStream()
@@ -161,7 +161,7 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
 
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
 
         final List<KeyValue<String, String>> results = receiveMessages(
             new StringDeserializer(),
@@ -193,10 +193,10 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldReduceWindowed() throws Exception {
-        final long firstBatchTimestamp = mockTime.milliseconds();
+        final long firstBatchTimestamp = mockTime.absoluteMilliseconds();
         mockTime.sleep(1000);
         produceMessages(firstBatchTimestamp);
-        final long secondBatchTimestamp = mockTime.milliseconds();
+        final long secondBatchTimestamp = mockTime.absoluteMilliseconds();
         produceMessages(secondBatchTimestamp);
         produceMessages(secondBatchTimestamp);
 
@@ -264,7 +264,7 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldAggregate() throws Exception {
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
         groupedStream.aggregate(
             initializer,
             aggregator,
@@ -274,7 +274,7 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
 
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
 
         final List<KeyValue<String, Integer>> results = receiveMessages(
             new StringDeserializer(),
@@ -299,10 +299,10 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldAggregateWindowed() throws Exception {
-        final long firstTimestamp = mockTime.milliseconds();
+        final long firstTimestamp = mockTime.absoluteMilliseconds();
         mockTime.sleep(1000);
         produceMessages(firstTimestamp);
-        final long secondTimestamp = mockTime.milliseconds();
+        final long secondTimestamp = mockTime.absoluteMilliseconds();
         produceMessages(secondTimestamp);
         produceMessages(secondTimestamp);
 
@@ -376,7 +376,7 @@ public class KStreamAggregationIntegrationTest {
     private void shouldCountHelper() throws Exception {
         startStreams();
 
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
 
         final List<KeyValue<String, Long>> results = receiveMessages(
             new StringDeserializer(),
@@ -400,7 +400,7 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldCount() throws Exception {
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
 
         groupedStream.count(Materialized.as("count-by-key"))
                 .toStream()
@@ -411,7 +411,7 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldCountWithInternalStore() throws Exception {
-        produceMessages(mockTime.milliseconds());
+        produceMessages(mockTime.absoluteMilliseconds());
 
         groupedStream.count()
                 .toStream()
@@ -422,7 +422,7 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldGroupByKey() throws Exception {
-        final long timestamp = mockTime.milliseconds();
+        final long timestamp = mockTime.absoluteMilliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 
@@ -459,7 +459,7 @@ public class KStreamAggregationIntegrationTest {
     public void shouldCountSessionWindows() throws Exception {
         final long sessionGap = 5 * 60 * 1000L;
 
-        final long t1 = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
+        final long t1 = mockTime.absoluteMilliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
         final List<KeyValue<String, String>> t1Messages = Arrays.asList(new KeyValue<>("bob", "start"),
                                                                         new KeyValue<>("penny", "start"),
                                                                         new KeyValue<>("jo", "pause"),
@@ -557,7 +557,7 @@ public class KStreamAggregationIntegrationTest {
     public void shouldReduceSessionWindows() throws Exception {
         final long sessionGap = 1000L; // something to do with time
 
-        final long t1 = mockTime.milliseconds();
+        final long t1 = mockTime.absoluteMilliseconds();
         final List<KeyValue<String, String>> t1Messages = Arrays.asList(new KeyValue<>("bob", "start"),
                                                                         new KeyValue<>("penny", "start"),
                                                                         new KeyValue<>("jo", "pause"),
@@ -650,10 +650,10 @@ public class KStreamAggregationIntegrationTest {
 
     @Test
     public void shouldCountUnlimitedWindows() throws Exception {
-        final long startTime = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;
+        final long startTime = mockTime.absoluteMilliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS) + 1;
         final long incrementTime = Duration.ofDays(1).toMillis();
 
-        final long t1 = mockTime.milliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
+        final long t1 = mockTime.absoluteMilliseconds() - TimeUnit.MILLISECONDS.convert(1, TimeUnit.HOURS);
         final List<KeyValue<String, String>> t1Messages = Arrays.asList(new KeyValue<>("bob", "start"),
                                                                         new KeyValue<>("penny", "start"),
                                                                         new KeyValue<>("jo", "pause"),

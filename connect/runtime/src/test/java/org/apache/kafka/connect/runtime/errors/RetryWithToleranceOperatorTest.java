@@ -168,7 +168,7 @@ public class RetryWithToleranceOperatorTest {
         String result = retryWithToleranceOperator.execAndHandleError(mockOperation, Exception.class);
         assertFalse(retryWithToleranceOperator.failed());
         assertEquals("Success", result);
-        assertEquals(expectedWait, time.hiResClockMs());
+        assertEquals(expectedWait, time.relativeMilliseconds());
 
         PowerMock.verifyAll();
     }
@@ -186,7 +186,7 @@ public class RetryWithToleranceOperatorTest {
         String result = retryWithToleranceOperator.execAndHandleError(mockOperation, Exception.class);
         assertTrue(retryWithToleranceOperator.failed());
         assertNull(result);
-        assertEquals(expectedWait, time.hiResClockMs());
+        assertEquals(expectedWait, time.relativeMilliseconds());
 
         PowerMock.verifyAll();
     }
@@ -220,29 +220,29 @@ public class RetryWithToleranceOperatorTest {
         MockTime time = new MockTime(0, 0, 0);
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(5, 5000, NONE, time);
 
-        long prevTs = time.hiResClockMs();
+        long prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(1, 5000);
-        assertEquals(300, time.hiResClockMs() - prevTs);
+        assertEquals(300, time.relativeMilliseconds() - prevTs);
 
-        prevTs = time.hiResClockMs();
+        prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(2, 5000);
-        assertEquals(600, time.hiResClockMs() - prevTs);
+        assertEquals(600, time.relativeMilliseconds() - prevTs);
 
-        prevTs = time.hiResClockMs();
+        prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(3, 5000);
-        assertEquals(1200, time.hiResClockMs() - prevTs);
+        assertEquals(1200, time.relativeMilliseconds() - prevTs);
 
-        prevTs = time.hiResClockMs();
+        prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(4, 5000);
-        assertEquals(2400, time.hiResClockMs() - prevTs);
+        assertEquals(2400, time.relativeMilliseconds() - prevTs);
 
-        prevTs = time.hiResClockMs();
+        prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(5, 5000);
-        assertEquals(500, time.hiResClockMs() - prevTs);
+        assertEquals(500, time.relativeMilliseconds() - prevTs);
 
-        prevTs = time.hiResClockMs();
+        prevTs = time.relativeMilliseconds();
         retryWithToleranceOperator.backoff(6, 5000);
-        assertEquals(0, time.hiResClockMs() - prevTs);
+        assertEquals(0, time.relativeMilliseconds() - prevTs);
 
         PowerMock.verifyAll();
     }

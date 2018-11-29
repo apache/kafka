@@ -216,10 +216,10 @@ class WorkerSourceTask extends WorkerTask {
 
                 if (toSend == null) {
                     log.trace("{} Nothing to send to Kafka. Polling source for additional records", this);
-                    long start = time.milliseconds();
+                    long start = time.absoluteMilliseconds();
                     toSend = poll();
                     if (toSend != null) {
-                        recordPollReturned(toSend.size(), time.milliseconds() - start);
+                        recordPollReturned(toSend.size(), time.absoluteMilliseconds() - start);
                     }
                 }
                 if (toSend == null)
@@ -396,7 +396,7 @@ class WorkerSourceTask extends WorkerTask {
 
         log.info("{} Committing offsets", this);
 
-        long started = time.milliseconds();
+        long started = time.absoluteMilliseconds();
         long timeout = started + commitTimeoutMs;
 
         synchronized (this) {
@@ -414,11 +414,11 @@ class WorkerSourceTask extends WorkerTask {
             log.info("{} flushing {} outstanding messages for offset commit", this, outstandingMessages.size());
             while (!outstandingMessages.isEmpty()) {
                 try {
-                    long timeoutMs = timeout - time.milliseconds();
+                    long timeoutMs = timeout - time.absoluteMilliseconds();
                     if (timeoutMs <= 0) {
                         log.error("{} Failed to flush, timed out while waiting for producer to flush outstanding {} messages", this, outstandingMessages.size());
                         finishFailedFlush();
-                        recordCommitFailure(time.milliseconds() - started, null);
+                        recordCommitFailure(time.absoluteMilliseconds() - started, null);
                         return false;
                     }
                     this.wait(timeoutMs);
@@ -428,7 +428,7 @@ class WorkerSourceTask extends WorkerTask {
                     // to stop immediately
                     log.error("{} Interrupted while flushing messages, offsets will not be committed", this);
                     finishFailedFlush();
-                    recordCommitFailure(time.milliseconds() - started, null);
+                    recordCommitFailure(time.absoluteMilliseconds() - started, null);
                     return false;
                 }
             }
@@ -439,7 +439,7 @@ class WorkerSourceTask extends WorkerTask {
                 // flush time, which can be used for monitoring even if the connector doesn't record any
                 // offsets.
                 finishSuccessfulFlush();
-                long durationMillis = time.milliseconds() - started;
+                long durationMillis = time.absoluteMilliseconds() - started;
                 recordCommitSuccess(durationMillis);
                 log.debug("{} Finished offset commitOffsets successfully in {} ms",
                         this, durationMillis);
@@ -464,11 +464,11 @@ class WorkerSourceTask extends WorkerTask {
         // any data
         if (flushFuture == null) {
             finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.absoluteMilliseconds() - started, null);
             return false;
         }
         try {
-            flushFuture.get(Math.max(timeout - time.milliseconds(), 0), TimeUnit.MILLISECONDS);
+            flushFuture.get(Math.max(timeout - time.absoluteMilliseconds(), 0), TimeUnit.MILLISECONDS);
             // There's a small race here where we can get the callback just as this times out (and log
             // success), but then catch the exception below and cancel everything. This won't cause any
             // errors, is only wasteful in this minor edge case, and the worst result is that the log
@@ -476,22 +476,22 @@ class WorkerSourceTask extends WorkerTask {
         } catch (InterruptedException e) {
             log.warn("{} Flush of offsets interrupted, cancelling", this);
             finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.absoluteMilliseconds() - started, e);
             return false;
         } catch (ExecutionException e) {
             log.error("{} Flush of offsets threw an unexpected exception: ", this, e);
             finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, e);
+            recordCommitFailure(time.absoluteMilliseconds() - started, e);
             return false;
         } catch (TimeoutException e) {
             log.error("{} Timed out waiting to flush offsets to storage", this);
             finishFailedFlush();
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.absoluteMilliseconds() - started, null);
             return false;
         }
 
         finishSuccessfulFlush();
-        long durationMillis = time.milliseconds() - started;
+        long durationMillis = time.absoluteMilliseconds() - started;
         recordCommitSuccess(durationMillis);
         log.info("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);

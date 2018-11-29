@@ -376,7 +376,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (exception != null)
             throw exception;
 
-        Set<TopicPartition> partitions = subscriptions.partitionsNeedingReset(time.milliseconds());
+        Set<TopicPartition> partitions = subscriptions.partitionsNeedingReset(time.absoluteMilliseconds());
         if (partitions.isEmpty())
             return;
 
@@ -596,14 +596,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
-            subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
+            subscriptions.setResetPending(resetTimestamps.keySet(), time.absoluteMilliseconds() + requestTimeoutMs);
 
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
                     if (!result.partitionsToRetry.isEmpty()) {
-                        subscriptions.resetFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
+                        subscriptions.resetFailed(result.partitionsToRetry, time.absoluteMilliseconds() + retryBackoffMs);
                         metadata.requestUpdate();
                     }
 
@@ -617,7 +617,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.resetFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
+                    subscriptions.resetFailed(resetTimestamps.keySet(), time.absoluteMilliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null, e))

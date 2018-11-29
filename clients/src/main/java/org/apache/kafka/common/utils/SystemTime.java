@@ -23,12 +23,12 @@ package org.apache.kafka.common.utils;
 public class SystemTime implements Time {
 
     @Override
-    public long milliseconds() {
+    public long absoluteMilliseconds() {
         return System.currentTimeMillis();
     }
 
     @Override
-    public long nanoseconds() {
+    public long relativeNanoseconds() {
         return System.nanoTime();
     }
 

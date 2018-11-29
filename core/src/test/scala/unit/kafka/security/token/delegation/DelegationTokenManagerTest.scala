@@ -96,7 +96,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.startup
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
-    val issueTime = time.milliseconds
+    val issueTime = time.absoluteMilliseconds
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, masterKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
@@ -113,7 +113,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.startup
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
-    val issueTime = time.milliseconds
+    val issueTime = time.absoluteMilliseconds
     val maxLifeTime = issueTime + maxLifeTimeMsDefault
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, masterKey)
@@ -130,14 +130,14 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     // try renew with default time period
     time.sleep(24 * 60 * 60 * 1000L)
-    var expectedExpiryStamp = time.milliseconds + renewTimeMsDefault
+    var expectedExpiryStamp = time.absoluteMilliseconds + renewTimeMsDefault
     tokenManager.renewToken(owner, ByteBuffer.wrap(password), -1 , renewResponseCallback)
     assertEquals(expectedExpiryStamp, expiryTimeStamp)
     assertEquals(Errors.NONE, error)
 
     // try renew with specific time period
     time.sleep(24 * 60 * 60 * 1000L)
-    expectedExpiryStamp = time.milliseconds + 1 * 60 * 60 * 1000L
+    expectedExpiryStamp = time.absoluteMilliseconds + 1 * 60 * 60 * 1000L
     tokenManager.renewToken(owner, ByteBuffer.wrap(password), 1 * 60 * 60 * 1000L , renewResponseCallback)
     assertEquals(expectedExpiryStamp, expiryTimeStamp)
     assertEquals(Errors.NONE, error)
@@ -161,7 +161,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.startup
 
     tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
-    val issueTime = time.milliseconds
+    val issueTime = time.absoluteMilliseconds
     val tokenId = createTokenResult.tokenId
     val password = DelegationTokenManager.createHmac(tokenId, masterKey)
     assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
@@ -177,7 +177,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     //try expire token at a timestamp
     time.sleep(24 * 60 * 60 * 1000L)
-    val expectedExpiryStamp = time.milliseconds + 2 * 60 * 60 * 1000L
+    val expectedExpiryStamp = time.absoluteMilliseconds + 2 * 60 * 60 * 1000L
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), 2 * 60 * 60 * 1000L, renewResponseCallback)
     assertEquals(expectedExpiryStamp, expiryTimeStamp)
 
@@ -186,7 +186,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
     assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)
-    assertEquals(time.milliseconds, expiryTimeStamp)
+    assertEquals(time.absoluteMilliseconds, expiryTimeStamp)
   }
 
   @Test

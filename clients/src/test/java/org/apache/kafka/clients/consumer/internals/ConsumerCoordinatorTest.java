@@ -654,10 +654,10 @@ public class ConsumerCoordinatorTest {
 
         assertTrue(coordinator.coordinatorUnknown());
         assertFalse(coordinator.poll(time.timer(0)));
-        assertEquals(time.milliseconds(), heartbeat.lastPollTime());
+        assertEquals(time.absoluteMilliseconds(), heartbeat.lastPollTime());
 
         time.sleep(rebalanceTimeoutMs - 1);
-        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
+        assertFalse(heartbeat.pollTimeoutExpired(time.absoluteMilliseconds()));
     }
 
     @Test
@@ -864,7 +864,7 @@ public class ConsumerCoordinatorTest {
         assertFalse(coordinator.rejoinNeededOrPending());
 
         // a new partition is added to the topic
-        metadata.update(TestUtils.metadataUpdateWith(1, singletonMap(topic1, 2)), time.milliseconds());
+        metadata.update(TestUtils.metadataUpdateWith(1, singletonMap(topic1, 2)), time.absoluteMilliseconds());
 
         // we should detect the change and ask for reassignment
         assertTrue(coordinator.rejoinNeededOrPending());
@@ -1680,7 +1680,7 @@ public class ConsumerCoordinatorTest {
         coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertEquals(Collections.singleton(t1p), subscriptions.missingFetchPositions());
-        assertEquals(Collections.emptySet(), subscriptions.partitionsNeedingReset(time.milliseconds()));
+        assertEquals(Collections.emptySet(), subscriptions.partitionsNeedingReset(time.absoluteMilliseconds()));
         assertFalse(subscriptions.hasAllFetchPositions());
         assertEquals(null, subscriptions.position(t1p));
     }
@@ -1709,7 +1709,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertFalse(subscriptions.hasAllFetchPositions());
-        assertEquals(Collections.singleton(t1p), subscriptions.partitionsNeedingReset(time.milliseconds()));
+        assertEquals(Collections.singleton(t1p), subscriptions.partitionsNeedingReset(time.absoluteMilliseconds()));
         assertEquals(OffsetResetStrategy.EARLIEST, subscriptions.resetStrategy(t1p));
         assertTrue(coordinator.coordinatorUnknown());
     }
@@ -1915,7 +1915,7 @@ public class ConsumerCoordinatorTest {
 
         // async commit offset should find coordinator
         time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
-        coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
+        coordinator.maybeAutoCommitOffsetsAsync(time.absoluteMilliseconds());
         assertFalse(coordinator.coordinatorUnknown());
         assertEquals(100L, subscriptions.position(t1p).longValue());
     }

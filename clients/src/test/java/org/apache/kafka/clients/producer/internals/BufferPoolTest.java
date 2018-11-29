@@ -168,7 +168,7 @@ public class BufferPoolTest {
         // The third buffer will be de-allocated after maxBlockTimeMs since the most recent allocation
         delayedDeallocate(pool, buffer3, maxBlockTimeMs / 2 * 5);
 
-        long beginTimeMs = Time.SYSTEM.milliseconds();
+        long beginTimeMs = Time.SYSTEM.absoluteMilliseconds();
         try {
             pool.allocate(10, maxBlockTimeMs);
             fail("The buffer allocated more memory than its maximum value 10");
@@ -177,7 +177,7 @@ public class BufferPoolTest {
         }
         // Thread scheduling sometimes means that deallocation varies by this point
         assertTrue("available memory " + pool.availableMemory(), pool.availableMemory() >= 8 && pool.availableMemory() <= 10);
-        long durationMs = Time.SYSTEM.milliseconds() - beginTimeMs;
+        long durationMs = Time.SYSTEM.absoluteMilliseconds() - beginTimeMs;
         assertTrue("TimeoutException should not throw before maxBlockTimeMs", durationMs >= maxBlockTimeMs);
         assertTrue("TimeoutException should throw soon after maxBlockTimeMs", durationMs < maxBlockTimeMs + 1000);
     }

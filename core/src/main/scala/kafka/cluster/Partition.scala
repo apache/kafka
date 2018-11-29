@@ -398,7 +398,7 @@ class Partition(val topicPartition: TopicPartition,
 
       val isNewLeader = !leaderReplicaIdOpt.contains(localBrokerId)
       val curLeaderLogEndOffset = leaderReplica.logEndOffset.messageOffset
-      val curTimeMs = time.milliseconds
+      val curTimeMs = time.absoluteMilliseconds
       // initialize lastCaughtUpTime of replicas as well as their lastFetchTimeMs and lastFetchLeaderLogEndOffset.
       (assignedReplicas - leaderReplica).foreach { replica =>
         val lastCaughtUpTimeMs = if (inSyncReplicas.contains(replica)) curTimeMs else 0L
@@ -583,7 +583,7 @@ class Partition(val topicPartition: TopicPartition,
    * Note There is no need to acquire the leaderIsrUpdate lock here
    * since all callers of this private API acquire that lock
    */
-  private def maybeIncrementLeaderHW(leaderReplica: Replica, curTime: Long = time.milliseconds): Boolean = {
+  private def maybeIncrementLeaderHW(leaderReplica: Replica, curTime: Long = time.absoluteMilliseconds): Boolean = {
     val allLogEndOffsets = assignedReplicas.filter { replica =>
       curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
     }.map(_.logEndOffset)
@@ -674,7 +674,7 @@ class Partition(val topicPartition: TopicPartition,
     val candidateReplicas = inSyncReplicas - leaderReplica
 
     val laggingReplicas = candidateReplicas.filter(r =>
-      r.logEndOffset.messageOffset != leaderReplica.logEndOffset.messageOffset && (time.milliseconds - r.lastCaughtUpTimeMs) > maxLagMs)
+      r.logEndOffset.messageOffset != leaderReplica.logEndOffset.messageOffset && (time.absoluteMilliseconds - r.lastCaughtUpTimeMs) > maxLagMs)
     if (laggingReplicas.nonEmpty)
       debug("Lagging replicas are %s".format(laggingReplicas.map(_.brokerId).mkString(",")))
 

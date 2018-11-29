@@ -87,12 +87,12 @@ public class SaslAuthenticatorFailureDelayTest {
         saslClientConfigs = clientCertStores.getTrustingConfig(serverCertStores);
         credentialCache = new CredentialCache();
         SaslAuthenticatorTest.TestLogin.loginCount.set(0);
-        startTimeMs = time.milliseconds();
+        startTimeMs = time.absoluteMilliseconds();
     }
 
     @After
     public void teardown() throws Exception {
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         if (server != null)
             this.server.close();
         if (selector != null)
@@ -153,9 +153,9 @@ public class SaslAuthenticatorFailureDelayTest {
                 "Timeout waiting for connection close");
 
         // Try forcing completion of delayed channel close
-        TestUtils.waitForCondition(() -> time.milliseconds() > startTimeMs + failedAuthenticationDelayMs + 1,
+        TestUtils.waitForCondition(() -> time.absoluteMilliseconds() > startTimeMs + failedAuthenticationDelayMs + 1,
                 "Timeout when waiting for auth failure response timeout to elapse");
-        NetworkTestUtils.completeDelayedChannelClose(server.selector(), time.nanoseconds());
+        NetworkTestUtils.completeDelayedChannelClose(server.selector(), time.relativeNanoseconds());
     }
 
     private void poll(Selector selector) {

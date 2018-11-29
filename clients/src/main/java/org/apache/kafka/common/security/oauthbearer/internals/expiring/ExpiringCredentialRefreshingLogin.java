@@ -420,7 +420,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
     }
 
     private long currentMs() {
-        return time.milliseconds();
+        return time.absoluteMilliseconds();
     }
 
     private boolean isLogoutRequiredBeforeLoggingBackIn() {

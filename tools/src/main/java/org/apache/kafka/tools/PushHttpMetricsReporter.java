@@ -168,7 +168,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     private class HttpReporter implements Runnable {
         @Override
         public void run() {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             final List<MetricValue> samples;
             synchronized (lock) {
                 samples = new ArrayList<>(metrics.size());

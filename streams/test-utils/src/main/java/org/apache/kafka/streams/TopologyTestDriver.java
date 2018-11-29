@@ -705,18 +705,18 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public long milliseconds() {
+        public long absoluteMilliseconds() {
             return timeMs.get();
         }
 
         @Override
-        public long nanoseconds() {
+        public long relativeNanoseconds() {
             return highResTimeNs.get();
         }
 
         @Override
-        public long hiResClockMs() {
-            return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
+        public long relativeMilliseconds() {
+            return TimeUnit.NANOSECONDS.toMillis(relativeNanoseconds());
         }
 
         @Override

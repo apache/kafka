@@ -51,20 +51,20 @@ public class ThrottleTest {
         MockTime time = new MockTime(0, 0, 0);
         ThrottleMock throttle = new ThrottleMock(time, 3);
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
+        Assert.assertEquals(0, time.absoluteMilliseconds());
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
+        Assert.assertEquals(0, time.absoluteMilliseconds());
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(0, time.milliseconds());
+        Assert.assertEquals(0, time.absoluteMilliseconds());
         Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(100, time.milliseconds());
+        Assert.assertEquals(100, time.absoluteMilliseconds());
         time.sleep(50);
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(150, time.milliseconds());
+        Assert.assertEquals(150, time.absoluteMilliseconds());
         Assert.assertFalse(throttle.increment());
-        Assert.assertEquals(150, time.milliseconds());
+        Assert.assertEquals(150, time.absoluteMilliseconds());
         Assert.assertTrue(throttle.increment());
-        Assert.assertEquals(200, time.milliseconds());
+        Assert.assertEquals(200, time.absoluteMilliseconds());
     }
 };
 

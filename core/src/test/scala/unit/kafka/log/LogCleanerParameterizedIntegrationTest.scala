@@ -116,7 +116,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
 
     val (log, _) = runCleanerAndCheckCompacted(100)
     // should delete old segments
-    log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
+    log.logSegments.foreach(_.lastModified = time.absoluteMilliseconds - (2 * retentionMs))
 
     TestUtils.waitUntilTrue(() => log.numberOfSegments == 1, "There should only be 1 segment remaining", 10000L)
     assertEquals(1, log.numberOfSegments)

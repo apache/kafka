@@ -203,7 +203,7 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
         String claimsJson;
         try {
             claimsJson = String.format("{%s,%s%s}", expClaimText(Long.parseLong(lifetimeSecondsValueToUse)),
-                    claimOrHeaderJsonText("iat", time.milliseconds() / 1000.0),
+                    claimOrHeaderJsonText("iat", time.absoluteMilliseconds() / 1000.0),
                     commaPrependedStringNumberAndListClaimsJsonText());
         } catch (NumberFormatException e) {
             throw new OAuthBearerConfigException(e.getMessage());
@@ -341,6 +341,6 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     }
 
     private String expClaimText(long lifetimeSeconds) {
-        return claimOrHeaderJsonText("exp", time.milliseconds() / 1000.0 + lifetimeSeconds);
+        return claimOrHeaderJsonText("exp", time.absoluteMilliseconds() / 1000.0 + lifetimeSeconds);
     }
 }

@@ -70,7 +70,7 @@ public final class Agent {
      */
     public Agent(Platform platform, Scheduler scheduler,
                  JsonRestServer restServer, AgentRestResource resource) {
-        this.serverStartMs = scheduler.time().milliseconds();
+        this.serverStartMs = scheduler.time().absoluteMilliseconds();
         this.workerManager = new WorkerManager(platform, scheduler);
         this.restServer = restServer;
         resource.setAgent(this);

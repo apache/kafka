@@ -340,14 +340,14 @@ public final class TaskManager {
                 log.info("Failed to create a new task {} with spec {}: {}",
                     id, spec, failure);
                 task = new ManagedTask(id, spec, null, TaskStateType.DONE);
-                task.doneMs = time.milliseconds();
+                task.doneMs = time.absoluteMilliseconds();
                 task.maybeSetError(failure);
                 tasks.put(id, task);
                 return null;
             }
             task = new ManagedTask(id, spec, controller, TaskStateType.PENDING);
             tasks.put(id, task);
-            long delayMs = task.startDelayMs(time.milliseconds());
+            long delayMs = task.startDelayMs(time.absoluteMilliseconds());
             task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
             log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.",
                     id, spec, delayMs);
@@ -378,14 +378,14 @@ public final class TaskManager {
                 nodeNames = task.findNodeNames();
             } catch (Exception e) {
                 log.error("Unable to find nodes for task {}", task.id, e);
-                task.doneMs = time.milliseconds();
+                task.doneMs = time.absoluteMilliseconds();
                 task.state = TaskStateType.DONE;
                 task.maybeSetError("Unable to find nodes for task: " + e.getMessage());
                 return null;
             }
             log.info("Running task {} on node(s): {}", task.id, Utils.join(nodeNames, ", "));
             task.state = TaskStateType.RUNNING;
-            task.startedMs = time.milliseconds();
+            task.startedMs = time.absoluteMilliseconds();
             for (String workerName : nodeNames) {
                 long workerId = nextWorkerId++;
                 task.workerIds.put(workerName, workerId);
@@ -434,7 +434,7 @@ public final class TaskManager {
                 case PENDING:
                     task.cancelled = true;
                     task.clearStartFuture();
-                    task.doneMs = time.milliseconds();
+                    task.doneMs = time.absoluteMilliseconds();
                     task.state = TaskStateType.DONE;
                     log.info("Stopped pending task {}.", id);
                     break;
@@ -447,7 +447,7 @@ public final class TaskManager {
                         } else {
                             log.info("Task {} is now complete with error: {}", id, task.error);
                         }
-                        task.doneMs = time.milliseconds();
+                        task.doneMs = time.absoluteMilliseconds();
                         task.state = TaskStateType.DONE;
                     } else {
                         for (Map.Entry<String, Long> entry : activeWorkerIds.entrySet()) {
@@ -579,7 +579,7 @@ public final class TaskManager {
         }
         TreeMap<String, Long> activeWorkerIds = task.activeWorkerIds();
         if (activeWorkerIds.isEmpty()) {
-            task.doneMs = time.milliseconds();
+            task.doneMs = time.absoluteMilliseconds();
             task.state = TaskStateType.DONE;
             log.info("{}: Task {} is now complete on {} with error: {}",
                 nodeName, task.id, Utils.join(task.workerIds.keySet(), ", "),

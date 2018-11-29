@@ -76,7 +76,7 @@ public final class Coordinator {
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
                        CoordinatorRestResource resource, long firstWorkerId) {
-        this.startTimeMs = scheduler.time().milliseconds();
+        this.startTimeMs = scheduler.time().absoluteMilliseconds();
         this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);
         this.restServer = restServer;
         resource.setCoordinator(this);

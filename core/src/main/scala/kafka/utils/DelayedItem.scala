@@ -25,7 +25,7 @@ import scala.math._
 
 class DelayedItem(val delayMs: Long) extends Delayed with Logging {
 
-  private val dueMs = Time.SYSTEM.milliseconds + delayMs
+  private val dueMs = Time.SYSTEM.absoluteMilliseconds + delayMs
 
   def this(delay: Long, unit: TimeUnit) = this(unit.toMillis(delay))
 
@@ -33,7 +33,7 @@ class DelayedItem(val delayMs: Long) extends Delayed with Logging {
    * The remaining delay time
    */
   def getDelay(unit: TimeUnit): Long = {
-    unit.convert(max(dueMs - Time.SYSTEM.milliseconds, 0), TimeUnit.MILLISECONDS)
+    unit.convert(max(dueMs - Time.SYSTEM.absoluteMilliseconds, 0), TimeUnit.MILLISECONDS)
   }
 
   def compareTo(d: Delayed): Int = {

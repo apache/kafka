@@ -347,7 +347,7 @@ public class SaslClientAuthenticator implements Authenticator {
             this.saslState = saslState;
             LOG.debug("Set SASL client state to {}", saslState);
             if (saslState == SaslState.COMPLETE) {
-                reauthInfo.setAuthenticationEndAndSessionReauthenticationTimes(time.nanoseconds());
+                reauthInfo.setAuthenticationEndAndSessionReauthenticationTimes(time.relativeNanoseconds());
                 if (!reauthInfo.reauthenticating())
                     transportLayer.removeInterestOps(SelectionKey.OP_WRITE);
                 else

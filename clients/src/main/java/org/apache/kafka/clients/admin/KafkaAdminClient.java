@@ -342,7 +342,7 @@ public class KafkaAdminClient extends AdminClient {
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                     config.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
-            metadataManager.update(Cluster.bootstrap(addresses), time.milliseconds());
+            metadataManager.update(Cluster.bootstrap(addresses), time.absoluteMilliseconds());
             List<MetricsReporter> reporters = config.getConfiguredInstances(AdminClientConfig.METRIC_REPORTER_CLASSES_CONFIG,
                 MetricsReporter.class,
                 Collections.singletonMap(AdminClientConfig.CLIENT_ID_CONFIG, clientId));
@@ -441,7 +441,7 @@ public class KafkaAdminClient extends AdminClient {
     public void close(long duration, TimeUnit unit) {
         long waitTimeMs = unit.toMillis(duration);
         waitTimeMs = Math.min(TimeUnit.DAYS.toMillis(365), waitTimeMs); // Limit the timeout to a year.
-        long now = time.milliseconds();
+        long now = time.absoluteMilliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
         while (true) {
@@ -462,7 +462,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
         if (log.isDebugEnabled()) {
-            long deltaMs = Math.max(0, newHardShutdownTimeMs - time.milliseconds());
+            long deltaMs = Math.max(0, newHardShutdownTimeMs - time.absoluteMilliseconds());
             log.debug("Waiting for the I/O thread to exit. Hard shutdown in {} ms.", deltaMs);
         }
         try {
@@ -488,7 +488,7 @@ public class KafkaAdminClient extends AdminClient {
     private class MetadataUpdateNodeIdProvider implements NodeProvider {
         @Override
         public Node provide() {
-            return client.leastLoadedNode(time.milliseconds());
+            return client.leastLoadedNode(time.absoluteMilliseconds());
         }
     }
 
@@ -538,7 +538,7 @@ public class KafkaAdminClient extends AdminClient {
             if (metadataManager.isReady()) {
                 // This may return null if all nodes are busy.
                 // In that case, we will postpone node assignment.
-                return client.leastLoadedNode(time.milliseconds());
+                return client.leastLoadedNode(time.absoluteMilliseconds());
             }
             metadataManager.requestUpdate();
             return null;
@@ -1076,7 +1076,7 @@ public class KafkaAdminClient extends AdminClient {
 
         @Override
         public void run() {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
             log.trace("Thread starting");
             while (true) {
                 // Copy newCalls into pendingCalls.
@@ -1129,7 +1129,7 @@ public class KafkaAdminClient extends AdminClient {
                 unassignUnsentCalls(client::connectionFailed);
 
                 // Update the current time and handle the latest responses.
-                now = time.milliseconds();
+                now = time.absoluteMilliseconds();
                 handleResponses(now, responses);
             }
             int numTimedOut = 0;
@@ -1213,7 +1213,7 @@ public class KafkaAdminClient extends AdminClient {
                 @Override
                 public void handleResponse(AbstractResponse abstractResponse) {
                     MetadataResponse response = (MetadataResponse) abstractResponse;
-                    long now = time.milliseconds();
+                    long now = time.absoluteMilliseconds();
                     metadataManager.update(response.cluster(), now);
 
                     // Unassign all unsent requests after a metadata refresh to allow for a new
@@ -1258,7 +1258,7 @@ public class KafkaAdminClient extends AdminClient {
                 topicsMap.put(newTopic.name(), newTopic.convertToTopicDetails());
             }
         }
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         Call call = new Call("createTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
@@ -1329,7 +1329,7 @@ public class KafkaAdminClient extends AdminClient {
                 validTopicNames.add(topicName);
             }
         }
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         Call call = new Call("deleteTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
@@ -1387,7 +1387,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListTopicsResult listTopics(final ListTopicsOptions options) {
         final KafkaFutureImpl<Map<String, TopicListing>> topicListingFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("listTopics", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -1432,7 +1432,7 @@ public class KafkaAdminClient extends AdminClient {
                 topicNamesList.add(topicName);
             }
         }
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         Call call = new Call("describeTopics", calcDeadlineMs(now, options.timeoutMs()),
             new ControllerNodeProvider()) {
 
@@ -1510,7 +1510,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<String> clusterIdFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -1554,7 +1554,7 @@ public class KafkaAdminClient extends AdminClient {
                     "must not contain UNKNOWN elements."));
             return new DescribeAclsResult(future);
         }
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         final KafkaFutureImpl<Collection<AclBinding>> future = new KafkaFutureImpl<>();
         runnable.call(new Call("describeAcls", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -1584,7 +1584,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         final Map<AclBinding, KafkaFutureImpl<Void>> futures = new HashMap<>();
         final List<AclCreation> aclCreations = new ArrayList<>();
         for (AclBinding acl : acls) {
@@ -1639,7 +1639,7 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteAclsResult deleteAcls(Collection<AclBindingFilter> filters, DeleteAclsOptions options) {
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         final Map<AclBindingFilter, KafkaFutureImpl<FilterResults>> futures = new HashMap<>();
         final List<AclBindingFilter> filterList = new ArrayList<>();
         for (AclBindingFilter filter : filters) {
@@ -1712,7 +1712,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         }
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         if (!unifiedRequestResources.isEmpty()) {
             runnable.call(new Call("describeConfigs", calcDeadlineMs(now, options.timeoutMs()),
                 new LeastLoadedNodeProvider()) {
@@ -1871,7 +1871,7 @@ public class KafkaAdminClient extends AdminClient {
             futures.put(resource, new KafkaFutureImpl<>());
         }
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("alterConfigs", calcDeadlineMs(now, options.timeoutMs()), nodeProvider) {
 
             @Override
@@ -1919,7 +1919,7 @@ public class KafkaAdminClient extends AdminClient {
             replicaAssignmentByBroker.get(brokerId).put(topicPartition, logDir);
         }
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         for (Map.Entry<Integer, Map<TopicPartition, String>> entry: replicaAssignmentByBroker.entrySet()) {
             final int brokerId = entry.getKey();
             final Map<TopicPartition, String> assignment = entry.getValue();
@@ -1968,7 +1968,7 @@ public class KafkaAdminClient extends AdminClient {
             futures.put(brokerId, new KafkaFutureImpl<>());
         }
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         for (final Integer brokerId: brokers) {
             runnable.call(new Call("describeLogDirs", calcDeadlineMs(now, options.timeoutMs()),
                 new ConstantNodeIdProvider(brokerId)) {
@@ -2016,7 +2016,7 @@ public class KafkaAdminClient extends AdminClient {
             partitionsByBroker.get(replica.brokerId()).add(new TopicPartition(replica.topic(), replica.partition()));
         }
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         for (Map.Entry<Integer, Set<TopicPartition>> entry: partitionsByBroker.entrySet()) {
             final int brokerId = entry.getKey();
             final Set<TopicPartition> topicPartitions = entry.getValue();
@@ -2094,7 +2094,7 @@ public class KafkaAdminClient extends AdminClient {
         final Map<String, PartitionDetails> requestMap = newPartitions.entrySet().stream()
                 .collect(Collectors.toMap(Map.Entry::getKey, e -> partitionDetails(e.getValue())));
 
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("createPartitions", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
@@ -2150,7 +2150,7 @@ public class KafkaAdminClient extends AdminClient {
             topics.add(topicPartition.topic());
         }
 
-        final long nowMetadata = time.milliseconds();
+        final long nowMetadata = time.absoluteMilliseconds();
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
         // asking for topics metadata for getting partitions leaders
         runnable.call(new Call("topicsMetadata", deadline,
@@ -2199,7 +2199,7 @@ public class KafkaAdminClient extends AdminClient {
 
                 for (final Map.Entry<Node, Map<TopicPartition, Long>> entry: leaders.entrySet()) {
 
-                    final long nowDelete = time.milliseconds();
+                    final long nowDelete = time.absoluteMilliseconds();
 
                     final int brokerId = entry.getKey().id();
 
@@ -2245,7 +2245,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public CreateDelegationTokenResult createDelegationToken(final CreateDelegationTokenOptions options) {
         final KafkaFutureImpl<DelegationToken> delegationTokenFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("createDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -2279,7 +2279,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public RenewDelegationTokenResult renewDelegationToken(final byte[] hmac, final RenewDelegationTokenOptions options) {
         final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("renewDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -2310,7 +2310,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ExpireDelegationTokenResult expireDelegationToken(final byte[] hmac, final ExpireDelegationTokenOptions options) {
         final KafkaFutureImpl<Long>  expiryTimeFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("expireDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -2341,7 +2341,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public DescribeDelegationTokenResult describeDelegationToken(final DescribeDelegationTokenOptions options) {
         final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
 
@@ -2394,7 +2394,7 @@ public class KafkaAdminClient extends AdminClient {
 
             final String groupId = entry.getKey();
 
-            final long startFindCoordinatorMs = time.milliseconds();
+            final long startFindCoordinatorMs = time.absoluteMilliseconds();
             final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
             runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
@@ -2410,7 +2410,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
                         return;
 
-                    final long nowDescribeConsumerGroups = time.milliseconds();
+                    final long nowDescribeConsumerGroups = time.absoluteMilliseconds();
                     final int nodeId = fcResponse.node().id();
                     runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
                         @Override
@@ -2540,7 +2540,7 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
-        final long nowMetadata = time.milliseconds();
+        final long nowMetadata = time.absoluteMilliseconds();
         final long deadline = calcDeadlineMs(nowMetadata, options.timeoutMs());
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
@@ -2559,7 +2559,7 @@ public class KafkaAdminClient extends AdminClient {
                 final ListConsumerGroupsResults results = new ListConsumerGroupsResults(allNodes, all);
 
                 for (final Node node : allNodes) {
-                    final long nowList = time.milliseconds();
+                    final long nowList = time.absoluteMilliseconds();
                     runnable.call(new Call("listConsumerGroups", deadline, new ConstantNodeIdProvider(node.id())) {
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
@@ -2618,7 +2618,7 @@ public class KafkaAdminClient extends AdminClient {
     public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(final String groupId, final ListConsumerGroupOffsetsOptions options) {
         final KafkaFutureImpl<Map<TopicPartition, OffsetAndMetadata>> groupOffsetListingFuture = new KafkaFutureImpl<>();
 
-        final long startFindCoordinatorMs = time.milliseconds();
+        final long startFindCoordinatorMs = time.absoluteMilliseconds();
         final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
         runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
@@ -2634,7 +2634,7 @@ public class KafkaAdminClient extends AdminClient {
                 if (handleFindCoordinatorError(response, groupOffsetListingFuture))
                     return;
 
-                final long nowListConsumerGroupOffsets = time.milliseconds();
+                final long nowListConsumerGroupOffsets = time.absoluteMilliseconds();
 
                 final int nodeId = response.node().id();
 
@@ -2709,7 +2709,7 @@ public class KafkaAdminClient extends AdminClient {
             if (futures.get(groupId).isCompletedExceptionally())
                 continue;
 
-            final long startFindCoordinatorMs = time.milliseconds();
+            final long startFindCoordinatorMs = time.absoluteMilliseconds();
             final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
 
             runnable.call(new Call("findCoordinator", deadline, new LeastLoadedNodeProvider()) {
@@ -2725,7 +2725,7 @@ public class KafkaAdminClient extends AdminClient {
                     if (handleFindCoordinatorError(response, futures.get(groupId)))
                         return;
 
-                    final long nowDeleteConsumerGroups = time.milliseconds();
+                    final long nowDeleteConsumerGroups = time.absoluteMilliseconds();
 
                     final int nodeId = response.node().id();
 

@@ -81,7 +81,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
       val stateInfoOpt = brokerStateInfo.get(brokerId)
       stateInfoOpt match {
         case Some(stateInfo) =>
-          stateInfo.messageQueue.put(QueueItem(apiKey, request, callback, time.milliseconds()))
+          stateInfo.messageQueue.put(QueueItem(apiKey, request, callback, time.absoluteMilliseconds()))
         case None =>
           warn(s"Not sending request $request to broker $brokerId, since it is offline.")
       }
@@ -222,7 +222,7 @@ class RequestSendThread(val controllerId: Int,
     def backoff(): Unit = pause(100, TimeUnit.MILLISECONDS)
 
     val QueueItem(apiKey, requestBuilder, callback, enqueueTimeMs) = queue.take()
-    requestRateAndQueueTimeMetrics.update(time.milliseconds() - enqueueTimeMs, TimeUnit.MILLISECONDS)
+    requestRateAndQueueTimeMetrics.update(time.absoluteMilliseconds() - enqueueTimeMs, TimeUnit.MILLISECONDS)
 
     var clientResponse: ClientResponse = null
     try {
@@ -237,7 +237,7 @@ class RequestSendThread(val controllerId: Int,
           }
           else {
             val clientRequest = networkClient.newClientRequest(brokerNode.idString, requestBuilder,
-              time.milliseconds(), true)
+              time.absoluteMilliseconds(), true)
             clientResponse = NetworkClientUtils.sendAndReceive(networkClient, clientRequest, time)
             isSendSuccessful = true
           }
@@ -276,7 +276,7 @@ class RequestSendThread(val controllerId: Int,
 
   private def brokerReady(): Boolean = {
     try {
-      if (!NetworkClientUtils.isReady(networkClient, brokerNode, time.milliseconds())) {
+      if (!NetworkClientUtils.isReady(networkClient, brokerNode, time.absoluteMilliseconds())) {
         if (!NetworkClientUtils.awaitReady(networkClient, brokerNode, time, socketTimeoutMs))
           throw new SocketTimeoutException(s"Failed to connect within $socketTimeoutMs ms")
 

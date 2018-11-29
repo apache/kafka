@@ -118,7 +118,7 @@ private[timer] class TimerTaskList(taskCounter: AtomicInteger) extends Delayed {
   }
 
   def getDelay(unit: TimeUnit): Long = {
-    unit.convert(max(getExpiration - Time.SYSTEM.hiResClockMs, 0), TimeUnit.MILLISECONDS)
+    unit.convert(max(getExpiration - Time.SYSTEM.relativeMilliseconds, 0), TimeUnit.MILLISECONDS)
   }
 
   def compareTo(d: Delayed): Int = {

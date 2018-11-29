@@ -655,8 +655,8 @@ public class SaslServerAuthenticator implements Authenticator {
 
         private long calcCompletionTimesAndReturnSessionLifetimeMs() {
             long retvalSessionLifetimeMs = 0L;
-            long authenticationEndMs = time.milliseconds();
-            authenticationEndNanos = time.nanoseconds();
+            long authenticationEndMs = time.absoluteMilliseconds();
+            authenticationEndNanos = time.relativeNanoseconds();
             Long credentialExpirationMs = (Long) saslServer
                     .getNegotiatedProperty(SaslInternalConfigs.CREDENTIAL_LIFETIME_MS_SASL_NEGOTIATED_PROPERTY_KEY);
             Long connectionsMaxReauthMs = connectionsMaxReauthMsByMechanism.get(saslMechanism);

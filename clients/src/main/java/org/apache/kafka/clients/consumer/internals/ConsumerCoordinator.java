@@ -329,7 +329,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // reduce the number of rebalances caused by single topic creation by asking consumer to
                     // refresh metadata before re-joining the group as long as the refresh backoff time has
                     // passed.
-                    if (this.metadata.timeToAllowUpdate(time.milliseconds()) == 0) {
+                    if (this.metadata.timeToAllowUpdate(time.absoluteMilliseconds()) == 0) {
                         this.metadata.requestUpdate();
                     }
 

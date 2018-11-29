@@ -934,7 +934,7 @@ private[log] class Cleaner(val id: Int,
  * A simple struct for collecting stats about log cleaning
  */
 private class CleanerStats(time: Time = Time.SYSTEM) {
-  val startTime = time.milliseconds
+  val startTime = time.absoluteMilliseconds
   var mapCompleteTime = -1L
   var endTime = -1L
   var bytesRead = 0L
@@ -969,11 +969,11 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
   }
 
   def indexDone() {
-    mapCompleteTime = time.milliseconds
+    mapCompleteTime = time.absoluteMilliseconds
   }
 
   def allDone() {
-    endTime = time.milliseconds
+    endTime = time.absoluteMilliseconds
   }
 
   def elapsedSecs = (endTime - startTime)/1000.0

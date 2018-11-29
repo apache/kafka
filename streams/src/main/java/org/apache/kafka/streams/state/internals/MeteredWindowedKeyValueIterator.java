@@ -43,7 +43,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         this.sensor = sensor;
         this.metrics = metrics;
         this.serdes = serdes;
-        this.startNs = time.nanoseconds();
+        this.startNs = time.relativeNanoseconds();
         this.time = time;
     }
 
@@ -73,7 +73,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            metrics.recordLatency(sensor, startNs, time.relativeNanoseconds());
         }
     }
 

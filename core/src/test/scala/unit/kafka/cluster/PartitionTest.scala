@@ -638,7 +638,7 @@ class PartitionTest {
                     leaderLogStartOffset = leaderReplica.logStartOffset,
                     leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset,
                     followerLogStartOffset = 0,
-                    fetchTimeMs = time.milliseconds,
+                    fetchTimeMs = time.absoluteMilliseconds,
                     readSize = 10240,
                     lastStableOffset = None)
     }
@@ -677,7 +677,7 @@ class PartitionTest {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
     val builder = MemoryRecords.builder(
       buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.LOG_APPEND_TIME,
-      baseOffset, time.milliseconds, partitionLeaderEpoch)
+      baseOffset, time.absoluteMilliseconds, partitionLeaderEpoch)
     records.foreach(builder.append)
     builder.build()
   }

@@ -890,7 +890,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val offset = 97L
     val metadata = "some metadata"
     val leaderEpoch = Optional.of[Integer](15)
-    val offsetAndMetadata = OffsetAndMetadata(offset, leaderEpoch, metadata, timer.time.milliseconds())
+    val offsetAndMetadata = OffsetAndMetadata(offset, leaderEpoch, metadata, timer.time.absoluteMilliseconds())
 
     val commitOffsetResult = commitOffsets(groupId, OffsetCommitRequest.DEFAULT_MEMBER_ID,
       OffsetCommitRequest.DEFAULT_GENERATION_ID, Map(tp -> offsetAndMetadata))
@@ -1759,7 +1759,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, "", timer.time.milliseconds())
+    OffsetAndMetadata(offset, "", timer.time.absoluteMilliseconds())
   }
 
 }

@@ -377,41 +377,41 @@ abstract class WorkerTask implements Runnable {
 
         @Override
         public void onStartup(ConnectorTaskId id) {
-            taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+            taskStateTimer.changeState(State.RUNNING, time.absoluteMilliseconds());
             delegateListener.onStartup(id);
         }
 
         @Override
         public void onFailure(ConnectorTaskId id, Throwable cause) {
-            taskStateTimer.changeState(State.FAILED, time.milliseconds());
+            taskStateTimer.changeState(State.FAILED, time.absoluteMilliseconds());
             delegateListener.onFailure(id, cause);
         }
 
         @Override
         public void onPause(ConnectorTaskId id) {
-            taskStateTimer.changeState(State.PAUSED, time.milliseconds());
+            taskStateTimer.changeState(State.PAUSED, time.absoluteMilliseconds());
             delegateListener.onPause(id);
         }
 
         @Override
         public void onResume(ConnectorTaskId id) {
-            taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+            taskStateTimer.changeState(State.RUNNING, time.absoluteMilliseconds());
             delegateListener.onResume(id);
         }
 
         @Override
         public void onShutdown(ConnectorTaskId id) {
-            taskStateTimer.changeState(State.UNASSIGNED, time.milliseconds());
+            taskStateTimer.changeState(State.UNASSIGNED, time.absoluteMilliseconds());
             delegateListener.onShutdown(id);
         }
 
         public void recordState(TargetState state) {
             switch (state) {
                 case STARTED:
-                    taskStateTimer.changeState(State.RUNNING, time.milliseconds());
+                    taskStateTimer.changeState(State.RUNNING, time.absoluteMilliseconds());
                     break;
                 case PAUSED:
-                    taskStateTimer.changeState(State.PAUSED, time.milliseconds());
+                    taskStateTimer.changeState(State.PAUSED, time.absoluteMilliseconds());
                     break;
                 default:
                     break;

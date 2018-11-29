@@ -123,7 +123,7 @@ class WorkerSinkTask extends WorkerTask {
         this.origOffsets = new HashMap<>();
         this.pausedForRedelivery = false;
         this.rebalanceException = null;
-        this.nextCommit = time.milliseconds() +
+        this.nextCommit = time.absoluteMilliseconds() +
                 workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
         this.committing = false;
         this.commitSeqno = 0;
@@ -203,7 +203,7 @@ class WorkerSinkTask extends WorkerTask {
         final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
 
         try {
-            long now = time.milliseconds();
+            long now = time.absoluteMilliseconds();
 
             // Maybe commit
             if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
@@ -256,7 +256,7 @@ class WorkerSinkTask extends WorkerTask {
                     this, seqno, commitSeqno);
             sinkTaskMetricsGroup.recordOffsetCommitSkip();
         } else {
-            long durationMillis = time.milliseconds() - commitStarted;
+            long durationMillis = time.absoluteMilliseconds() - commitStarted;
             if (error != null) {
                 log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
                         this, seqno, committedOffsets, error);
@@ -561,10 +561,10 @@ class WorkerSinkTask extends WorkerTask {
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
             log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
-            long start = time.milliseconds();
+            long start = time.absoluteMilliseconds();
             task.put(new ArrayList<>(messageBatch));
             recordBatch(messageBatch.size());
-            sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
+            sinkTaskMetricsGroup.recordPut(time.absoluteMilliseconds() - start);
             currentOffsets.putAll(origOffsets);
             messageBatch.clear();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
@@ -614,7 +614,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void closePartitions() {
-        commitOffsets(time.milliseconds(), true);
+        commitOffsets(time.absoluteMilliseconds(), true);
         sinkTaskMetricsGroup.recordPartitionCount(0);
     }
 

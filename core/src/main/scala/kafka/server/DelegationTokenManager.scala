@@ -269,7 +269,7 @@ class DelegationTokenManager(val config: KafkaConfig,
       lock.synchronized {
         val tokenId = CoreUtils.generateUuidAsBase64
 
-        val issueTimeStamp = time.milliseconds
+        val issueTimeStamp = time.absoluteMilliseconds
         val maxLifeTime = if (maxLifeTimeMs <= 0) tokenMaxLifetime else Math.min(maxLifeTimeMs, tokenMaxLifetime)
         val maxLifeTimeStamp = issueTimeStamp + maxLifeTime
         val expiryTimeStamp = Math.min(maxLifeTimeStamp, issueTimeStamp + defaultTokenRenewTime)
@@ -303,7 +303,7 @@ class DelegationTokenManager(val config: KafkaConfig,
       lock.synchronized  {
         getToken(hmac) match {
           case Some(token) => {
-            val now = time.milliseconds
+            val now = time.absoluteMilliseconds
             val tokenInfo =  token.tokenInfo
 
             if (!allowedToRenew(principal, tokenInfo)) {
@@ -404,7 +404,7 @@ class DelegationTokenManager(val config: KafkaConfig,
         getToken(hmac) match {
           case Some(token) =>  {
             val tokenInfo =  token.tokenInfo
-            val now = time.milliseconds
+            val now = time.absoluteMilliseconds
 
             if (!allowedToRenew(principal, tokenInfo)) {
               expireResponseCallback(Errors.DELEGATION_TOKEN_OWNER_MISMATCH, -1)
@@ -455,7 +455,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   def expireTokens(): Unit = {
     lock.synchronized {
       for (tokenInfo <- getAllTokenInformation) {
-        val now = time.milliseconds
+        val now = time.absoluteMilliseconds
         if (tokenInfo.maxTimestamp < now || tokenInfo.expiryTimestamp < now) {
           info(s"Delegation token expired for token: ${tokenInfo.tokenId} for owner: ${tokenInfo.owner}")
           removeToken(tokenInfo.tokenId)

@@ -120,7 +120,7 @@ public class RetryWithToleranceOperator {
      */
     protected <V> V execAndRetry(Operation<V> operation) throws Exception {
         int attempt = 0;
-        long startTime = time.milliseconds();
+        long startTime = time.absoluteMilliseconds();
         long deadline = startTime + errorRetryTimeout;
         do {
             try {
@@ -204,7 +204,7 @@ public class RetryWithToleranceOperator {
 
     // Visible for testing
     boolean checkRetry(long startTime) {
-        return (time.milliseconds() - startTime) < errorRetryTimeout;
+        return (time.absoluteMilliseconds() - startTime) < errorRetryTimeout;
     }
 
     // Visible for testing
@@ -214,8 +214,8 @@ public class RetryWithToleranceOperator {
         if (delay > errorMaxDelayInMillis) {
             delay = ThreadLocalRandom.current().nextLong(errorMaxDelayInMillis);
         }
-        if (delay + time.milliseconds() > deadline) {
-            delay = deadline - time.milliseconds();
+        if (delay + time.absoluteMilliseconds() > deadline) {
+            delay = deadline - time.absoluteMilliseconds();
         }
         log.debug("Sleeping for {} millis", delay);
         time.sleep(delay);

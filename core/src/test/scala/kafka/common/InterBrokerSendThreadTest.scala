@@ -75,10 +75,10 @@ class InterBrokerSendThreadTest {
       EasyMock.same(handler.handler)))
       .andReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock.expect(networkClient.ready(node, time.absoluteMilliseconds()))
       .andReturn(true)
 
-    EasyMock.expect(networkClient.send(clientRequest, time.milliseconds()))
+    EasyMock.expect(networkClient.send(clientRequest, time.absoluteMilliseconds()))
 
     EasyMock.expect(networkClient.poll(EasyMock.anyLong(), EasyMock.anyLong()))
       .andReturn(new util.ArrayList())
@@ -112,7 +112,7 @@ class InterBrokerSendThreadTest {
       EasyMock.same(requestAndCompletionHandler.handler)))
       .andReturn(clientRequest)
 
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock.expect(networkClient.ready(node, time.absoluteMilliseconds()))
       .andReturn(false)
 
     EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))
@@ -145,20 +145,20 @@ class InterBrokerSendThreadTest {
       override def generateRequests() = List[RequestAndCompletionHandler](handler)
     }
 
-    val clientRequest = new ClientRequest("dest", request, 0, "1", time.milliseconds(), true,
+    val clientRequest = new ClientRequest("dest", request, 0, "1", time.absoluteMilliseconds(), true,
       requestTimeoutMs, handler.handler)
     time.sleep(1500)
 
     EasyMock.expect(networkClient.newClientRequest(EasyMock.eq("1"),
       EasyMock.same(handler.request),
-      EasyMock.eq(time.milliseconds()),
+      EasyMock.eq(time.absoluteMilliseconds()),
       EasyMock.eq(true),
       EasyMock.eq(requestTimeoutMs),
       EasyMock.same(handler.handler)))
       .andReturn(clientRequest)
 
     // make the node unready so the request is not cleared
-    EasyMock.expect(networkClient.ready(node, time.milliseconds()))
+    EasyMock.expect(networkClient.ready(node, time.absoluteMilliseconds()))
       .andReturn(false)
 
     EasyMock.expect(networkClient.connectionDelay(EasyMock.anyObject(), EasyMock.anyLong()))

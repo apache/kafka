@@ -334,7 +334,7 @@ public class RoundTripWorker implements TaskWorker {
             long pollInvoked = 0;
             log.debug("{}: Starting RoundTripWorker#ConsumerRunnable.", id);
             try {
-                long lastLogTimeMs = Time.SYSTEM.milliseconds();
+                long lastLogTimeMs = Time.SYSTEM.absoluteMilliseconds();
                 while (true) {
                     try {
                         pollInvoked++;
@@ -356,7 +356,7 @@ public class RoundTripWorker implements TaskWorker {
                                 }
                             }
                         }
-                        long curTimeMs = Time.SYSTEM.milliseconds();
+                        long curTimeMs = Time.SYSTEM.absoluteMilliseconds();
                         if (curTimeMs > lastLogTimeMs + LOG_INTERVAL_MS) {
                             toReceiveTracker.log();
                             lastLogTimeMs = curTimeMs;

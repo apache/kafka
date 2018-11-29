@@ -82,13 +82,13 @@ public class Microbenchmarks {
             public void run() {
                 time.sleep(1);
                 int counter = 0;
-                long start = time.nanoseconds();
+                long start = time.relativeNanoseconds();
                 for (int i = 0; i < iters; i++) {
                     synchronized (lock) {
                         counter++;
                     }
                 }
-                System.out.println("synchronized: " + ((time.nanoseconds() - start) / iters));
+                System.out.println("synchronized: " + ((time.relativeNanoseconds() - start) / iters));
                 System.out.println(counter);
                 done.set(true);
             }
@@ -119,13 +119,13 @@ public class Microbenchmarks {
             public void run() {
                 time.sleep(1);
                 int counter = 0;
-                long start = time.nanoseconds();
+                long start = time.relativeNanoseconds();
                 for (int i = 0; i < iters; i++) {
                     lock2.lock();
                     counter++;
                     lock2.unlock();
                 }
-                System.out.println("lock: " + ((time.nanoseconds() - start) / iters));
+                System.out.println("lock: " + ((time.relativeNanoseconds() - start) / iters));
                 System.out.println(counter);
                 done.set(true);
             }

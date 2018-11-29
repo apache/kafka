@@ -78,7 +78,7 @@ class ReplicaTest {
 
     assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
 
-    val expiredTimestamp = time.milliseconds() - 1000
+    val expiredTimestamp = time.absoluteMilliseconds() - 1000
     for (i <- 0 until 100) {
       val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
       log.appendAsLeader(records, leaderEpoch = 0)
@@ -92,7 +92,7 @@ class ReplicaTest {
 
   @Test
   def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
-    val expiredTimestamp = time.milliseconds() - 1000
+    val expiredTimestamp = time.absoluteMilliseconds() - 1000
     for (i <- 0 until 100) {
       val records = TestUtils.singletonRecords(value = s"test$i".getBytes, timestamp = expiredTimestamp)
       log.appendAsLeader(records, leaderEpoch = 0)

@@ -174,9 +174,9 @@ public class NioEchoServer extends Thread {
     public void waitForMetrics(String namePrefix, final double expectedValue, Set<MetricType> metricTypes)
             throws InterruptedException {
         long maxAggregateWaitMs = 15000;
-        long startMs = time.milliseconds();
+        long startMs = time.absoluteMilliseconds();
         for (MetricType metricType : metricTypes) {
-            long currentElapsedMs = time.milliseconds() - startMs;
+            long currentElapsedMs = time.absoluteMilliseconds() - startMs;
             long thisMaxWaitMs = maxAggregateWaitMs - currentElapsedMs;
             String metricName = namePrefix + metricType.metricNameSuffix();
             if (expectedValue == 0.0) {
@@ -249,7 +249,7 @@ public class NioEchoServer extends Thread {
     private static boolean maybeBeginServerReauthentication(KafkaChannel channel, NetworkReceive networkReceive, Time time) {
         try {
             if (TestUtils.apiKeyFrom(networkReceive) == ApiKeys.SASL_HANDSHAKE) {
-                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.nanoseconds());
+                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.relativeNanoseconds());
             }
         } catch (Exception e) {
             // ignore

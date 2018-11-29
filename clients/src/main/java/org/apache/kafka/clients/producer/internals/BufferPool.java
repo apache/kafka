@@ -127,13 +127,13 @@ public class BufferPool {
                     // loop over and over until we have a buffer or have reserved
                     // enough memory to allocate one
                     while (accumulated < size) {
-                        long startWaitNs = time.nanoseconds();
+                        long startWaitNs = time.relativeNanoseconds();
                         long timeNs;
                         boolean waitingTimeElapsed;
                         try {
                             waitingTimeElapsed = !moreMemory.await(remainingTimeToBlockNs, TimeUnit.NANOSECONDS);
                         } finally {
-                            long endWaitNs = time.nanoseconds();
+                            long endWaitNs = time.relativeNanoseconds();
                             timeNs = Math.max(0L, endWaitNs - startWaitNs);
                             recordWaitTime(timeNs);
                         }
@@ -187,7 +187,7 @@ public class BufferPool {
 
     // Protected for testing
     protected void recordWaitTime(long timeNs) {
-        this.waitTime.record(timeNs, time.milliseconds());
+        this.waitTime.record(timeNs, time.absoluteMilliseconds());
     }
 
     /**

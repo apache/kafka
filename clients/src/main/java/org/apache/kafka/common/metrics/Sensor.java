@@ -112,7 +112,7 @@ public final class Sensor {
         this.config = config;
         this.time = time;
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
-        this.lastRecordTime = time.milliseconds();
+        this.lastRecordTime = time.absoluteMilliseconds();
         this.recordingLevel = recordingLevel;
         this.metricLock = new Object();
         checkForest(new HashSet<Sensor>());
@@ -156,7 +156,7 @@ public final class Sensor {
      */
     public void record(double value) {
         if (shouldRecord()) {
-            record(value, time.milliseconds());
+            record(value, time.absoluteMilliseconds());
         }
     }
 
@@ -193,7 +193,7 @@ public final class Sensor {
      * Check if we have violated our quota for any metric that has a configured quota
      */
     public void checkQuotas() {
-        checkQuotas(time.milliseconds());
+        checkQuotas(time.absoluteMilliseconds());
     }
 
     public void checkQuotas(long timeMs) {
@@ -287,7 +287,7 @@ public final class Sensor {
      *        false otherwise
      */
     public boolean hasExpired() {
-        return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
+        return (time.absoluteMilliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
     synchronized List<KafkaMetric> metrics() {

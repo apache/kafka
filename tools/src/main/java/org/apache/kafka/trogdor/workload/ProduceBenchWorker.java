@@ -139,7 +139,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         public void onCompletion(RecordMetadata metadata, Exception exception) {
-            long now = Time.SYSTEM.milliseconds();
+            long now = Time.SYSTEM.absoluteMilliseconds();
             long durationMs = now - startMs;
             sendRecords.recordDuration(durationMs);
             if (exception != null) {
@@ -162,9 +162,9 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         protected synchronized void delay(long amount) throws InterruptedException {
-            long startMs = time().milliseconds();
+            long startMs = time().absoluteMilliseconds();
             producer.flush();
-            long endMs = time().milliseconds();
+            long endMs = time().absoluteMilliseconds();
             long delta = endMs - startMs;
             super.delay(amount - delta);
         }
@@ -219,7 +219,7 @@ public class ProduceBenchWorker implements TaskWorker {
 
         @Override
         public Void call() throws Exception {
-            long startTimeMs = Time.SYSTEM.milliseconds();
+            long startTimeMs = Time.SYSTEM.absoluteMilliseconds();
             try {
                 try {
                     if (enableTransactions)
@@ -252,7 +252,7 @@ public class ProduceBenchWorker implements TaskWorker {
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData = new StatusUpdater(histogram, transactionsCommitted).update();
-                long curTimeMs = Time.SYSTEM.milliseconds();
+                long curTimeMs = Time.SYSTEM.absoluteMilliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, statusData);
             }
@@ -292,7 +292,7 @@ public class ProduceBenchWorker implements TaskWorker {
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
                 partition.topic(), partition.partition(), keys.next(), values.next());
             sendFuture = producer.send(record,
-                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+                new SendRecordsCallback(this, Time.SYSTEM.absoluteMilliseconds()));
             throttle.increment();
         }
 

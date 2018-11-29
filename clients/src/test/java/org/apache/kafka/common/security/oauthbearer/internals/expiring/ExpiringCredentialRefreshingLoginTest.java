@@ -129,7 +129,7 @@ public class ExpiringCredentialRefreshingLoginTest {
 
         private ExpiringCredential internalNewExpiringCredential() {
             return new ExpiringCredential() {
-                private final long createMs = time.milliseconds();
+                private final long createMs = time.absoluteMilliseconds();
                 private final long expireTimeMs = createMs + lifetimeMillis;
 
                 @Override
@@ -264,7 +264,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 when(mockLoginContext.getSubject()).thenReturn(subject);
 
                 MockTime mockTime = new MockTime();
-                long startMs = mockTime.milliseconds();
+                long startMs = mockTime.absoluteMilliseconds();
                 /*
                  * Identify the lifetime of each expiring credential
                  */
@@ -315,7 +315,7 @@ public class ExpiringCredentialRefreshingLoginTest {
                 testExpiringCredentialRefreshingLogin.login();
                 assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
                 testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
-                assertEquals(expectedFinalMs, mockTime.milliseconds());
+                assertEquals(expectedFinalMs, mockTime.absoluteMilliseconds());
                 for (int i = 0; i < numExpectedRefreshes; ++i) {
                     KafkaFutureImpl<Long> waiter = waiters.get(i);
                     assertTrue(waiter.isDone());
@@ -352,7 +352,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
-        long startMs = mockTime.milliseconds();
+        long startMs = mockTime.absoluteMilliseconds();
         /*
          * Identify the lifetime of each expiring credential
          */
@@ -405,7 +405,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
-        assertEquals(expectedFinalMs, mockTime.milliseconds());
+        assertEquals(expectedFinalMs, mockTime.absoluteMilliseconds());
         for (int i = 0; i < numExpectedRefreshes; ++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
@@ -430,7 +430,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
-        long startMs = mockTime.milliseconds();
+        long startMs = mockTime.absoluteMilliseconds();
         /*
          * Identify the lifetime of each expiring credential
          */
@@ -485,7 +485,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
-        assertEquals(expectedFinalMs, mockTime.milliseconds());
+        assertEquals(expectedFinalMs, mockTime.absoluteMilliseconds());
         for (int i = 0; i < numExpectedRefreshes; ++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());
@@ -511,7 +511,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
-        long startMs = mockTime.milliseconds();
+        long startMs = mockTime.absoluteMilliseconds();
         /*
          * Identify the lifetime of each expiring credential
          */
@@ -565,7 +565,7 @@ public class ExpiringCredentialRefreshingLoginTest {
         testExpiringCredentialRefreshingLogin.login();
         assertTrue(testLoginContextFactory.refresherThreadStartedFuture().isDone());
         testLoginContextFactory.refresherThreadDoneFuture().get(1L, TimeUnit.SECONDS);
-        assertEquals(expectedFinalMs, mockTime.milliseconds());
+        assertEquals(expectedFinalMs, mockTime.absoluteMilliseconds());
         for (int i = 0; i < numExpectedRefreshes; ++i) {
             KafkaFutureImpl<Long> waiter = waiters.get(i);
             assertTrue(waiter.isDone());

@@ -43,7 +43,7 @@ public class RecordsUtil {
         // maintain the batch along with the decompressed records to avoid the need to decompress again
         List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
         int totalSizeEstimate = 0;
-        long startNanos = time.nanoseconds();
+        long startNanos = time.relativeNanoseconds();
 
         for (RecordBatch batch : batches) {
             if (toMagic < RecordBatch.MAGIC_VALUE_V2) {
@@ -94,7 +94,7 @@ public class RecordsUtil {
 
         buffer.flip();
         RecordConversionStats stats = new RecordConversionStats(temporaryMemoryBytes, numRecordsConverted,
-                time.nanoseconds() - startNanos);
+                time.relativeNanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }
 

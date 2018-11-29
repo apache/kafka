@@ -190,7 +190,7 @@ public class PurgeRepartitionTopicIntegrationTest {
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(),
                         IntegerSerializer.class,
                         IntegerSerializer.class),
-                time.milliseconds());
+                time.absoluteMilliseconds());
 
         kafkaStreams.start();
 

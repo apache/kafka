@@ -253,7 +253,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         // Process any external requests
-        final long now = time.milliseconds();
+        final long now = time.absoluteMilliseconds();
         long nextRequestTimeoutMs = Long.MAX_VALUE;
         while (true) {
             final DistributedHerderRequest next = peekWithoutException();
@@ -806,7 +806,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // We only mark this as resolved once we've actually started work, which allows us to correctly track whether
         // what work is currently active and running. If we bail early, the main tick loop + having requested rejoin
         // guarantees we'll attempt to rejoin before executing this method again.
-        herderMetrics.rebalanceSucceeded(time.milliseconds());
+        herderMetrics.rebalanceSucceeded(time.absoluteMilliseconds());
         rebalanceResolved = true;
         return true;
     }
@@ -1061,7 +1061,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     DistributedHerderRequest addRequest(long delayMs, Callable<Void> action, Callback<Void> callback) {
-        DistributedHerderRequest req = new DistributedHerderRequest(time.milliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
+        DistributedHerderRequest req = new DistributedHerderRequest(time.absoluteMilliseconds() + delayMs, requestSeqNum.incrementAndGet(), action, callback);
         requests.add(req);
         if (peekWithoutException() == req)
             member.wakeup();
@@ -1218,7 +1218,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
                 rebalanceResolved = false;
-                herderMetrics.rebalanceStarted(time.milliseconds());
+                herderMetrics.rebalanceStarted(time.absoluteMilliseconds());
             }
 
             // Delete the statuses of all connectors removed prior to the start of this rebalance. This has to

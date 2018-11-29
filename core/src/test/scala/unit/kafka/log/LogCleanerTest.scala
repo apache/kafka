@@ -1436,20 +1436,20 @@ class LogCleanerTest extends JUnitSuite {
     // Append a message with a large timestamp.
     log.appendAsLeader(TestUtils.singletonRecords(value = "0".getBytes,
                                           key = "0".getBytes,
-                                          timestamp = time.milliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
+                                          timestamp = time.absoluteMilliseconds() + logConfig.deleteRetentionMs + 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 0, log.activeSegment.baseOffset))
     // Append a tombstone with a small timestamp and roll out a new log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = null,
                                           key = "0".getBytes,
-                                          timestamp = time.milliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
+                                          timestamp = time.absoluteMilliseconds() - logConfig.deleteRetentionMs - 10000), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 1, log.activeSegment.baseOffset))
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
     // Append a message and roll out another log segment.
     log.appendAsLeader(TestUtils.singletonRecords(value = "1".getBytes,
                                           key = "1".getBytes,
-                                          timestamp = time.milliseconds()), leaderEpoch = 0)
+                                          timestamp = time.absoluteMilliseconds()), leaderEpoch = 0)
     log.roll()
     cleaner.clean(LogToClean(new TopicPartition("test", 0), log, 2, log.activeSegment.baseOffset))
     assertEquals("The tombstone should be retained.", 1, log.logSegments.head.log.batches.iterator.next().lastOffset)
@@ -1532,7 +1532,7 @@ class LogCleanerTest extends JUnitSuite {
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
         val keyBytes = key.toString.getBytes
-        new SimpleRecord(time.milliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
+        new SimpleRecord(time.absoluteMilliseconds(), keyBytes, keyBytes) // the value doesn't matter since we validate offsets
       }
       val records = if (isTransactional)
         MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
@@ -1543,10 +1543,10 @@ class LogCleanerTest extends JUnitSuite {
     }
   }
 
-  private def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def commitMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.absoluteMilliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.COMMIT, 0L, timestamp)
 
-  private def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.milliseconds()): MemoryRecords =
+  private def abortMarker(producerId: Long, producerEpoch: Short, timestamp: Long = time.absoluteMilliseconds()): MemoryRecords =
     endTxnMarker(producerId, producerEpoch, ControlRecordType.ABORT, 0L, timestamp)
 
   private def endTxnMarker(producerId: Long, producerEpoch: Short, controlRecordType: ControlRecordType,

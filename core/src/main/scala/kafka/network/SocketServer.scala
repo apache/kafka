@@ -707,7 +707,7 @@ private[kafka] class Processor(val id: Int,
   }
 
   private def nowNanosSupplier = new Supplier[java.lang.Long] {
-    override def get(): java.lang.Long = time.nanoseconds()
+    override def get(): java.lang.Long = time.relativeNanoseconds()
   }
 
   private def poll() {
@@ -729,7 +729,7 @@ private[kafka] class Processor(val id: Int,
             if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
               trace(s"Begin re-authentication: $channel")
             else {
-              val nowNanos = time.nanoseconds()
+              val nowNanos = time.relativeNanoseconds()
               if (channel.serverAuthenticationSessionExpired(nowNanos)) {
                 channel.disconnect()
                 debug(s"Disconnected expired channel: $channel : $header")
@@ -879,7 +879,7 @@ private[kafka] class Processor(val id: Int,
   private def dequeueResponse(): RequestChannel.Response = {
     val response = responseQueue.poll()
     if (response != null)
-      response.request.responseDequeueTimeNanos = Time.SYSTEM.nanoseconds
+      response.request.responseDequeueTimeNanos = Time.SYSTEM.relativeNanoseconds
     response
   }
 

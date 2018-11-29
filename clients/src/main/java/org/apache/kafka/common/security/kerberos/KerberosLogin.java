@@ -371,11 +371,11 @@ public class KerberosLogin extends AbstractLogin {
     }
 
     private long currentElapsedTime() {
-        return time.hiResClockMs();
+        return time.relativeMilliseconds();
     }
 
     private long currentWallTime() {
-        return time.milliseconds();
+        return time.absoluteMilliseconds();
     }
 
 }

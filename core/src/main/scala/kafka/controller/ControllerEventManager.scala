@@ -82,7 +82,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
         case controllerEvent =>
           _state = controllerEvent.state
 
-          eventQueueTimeHist.update(time.milliseconds() - controllerEvent.enqueueTimeMs)
+          eventQueueTimeHist.update(time.absoluteMilliseconds() - controllerEvent.enqueueTimeMs)
 
           try {
             rateAndTimeMetrics(state).time {

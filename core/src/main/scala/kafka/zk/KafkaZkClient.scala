@@ -101,7 +101,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
   def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
-    val timestamp = time.milliseconds()
+    val timestamp = time.absoluteMilliseconds()
 
     // Read /controller_epoch to get the current controller epoch and zkVersion,
     // create /controller_epoch with initial value if not exists

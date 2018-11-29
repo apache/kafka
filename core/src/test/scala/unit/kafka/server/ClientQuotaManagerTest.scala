@@ -71,7 +71,7 @@ class ClientQuotaManagerTest {
 
   private def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, value: Double): Int = {
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
-    quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null), clientId, value, time.milliseconds())
+    quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null), clientId, value, time.absoluteMilliseconds())
   }
 
   private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,

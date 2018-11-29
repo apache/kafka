@@ -416,7 +416,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             } else {
                 this.metadata = new Metadata(retryBackoffMs, config.getLong(ProducerConfig.METADATA_MAX_AGE_CONFIG),
                     true, true, clusterResourceListeners);
-                this.metadata.bootstrap(addresses, time.milliseconds());
+                this.metadata.bootstrap(addresses, time.absoluteMilliseconds());
             }
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
@@ -893,7 +893,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             int serializedSize = AbstractRecords.estimateSizeInBytesUpperBound(apiVersions.maxUsableProduceMagic(),
                     compressionType, serializedKey, serializedValue, headers);
             ensureValidRecordSize(serializedSize);
-            long timestamp = record.timestamp() == null ? time.milliseconds() : record.timestamp();
+            long timestamp = record.timestamp() == null ? time.absoluteMilliseconds() : record.timestamp();
             log.trace("Sending record {} with callback {} to topic {} partition {}", record, callback, record.topic(), partition);
             // producer callback will make sure to call both 'callback' and interceptor callback
             Callback interceptCallback = new InterceptorCallback<>(callback, this.interceptors, tp);
@@ -967,7 +967,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (partitionsCount != null && (partition == null || partition < partitionsCount))
             return new ClusterAndWaitTime(cluster, 0);
 
-        long begin = time.milliseconds();
+        long begin = time.absoluteMilliseconds();
         long remainingWaitMs = maxWaitMs;
         long elapsed;
         // Issue metadata requests until we have metadata for the topic or maxWaitTimeMs is exceeded.
@@ -986,7 +986,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             }
             cluster = metadata.fetch();
-            elapsed = time.milliseconds() - begin;
+            elapsed = time.absoluteMilliseconds() - begin;
             if (elapsed >= maxWaitMs)
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             if (cluster.unauthorizedTopics().contains(topic))

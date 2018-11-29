@@ -168,9 +168,9 @@ class ZooKeeperClient(connectString: String,
     // Safe to cast as we always create a response of the right type
     def callback(response: AsyncResponse): Unit = processResponse(response.asInstanceOf[Req#Response])
 
-    def responseMetadata(sendTimeMs: Long) = new ResponseMetadata(sendTimeMs, receivedTimeMs = time.hiResClockMs())
+    def responseMetadata(sendTimeMs: Long) = new ResponseMetadata(sendTimeMs, receivedTimeMs = time.relativeMilliseconds())
 
-    val sendTimeMs = time.hiResClockMs()
+    val sendTimeMs = time.relativeMilliseconds()
     request match {
       case ExistsRequest(path, ctx, _) =>
         zooKeeper.exists(path, shouldWatch(request), new StatCallback {

@@ -115,7 +115,7 @@ public class Timer {
      * the update will be ignored.
      */
     public void update() {
-        update(time.milliseconds());
+        update(time.absoluteMilliseconds());
     }
 
     /**

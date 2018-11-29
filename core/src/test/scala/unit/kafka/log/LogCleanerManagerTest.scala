@@ -322,10 +322,10 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while(log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.absoluteMilliseconds()), leaderEpoch = 0)
 
     val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.absoluteMilliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
@@ -342,20 +342,20 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    val t0 = time.milliseconds
+    val t0 = time.absoluteMilliseconds
     while(log.numberOfSegments < 4)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
 
     val activeSegAtT0 = log.activeSegment
 
     time.sleep(compactionLag + 1)
-    val t1 = time.milliseconds
+    val t1 = time.absoluteMilliseconds
 
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1), leaderEpoch = 0)
 
     val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.absoluteMilliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with the second block of log entries.", activeSegAtT0.baseOffset, cleanableOffsets._2)
   }
@@ -373,14 +373,14 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
-    val t0 = time.milliseconds
+    val t0 = time.absoluteMilliseconds
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
 
     time.sleep(compactionLag + 1)
 
     val lastClean = Map(topicPartition -> 0L)
-    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.milliseconds)
+    val cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, time.absoluteMilliseconds)
     assertEquals("The first cleanable offset starts at the beginning of the log.", 0L, cleanableOffsets._1)
     assertEquals("The first uncleanable offset begins with active segment.", log.activeSegment.baseOffset, cleanableOffsets._2)
   }
@@ -398,28 +398,28 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     val producerEpoch = 0.toShort
     val sequence = 0
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
-      new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
-      new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
+      new SimpleRecord(time.absoluteMilliseconds(), "1".getBytes, "a".getBytes),
+      new SimpleRecord(time.absoluteMilliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 2,
-      new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
+      new SimpleRecord(time.absoluteMilliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
     log.roll()
     log.onHighWatermarkIncremented(3L)
 
     time.sleep(compactionLag + 1)
     // although the compaction lag has been exceeded, the undecided data should not be cleaned
     var cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+      Map(topicPartition -> 0L), time.absoluteMilliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(0L, cleanableOffsets._2)
 
-    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
+    log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.absoluteMilliseconds(), producerId, producerEpoch,
       new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0, isFromClient = false)
     log.roll()
     log.onHighWatermarkIncremented(4L)
 
     // the first segment should now become cleanable immediately
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+      Map(topicPartition -> 0L), time.absoluteMilliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(3L, cleanableOffsets._2)
 
@@ -427,7 +427,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
 
     // the second segment becomes cleanable after the compaction lag
     cleanableOffsets = LogCleanerManager.cleanableOffsets(log, topicPartition,
-      Map(topicPartition -> 0L), time.milliseconds())
+      Map(topicPartition -> 0L), time.absoluteMilliseconds())
     assertEquals(0L, cleanableOffsets._1)
     assertEquals(4L, cleanableOffsets._2)
   }
@@ -438,7 +438,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
     logProps.put(LogConfig.SegmentBytesProp, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     while(log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.absoluteMilliseconds()), leaderEpoch = 0)
 
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
@@ -517,7 +517,7 @@ class LogCleanerManagerTest extends JUnitSuite with Logging {
       val segment = LogUtils.createSegment(startOffset, logDir)
       var lastTimestamp = 0L
       val records = (startOffset until endOffset).map { offset =>
-        val currentTimestamp = time.milliseconds()
+        val currentTimestamp = time.absoluteMilliseconds()
         if (offset == endOffset - 1)
           lastTimestamp = currentTimestamp
 

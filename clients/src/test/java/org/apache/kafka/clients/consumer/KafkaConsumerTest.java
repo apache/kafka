@@ -423,7 +423,7 @@ public class KafkaConsumerTest {
 
         // respond to the outstanding fetch so that we have data available on the next poll
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
-        client.poll(0, time.milliseconds());
+        client.poll(0, time.absoluteMilliseconds());
 
         client.prepareResponseFrom(fetchResponse(tp0, 5, 0), node);
         AtomicBoolean heartbeatReceived = prepareHeartbeatResponse(client, coordinator);
@@ -688,7 +688,7 @@ public class KafkaConsumerTest {
 
         // respond to the outstanding fetch so that we have data available on the next poll
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
-        client.poll(0, time.milliseconds());
+        client.poll(0, time.absoluteMilliseconds());
 
         time.sleep(autoCommitIntervalMs);
 
@@ -789,7 +789,7 @@ public class KafkaConsumerTest {
 
         // respond to the outstanding fetch so that we have data available on the next poll
         client.respondFrom(fetchResponse(tp0, 0, 5), node);
-        client.poll(0, time.milliseconds());
+        client.poll(0, time.absoluteMilliseconds());
 
         consumer.wakeup();
 
@@ -925,7 +925,7 @@ public class KafkaConsumerTest {
         fetches1.put(tp0, new FetchInfo(0, 1));
         fetches1.put(t2p0, new FetchInfo(0, 10));
         client.respondFrom(fetchResponse(fetches1), node);
-        client.poll(0, time.milliseconds());
+        client.poll(0, time.absoluteMilliseconds());
 
         ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
 
@@ -933,7 +933,7 @@ public class KafkaConsumerTest {
         fetches1.put(tp0, new FetchInfo(1, 0));
         fetches1.put(t2p0, new FetchInfo(10, 0));
         client.respondFrom(fetchResponse(fetches1), node);
-        client.poll(0, time.milliseconds());
+        client.poll(0, time.absoluteMilliseconds());
 
         // verify that the fetch occurred as expected
         assertEquals(11, records.count());

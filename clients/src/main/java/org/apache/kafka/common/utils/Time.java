@@ -29,15 +29,25 @@ public interface Time {
     Time SYSTEM = new SystemTime();
 
     /**
-     * Returns the current time in milliseconds.
+     * Returns the number of milliseconds since midnight UTC on 1/1/1970.
+     *
+     * This value is likely less precise than relative time.
      */
-    long milliseconds();
+    long absoluteMilliseconds();
 
     /**
-     * Returns the value returned by `nanoseconds` converted into milliseconds.
+     * Returns the current value of the running JVM's high-resolution time source, rounded down to milliseconds.
+     *
+     * <p>This method can only be used to measure elapsed time and is
+     * not related to any other notion of system or wall-clock time.
+     * The value returned represents nanoseconds since some fixed but
+     * arbitrary <i>origin</i> time (perhaps in the future, so values
+     * may be negative).  The same origin is used by all invocations of
+     * this method in an instance of a Java virtual machine; other
+     * virtual machine instances are likely to use a different origin.
      */
-    default long hiResClockMs() {
-        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
+    default long relativeMilliseconds() {
+        return TimeUnit.NANOSECONDS.toMillis(relativeNanoseconds());
     }
 
     /**
@@ -51,7 +61,7 @@ public interface Time {
      * this method in an instance of a Java virtual machine; other
      * virtual machine instances are likely to use a different origin.
      */
-    long nanoseconds();
+    long relativeNanoseconds();
 
     /**
      * Sleep for the given number of milliseconds

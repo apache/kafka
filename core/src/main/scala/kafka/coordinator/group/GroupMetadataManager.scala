@@ -200,7 +200,7 @@ class GroupMetadataManager(brokerId: Int,
       case Some(magicValue) =>
         // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
         val timestampType = TimestampType.CREATE_TIME
-        val timestamp = time.milliseconds()
+        val timestamp = time.absoluteMilliseconds()
         val key = GroupMetadataManager.groupMetadataKey(group.groupId)
         val value = GroupMetadataManager.groupMetadataValue(group, groupAssignment, interBrokerProtocolVersion)
 
@@ -320,7 +320,7 @@ class GroupMetadataManager(brokerId: Int,
         case Some(magicValue) =>
           // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
           val timestampType = TimestampType.CREATE_TIME
-          val timestamp = time.milliseconds()
+          val timestamp = time.absoluteMilliseconds()
 
           val records = filteredOffsetMetadata.map { case (topicPartition, offsetAndMetadata) =>
             val key = GroupMetadataManager.offsetCommitKey(group.groupId, topicPartition)
@@ -333,7 +333,7 @@ class GroupMetadataManager(brokerId: Int,
           if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
             throw Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT.exception("Attempting to make a transaction offset commit with an invalid magic: " + magicValue)
 
-          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.milliseconds(),
+          val builder = MemoryRecords.builder(buffer, magicValue, compressionType, timestampType, 0L, time.absoluteMilliseconds(),
             producerId, producerEpoch, 0, isTxnOffsetCommit, RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
           records.foreach(builder.append)
@@ -496,9 +496,9 @@ class GroupMetadataManager(brokerId: Int,
 
   private[group] def loadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
     try {
-      val startMs = time.milliseconds()
+      val startMs = time.absoluteMilliseconds()
       doLoadGroupsAndOffsets(topicPartition, onGroupLoaded)
-      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.milliseconds() - startMs} milliseconds.")
+      info(s"Finished loading offsets and group metadata from $topicPartition in ${time.absoluteMilliseconds() - startMs} milliseconds.")
     } catch {
       case t: Throwable => error(s"Error loading offsets from $topicPartition", t)
     } finally {
@@ -720,11 +720,11 @@ class GroupMetadataManager(brokerId: Int,
 
   // visible for testing
   private[group] def cleanupGroupMetadata(): Unit = {
-    val currentTimestamp = time.milliseconds()
+    val currentTimestamp = time.absoluteMilliseconds()
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
     })
-    info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
+    info(s"Removed $numOffsetsRemoved expired offsets in ${time.absoluteMilliseconds() - currentTimestamp} milliseconds.")
   }
 
   /**
@@ -754,7 +754,7 @@ class GroupMetadataManager(brokerId: Int,
       case Some(magicValue) =>
         // We always use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
         val timestampType = TimestampType.CREATE_TIME
-        val timestamp = time.milliseconds()
+        val timestamp = time.absoluteMilliseconds()
 
           replicaManager.nonOfflinePartition(appendPartition).foreach { partition =>
             val tombstones = ListBuffer.empty[SimpleRecord]
