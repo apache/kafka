@@ -7,8 +7,6 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.*;
 
 /**
- * 冷备模式: 单个 consumer 消费所有 partition 数据, 宕机后重新分配到另外一个 consumer 消费所有数据
- * 
  * All partitions will be assigned to one consumer, while others consumer are failover.
  *
  * For example, suppose there are two consumers C0 and C1, two topics t0 and t1, and each topic has 3 partitions,
@@ -21,6 +19,7 @@ import java.util.*;
  * When C0 crashes , the result of the assignment will be
  * C1: [t0p0, t0p1, t0p2, t1p0, t1p1, and t1p2]
  *
+ * 冷备模式: 单个 consumer 消费所有 partition 数据, 宕机后重新分配到另外一个 consumer 消费所有数据
  * User: FengHong
  * Date: 2018/11/2811:02
  */
