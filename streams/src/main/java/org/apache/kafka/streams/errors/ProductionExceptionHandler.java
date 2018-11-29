@@ -24,6 +24,7 @@ import org.apache.kafka.common.Configurable;
  * Kafka should be handled.
  */
 public interface ProductionExceptionHandler extends Configurable {
+
     /**
      * Inspect a record that we attempted to produce, and the exception that resulted
      * from attempting to produce it and determine whether or not to continue processing.
@@ -33,6 +34,18 @@ public interface ProductionExceptionHandler extends Configurable {
      */
     ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                               final Exception exception);
+
+    /**
+     * Inspecting a record that we attempted to serialize, and the exception that resulted
+     * from attempting to serialize it and determine whether or not continue processing.
+     *
+     * @param record        the record that failed to serialize
+     * @param exception     the exception that occurred during serialization
+     */
+    default ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
+                                                                            final Exception exception) {
+        return ProductionExceptionHandlerResponse.FAIL;
+    }
 
     enum ProductionExceptionHandlerResponse {
         /* continue processing */

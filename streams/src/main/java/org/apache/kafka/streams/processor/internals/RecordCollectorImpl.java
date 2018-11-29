@@ -158,8 +158,46 @@ public class RecordCollectorImpl implements RecordCollector {
                             final Serializer<K> keySerializer,
                             final Serializer<V> valueSerializer) {
         checkForException();
-        final byte[] keyBytes = keySerializer.serialize(topic, headers, key);
-        final byte[] valBytes = valueSerializer.serialize(topic, headers, value);
+        byte[] keyBytes = null;
+        final byte[] valBytes;
+        try {
+            keyBytes = keySerializer.serialize(topic, headers, key);
+            valBytes = valueSerializer.serialize(topic, headers, value);
+        } catch (final Exception serializationException) {
+            final ProducerRecord<K, V> record = new ProducerRecord<>(topic, partition, timestamp, key, value, headers);
+            final boolean isKey = keyBytes == null;
+            final ProductionExceptionHandler.ProductionExceptionHandlerResponse response;
+            try {
+                response = productionExceptionHandler.handleSerializationException(record, serializationException);
+            } catch (final Exception fatalUserException) {
+                log.error("Serialization error callback failed after serialization error for record {}", record,
+                        fatalUserException);
+                recordSendError(key, value, timestamp, topic, serializationException);
+                return;
+            }
+
+            if (response == ProductionExceptionHandler.ProductionExceptionHandlerResponse.CONTINUE) {
+                log.warn("Error serializing the record {} (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
+                                "The exception handler chose to CONTINUE processing in spite of this error.",
+                        isKey ? "key" : "value", key, value, timestamp, topic, partition, serializationException);
+                skippedRecordsSensor.record();
+            } else if (serializationException instanceof ClassCastException) {
+                final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
+                final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+                throw new StreamsException(
+                        String.format("A serializer (key: %s / value: %s) is not compatible to the actual key or value type " +
+                                        "(key type: %s / value type: %s). Change the default Serdes in StreamConfig or " +
+                                        "provide correct Serdes via method parameters.",
+                                keySerializer.getClass().getName(),
+                                valueSerializer.getClass().getName(),
+                                keyClass,
+                                valueClass),
+                        serializationException);
+            } else {
+                recordSendError(key, value, timestamp, topic, serializationException);
+            }
+            return;
+        }
 
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 

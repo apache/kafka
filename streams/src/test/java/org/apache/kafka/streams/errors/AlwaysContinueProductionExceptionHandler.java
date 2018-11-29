@@ -24,6 +24,13 @@ import org.apache.kafka.clients.producer.ProducerRecord;
  * happens while attempting to produce result records.
  */
 public class AlwaysContinueProductionExceptionHandler implements ProductionExceptionHandler {
+
+    @Override
+    public ProductionExceptionHandlerResponse handleSerializationException(final ProducerRecord record,
+                                                                           final Exception exception) {
+        return ProductionExceptionHandlerResponse.CONTINUE;
+    }
+
     @Override
     public ProductionExceptionHandlerResponse handle(final ProducerRecord<byte[], byte[]> record,
                                                      final Exception exception) {
