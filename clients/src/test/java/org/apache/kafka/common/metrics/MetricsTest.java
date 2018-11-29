@@ -203,6 +203,18 @@ public class MetricsTest {
     }
 
     @Test
+    public void testRemoveChildSensor() {
+        final Metrics metrics = new Metrics();
+
+        final Sensor parent = metrics.sensor("parent");
+        metrics.sensor("child", parent);
+
+        metrics.removeSensor("child");
+
+        assertTrue(metrics.childrenSensors().toString(), metrics.childrenSensors().get(parent).isEmpty());
+    }
+
+    @Test
     public void testRemoveSensor() {
         int size = metrics.metrics().size();
         Sensor parent1 = metrics.sensor("test.parent1");
