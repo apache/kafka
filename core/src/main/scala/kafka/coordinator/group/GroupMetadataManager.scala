@@ -282,6 +282,7 @@ class GroupMetadataManager(brokerId: Int,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,
       isFromClient = false,
+      assignOffsets = true,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback)
@@ -781,7 +782,7 @@ class GroupMetadataManager(brokerId: Int,
                 // do not need to require acks since even if the tombstone is lost,
                 // it will be appended again in the next purge cycle
                 val records = MemoryRecords.withRecords(magicValue, 0L, compressionType, timestampType, tombstones: _*)
-                partition.appendRecordsToLeader(records, isFromClient = false, requiredAcks = 0)
+                partition.appendRecordsToLeader(records, isFromClient = false, assignOffsets = true, requiredAcks = 0)
 
                 offsetsRemoved += removedOffsets.size
                 trace(s"Successfully appended ${tombstones.size} tombstones to $appendPartition for expired/deleted " +

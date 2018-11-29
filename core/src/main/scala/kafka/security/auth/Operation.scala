@@ -67,6 +67,10 @@ case object IdempotentWrite extends Operation {
   val name = "IdempotentWrite"
   val toJava = AclOperation.IDEMPOTENT_WRITE
 }
+case object ReplicatorWrite extends Operation {
+  val name = "ReplicatorWrite"
+  val toJava = AclOperation.REPLICATOR_WRITE
+}
 case object All extends Operation {
   val name = "All"
   val toJava = AclOperation.ALL
@@ -82,5 +86,5 @@ object Operation {
   def fromJava(operation: AclOperation): Operation = fromString(operation.toString.replaceAll("_", ""))
 
   def values: Seq[Operation] = List(Read, Write, Create, Delete, Alter, Describe, ClusterAction, AlterConfigs,
-     DescribeConfigs, IdempotentWrite, All)
+     DescribeConfigs, IdempotentWrite, ReplicatorWrite, All)
 }

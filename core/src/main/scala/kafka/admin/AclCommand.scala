@@ -44,7 +44,7 @@ object AclCommand extends Logging {
   val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
     JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
     JResourceType.GROUP -> Set(Read, Describe, Delete, All),
-    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
+    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, ReplicatorWrite, All),
     JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
     JResourceType.DELEGATION_TOKEN -> Set(Describe, All)
   )

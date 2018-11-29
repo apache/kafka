@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.List;
+import java.util.OptionalLong;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -65,6 +66,7 @@ public final class ProducerBatch {
     private final List<Thunk> thunks = new ArrayList<>();
     private final MemoryRecordsBuilder recordsBuilder;
     private final AtomicInteger attempts = new AtomicInteger(0);
+    private final boolean useOffsets;
     private final boolean isSplitBatch;
     private final AtomicReference<FinalState> finalState = new AtomicReference<>(null);
 
@@ -76,11 +78,11 @@ public final class ProducerBatch {
     private boolean retry;
     private boolean reopened;
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs) {
-        this(tp, recordsBuilder, createdMs, false);
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean useOffsets) {
+        this(tp, recordsBuilder, createdMs, useOffsets, false);
     }
 
-    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean isSplitBatch) {
+    public ProducerBatch(TopicPartition tp, MemoryRecordsBuilder recordsBuilder, long createdMs, boolean useOffsets, boolean isSplitBatch) {
         this.createdMs = createdMs;
         this.lastAttemptMs = createdMs;
         this.recordsBuilder = recordsBuilder;
@@ -88,22 +90,33 @@ public final class ProducerBatch {
         this.lastAppendTime = createdMs;
         this.produceFuture = new ProduceRequestResult(topicPartition);
         this.retry = false;
+        this.useOffsets = useOffsets;
         this.isSplitBatch = isSplitBatch;
         float compressionRatioEstimation = CompressionRatioEstimator.estimation(topicPartition.topic(),
                                                                                 recordsBuilder.compressionType());
         recordsBuilder.setEstimatedCompressionRatio(compressionRatioEstimation);
     }
 
+    //EDO @Deprecated
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+        return tryAppend(timestamp, key, value, headers, OptionalLong.empty(), callback, now);
+    }
+
     /**
      * Append the record to the current record set and return the relative offset within that record set
      *
-     * @return The RecordSend corresponding to this record or null if there isn't sufficient room.
+     * @return The RecordSend corresponding to this record or null if a new batch needs to be created because of not enough room in
+     * current batch or record offset is not sequential.
      */
-    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, Callback callback, long now) {
+    public FutureRecordMetadata tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, OptionalLong offset, Callback callback, long now) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return null;
+        } else if (offset.isPresent() && offset.getAsLong() > recordsBuilder.nextSequentialOffset()) {
+            return null;
         } else {
-            Long checksum = this.recordsBuilder.append(timestamp, key, value, headers);
+            Long checksum = offset.isPresent() ? 
+                    this.recordsBuilder.appendWithOffset(offset.getAsLong(), timestamp, key, value, headers) :
+                    this.recordsBuilder.append(timestamp, key, value, headers);
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
             this.lastAppendTime = now;
@@ -124,12 +137,16 @@ public final class ProducerBatch {
      * This method is only used by {@link #split(int)} when splitting a large batch to smaller ones.
      * @return true if the record has been successfully appended, false otherwise.
      */
-    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, Thunk thunk) {
+    private boolean tryAppendForSplit(long timestamp, ByteBuffer key, ByteBuffer value, Header[] headers, long offset, Thunk thunk) {
         if (!recordsBuilder.hasRoomFor(timestamp, key, value, headers)) {
             return false;
         } else {
             // No need to get the CRC.
-            this.recordsBuilder.append(timestamp, key, value, headers);
+            if (this.useOffsets) {
+                this.recordsBuilder.appendWithOffset(offset, timestamp, key, value, headers);
+            } else {
+                this.recordsBuilder.append(timestamp, key, value, headers);
+            }
             this.maxRecordSize = Math.max(this.maxRecordSize, AbstractRecords.estimateSizeInBytesUpperBound(magic(),
                     recordsBuilder.compressionType(), key, value, headers));
             FutureRecordMetadata future = new FutureRecordMetadata(this.produceFuture, this.recordCount,
@@ -193,6 +210,7 @@ public final class ProducerBatch {
         }
 
         if (this.finalState.compareAndSet(null, tryFinalState)) {
+            // do not set offset to individual RecordMetadata when using producer offsets
             completeFutureAndFireCallbacks(baseOffset, logAppendTime, exception);
             return true;
         }
@@ -265,10 +283,10 @@ public final class ProducerBatch {
                 batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
 
             // A newly created batch can always host the first message.
-            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk)) {
+            if (!batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), record.offset(), thunk)) {
                 batches.add(batch);
                 batch = createBatchOffAccumulatorForRecord(record, splitBatchSize);
-                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), thunk);
+                batch.tryAppendForSplit(record.timestamp(), record.key(), record.value(), record.headers(), record.offset(), thunk);
             }
         }
 
@@ -299,8 +317,8 @@ public final class ProducerBatch {
         // for the newly created batch. This will be set when the batch is dequeued for sending (which is consistent
         // with how normal batches are handled).
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic(), recordsBuilder.compressionType(),
-                TimestampType.CREATE_TIME, 0L);
-        return new ProducerBatch(topicPartition, builder, this.createdMs, true);
+                TimestampType.CREATE_TIME, useOffsets ? record.offset() : 0L);
+        return new ProducerBatch(topicPartition, builder, this.createdMs, useOffsets, true);
     }
 
     public boolean isCompressed() {

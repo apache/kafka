@@ -40,7 +40,7 @@ import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, ProducerRecordWithOffset}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.RetriableException
@@ -381,6 +381,26 @@ object TestUtils extends Logging {
     records.foreach(builder.append)
     builder.build()
   }
+ 
+  def recordsWithOffset(records: Iterable[SimpleRecord],
+              offsets: Iterable[Long],
+              magicValue: Byte = RecordBatch.CURRENT_MAGIC_VALUE,
+              codec: CompressionType = CompressionType.NONE,
+              producerId: Long = RecordBatch.NO_PRODUCER_ID,
+              producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
+              sequence: Int = RecordBatch.NO_SEQUENCE,
+              baseOffset: Long = 0L,
+              partitionLeaderEpoch: Int = RecordBatch.NO_PARTITION_LEADER_EPOCH): MemoryRecords = {
+    val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, baseOffset,
+      System.currentTimeMillis, producerId, producerEpoch, sequence, false, partitionLeaderEpoch)
+    val recIter = records.iterator
+    for (offset <- offsets) {
+      val record = recIter.next
+      builder.appendWithOffset(offset, record)
+    }
+    builder.build()
+  }
 
   /**
    * Generate an array of random bytes
@@ -536,6 +556,7 @@ object TestUtils extends Logging {
                            batchSize: Int = 16384,
                            compressionType: String = "none",
                            requestTimeoutMs: Int = 20 * 1000,
+                           enableIdempotent: Boolean = false,
                            securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
                            trustStoreFile: Option[File] = None,
                            saslProperties: Option[Properties] = None,
@@ -552,6 +573,7 @@ object TestUtils extends Logging {
     producerProps.put(ProducerConfig.LINGER_MS_CONFIG, lingerMs.toString)
     producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, batchSize.toString)
     producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType)
+    producerProps.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, String.valueOf(enableIdempotent))
     producerProps ++= producerSecurityConfigs(securityProtocol, trustStoreFile, saslProperties)
     new KafkaProducer[K, V](producerProps, keySerializer, valueSerializer)
   }
@@ -1323,14 +1345,17 @@ object TestUtils extends Logging {
   }
 
   def producerRecordWithExpectedTransactionStatus(topic: String, key: Array[Byte], value: Array[Byte],
-                                                  willBeCommitted: Boolean) : ProducerRecord[Array[Byte], Array[Byte]] = {
+                                                  willBeCommitted: Boolean, producerOffset: Long = -1L) : ProducerRecord[Array[Byte], Array[Byte]] = {
     val header = new Header {override def key() = transactionStatusKey
       override def value() = if (willBeCommitted)
         committedValue
       else
         abortedValue
     }
-    new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, Collections.singleton(header))
+    if (producerOffset != -1L)
+      new ProducerRecordWithOffset[Array[Byte], Array[Byte]](topic, null, null, key, value, Collections.singleton(header), producerOffset)
+    else
+      new ProducerRecord[Array[Byte], Array[Byte]](topic, null, key, value, Collections.singleton(header))
   }
 
   def producerRecordWithExpectedTransactionStatus(topic: String, key: String, value: String,

@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.requests._
@@ -84,6 +84,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   val clusterAlterAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Alter)))
   val clusterDescribeAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Describe)))
   val clusterIdempotentWriteAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, IdempotentWrite)))
+  val clusterReplicatorWriteAcl = Map(Resource.ClusterResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, ReplicatorWrite)))
   val topicCreateAcl = Map(createTopicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Create)))
   val topicReadAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Read)))
   val topicWriteAcl = Map(topicResource -> Set(new Acl(userPrincipal, Allow, Acl.WildCardHost, Write)))
@@ -255,6 +256,14 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def createProduceRequest = {
     requests.ProduceRequest.Builder.forCurrentMagic(1, 5000,
       collection.mutable.Map(tp -> MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava).
+      build()
+  }
+
+  private def createProduceWithOffsetsRequest = {
+    requests.ProduceRequest.Builder.forMagic(RecordBatch.CURRENT_MAGIC_VALUE, 1, 5000,
+      collection.mutable.Map(tp ->
+        MemoryRecords.withRecords(1000L, CompressionType.NONE, new SimpleRecord("test".getBytes))).asJava,
+      null, true).
       build()
   }
 
@@ -511,6 +520,24 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
 
     val clusterAcls = clusterAcl(Resource.ClusterResource)
+    addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
+  }
+
+  @Test
+  def testProduceWithOffsetsRequest() {
+    val key = ApiKeys.PRODUCE
+    val request = createProduceWithOffsetsRequest
+
+    removeAllAcls()
+    val resources = Set(topicResource.resourceType, Resource.ClusterResource.resourceType)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+    val writeAcls = topicWriteAcl(topicResource)
+    addAndVerifyAcls(writeAcls, topicResource)
+    sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = false)
+
+    val clusterAcls = clusterReplicatorWriteAcl(Resource.ClusterResource)
     addAndVerifyAcls(clusterAcls, Resource.ClusterResource)
     sendRequestAndVerifyResponseError(key, request, resources, isAuthorized = true)
   }

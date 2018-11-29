@@ -389,6 +389,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       return
     }
 
+    // The producer must have ReplicatorWrite on ClusterResource in order to impose offsets.
+    if (produceRequest.useOffsets && !authorize(request.session, ReplicatorWrite, Resource.ClusterResource)) {
+      sendErrorResponseMaybeThrottle(request, new ClusterAuthorizationException("Produce with offsets requires ReplicatorWrite authorization"))
+      return
+    }
+
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
@@ -477,6 +483,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
         isFromClient = true,
+        assignOffsets = !produceRequest.useOffsets,
         entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback)
@@ -1683,6 +1690,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           requiredAcks = -1,
           internalTopicsAllowed = true,
           isFromClient = false,
+          assignOffsets = true,
           entriesPerPartition = controlRecords,
           responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
       }

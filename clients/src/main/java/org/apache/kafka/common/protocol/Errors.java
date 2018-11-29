@@ -31,6 +31,7 @@ import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
 import org.apache.kafka.common.errors.FencedLeaderEpochException;
+import org.apache.kafka.common.errors.InvalidProduceOffsetException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -287,7 +288,9 @@ public enum Errors {
     UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
             UnknownLeaderEpochException::new),
     UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
-            UnsupportedCompressionTypeException::new);
+            UnsupportedCompressionTypeException::new),
+    INVALID_PRODUCE_OFFSET(77, "The supplied producer offset is smaller than the log end offset of given partition.",
+            InvalidProduceOffsetException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

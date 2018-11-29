@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
+import java.nio.charset.StandardCharsets
 import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -109,6 +110,23 @@ class TransactionsTest extends KafkaServerTestHarness {
     val expectedValues = List("1", "2", "3", "4").toSet
     allRecords.foreach { record =>
       assertTrue(expectedValues.contains(TestUtils.recordValueAsString(record)))
+    }
+  }
+
+  @Test
+  def testProducerOffsetsCannotBeUSedWithTransactions() = {
+    val producer = transactionalProducers.head
+
+    producer.initTransactions()
+    producer.beginTransaction()
+    val r = TestUtils.producerRecordWithExpectedTransactionStatus(
+      topic1, "key".getBytes(StandardCharsets.UTF_8), "2".getBytes(StandardCharsets.UTF_8),
+      willBeCommitted = false, 1001)
+    try {
+      producer.send(r)
+      fail("IllegalArgumentException expected")
+    } catch {
+      case _: IllegalArgumentException => // expected
     }
   }
 

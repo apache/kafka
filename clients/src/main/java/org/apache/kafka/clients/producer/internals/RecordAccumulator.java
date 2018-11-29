@@ -25,8 +25,10 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.producer.Callback;
@@ -85,6 +87,7 @@ public final class RecordAccumulator {
     private int drainIndex;
     private final TransactionManager transactionManager;
     private long nextBatchExpiryTimeMs = Long.MAX_VALUE; // the earliest time (absolute) a batch will expire.
+    private final AtomicReference<Boolean> useOffsets = new AtomicReference<>(null);
 
     /**
      * Create a new record accumulator
@@ -166,6 +169,17 @@ public final class RecordAccumulator {
         bufferExhaustedRecordSensor.add(new Meter(rateMetricName, totalMetricName));
     }
 
+    //EDO @Deprecated
+    public RecordAppendResult append(TopicPartition tp,
+            long timestamp,
+            byte[] key,
+            byte[] value,
+            Header[] headers,
+            Callback callback,
+            long maxTimeToBlock) throws InterruptedException {
+        return append(tp, timestamp, key, value, headers, OptionalLong.empty(), callback, maxTimeToBlock);
+    }
+
     /**
      * Add a record to the accumulator, return the append result
      * <p>
@@ -185,8 +199,13 @@ public final class RecordAccumulator {
                                      byte[] key,
                                      byte[] value,
                                      Header[] headers,
+                                     OptionalLong offset,
                                      Callback callback,
                                      long maxTimeToBlock) throws InterruptedException {
+
+        useOffsets.compareAndSet(null, offset.isPresent());
+        validateUseOffset(offset);
+
         // We keep track of the number of appending thread to make sure we do not miss batches in
         // abortIncompleteBatches().
         appendsInProgress.incrementAndGet();
@@ -198,7 +217,7 @@ public final class RecordAccumulator {
             synchronized (dq) {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, offset, callback, dq);
                 if (appendResult != null)
                     return appendResult;
             }
@@ -213,15 +232,15 @@ public final class RecordAccumulator {
                 if (closed)
                     throw new KafkaException("Producer closed while send in progress");
 
-                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, callback, dq);
+                RecordAppendResult appendResult = tryAppend(timestamp, key, value, headers, offset, callback, dq);
                 if (appendResult != null) {
                     // Somebody else found us a batch, return the one we waited for! Hopefully this doesn't happen often...
                     return appendResult;
                 }
 
-                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic);
-                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds());
-                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, callback, time.milliseconds()));
+                MemoryRecordsBuilder recordsBuilder = recordsBuilder(buffer, maxUsableMagic, offset);
+                ProducerBatch batch = new ProducerBatch(tp, recordsBuilder, time.milliseconds(), offset.isPresent());
+                FutureRecordMetadata future = Utils.notNull(batch.tryAppend(timestamp, key, value, headers, offset, callback, time.milliseconds()));
 
                 dq.addLast(batch);
                 incomplete.add(batch);
@@ -237,12 +256,21 @@ public final class RecordAccumulator {
         }
     }
 
-    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic) {
+    private void validateUseOffset(OptionalLong offset) {
+        if (!useOffsets.get().equals(offset.isPresent())) {
+            throw new IllegalArgumentException("Cannot mix sending records with and without offsets");
+        }
+        if (useOffsets.get() && transactionManager != null && transactionManager.isTransactional()) {
+            throw new IllegalArgumentException("Transactional producer does not support sending records with offsets");
+        }
+    }
+
+    private MemoryRecordsBuilder recordsBuilder(ByteBuffer buffer, byte maxUsableMagic, OptionalLong offset) {
         if (transactionManager != null && maxUsableMagic < RecordBatch.MAGIC_VALUE_V2) {
             throw new UnsupportedVersionException("Attempting to use idempotence with a broker which does not " +
                 "support the required message format (v2). The broker must be version 0.11 or later.");
         }
-        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, 0L);
+        return MemoryRecords.builder(buffer, maxUsableMagic, compression, TimestampType.CREATE_TIME, offset.orElse(0L));
     }
 
     /**
@@ -253,11 +281,11 @@ public final class RecordAccumulator {
      *  and memory records built) in one of the following cases (whichever comes first): right before send,
      *  if it is expired, or when the producer is closed.
      */
-    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers,
+    private RecordAppendResult tryAppend(long timestamp, byte[] key, byte[] value, Header[] headers, OptionalLong offset,
                                          Callback callback, Deque<ProducerBatch> deque) {
         ProducerBatch last = deque.peekLast();
         if (last != null) {
-            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, callback, time.milliseconds());
+            FutureRecordMetadata future = last.tryAppend(timestamp, key, value, headers, offset, callback, time.milliseconds());
             if (future == null)
                 last.closeForRecordAppends();
             else
@@ -808,5 +836,10 @@ public final class RecordAccumulator {
             this.nextReadyCheckDelayMs = nextReadyCheckDelayMs;
             this.unknownLeaderTopics = unknownLeaderTopics;
         }
+    }
+
+    boolean useOffsets() {
+        Boolean useOffsets = this.useOffsets.get();
+        return useOffsets != null ? useOffsets : false;
     }
 }

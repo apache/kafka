@@ -219,7 +219,7 @@ public class SenderTest {
         // start off support produce request v3
         apiVersions.update("0", NodeApiVersions.create());
 
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, RecordBatch.NO_TIMESTAMP, 100);
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(Errors.NONE, offset, RecordBatch.NO_TIMESTAMP, 100, 200);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = new HashMap<>();
         partResp.put(tp0, resp);
         partResp.put(tp1, resp);
@@ -1545,10 +1545,13 @@ public class SenderTest {
 
     }
     void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset) {
-        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1L);
+        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, -1L, -1L);
+    }
+    void sendIdempotentProducerResponse(int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
+        sendIdempotentProducerResponse(expectedSequence, tp, responseError, responseOffset, logStartOffset, -1L);
     }
 
-    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset) {
+    void sendIdempotentProducerResponse(final int expectedSequence, TopicPartition tp, Errors responseError, long responseOffset, long logStartOffset, long logEndOffset) {
         client.respond(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -1562,7 +1565,7 @@ public class SenderTest {
                 assertEquals(expectedSequence, firstBatch.baseSequence());
                 return true;
             }
-        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset));
+        }, produceResponse(tp, responseOffset, responseError, 0, logStartOffset, logEndOffset));
     }
 
     @Test
@@ -1876,7 +1879,7 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
-            responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+            responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L, 0L));
             client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 0, txnManager.isTransactional()),
                     new ProduceResponse(responseMap));
 
@@ -1893,7 +1896,7 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue("Client ready status should be true", client.isReady(node, 0L));
 
-            responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L));
+            responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L, 0L));
             client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 1, txnManager.isTransactional()),
                     new ProduceResponse(responseMap));
 
@@ -1948,7 +1951,7 @@ public class SenderTest {
         assertEquals("Expect one in-flight batch in accumulator", 1, sender.inFlightBatches(tp0).size());
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+        responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L, 0L));
         client.respond(new ProduceResponse(responseMap));
 
         time.sleep(deliveryTimeoutMs);
@@ -1983,7 +1986,7 @@ public class SenderTest {
 
         time.sleep(deliveryTimeoutMs / 2); // expire the first batch only
 
-        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0, 0L));
+        client.respond(produceResponse(tp0, 0L, Errors.NONE, 0, 0L, 0L));
         sender.run(time.milliseconds());  // receive response (offset=0)
         assertEquals(0, client.inFlightRequestCount());
         assertEquals(0, sender.inFlightBatches(tp0).size());
@@ -2007,7 +2010,7 @@ public class SenderTest {
         time.sleep(deliverTimeoutMs);
 
         Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-        responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+        responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L, 0L));
         client.respond(produceResponse(tp0, -1, Errors.NOT_LEADER_FOR_PARTITION, -1)); // return a retriable error
 
         sender.run(time.milliseconds());  // expire the batch
@@ -2129,8 +2132,7 @@ public class SenderTest {
                     return false;
 
                 MutableRecordBatch batch = batches.get(0);
-                return batch.baseOffset() == 0L &&
-                        batch.baseSequence() == sequence &&
+                return batch.baseSequence() == sequence &&
                         batch.producerId() == producerIdAndEpoch.producerId &&
                         batch.producerEpoch() == producerIdAndEpoch.epoch &&
                         batch.isTransactional() == isTransactional;
@@ -2147,8 +2149,8 @@ public class SenderTest {
         }
     }
 
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset) {
-        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
+    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, long logStartOffset, long logEndOffset) {
+        ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset, logEndOffset);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = Collections.singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
@@ -2157,14 +2159,14 @@ public class SenderTest {
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResponses = new LinkedHashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndError> entry : responses.entrySet()) {
             ProduceResponse.PartitionResponse response = new ProduceResponse.PartitionResponse(entry.getValue().error,
-                    entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1);
+                    entry.getValue().offset, RecordBatch.NO_TIMESTAMP, -1, -1);
             partResponses.put(entry.getKey(), response);
         }
         return new ProduceResponse(partResponses);
 
     }
     private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs) {
-        return produceResponse(tp, offset, error, throttleTimeMs, -1L);
+        return produceResponse(tp, offset, error, throttleTimeMs, -1L, -1L);
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager) {

@@ -174,6 +174,7 @@ object AbstractCoordinatorConcurrencyTest {
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
                                isFromClient: Boolean,
+                               assignOffsets: Boolean,
                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                delayedProduceLock: Option[Lock] = None,
@@ -183,7 +184,7 @@ object AbstractCoordinatorConcurrencyTest {
         return
       val produceMetadata = ProduceMetadata(1, entriesPerPartition.map {
         case (tp, _) =>
-          (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+          (tp, ProducePartitionStatus(0L, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L, -1L)))
       })
       val delayedProduce = new DelayedProduce(5, produceMetadata, this, responseCallback, delayedProduceLock) {
         // Complete produce requests after a few attempts to trigger delayed produce from different threads
@@ -197,7 +198,7 @@ object AbstractCoordinatorConcurrencyTest {
         override def onComplete() {
           responseCallback(entriesPerPartition.map {
             case (tp, _) =>
-              (tp, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L))
+              (tp, new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L, -1L))
           })
         }
       }
