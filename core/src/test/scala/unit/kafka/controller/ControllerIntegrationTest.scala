@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.KafkaMetric
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.collection.Seq
 import scala.util.Try
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
@@ -233,7 +234,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val reassignment = Map(tp -> Seq(otherBrokerId))
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     zkClient.createPartitionReassignment(reassignment)
-    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 3,
+    waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() =>  zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
       "failed to get updated partition assignment on topic znode after partition reassignment")
@@ -257,7 +258,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers(otherBrokerId).awaitShutdown()
     val controller = getController()
     zkClient.setOrCreatePartitionReassignment(reassignment, controller.kafkaController.controllerContext.epochZkVersion)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state during partition reassignment with offline replica")
     TestUtils.waitUntilTrue(() => zkClient.reassignPartitionsInProgress(),
       "partition reassignment path should remain while reassignment in progress")
@@ -297,8 +298,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     zkClient.createPartitionReassignment(reassignment)
-    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state during partition reassignment with offline replica")
+    println("Triggering server startup")
     servers(otherBrokerId).startup()
     println("Triggered server startup")
     serverStarted = true
@@ -620,22 +622,29 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                                     message: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
-      println(tp)
+      printZkPartitionData(tp)
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
     }, message)
+  }
+
+  private def printZkPartitionData(topicPartition: TopicPartition) = {
+    print(s"ZK Data; TopicPartition: $topicPartition,")
+    print(s" Replicas: [${zkClient.getReplicasForPartition(topicPartition).mkString(",")}],")
+    print(s" ISR: [${zkClient.getInSyncReplicasForPartition(topicPartition).getOrElse(Seq()).mkString(",")}],")
+    println(s" Leader: ${zkClient.getLeaderForPartition(topicPartition).getOrElse(-1)}")
   }
 
   private def isExpectedPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        controllerEpoch: Int,
                                        leader: Int,
                                        leaderEpoch: Int) = {
-    if (serverStarted){
+//    if (serverStarted){
       println ("***************************************************************")
       println(leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch)
       println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leader} == $leader")
       println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch} == $leaderEpoch")
-    }
+//    }
     leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
