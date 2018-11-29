@@ -255,10 +255,10 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
   /**
    * Verifies that the path has the appropriate secure ACL.
    */
-  private def verify(path: String): Boolean = {
+  private def verify(path: String): Unit = {
     val sensitive = ZkData.sensitivePath(path)
     val list = zkClient.getAcl(path)
-    list.forall(TestUtils.isAclSecure(_, sensitive))
+    assertTrue(list.forall(TestUtils.isAclSecure(_, sensitive)))
   }
 
   /**
