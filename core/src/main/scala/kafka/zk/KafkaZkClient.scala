@@ -1881,6 +1881,7 @@ object KafkaZkClient {
                 }
                 SetDataResponse(resultCode, setDataOp.path, ctx, stat, responseMetadata)
             }
+          case null => throw KeeperException.create(resultCode)
           case _ => throw new IllegalStateException(s"Cannot unwrap $response because the first zookeeper op is not check op in original MultiRequest")
         }
       case _ => throw new IllegalStateException(s"Cannot unwrap $response because it is not a MultiResponse")
