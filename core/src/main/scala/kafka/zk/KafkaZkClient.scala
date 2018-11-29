@@ -95,7 +95,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   def registerBroker(brokerInfo: BrokerInfo): Long = {
     val path = brokerInfo.path
     val stat = checkedEphemeralCreate(path, brokerInfo.toJsonBytes)
-    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid: ${stat.getCzxid}")
+    info(s"Registered broker ${brokerInfo.broker.id} at path $path with addresses: ${brokerInfo.broker.endPoints}, czxid (broker epoch): ${stat.getCzxid}")
     stat.getCzxid
   }
 
@@ -396,7 +396,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return sequence of brokers in the cluster.
    */
   def getAllBrokersInCluster: Seq[Broker] = {
-    val brokerIds = getSortedBrokerList()
+    val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
@@ -415,7 +415,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * @return sequence of brokers in the cluster.
     */
   def getAllBrokerAndEpochsInCluster: Seq[(Broker, Long)] = {
-    val brokerIds = getSortedBrokerList()
+    val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
     getDataResponses.flatMap { getDataResponse =>
@@ -447,8 +447,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Gets the list of sorted broker Ids
    */
-  def getSortedBrokerList(): Seq[Int] =
-    getChildren(BrokerIdsZNode.path).map(_.toInt).sorted
+  def getSortedBrokerList: Seq[Int] = getChildren(BrokerIdsZNode.path).map(_.toInt).sorted
 
   /**
    * Gets all topics in the cluster.
@@ -1715,14 +1714,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           CreateOp(path, null, defaultAcls(path), CreateMode.EPHEMERAL),
           SetDataOp(path, data, 0)))
       )
-      response.resultCode match {
+      val stat = response.resultCode match {
         case code@ Code.OK =>
-          // At this point, we need to save a reference to the zookeeper session id.
-          // This is done here since the Zookeeper session id may not be available at the Object creation time.
-          // This is assuming the 'retryRequestUntilConnected' method got connected and a valid session id is present.
-          // This code is part of the workaround done in the KAFKA-7165, once ZOOKEEPER-2985 is complete, this code
-          // must be deleted.
-          updateCurrentZKSessionId(zooKeeperClient.sessionId)
           val setDataResult = response.zkOpResults(1).rawOpResult.asInstanceOf[SetDataResult]
           setDataResult.getStat
         case Code.NODEEXISTS =>
@@ -1731,6 +1724,15 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           error(s"Error while creating ephemeral at $path with return code: $code")
           throw KeeperException.create(code)
       }
+
+      // At this point, we need to save a reference to the zookeeper session id.
+      // This is done here since the Zookeeper session id may not be available at the Object creation time.
+      // This is assuming the 'retryRequestUntilConnected' method got connected and a valid session id is present.
+      // This code is part of the workaround done in the KAFKA-7165, once ZOOKEEPER-2985 is complete, this code
+      // must be deleted.
+      updateCurrentZKSessionId(zooKeeperClient.sessionId)
+
+      stat
     }
 
     // This method is part of the work around done in the KAFKA-7165, once ZOOKEEPER-2985 is complete, this code must
@@ -1752,7 +1754,6 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
       var codeAfterReCreate = codeAfterDelete
       debug(s"Result of znode ephemeral deletion at $path is: $codeAfterDelete")
       if (codeAfterDelete == Code.OK || codeAfterDelete == Code.NONODE) {
-        debug(s"Result of znode ephemeral re-creation at $path is: $codeAfterReCreate")
         create()
       } else {
         throw KeeperException.create(codeAfterReCreate)

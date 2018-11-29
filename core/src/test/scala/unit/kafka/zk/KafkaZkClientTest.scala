@@ -728,7 +728,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createTopLevelPaths()
 
     assertEquals(Seq.empty,zkClient.getAllBrokersInCluster)
-    assertEquals(Seq.empty, zkClient.getSortedBrokerList())
+    assertEquals(Seq.empty, zkClient.getSortedBrokerList)
     assertEquals(None, zkClient.getBroker(0))
 
     val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
@@ -737,7 +737,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)
 
-    assertEquals(Seq(0, 1), zkClient.getSortedBrokerList())
+    assertEquals(Seq(0, 1), zkClient.getSortedBrokerList)
     assertEquals(
       Seq(brokerInfo0.broker, brokerInfo1.broker),
       zkClient.getAllBrokersInCluster

@@ -408,7 +408,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     val controller = getController().kafkaController
     val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
-    var staleBrokerEpochDetected = false
+    @volatile var staleBrokerEpochDetected = false
     controller.controlledShutdown(otherBroker.config.brokerId, otherBroker.kafkaController.brokerEpoch - 1, {
       case scala.util.Failure(exception) if exception.isInstanceOf[StaleBrokerEpochException] => staleBrokerEpochDetected = true
       case _ =>
@@ -492,7 +492,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
 
     otherBroker.shutdown()
-    otherBroker.awaitShutdown()
     otherBroker.startup()
 
     assertEquals(0, otherBroker.replicaManager.partitionCount.value())

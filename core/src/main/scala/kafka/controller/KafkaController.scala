@@ -196,6 +196,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * that is in that partition's ISR.
    *
    * @param id Id of the broker to shutdown.
+   * @param brokerEpoch The broker epoch in the controlled shutdown request
    * @return The number of partitions that the broker still leads.
    */
   def controlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit): Unit = {
@@ -640,11 +641,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def initializeControllerContext() {
     // update controller cache with delete topic information
-    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
-    controllerContext.liveBrokers = curBrokerAndEpochs.map(_._1).toSet
-    // update broker epoch cache for all live brokers
-    curBrokerAndEpochs.foreach(e => controllerContext.brokerEpochs(e._1.id) = e._2)
-    info(s"Initialized broker epochs cache: ${controllerContext.brokerEpochs}")
+    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster.toMap
+    controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
+    info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
     registerPartitionModificationsHandlers(controllerContext.allTopics.toSeq)
     zkClient.getReplicaAssignmentForTopics(controllerContext.allTopics.toSet).foreach {
@@ -1037,11 +1036,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // broker epoch in the request is unknown if the controller hasn't been upgraded to use KIP-380
       // so we will keep the previous behavior and don't reject the request
       if (brokerEpoch != AbstractControlRequest.UNKNOWN_BROKER_EPOCH) {
-        val cachedBrokerEpoch = controllerContext.brokerEpochs(id)
+        val cachedBrokerEpoch = controllerContext.liveBrokerIdAndEpochs(id)
         if (brokerEpoch < cachedBrokerEpoch) {
           val stateBrokerEpochErrorMessage = "Received controlled shutdown request from an old broker epoch " +
             s"$brokerEpoch for broker $id. Current broker epoch is $cachedBrokerEpoch."
-          warn(stateBrokerEpochErrorMessage)
+          info(stateBrokerEpochErrorMessage)
           throw new StaleBrokerEpochException(stateBrokerEpochErrorMessage)
         }
       }
@@ -1262,18 +1261,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
-      val curBrokerIdAndEpochMap = curBrokerAndEpochs.map(e => (e._1.id, e._2)).toMap
-      val curBrokers = curBrokerAndEpochs.map(_._1).toSet
-      val curBrokerIds = curBrokerIdAndEpochMap.keySet
+      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster.toMap
+      val curBrokerIdAndEpochs = curBrokerAndEpochs map { case (broker, epoch) => (broker.id, epoch) }
+      val curBrokerIds = curBrokerIdAndEpochs.keySet
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
       val newBrokerIds = curBrokerIds -- liveOrShuttingDownBrokerIds
       val deadBrokerIds = liveOrShuttingDownBrokerIds -- curBrokerIds
       val bouncedBrokerIds = (curBrokerIds & liveOrShuttingDownBrokerIds)
-        .filter(brokerId => curBrokerIdAndEpochMap(brokerId) > controllerContext.brokerEpochs(brokerId))
-      val newBrokers = curBrokers.filter(broker => newBrokerIds(broker.id))
-      val bouncedBrokers = curBrokers.filter(broker => bouncedBrokerIds(broker.id))
-      controllerContext.liveBrokers = curBrokers
+        .filter(brokerId => curBrokerIdAndEpochs(brokerId) > controllerContext.liveBrokerIdAndEpochs(brokerId))
+      val newBrokerAndEpochs = curBrokerAndEpochs.filterKeys(broker => newBrokerIds.contains(broker.id))
+      val bouncedBrokerAndEpochs = curBrokerAndEpochs.filterKeys(broker => bouncedBrokerIds.contains(broker.id))
       val newBrokerIdsSorted = newBrokerIds.toSeq.sorted
       val deadBrokerIdsSorted = deadBrokerIds.toSeq.sorted
       val liveBrokerIdsSorted = curBrokerIds.toSeq.sorted
@@ -1283,26 +1280,27 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         s"bounced brokers: ${bouncedBrokerIdsSorted.mkString(",")}, " +
         s"all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
 
-      newBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+      newBrokerAndEpochs.keySet.foreach(controllerContext.controllerChannelManager.addBroker)
       bouncedBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-      bouncedBrokers.foreach(controllerContext.controllerChannelManager.addBroker)
+      bouncedBrokerAndEpochs.keySet.foreach(controllerContext.controllerChannelManager.addBroker)
       deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
       if (newBrokerIds.nonEmpty) {
-        newBrokerIds.foreach(brokerId => controllerContext.brokerEpochs(brokerId) = curBrokerIdAndEpochMap(brokerId))
+        controllerContext.addLiveBrokersAndEpochs(newBrokerAndEpochs)
         onBrokerStartup(newBrokerIdsSorted)
       }
       if (bouncedBrokerIds.nonEmpty) {
+        controllerContext.removeLiveBrokersAndEpochs(bouncedBrokerIds)
         onBrokerFailure(bouncedBrokerIdsSorted)
-        bouncedBrokerIds.foreach(brokerId => controllerContext.brokerEpochs(brokerId) = curBrokerIdAndEpochMap(brokerId))
+        controllerContext.addLiveBrokersAndEpochs(bouncedBrokerAndEpochs)
         onBrokerStartup(bouncedBrokerIdsSorted)
       }
       if (deadBrokerIds.nonEmpty) {
+        controllerContext.removeLiveBrokersAndEpochs(deadBrokerIds)
         onBrokerFailure(deadBrokerIdsSorted)
-        deadBrokerIds.foreach(controllerContext.brokerEpochs.remove)
       }
 
       if (newBrokerIds.nonEmpty || deadBrokerIds.nonEmpty || bouncedBrokerIds.nonEmpty) {
-        info(s"Updated broker epochs cache: ${controllerContext.brokerEpochs}")
+        info(s"Updated broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
       }
     }
   }
@@ -1317,8 +1315,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       if (newMetadata.nonEmpty && oldMetadata.nonEmpty && newMetadata.map(_.endPoints) != oldMetadata.map(_.endPoints)) {
         info(s"Updated broker: ${newMetadata.get}")
 
-        val curBrokers = controllerContext.liveBrokers -- oldMetadata ++ newMetadata
-        controllerContext.liveBrokers = curBrokers // Update broker metadata
+        controllerContext.updateBrokerMetadata(oldMetadata, newMetadata)
         onBrokerUpdate(brokerId)
       }
     }

@@ -214,7 +214,8 @@ class ZooKeeperClient(connectString: String,
         zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, new MultiCallback {
           override def processResult(rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]): Unit = {
             callback(MultiResponse(Code.get(rc), path, Option(ctx),
-              zkOps.zip(opResults.asScala).map(e => ZkOpResult(e._1, e._2)), responseMetadata(sendTimeMs)))
+              zkOps.zip(opResults.asScala) map { case (zkOp, result) => ZkOpResult(zkOp, result) },
+              responseMetadata(sendTimeMs)))
           }
         }, ctx.orNull)
     }

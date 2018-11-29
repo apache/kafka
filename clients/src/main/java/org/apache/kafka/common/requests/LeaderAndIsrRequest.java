@@ -114,8 +114,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             LIVE_LEADERS_V0);
 
     // LEADER_AND_ISR_REQUEST_V2 added a broker_epoch Field. This field specifies the generation of the broker across
-    // bounces. It also introduce LEADER_AND_ISR_REQUEST_TOPIC_STATE_V0 to normalize LEADER_AND_ISR_REQUEST_PARTITION_STATE_V1
-    // to make the request more memory efficient
+    // bounces. It also normalize partitions under each topic.
     private static final Schema LEADER_AND_ISR_REQUEST_V2 = new Schema(
             CONTROLLER_ID,
             CONTROLLER_EPOCH,

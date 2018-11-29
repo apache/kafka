@@ -168,8 +168,7 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
             LIVE_BROKERS_V3);
 
     // UPDATE_METADATA_REQUEST_V5 added a broker_epoch Field. This field specifies the generation of the broker across
-    // bounces. It also introduce TOPIC_STATES_V5 to normalize PARTITION_STATES_V4
-    // to make the request more memory efficient
+    // bounces. It also normalize partitions under each topic.
     private static final Schema UPDATE_METADATA_REQUEST_V5 = new Schema(
             CONTROLLER_ID,
             CONTROLLER_EPOCH,

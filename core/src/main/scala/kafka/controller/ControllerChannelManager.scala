@@ -417,7 +417,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
           val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
             _.node(controller.config.interBrokerListenerName)
           }
-          val brokerEpoch = controllerContext.brokerEpochs(broker)
+          val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
           val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
             brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
           controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
@@ -459,7 +459,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         }
 
       updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
-        val brokerEpoch = controllerContext.brokerEpochs(broker)
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
         val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
           brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA, updateMetadataRequest, null)
@@ -478,7 +478,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         debug(s"The stop replica request (delete = false) sent to broker $broker is ${stopReplicaWithoutDelete.mkString(",")}")
 
         val (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r => !r.deletePartition && r.callback == null)
-        val brokerEpoch = controllerContext.brokerEpochs(broker)
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
 
         // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
         // changes the order in which the requests are sent for the same partitions, but that's OK.

@@ -20,7 +20,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Struct;
 
-// Abstarct class for all control requests including UpdateMetadataRequest, LeaderAndIsrRequest and StopReplicaRequest
+// Abstract class for all control requests including UpdateMetadataRequest, LeaderAndIsrRequest and StopReplicaRequest
 public abstract class AbstractControlRequest extends AbstractRequest {
     public static final long UNKNOWN_BROKER_EPOCH = -1L;
 

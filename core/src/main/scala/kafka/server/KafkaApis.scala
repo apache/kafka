@@ -187,7 +187,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch())) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      warn("Received LeaderAndIsr request with broker epoch " +
+      info("Received LeaderAndIsr request with broker epoch " +
         s"${leaderAndIsrRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
     } else {
@@ -208,7 +208,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch())) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      warn("Received stop replica request with old broker epoch " +
+      info("Received stop replica request with broker epoch " +
         s"${stopReplicaRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.STALE_BROKER_EPOCH, Map.empty[TopicPartition, Errors].asJava))
     } else {
@@ -239,7 +239,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch())) {
       // When the broker restarts very quickly, it is possible for this broker to receive request intended
       // for its previous generation so the broker should skip the stale request.
-      warn("Received update metadata request with broker epoch " +
+      info("Received update metadata request with broker epoch " +
         s"${updateMetadataRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.STALE_BROKER_EPOCH))
     } else {
@@ -2331,14 +2331,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     requestChannel.sendResponse(response)
   }
 
-  private def isBrokerEpochStale(epoch: Long): Boolean = {
+  private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
     // Broker epoch in the control request is unknown if the controller hasn't been upgraded to use KIP-380
-    if (epoch == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
+    if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
     else {
       val curBrokerEpoch = controller.brokerEpoch
-      if (epoch < curBrokerEpoch) true
-      else if (epoch == curBrokerEpoch) false
-      else throw new IllegalStateException(s"Epoch $epoch larger than current broker epoch $curBrokerEpoch")
+      if (brokerEpochInRequest < curBrokerEpoch) true
+      else if (brokerEpochInRequest == curBrokerEpoch) false
+      else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
     }
   }
 
