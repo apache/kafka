@@ -293,16 +293,13 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val tp = new TopicPartition("t", 0)
     val assignment = Map(tp.partition -> Seq(controllerId))
     val reassignment = Map(tp -> Seq(otherBrokerId))
-    println(s"Reassignment: $reassignment")
     TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
     servers(otherBrokerId).shutdown()
     servers(otherBrokerId).awaitShutdown()
     zkClient.createPartitionReassignment(reassignment)
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state during partition reassignment with offline replica")
-    println("Triggering server startup")
     servers(otherBrokerId).startup()
-    println("Triggered server startup")
     serverStarted = true
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
@@ -622,29 +619,15 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                                     message: String): Unit = {
     TestUtils.waitUntilTrue(() => {
       val leaderIsrAndControllerEpochMap = zkClient.getTopicPartitionStates(Seq(tp))
-      printZkPartitionData(tp)
       leaderIsrAndControllerEpochMap.contains(tp) &&
         isExpectedPartitionState(leaderIsrAndControllerEpochMap(tp), controllerEpoch, leader, leaderEpoch)
     }, message)
-  }
-
-  private def printZkPartitionData(topicPartition: TopicPartition) = {
-    print(s"ZK Data; TopicPartition: $topicPartition,")
-    print(s" Replicas: [${zkClient.getReplicasForPartition(topicPartition).mkString(",")}],")
-    print(s" ISR: [${zkClient.getInSyncReplicasForPartition(topicPartition).getOrElse(Seq()).mkString(",")}],")
-    println(s" Leader: ${zkClient.getLeaderForPartition(topicPartition).getOrElse(-1)}")
   }
 
   private def isExpectedPartitionState(leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
                                        controllerEpoch: Int,
                                        leader: Int,
                                        leaderEpoch: Int) = {
-//    if (serverStarted){
-      println ("***************************************************************")
-      println(leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch)
-      println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leader} == $leader")
-      println(s"${leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch} == $leaderEpoch")
-//    }
     leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
