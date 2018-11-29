@@ -760,6 +760,7 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true): LogAppendInfo = {
+    this.loadSegments()
     append(records, isFromClient, assignOffsets = true, leaderEpoch)
   }
 
