@@ -466,10 +466,10 @@ task jacocoRootReport(type: org.gradle.testing.jacoco.tasks.JacocoReport) {
   description = 'Generates an aggregate report from all subprojects'
   dependsOn(javaProjects.test)
 
-  additionalSourceDirs.from(files(javaProjects.sourceSets.main.allSource.srcDirs))
-  sourceDirectories.from(files(javaProjects.sourceSets.main.allSource.srcDirs))
-  classDirectories.from(files(javaProjects.sourceSets.main.output))
-  executionData.from(files(javaProjects.jacocoTestReport.executionData))
+  additionalSourceDirs = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  sourceDirectories = files(javaProjects.sourceSets.main.allSource.srcDirs)
+  classDirectories =  files(javaProjects.sourceSets.main.output)
+  executionData = files(javaProjects.jacocoTestReport.executionData)
 
   reports {
     html.enabled = true
