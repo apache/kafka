@@ -55,6 +55,8 @@ public class StopReplicaRequest extends AbstractControlRequest {
             DELETE_PARTITIONS,
             PARTITIONS_V0);
 
+    // STOP_REPLICA_REQUEST_V1 added a broker_epoch Field. This field specifies the generation of the broker across
+    // bounces. It also normalizes partitions under each topic.
     private static final Schema STOP_REPLICA_REQUEST_V1 = new Schema(
             CONTROLLER_ID,
             CONTROLLER_EPOCH,
