@@ -805,7 +805,8 @@ class Partition(val topicPartition: TopicPartition,
   def fetchOffsetForTimestamp(timestamp: Long,
                               isolationLevel: Option[IsolationLevel],
                               currentLeaderEpoch: Optional[Integer],
-                              fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
+                              fetchOnlyFromLeader: Boolean,
+                              isFromClient: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
@@ -813,6 +814,16 @@ class Partition(val topicPartition: TopicPartition,
       case Some(IsolationLevel.READ_COMMITTED) => localReplica.lastStableOffset.messageOffset
       case Some(IsolationLevel.READ_UNCOMMITTED) => localReplica.highWatermark.messageOffset
       case None => localReplica.logEndOffset.messageOffset
+    }
+
+    // Wait until the HW has caught up with the start offset from this epoch
+    if(isFromClient && leaderEpochStartOffsetOpt.isDefined) {
+      if(leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
+        throw Errors.LEADER_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+          s"partition $topicPartition with leader epoch ${currentLeaderEpoch.get} as this partition's " +
+          s"high-water mark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +
+          s"LEO (${leaderEpochStartOffsetOpt.get}).")
+      }
     }
 
     if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {

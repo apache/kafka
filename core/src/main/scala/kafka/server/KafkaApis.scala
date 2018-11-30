@@ -812,7 +812,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         try {
           val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID
-          val isolationLevelOpt = if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID)
+          val isClientRequest = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+          val isolationLevelOpt = if (isClientRequest)
             Some(offsetRequest.isolationLevel)
           else
             None
@@ -821,7 +822,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             partitionData.timestamp,
             isolationLevelOpt,
             partitionData.currentLeaderEpoch,
-            fetchOnlyFromLeader)
+            fetchOnlyFromLeader,
+            isFromClient = isClientRequest)
 
           val response = foundOpt match {
             case Some(found) =>

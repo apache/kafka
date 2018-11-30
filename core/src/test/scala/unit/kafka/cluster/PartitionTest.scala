@@ -29,7 +29,7 @@ import kafka.server._
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.ReplicaNotAvailableException
+import org.apache.kafka.common.errors.{ApiException, LeaderNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -319,7 +319,8 @@ class PartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
-          fetchOnlyFromLeader = true)
+          fetchOnlyFromLeader = true,
+          isFromClient = false)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
       } catch {
@@ -346,7 +347,8 @@ class PartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
-          fetchOnlyFromLeader = fetchOnlyLeader)
+          fetchOnlyFromLeader = fetchOnlyLeader,
+          isFromClient = false)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
       } catch {
@@ -374,13 +376,143 @@ class PartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
-      fetchOnlyFromLeader = true)
+      fetchOnlyFromLeader = true,
+      isFromClient = false)
 
     assertTrue(timestampAndOffsetOpt.isDefined)
 
     val timestampAndOffset = timestampAndOffsetOpt.get
     assertEquals(Optional.of(leaderEpoch), timestampAndOffset.leaderEpoch)
   }
+
+  /**
+    * This test checks that after a new leader election, we don't answer any ListOffsetsRequest until
+    * the HW of the new leader has caught up to its startLogOffset for this epoch. From a client
+    * perspective this helps guarantee monotonic offsets
+    *
+    * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-207%3A+Offsets+returned+by+ListOffsetsResponse+should+be+monotonically+increasing+even+during+a+partition+leader+change">KIP-207</a>
+    */
+  @Test
+  def testMonotonicOffsetsAfterLeaderChange(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower1, follower2).asJava
+    val isr = List[Integer](leader, follower2).asJava
+    val leaderEpoch = 8
+    val batch1 = TestUtils.records(records = List(new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)))
+    val batch2 = TestUtils.records(records = List(new SimpleRecord("k3".getBytes, "v1".getBytes),
+      new SimpleRecord("k4".getBytes, "v2".getBytes),
+      new SimpleRecord("k5".getBytes, "v3".getBytes)))
+    val batch3 = TestUtils.records(records = List(new SimpleRecord("k6".getBytes, "v1".getBytes),
+      new SimpleRecord("k7".getBytes, "v2".getBytes)))
+
+    val partition = Partition(topicPartition, time, replicaManager)
+    assertTrue("Expected first makeLeader() to return 'leader changed'",
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0))
+    assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas.map(_.brokerId))
+
+    // after makeLeader(() call, partition should know about all the replicas
+    val leaderReplica = partition.getReplica(leader).get
+    val follower1Replica = partition.getReplica(follower1).get
+    val follower2Replica = partition.getReplica(follower2).get
+
+    // append records with initial leader epoch
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, isFromClient = true).lastOffset
+    partition.appendRecordsToLeader(batch2, isFromClient = true)
+    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
+
+    // let the follower in ISR move leader's HW to move further but below LEO
+    def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
+      LogReadResult(info = fetchInfo,
+        highWatermark = leaderReplica.highWatermark.messageOffset,
+        leaderLogStartOffset = leaderReplica.logStartOffset,
+        leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset,
+        followerLogStartOffset = 0,
+        fetchTimeMs = time.milliseconds,
+        readSize = 10240,
+        lastStableOffset = None)
+    }
+    // Update follower 1
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
+
+    // Update follower 2
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
+
+    // Get offsets
+    var offsetAndTimestamp = partition.fetchOffsetForTimestamp(
+      timestamp = -1L,
+      isolationLevel = None,
+      currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+      fetchOnlyFromLeader = true,
+      isFromClient = true
+    )
+
+    assertTrue(offsetAndTimestamp.isDefined)
+    assertEquals(offsetAndTimestamp.get.offset, 5) // Current LEO on leader is 5
+    assertEquals(partition.localReplica.get.highWatermark.messageOffset, 2) // HW is still 2
+
+    // Make into a follower
+    assertTrue(partition.makeFollower(controllerId,
+      new LeaderAndIsrRequest.PartitionState(controllerEpoch, follower2, leaderEpoch + 1, isr, 1, replicas, false), 1))
+
+    // Back to leader, this resets the startLogOffset for this epoch
+    assertTrue(partition.makeLeader(controllerId,
+      new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch + 2, isr, 1, replicas, false), 2))
+
+    try {
+      // Try to get offsets as a client
+      partition.fetchOffsetForTimestamp(
+        timestamp = -1L,
+        isolationLevel = None,
+        currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+        fetchOnlyFromLeader = true,
+        isFromClient = true
+      )
+    } catch {
+      case e: LeaderNotAvailableException => // expected
+      case e: ApiException => fail(s"Expected LeaderNotAvailableException, got different API exception ${e.getMessage}")
+    }
+
+    // If request is not from a client, we skip the check
+    offsetAndTimestamp = partition.fetchOffsetForTimestamp(
+      timestamp = -1L,
+      isolationLevel = None,
+      currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+      fetchOnlyFromLeader = true,
+      isFromClient = false
+    )
+    assertTrue(offsetAndTimestamp.isDefined)
+    assertEquals(offsetAndTimestamp.get.offset, 5)
+
+    // Next fetch from replicas
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
+
+    // Error goes away
+    offsetAndTimestamp = partition.fetchOffsetForTimestamp(
+      timestamp = -1L,
+      isolationLevel = None,
+      currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+      fetchOnlyFromLeader = true,
+      isFromClient = true
+    )
+    assertTrue(offsetAndTimestamp.isDefined)
+    assertEquals(offsetAndTimestamp.get.offset, 5)
+  }
+
 
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
@@ -523,7 +655,8 @@ class PartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
+        fetchOnlyFromLeader = true,
+        isFromClient = false)
       assertTrue(res.isDefined)
       res.get
     }
@@ -532,7 +665,8 @@ class PartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true)
+        fetchOnlyFromLeader = true,
+        isFromClient = false)
       assertTrue(res.isDefined)
       res.get
     }

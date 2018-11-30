@@ -374,7 +374,7 @@ class KafkaApisTest {
     val currentLeaderEpoch = Optional.of[Integer](15)
 
     EasyMock.expect(replicaManager.fetchOffsetForTimestamp(tp, ListOffsetRequest.EARLIEST_TIMESTAMP,
-      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true))
+      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true, isFromClient = false))
       .andThrow(error.exception)
 
     val capturedResponse = expectNoThrottling()
@@ -463,7 +463,7 @@ class KafkaApisTest {
     val currentLeaderEpoch = Optional.empty[Integer]()
 
     EasyMock.expect(replicaManager.fetchOffsetForTimestamp(tp, ListOffsetRequest.LATEST_TIMESTAMP,
-      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true))
+      Some(isolationLevel), currentLeaderEpoch, fetchOnlyFromLeader = true, isFromClient = false))
       .andReturn(Some(new TimestampAndOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 
     val capturedResponse = expectNoThrottling()
