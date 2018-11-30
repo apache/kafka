@@ -222,10 +222,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         Objects.requireNonNull(sensor, "Sensor is null");
         metrics.removeSensor(sensor.name());
 
-        final Sensor parent = parentSensors.get(sensor);
+        final Sensor parent = parentSensors.remove(sensor);
         if (parent != null) {
             metrics.removeSensor(parent.name());
-            parentSensors.remove(sensor);
         }
 
     }
