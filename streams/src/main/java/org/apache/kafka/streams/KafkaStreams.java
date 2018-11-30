@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.time.Duration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -63,6 +62,7 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
 import org.apache.kafka.streams.state.internals.StreamThreadStateStoreProvider;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -126,7 +126,6 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 public class KafkaStreams {
 
     private static final String JMX_PREFIX = "kafka.streams";
-    private static final int DEFAULT_CLOSE_TIMEOUT = 0;
 
     // processId is expected to be unique across JVMs and to be used
     // in userData of the subscription request to allow assignor be aware
@@ -811,7 +810,7 @@ public class KafkaStreams {
      * This will block until all threads have stopped.
      */
     public void close() {
-        close(DEFAULT_CLOSE_TIMEOUT, TimeUnit.SECONDS);
+        close(Long.MAX_VALUE);
     }
 
     /**
