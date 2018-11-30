@@ -1,4 +1,21 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.clients.consumer;
+
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor.Subscription;
 import org.apache.kafka.common.TopicPartition;
 import org.junit.Test;
@@ -130,7 +147,7 @@ public class FailoverAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic, 0), tp(topic, 1)),
                 assignment.get(consumer1));
-        assertTrue( assignment.get(consumer2).isEmpty());
+        assertTrue(assignment.get(consumer2).isEmpty());
     }
 
     @Test
@@ -153,8 +170,8 @@ public class FailoverAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic2, 0),
                 tp(topic2, 1), tp(topic1, 2)), assignment.get(consumer1));
-        assertTrue( assignment.get(consumer2).isEmpty());
-        assertTrue( assignment.get(consumer3).isEmpty());
+        assertTrue(assignment.get(consumer2).isEmpty());
+        assertTrue(assignment.get(consumer3).isEmpty());
     }
 
     @Test
@@ -176,7 +193,7 @@ public class FailoverAssignorTest {
         assertAssignment(partitions(tp(topic1, 0), tp(topic1, 1), tp(topic1, 2),
                 tp(topic2, 0), tp(topic2, 1), tp(topic2, 2)),
                 assignment.get(consumer1));
-        assertTrue( assignment.get(consumer2).isEmpty());
+        assertTrue(assignment.get(consumer2).isEmpty());
     }
 
     private void assertAssignment(List<TopicPartition> expected, List<TopicPartition> actual) {
