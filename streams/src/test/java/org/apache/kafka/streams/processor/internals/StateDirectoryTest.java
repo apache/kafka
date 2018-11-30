@@ -54,10 +54,10 @@ public class StateDirectoryTest {
     private File appDir;
 
     private void initializeStateDirectory(final boolean createStateDirectory) throws Exception {
+        stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         if (!createStateDirectory) {
             cleanup();
         }
-        stateDir = new File(TestUtils.IO_TMP_DIR, "kafka-" + TestUtils.randomString(5));
         directory = new StateDirectory(
             new StreamsConfig(new Properties() {
                 {
