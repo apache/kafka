@@ -145,6 +145,7 @@ public class KTableKTableInnerJoinTest {
         doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -241,6 +242,7 @@ public class KTableKTableInnerJoinTest {
         proc.checkAndClearProcessResult("2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
     }
 
+    @SuppressWarnings("unchecked")
     private void doTestJoin(final StreamsBuilder builder,
                             final int[] expectedKeys,
                             final MockProcessorSupplier<Integer, String> supplier,

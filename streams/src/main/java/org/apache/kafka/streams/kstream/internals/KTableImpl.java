@@ -110,6 +110,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                   final boolean filterNot) {
+        // we actually do not need generate store names at all since if it is not specified, we will not
+        // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
+        if (materializedInternal != null) {
+            materializedInternal.generateStoreNameIfNeeded(builder, FILTER_NAME);
+        }
+
         final String name = builder.newProcessorName(FILTER_NAME);
 
         // only materialize if the state store has queryable name
@@ -154,7 +160,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, FILTER_NAME);
 
         return doFilter(predicate, materializedInternal, false);
     }
@@ -171,13 +176,18 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, FILTER_NAME);
 
         return doFilter(predicate, materializedInternal, true);
     }
 
     private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
                                            final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        // we actually do not need generate store names at all since if it is not specified, we will not
+        // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
+        if (materializedInternal != null) {
+            materializedInternal.generateStoreNameIfNeeded(builder, MAPVALUES_NAME);
+        }
+
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
         // only materialize if the state store has queryable name
@@ -232,7 +242,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(materialized, "materialized can't be null");
 
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, MAPVALUES_NAME);
 
         return doMapValues(withKey(mapper), materializedInternal);
     }
@@ -244,8 +253,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(materialized, "materialized can't be null");
 
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, MAPVALUES_NAME);
-
         return doMapValues(mapper, materializedInternal);
     }
 
@@ -261,7 +268,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                               final String... stateStoreNames) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, TRANSFORMVALUES_NAME);
 
         return doTransformValues(transformerSupplier, materializedInternal, stateStoreNames);
     }
