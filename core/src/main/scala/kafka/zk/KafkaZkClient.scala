@@ -88,7 +88,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
-    * Registers the broker in zookeeper as the controller and return the broker epoch.
+    * Registers the broker in zookeeper and return the broker epoch.
     * @return broker epoch (znode create transaction id)
     * @param brokerInfo payload of the broker znode
     */
@@ -414,7 +414,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     * Gets all brokers with broker epoch in the cluster.
     * @return sequence of brokers in the cluster.
     */
-  def getAllBrokerAndEpochsInCluster: Seq[(Broker, Long)] = {
+  def getAllBrokerAndEpochsInCluster: Map[Broker, Long] = {
     val brokerIds = getSortedBrokerList
     val getDataRequests = brokerIds.map(brokerId => GetDataRequest(BrokerIdZNode.path(brokerId), ctx = Some(brokerId)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests)
@@ -426,7 +426,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         case Code.NONODE => None
         case _ => throw getDataResponse.resultException.get
       }
-    }
+    }.toMap
   }
 
   /**

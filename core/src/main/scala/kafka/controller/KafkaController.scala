@@ -60,8 +60,9 @@ object KafkaController extends Logging {
 
 }
 
-class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics, initialBrokerInfo: BrokerInfo,
-                      tokenManager: DelegationTokenManager, initialBrokerEpoch: Long, threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
+class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Time, metrics: Metrics,
+                      initialBrokerInfo: BrokerInfo, initialBrokerEpoch: Long, tokenManager: DelegationTokenManager,
+                      threadNamePrefix: Option[String] = None) extends Logging with KafkaMetricsGroup {
 
   this.logIdent = s"[Controller id=${config.brokerId}] "
 
@@ -641,7 +642,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private def initializeControllerContext() {
     // update controller cache with delete topic information
-    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster.toMap
+    val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
     controllerContext.setLiveBrokerAndEpochs(curBrokerAndEpochs)
     info(s"Initialized broker epochs cache: ${controllerContext.liveBrokerIdAndEpochs}")
     controllerContext.allTopics = zkClient.getAllTopicsInCluster.toSet
@@ -1261,7 +1262,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster.toMap
+      val curBrokerAndEpochs = zkClient.getAllBrokerAndEpochsInCluster
       val curBrokerIdAndEpochs = curBrokerAndEpochs map { case (broker, epoch) => (broker.id, epoch) }
       val curBrokerIds = curBrokerIdAndEpochs.keySet
       val liveOrShuttingDownBrokerIds = controllerContext.liveOrShuttingDownBrokerIds
@@ -1555,9 +1556,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def state: ControllerState = ControllerState.ControllerChange
 
     override def process(): Unit = {
-      val newBrokerEpoch = zkClient.registerBroker(brokerInfo)
-      info(s"Update broker epoch from ${_brokerEpoch} to $newBrokerEpoch")
-      _brokerEpoch = newBrokerEpoch
+      _brokerEpoch = zkClient.registerBroker(brokerInfo)
       Reelect.process()
     }
   }

@@ -440,23 +440,23 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
         else 0
 
-        val liveBrokers = if (updateMetadataRequestVersion == 0) {
-          // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
-          controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val securityProtocol = SecurityProtocol.PLAINTEXT
-            val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-            val node = broker.node(listenerName)
-            val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
-            new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
-          }
-        } else {
-          controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val endPoints = broker.endPoints.map { endPoint =>
-              new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
-            }
-            new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
-          }
+      val liveBrokers = if (updateMetadataRequestVersion == 0) {
+        // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
+        controllerContext.liveOrShuttingDownBrokers.map { broker =>
+          val securityProtocol = SecurityProtocol.PLAINTEXT
+          val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+          val node = broker.node(listenerName)
+          val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
+          new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
         }
+      } else {
+        controllerContext.liveOrShuttingDownBrokers.map { broker =>
+          val endPoints = broker.endPoints.map { endPoint =>
+            new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
+          }
+          new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
+        }
+      }
 
       updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
         val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
@@ -499,15 +499,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       case e: Throwable =>
         if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
-              s"the map is $leaderAndIsrRequestMap. Exception message: $e")
+            s"the map is $leaderAndIsrRequestMap. Exception message: $e")
         }
         if (updateMetadataRequestBrokerSet.nonEmpty) {
           error(s"Haven't been able to send metadata update requests to brokers $updateMetadataRequestBrokerSet, " +
-                s"current state of the partition info is $updateMetadataRequestPartitionInfoMap. Exception message: $e")
+            s"current state of the partition info is $updateMetadataRequestPartitionInfoMap. Exception message: $e")
         }
         if (stopReplicaRequestMap.nonEmpty) {
           error("Haven't been able to send stop replica requests, current state of " +
-              s"the map is $stopReplicaRequestMap. Exception message: $e")
+            s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
         throw new IllegalStateException(e)
     }

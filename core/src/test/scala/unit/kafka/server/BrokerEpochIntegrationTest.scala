@@ -35,7 +35,6 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.mutable
 
 class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -127,7 +126,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     controllerChannelManager.startup()
 
     val broker2 = servers(brokerId2)
-    val epochInReuest =
+    val epochInRequest =
       if (isEpochInRequestStale) broker2.kafkaController.brokerEpoch - 1 else broker2.kafkaController.brokerEpoch
 
     try {
@@ -140,7 +139,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         )
         val requestBuilder = new LeaderAndIsrRequest.Builder(
           ApiKeys.LEADER_AND_ISR.latestVersion, controllerId, controllerEpoch,
-          epochInReuest,
+          epochInRequest,
           partitionStates.asJava, nodes.toSet.asJava)
 
         if (isEpochInRequestStale) {
@@ -169,7 +168,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
         }
         val requestBuilder = new UpdateMetadataRequest.Builder(
           ApiKeys.UPDATE_METADATA.latestVersion, controllerId, controllerEpoch,
-          epochInReuest,
+          epochInRequest,
           partitionStates.asJava, liverBrokers.toSet.asJava)
 
         if (isEpochInRequestStale) {
@@ -187,7 +186,7 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
       {
         val requestBuilder = new StopReplicaRequest.Builder(
           ApiKeys.STOP_REPLICA.latestVersion, controllerId, controllerEpoch,
-          epochInReuest, // Correct broker epoch
+          epochInRequest, // Correct broker epoch
           true, Set(tp).asJava)
 
         if (isEpochInRequestStale) {

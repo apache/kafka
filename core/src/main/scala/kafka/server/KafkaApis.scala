@@ -2332,7 +2332,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
-    // Broker epoch in the control request is unknown if the controller hasn't been upgraded to use KIP-380
+    // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
+    // if the controller hasn't been upgraded to use KIP-380
     if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
     else {
       val curBrokerEpoch = controller.brokerEpoch
