@@ -1288,7 +1288,7 @@
             consumer groups, like joining a group must have privileges with the group in subject. If the privilege is not
             given then a GROUP_AUTHORIZATION_FAILED (error code: 30) will be returned in the protocol response.</li>
         <li><b>Cluster:</b> this resource represents the cluster. Operations that are affecting the whole cluster, like
-            controlled shutdown are protected by privileges on the Cluster resource. If there is an authorication problem
+            controlled shutdown are protected by privileges on the Cluster resource. If there is an authorization problem
             on a cluster resource, then a CLUSTER_AUTHORIZATION_FAILED (error code: 31) will be returned.</li>
         <li><b>TransactionalId:</b> this resource represents actions related to transactions, such as committing.
             If any error occurs, then a TRANSACTIONAL_ID_AUTHORIZATION_FAILED (error code: 53) will be returned by brokers.</li>
@@ -1559,7 +1559,7 @@
             <td>Write</td>
             <td>TransactionalId</td>
             <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks
-                for Write action on the TransactionalId resoure, then it checks whether it can Read on the given group
+                for Write action on the TransactionalId resource, then it checks whether it can Read on the given group
                 (below).</td>
         </tr>
         <tr>
