@@ -24,6 +24,7 @@ import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.junit.Test;
@@ -31,6 +32,7 @@ import org.junit.Test;
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
@@ -50,19 +52,19 @@ public class ProduceRequestTest {
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1,
                 10, Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.isTransactional());
+        assertTrue(request.hasTransactionalRecords());
     }
 
     @Test
     public void shouldNotBeFlaggedAsTransactionalWhenNoRecords() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.isTransactional());
+        assertFalse(request.hasTransactionalRecords());
     }
 
     @Test
     public void shouldNotBeFlaggedAsIdempotentWhenRecordsNotIdempotent() throws Exception {
         final ProduceRequest request = createNonIdempotentNonTransactionalRecords();
-        assertFalse(request.isTransactional());
+        assertFalse(request.hasTransactionalRecords());
     }
 
     @Test
@@ -71,7 +73,7 @@ public class ProduceRequestTest {
                 (short) 1, 1, 1, simpleRecord);
         final ProduceRequest request = ProduceRequest.Builder.forCurrentMagic((short) -1, 10,
                 Collections.singletonMap(new TopicPartition("topic", 1), memoryRecords)).build();
-        assertTrue(request.isIdempotent());
+        assertTrue(request.hasIdempotentRecords());
     }
 
     @Test
@@ -176,6 +178,53 @@ public class ProduceRequestTest {
 
         // Works fine with current version (>= 7)
         ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+    }
+
+    @Test
+    public void testMixedTransactionalData() {
+        long producerId = 15L;
+        short producerEpoch = 5;
+        int sequence = 10;
+        String transactionalId = "txnlId";
+
+        MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
+                new SimpleRecord("foo".getBytes()));
+        MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+                producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
+
+        Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
+        recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
+        recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
+
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
+                recordsByPartition, transactionalId);
+
+        ProduceRequest request = builder.build();
+        assertTrue(request.hasTransactionalRecords());
+        assertTrue(request.hasIdempotentRecords());
+    }
+
+    @Test
+    public void testMixedIdempotentData() {
+        long producerId = 15L;
+        short producerEpoch = 5;
+        int sequence = 10;
+
+        MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
+                new SimpleRecord("foo".getBytes()));
+        MemoryRecords txnRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+                producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
+
+        Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
+        recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
+        recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
+
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
+                recordsByPartition, null);
+
+        ProduceRequest request = builder.build();
+        assertFalse(request.hasTransactionalRecords());
+        assertTrue(request.hasIdempotentRecords());
     }
 
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
