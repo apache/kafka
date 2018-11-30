@@ -140,7 +140,9 @@ public abstract class ConnectRecord<R extends ConnectRecord<R>> {
                 "topic='" + topic + '\'' +
                 ", kafkaPartition=" + kafkaPartition +
                 ", key=" + key +
+                ", keySchema=" + keySchema.toString() +
                 ", value=" + value +
+                ", valueSchema=" + valueSchema.toString() +
                 ", timestamp=" + timestamp +
                 ", headers=" + headers +
                 '}';
