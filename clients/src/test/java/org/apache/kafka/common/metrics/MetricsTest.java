@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -207,11 +209,13 @@ public class MetricsTest {
         final Metrics metrics = new Metrics();
 
         final Sensor parent = metrics.sensor("parent");
-        metrics.sensor("child", parent);
+        final Sensor child = metrics.sensor("child", parent);
+
+        assertEquals(singletonList(child), metrics.childrenSensors().get(parent));
 
         metrics.removeSensor("child");
 
-        assertTrue(metrics.childrenSensors().toString(), metrics.childrenSensors().get(parent).isEmpty());
+        assertEquals(emptyList(), metrics.childrenSensors().get(parent));
     }
 
     @Test
