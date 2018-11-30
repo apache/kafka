@@ -22,7 +22,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -30,6 +29,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static java.util.Collections.unmodifiableMap;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsMetricsImplTest {
@@ -58,26 +58,26 @@ public class StreamsMetricsImplTest {
         String operation = "put";
         Map<String, String> tags = new HashMap<>();
         final Metrics metrics = new Metrics();
-        final Map<MetricName, KafkaMetric> initialMetrics = Collections.unmodifiableMap(new LinkedHashMap<>(metrics.metrics()));
+        final Map<MetricName, KafkaMetric> initialMetrics = unmodifiableMap(new LinkedHashMap<>(metrics.metrics()));
         StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, groupName, tags);
 
         Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
-        Assert.assertEquals(initialMetrics, metrics.metrics());
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
-        Assert.assertEquals(initialMetrics, metrics.metrics());
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
-        Assert.assertEquals(initialMetrics, metrics.metrics());
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
-        Assert.assertEquals(initialMetrics, metrics.metrics());
+        assertEquals(initialMetrics, metrics.metrics());
 
-        Assert.assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors);
+        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors);
     }
 
     @Test
