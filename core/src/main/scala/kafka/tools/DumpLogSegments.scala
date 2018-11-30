@@ -36,6 +36,9 @@ import scala.collection.JavaConverters._
 
 object DumpLogSegments {
 
+  // visible for testing
+  private[tools] val INDENT = "|"
+
   def main(args: Array[String]) {
     val opts = new DumpLogSegmentsOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to parse a log file and dump its contents to the console, useful for debugging a seemingly corrupt log segment.")
@@ -289,15 +292,10 @@ object DumpLogSegments {
           }
           lastOffset = record.offset
 
-          print("- offset: " + record.offset + " position: " + validBytes +
-            " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
-            " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
-            " compresscodec: " + batch.compressionType)
+          print(s"$INDENT offset: ${record.offset} keysize: ${record.keySize} valuesize: ${record.valueSize}")
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch + " sequence: " + record.sequence +
-              " isTransactional: " + batch.isTransactional +
-              " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+            print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {
             print(" crc: " + record.checksumOrNull)
           }

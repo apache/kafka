@@ -67,13 +67,13 @@ class DumpLogSegmentsTest {
         if (i % 3 == 0)
           assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: ${i / 3 * 2} lastOffset: "))
         else
-          assertTrue(s"Not a valid message record: $line", line.startsWith(s"- offset: ${i - 1 - i / 3} position:"))
+          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.INDENT} offset: ${i - 1 - i / 3} keysize:"))
       }
     }
 
     def verifyNoRecordsInOutput(args: Array[String]): Unit = {
       val output = runDumpLogSegments(args)
-      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* position.*"))
+      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* keysize.*"))
     }
 
     // Verify that records are printed with --print-data-log even if --deep-iteration is not specified
