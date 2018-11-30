@@ -196,11 +196,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
      */
     @Override
     public void removeSensor(Sensor sensor) {
-        Sensor parent = null;
         Objects.requireNonNull(sensor, "Sensor is null");
 
         metrics.removeSensor(sensor.name());
-        parent = parentSensors.get(sensor);
+
+        final Sensor parent = parentSensors.remove(sensor);
         if (parent != null) {
             metrics.removeSensor(parent.name());
         }
