@@ -89,8 +89,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
     * Registers the broker in zookeeper and return the broker epoch.
-    * @return broker epoch (znode create transaction id)
     * @param brokerInfo payload of the broker znode
+    * @return broker epoch (znode create transaction id)
     */
   def registerBroker(brokerInfo: BrokerInfo): Long = {
     val path = brokerInfo.path
@@ -101,8 +101,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
    * Registers a given broker in zookeeper as the controller and increments controller epoch.
-   * @return the (updated controller epoch, epoch zkVersion) tuple
    * @param controllerId the id of the broker that is to be registered as the controller.
+   * @return the (updated controller epoch, epoch zkVersion) tuple
    * @throws ControllerMovedException if fail to create /controller or fail to increment controller epoch.
    */
   def registerControllerAndIncrementControllerEpoch(controllerId: Int): (Int, Int) = {
