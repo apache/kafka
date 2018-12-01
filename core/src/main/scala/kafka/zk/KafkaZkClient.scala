@@ -412,7 +412,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   /**
     * Gets all brokers with broker epoch in the cluster.
-    * @return sequence of brokers in the cluster.
+    * @return map of broker to epoch in the cluster.
     */
   def getAllBrokerAndEpochsInCluster: Map[Broker, Long] = {
     val brokerIds = getSortedBrokerList
