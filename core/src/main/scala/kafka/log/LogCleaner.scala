@@ -533,7 +533,6 @@ private[log] class Cleaner(val id: Int,
                                  map: OffsetMap,
                                  deleteHorizonMs: Long,
                                  stats: CleanerStats) {
-    log.closeHandlers()
     // create a new segment with a suffix appended to the name of the log and indexes
     val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
 
@@ -637,9 +636,6 @@ private[log] class Cleaner(val id: Int,
       }
     }
 
-    val reopenedSourceRecords = FileRecords.open(sourceRecords.file())
-    sourceRecords.setFile(reopenedSourceRecords.file(), reopenedSourceRecords.channel())
-
     var position = 0
     while (position < sourceRecords.sizeInBytes) {
       checkDone(topicPartition)
@@ -648,7 +644,6 @@ private[log] class Cleaner(val id: Int,
       writeBuffer.clear()
 
       sourceRecords.readInto(readBuffer, position)
-
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
       val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize, decompressionBufferSupplier)

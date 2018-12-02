@@ -49,7 +49,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     // mutable state
     private final AtomicInteger size;
-    private volatile FileChannel channel;
+    private final FileChannel channel;
     private volatile File file;
 
     /**
@@ -213,11 +213,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
      */
     public void setFile(File file) {
         this.file = file;
-    }
-
-    public void setFile(File file, FileChannel channel) {
-        this.file = file;
-        this.channel = channel;
     }
 
     /**
