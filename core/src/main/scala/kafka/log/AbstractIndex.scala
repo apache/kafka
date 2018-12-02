@@ -176,21 +176,25 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       if (_length == roundedNewSize) {
         false
       } else {
-        val raf = new RandomAccessFile(file, "rw")
-        try {
-          val position = mmap.position()
-
-          /* Windows won't let us modify the file length while the file is mmapped :-( */
-          if (OperatingSystem.IS_WINDOWS)
-            safeForceUnmap()
-          raf.setLength(roundedNewSize)
-          _length = roundedNewSize
-          mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
-          _maxEntries = mmap.limit() / entrySize
-          mmap.position(position)
-          true
-        } finally {
-          CoreUtils.swallow(raf.close(), this)
+        if (OperatingSystem.IS_WINDOWS && mmap == null) {
+          /* under Windows the file might already be closed */
+          false
+        } else {
+          val raf = new RandomAccessFile(file, "rw")
+          try {
+            val position = mmap.position()
+            /* Windows won't let us modify the file length while the file is mmapped :-( */
+            if (OperatingSystem.IS_WINDOWS)
+              safeForceUnmap()
+            raf.setLength(roundedNewSize)
+            _length = roundedNewSize
+            mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
+            _maxEntries = mmap.limit() / entrySize
+            mmap.position(position)
+            true
+          } finally {
+            CoreUtils.swallow(raf.close(), this)
+          }
         }
       }
     }
