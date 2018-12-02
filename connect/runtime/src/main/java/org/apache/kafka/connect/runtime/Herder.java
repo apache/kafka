@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -155,6 +156,15 @@ public interface Herder {
     void restartConnector(String connName, Callback<Void> cb);
 
     /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
@@ -168,6 +178,24 @@ public interface Herder {
      */
     void resumeConnector(String connector);
 
+    /**
+     * Returns a handle to the plugin factory used by this herder and its worker.
+     *
+     * @return a reference to the plugin factory.
+     */
+    Plugins plugins();
+
+
+    /**
+     * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * @return the cluster ID of the Kafka cluster backing this connect cluster
+     */
+    String kafkaClusterId();
+
+    enum ConfigReloadAction {
+        NONE,
+        RESTART
+    }
 
     class Created<T> {
         private final boolean created;

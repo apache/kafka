@@ -17,8 +17,8 @@
 package org.apache.kafka.common.errors;
 
 /**
- * The transaction coordinator returns this error code if the timeout received via the InitPidRequest is larger than
- * the `max.transaction.timeout.ms` config value.
+ * The transaction coordinator returns this error code if the timeout received via the InitProducerIdRequest is larger than
+ * the `transaction.max.timeout.ms` config value.
  */
 public class InvalidTxnTimeoutException extends ApiException {
     private static final long serialVersionUID = 1L;
@@ -31,3 +31,4 @@ public class InvalidTxnTimeoutException extends ApiException {
         super(message);
     }
 }
+

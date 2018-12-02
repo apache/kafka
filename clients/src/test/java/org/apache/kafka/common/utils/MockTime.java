@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -23,6 +24,15 @@ import java.util.concurrent.atomic.AtomicLong;
  * A clock that you can manually advance by calling sleep
  */
 public class MockTime implements Time {
+
+    interface MockTimeListener {
+        void tick();
+    }
+
+    /**
+     * Listeners which are waiting for time changes.
+     */
+    private final CopyOnWriteArrayList<MockTimeListener> listeners = new CopyOnWriteArrayList<>();
 
     private final long autoTickMs;
 
@@ -45,6 +55,10 @@ public class MockTime implements Time {
         this.autoTickMs = autoTickMs;
     }
 
+    public void addListener(MockTimeListener listener) {
+        listeners.add(listener);
+    }
+
     @Override
     public long milliseconds() {
         maybeSleep(autoTickMs);
@@ -57,11 +71,6 @@ public class MockTime implements Time {
         return highResTimeNs.get();
     }
 
-    @Override
-    public long hiResClockMs() {
-        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
-    }
-
     private void maybeSleep(long ms) {
         if (ms != 0)
             sleep(ms);
@@ -71,6 +80,23 @@ public class MockTime implements Time {
     public void sleep(long ms) {
         timeMs.addAndGet(ms);
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
+        tick();
     }
 
+    public void setCurrentTimeMs(long newMs) {
+        long oldMs = timeMs.getAndSet(newMs);
+
+        // does not allow to set to an older timestamp
+        if (oldMs > newMs)
+            throw new IllegalArgumentException("Setting the time to " + newMs + " while current time " + oldMs + " is newer; this is not allowed");
+
+        highResTimeNs.set(TimeUnit.MILLISECONDS.toNanos(newMs));
+        tick();
+    }
+
+    private void tick() {
+        for (MockTimeListener listener : listeners) {
+            listener.tick();
+        }
+    }
 }

@@ -18,6 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
@@ -26,15 +29,57 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
+import static org.apache.kafka.common.protocol.CommonFields.MEMBER_ID;
+import static org.apache.kafka.common.protocol.types.Type.BYTES;
+import static org.apache.kafka.common.protocol.types.Type.INT32;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
+
 public class JoinGroupRequest extends AbstractRequest {
-    private static final String GROUP_ID_KEY_NAME = "group_id";
     private static final String SESSION_TIMEOUT_KEY_NAME = "session_timeout";
     private static final String REBALANCE_TIMEOUT_KEY_NAME = "rebalance_timeout";
-    private static final String MEMBER_ID_KEY_NAME = "member_id";
     private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
     private static final String GROUP_PROTOCOLS_KEY_NAME = "group_protocols";
     private static final String PROTOCOL_NAME_KEY_NAME = "protocol_name";
     private static final String PROTOCOL_METADATA_KEY_NAME = "protocol_metadata";
+
+    /* Join group api */
+    private static final Schema JOIN_GROUP_REQUEST_PROTOCOL_V0 = new Schema(
+            new Field(PROTOCOL_NAME_KEY_NAME, STRING),
+            new Field(PROTOCOL_METADATA_KEY_NAME, BYTES));
+
+    private static final Schema JOIN_GROUP_REQUEST_V0 = new Schema(
+            GROUP_ID,
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives " +
+                    "no heartbeat after this timeout in ms."),
+            MEMBER_ID,
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+                    "that the member supports"));
+
+    private static final Schema JOIN_GROUP_REQUEST_V1 = new Schema(
+            GROUP_ID,
+            new Field(SESSION_TIMEOUT_KEY_NAME, INT32, "The coordinator considers the consumer dead if it receives no " +
+                    "heartbeat after this timeout in ms."),
+            new Field(REBALANCE_TIMEOUT_KEY_NAME, INT32, "The maximum time that the coordinator will wait for each " +
+                    "member to rejoin when rebalancing the group"),
+            MEMBER_ID,
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING, "Unique name for class of protocols implemented by group"),
+            new Field(GROUP_PROTOCOLS_KEY_NAME, new ArrayOf(JOIN_GROUP_REQUEST_PROTOCOL_V0), "List of protocols " +
+                    "that the member supports"));
+
+    /* v2 request is the same as v1. Throttle time has been added to response */
+    private static final Schema JOIN_GROUP_REQUEST_V2 = JOIN_GROUP_REQUEST_V1;
+
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema JOIN_GROUP_REQUEST_V3 = JOIN_GROUP_REQUEST_V2;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2,
+            JOIN_GROUP_REQUEST_V3};
+    }
 
     public static final String UNKNOWN_MEMBER_ID = "";
 
@@ -90,7 +135,8 @@ public class JoinGroupRequest extends AbstractRequest {
         @Override
         public JoinGroupRequest build(short version) {
             if (version < 1) {
-                rebalanceTimeout = -1;
+                // v0 had no rebalance timeout but used session timeout implicitly
+                rebalanceTimeout = sessionTimeout;
             }
             return new JoinGroupRequest(version, groupId, sessionTimeout,
                     rebalanceTimeout, memberId, protocolType, groupProtocols);
@@ -114,7 +160,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private JoinGroupRequest(short version, String groupId, int sessionTimeout,
             int rebalanceTimeout, String memberId, String protocolType,
             List<ProtocolMetadata> groupProtocols) {
-        super(version);
+        super(ApiKeys.JOIN_GROUP, version);
         this.groupId = groupId;
         this.sessionTimeout = sessionTimeout;
         this.rebalanceTimeout = rebalanceTimeout;
@@ -124,9 +170,9 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     public JoinGroupRequest(Struct struct, short versionId) {
-        super(versionId);
+        super(ApiKeys.JOIN_GROUP, versionId);
 
-        groupId = struct.getString(GROUP_ID_KEY_NAME);
+        groupId = struct.get(GROUP_ID);
         sessionTimeout = struct.getInt(SESSION_TIMEOUT_KEY_NAME);
 
         if (struct.hasField(REBALANCE_TIMEOUT_KEY_NAME))
@@ -136,7 +182,7 @@ public class JoinGroupRequest extends AbstractRequest {
             // v0 had no rebalance timeout but used session timeout implicitly
             rebalanceTimeout = sessionTimeout;
 
-        memberId = struct.getString(MEMBER_ID_KEY_NAME);
+        memberId = struct.get(MEMBER_ID);
         protocolType = struct.getString(PROTOCOL_TYPE_KEY_NAME);
 
         groupProtocols = new ArrayList<>();
@@ -149,18 +195,28 @@ public class JoinGroupRequest extends AbstractRequest {
     }
 
     @Override
-    public AbstractResponse getErrorResponse(Throwable e) {
+    public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         short versionId = version();
         switch (versionId) {
             case 0:
             case 1:
                 return new JoinGroupResponse(
-                        Errors.forException(e),
-                        JoinGroupResponse.UNKNOWN_GENERATION_ID,
-                        JoinGroupResponse.UNKNOWN_PROTOCOL,
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
-                        JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-                        Collections.<String, ByteBuffer>emptyMap());
+                    Errors.forException(e),
+                    JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                    JoinGroupResponse.UNKNOWN_PROTOCOL,
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
+                    Collections.emptyMap());
+            case 2:
+            case 3:
+                return new JoinGroupResponse(
+                    throttleTimeMs,
+                    Errors.forException(e),
+                    JoinGroupResponse.UNKNOWN_GENERATION_ID,
+                    JoinGroupResponse.UNKNOWN_PROTOCOL,
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
+                    JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
+                    Collections.emptyMap());
 
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -200,12 +256,12 @@ public class JoinGroupRequest extends AbstractRequest {
     protected Struct toStruct() {
         short version = version();
         Struct struct = new Struct(ApiKeys.JOIN_GROUP.requestSchema(version));
-        struct.set(GROUP_ID_KEY_NAME, groupId);
+        struct.set(GROUP_ID, groupId);
         struct.set(SESSION_TIMEOUT_KEY_NAME, sessionTimeout);
         if (version >= 1) {
             struct.set(REBALANCE_TIMEOUT_KEY_NAME, rebalanceTimeout);
         }
-        struct.set(MEMBER_ID_KEY_NAME, memberId);
+        struct.set(MEMBER_ID, memberId);
         struct.set(PROTOCOL_TYPE_KEY_NAME, protocolType);
         List<Struct> groupProtocolsList = new ArrayList<>(groupProtocols.size());
         for (ProtocolMetadata protocol : groupProtocols) {

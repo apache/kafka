@@ -19,12 +19,12 @@ package kafka.api
 
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Properties}
+import java.util.Properties
 
-import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
+import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
@@ -34,8 +34,6 @@ import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
-
-import scala.collection.mutable.ArrayBuffer
 
 /** The test cases here verify the following conditions.
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
@@ -99,22 +97,21 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = new TopicAndPartition(topic, part)
-  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, "kafka.api.EndToEndClusterIdTest$MockBrokerMetricsReporter")
+  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
-  override def generateConfigs() = {
+  override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
-    cfgs.foreach(_.putAll(serverConfig))
+    cfgs.foreach(_ ++= serverConfig)
     cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
   override def setUp() {
-    super.setUp
+    super.setUp()
     MockDeserializer.resetStaticVariables
     // create the consumer offset topic
-    TestUtils.createTopic(this.zkUtils, topic, 2, serverCount, this.servers)
+    createTopic(topic, 2, serverCount)
   }
 
   @Test
@@ -128,9 +125,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
 
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockProducerInterceptor")
+    producerProps.put(ProducerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockProducerInterceptor].getName)
     producerProps.put("mock.interceptor.append", appendStr)
-    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockProducerMetricsReporter")
+    producerProps.put(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockProducerMetricsReporter].getName)
     val testProducer = new KafkaProducer(producerProps, new MockSerializer, new MockSerializer)
 
     // Send one record and make sure clusterId is set after send and before onAcknowledgement
@@ -149,8 +146,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     isValidClusterId(MockProducerMetricsReporter.CLUSTER_META.get.clusterId)
 
     this.consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
-    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "kafka.api.EndToEndClusterIdTest$MockConsumerMetricsReporter")
+    this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, classOf[MockConsumerInterceptor].getName)
+    this.consumerConfig.put(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, classOf[MockConsumerMetricsReporter].getName)
     val testConsumer = new KafkaConsumer(this.consumerConfig, new MockDeserializer, new MockDeserializer)
     testConsumer.assign(List(tp).asJava)
     testConsumer.seek(tp, 0)
@@ -200,21 +197,12 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   }
 
   private def consumeRecords(consumer: Consumer[Array[Byte], Array[Byte]],
-                             numRecords: Int = 1,
+                             numRecords: Int,
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part) {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 50
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
-        records += record
-      }
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
+    val records = TestUtils.consumeRecords(consumer, numRecords)
+
     for (i <- 0 until numRecords) {
       val record = records(i)
       val offset = startingOffset + i

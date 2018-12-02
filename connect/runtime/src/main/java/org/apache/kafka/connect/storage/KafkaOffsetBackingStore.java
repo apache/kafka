@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -29,6 +30,7 @@ import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConvertingFutureCallback;
 import org.apache.kafka.connect.util.KafkaBasedLog;
+import org.apache.kafka.connect.util.TopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,25 +60,47 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
     private HashMap<ByteBuffer, ByteBuffer> data;
 
     @Override
-    public void configure(WorkerConfig config) {
+    public void configure(final WorkerConfig config) {
         String topic = config.getString(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG);
-        if (topic.equals(""))
+        if (topic == null || topic.trim().length() == 0)
             throw new ConfigException("Offset storage topic must be specified");
 
         data = new HashMap<>();
 
-        Map<String, Object> producerProps = new HashMap<>();
-        producerProps.putAll(config.originals());
+        Map<String, Object> originals = config.originals();
+        Map<String, Object> producerProps = new HashMap<>(originals);
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class.getName());
-        producerProps.put(ProducerConfig.RETRIES_CONFIG, Integer.MAX_VALUE);
+        producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.MAX_VALUE);
 
-        Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.putAll(config.originals());
+        Map<String, Object> consumerProps = new HashMap<>(originals);
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
 
-        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback);
+        Map<String, Object> adminProps = new HashMap<>(originals);
+        NewTopic topicDescription = TopicAdmin.defineTopic(topic).
+                compacted().
+                partitions(config.getInt(DistributedConfig.OFFSET_STORAGE_PARTITIONS_CONFIG)).
+                replicationFactor(config.getShort(DistributedConfig.OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG)).
+                build();
+
+        offsetLog = createKafkaBasedLog(topic, producerProps, consumerProps, consumedCallback, topicDescription, adminProps);
+    }
+
+    private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
+                                                              Map<String, Object> consumerProps,
+                                                              Callback<ConsumerRecord<byte[], byte[]>> consumedCallback,
+                                                              final NewTopic topicDescription, final Map<String, Object> adminProps) {
+        Runnable createTopics = new Runnable() {
+            @Override
+            public void run() {
+                log.debug("Creating admin client to manage Connect internal offset topic");
+                try (TopicAdmin admin = new TopicAdmin(adminProps)) {
+                    admin.createTopics(topicDescription);
+                }
+            }
+        };
+        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM, createTopics);
     }
 
     @Override
@@ -134,11 +158,6 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             data.put(key, value);
         }
     };
-
-    private KafkaBasedLog<byte[], byte[]> createKafkaBasedLog(String topic, Map<String, Object> producerProps,
-                                                              Map<String, Object> consumerProps, Callback<ConsumerRecord<byte[], byte[]>> consumedCallback) {
-        return new KafkaBasedLog<>(topic, producerProps, consumerProps, consumedCallback, Time.SYSTEM);
-    }
 
     private static class SetCallbackFuture implements org.apache.kafka.clients.producer.Callback, Future<Void> {
         private int numLeft;

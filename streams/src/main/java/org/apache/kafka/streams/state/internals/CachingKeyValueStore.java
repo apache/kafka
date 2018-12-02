@@ -23,25 +23,31 @@ import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
+import java.util.Objects;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReadWriteLock;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
-class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V>, CachedStateStore<K, V> {
+class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]>, CachedStateStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private CacheFlushListener<K, V> flushListener;
+    private boolean sendOldValues;
     private String cacheName;
     private ThreadCache cache;
     private InternalProcessorContext context;
     private StateSerdes<K, V> serdes;
     private Thread streamThread;
+    private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
     CachingKeyValueStore(final KeyValueStore<Bytes, byte[]> underlying,
                          final Serde<K> keySerde,
@@ -52,11 +58,10 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        underlying.init(context, root);
         initInternal(context);
+        underlying.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
         // when the stream thread is the current thread.
         streamThread = Thread.currentThread();
@@ -69,12 +74,12 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                                         keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
                                         valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
-        this.cacheName = context.taskId() + "-" + underlying.name();
         this.cache = this.context.getCache();
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (ThreadCache.DirtyEntry entry : entries) {
+                for (final ThreadCache.DirtyEntry entry : entries) {
                     putAndMaybeForward(entry, (InternalProcessorContext) context);
                 }
             }
@@ -82,37 +87,57 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final RecordContext current = context.recordContext();
+        final ProcessorRecordContext current = context.recordContext();
         try {
-            context.setRecordContext(entry.recordContext());
+            context.setRecordContext(entry.entry().context());
             if (flushListener != null) {
-
+                V oldValue = null;
+                if (sendOldValues) {
+                    final byte[] oldBytesValue = underlying.get(entry.key());
+                    oldValue = oldBytesValue == null ? null : serdes.valueFrom(oldBytesValue);
+                }
+                // we rely on underlying store to handle null new value bytes as deletes
+                underlying.put(entry.key(), entry.newValue());
                 flushListener.apply(serdes.keyFrom(entry.key().get()),
                                     serdes.valueFrom(entry.newValue()),
-                                    serdes.valueFrom(underlying.get(entry.key())));
-
+                                    oldValue);
+            } else {
+                underlying.put(entry.key(), entry.newValue());
             }
-            underlying.put(entry.key(), entry.newValue());
         } finally {
             context.setRecordContext(current);
         }
     }
 
-    public void setFlushListener(final CacheFlushListener<K, V> flushListener) {
+    public void setFlushListener(final CacheFlushListener<K, V> flushListener,
+                                 final boolean sendOldValues) {
+
         this.flushListener = flushListener;
+        this.sendOldValues = sendOldValues;
     }
 
     @Override
-    public synchronized void flush() {
-        cache.flush(cacheName);
-        underlying.flush();
+    public void flush() {
+        lock.writeLock().lock();
+        try {
+            cache.flush(cacheName);
+            underlying.flush();
+        } finally {
+            lock.writeLock().unlock();
+        }
     }
 
     @Override
     public void close() {
-        flush();
-        underlying.close();
-        cache.close(cacheName);
+        try {
+            flush();
+        } finally {
+            try {
+                underlying.close();
+            } finally {
+                cache.close(cacheName);
+            }
+        }
     }
 
     @Override
@@ -126,18 +151,28 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public synchronized V get(final K key) {
+    public byte[] get(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        if (key == null) {
-            return null;
+        final Lock theLock;
+        if (Thread.currentThread().equals(streamThread)) {
+            theLock = lock.writeLock();
+        } else {
+            theLock = lock.readLock();
         }
-        final byte[] rawKey = serdes.rawKey(key);
-        return get(rawKey);
+        theLock.lock();
+        try {
+            return getInternal(key);
+        } finally {
+            theLock.unlock();
+        }
     }
 
-    private V get(final byte[] rawKey) {
-        final Bytes key = Bytes.wrap(rawKey);
-        final LRUCacheEntry entry = cache.get(cacheName, key);
+    private byte[] getInternal(final Bytes key) {
+        LRUCacheEntry entry = null;
+        if (cache != null) {
+            entry = cache.get(cacheName, key);
+        }
         if (entry == null) {
             final byte[] rawValue = underlying.get(key);
             if (rawValue == null) {
@@ -148,78 +183,111 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
             if (Thread.currentThread().equals(streamThread)) {
                 cache.put(cacheName, key, new LRUCacheEntry(rawValue));
             }
-            return serdes.valueFrom(rawValue);
+            return rawValue;
+        } else {
+            return entry.value();
         }
-
-        if (entry.value == null) {
-            return null;
-        }
-
-        return serdes.valueFrom(entry.value);
     }
 
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         validateStoreOpen();
-        final Bytes origFrom = Bytes.wrap(serdes.rawKey(from));
-        final Bytes origTo = Bytes.wrap(serdes.rawKey(to));
-        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(origFrom, origTo);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, origFrom, origTo);
-        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(from, to);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
     @Override
-    public KeyValueIterator<K, V> all() {
+    public KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), underlying.all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
-        return new MergedSortedCacheKeyValueStoreIterator<>(cacheIterator, storeIterator, serdes);
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
 
     @Override
-    public synchronized long approximateNumEntries() {
+    public long approximateNumEntries() {
         validateStoreOpen();
-        return underlying.approximateNumEntries();
-    }
-
-    @Override
-    public synchronized void put(final K key, final V value) {
-        validateStoreOpen();
-        put(serdes.rawKey(key), value);
-    }
-
-    private synchronized void put(final byte[] rawKey, final V value) {
-        final byte[] rawValue = serdes.rawValue(value);
-        cache.put(cacheName, Bytes.wrap(rawKey), new LRUCacheEntry(rawValue, true, context.offset(),
-                  context.timestamp(), context.partition(), context.topic()));
-    }
-
-    @Override
-    public synchronized V putIfAbsent(final K key, final V value) {
-        validateStoreOpen();
-        final byte[] rawKey = serdes.rawKey(key);
-        final V v = get(rawKey);
-        if (v == null) {
-            put(rawKey, value);
-        }
-        return v;
-    }
-
-    @Override
-    public synchronized void putAll(final List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries) {
-            put(entry.key, entry.value);
+        lock.readLock().lock();
+        try {
+            return underlying.approximateNumEntries();
+        } finally {
+            lock.readLock().unlock();
         }
     }
 
     @Override
-    public synchronized V delete(final K key) {
+    public void put(final Bytes key, final byte[] value) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        final byte[] rawKey = serdes.rawKey(key);
-        final Bytes bytesKey = Bytes.wrap(rawKey);
-        final V v = get(rawKey);
-        cache.delete(cacheName, bytesKey);
-        underlying.delete(bytesKey);
+        lock.writeLock().lock();
+        try {
+            // for null bytes, we still put it into cache indicating tombstones
+            putInternal(key, value);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private void putInternal(final Bytes key, final byte[] value) {
+        cache.put(
+            cacheName,
+            key,
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                context.timestamp(),
+                context.partition(),
+                context.topic()));
+    }
+
+    @Override
+    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            final byte[] v = getInternal(key);
+            if (v == null) {
+                putInternal(key, value);
+            }
+            return v;
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                Objects.requireNonNull(entry.key, "key cannot be null");
+                put(entry.key, entry.value);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    @Override
+    public byte[] delete(final Bytes key) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+        lock.writeLock().lock();
+        try {
+            return deleteInternal(key);
+        } finally {
+            lock.writeLock().unlock();
+        }
+    }
+
+    private byte[] deleteInternal(final Bytes key) {
+        final byte[] v = getInternal(key);
+        putInternal(key, null);
         return v;
     }
 

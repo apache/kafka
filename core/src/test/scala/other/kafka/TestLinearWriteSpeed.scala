@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -20,11 +20,13 @@ package kafka
 import java.io._
 import java.nio._
 import java.nio.channels._
+import java.nio.file.StandardOpenOption
 import java.util.{Properties, Random}
 
 import joptsimple._
 import kafka.log._
 import kafka.message._
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils._
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -37,7 +39,7 @@ import scala.math._
 object TestLinearWriteSpeed {
 
   def main(args: Array[String]): Unit = {
-    val parser = new OptionParser
+    val parser = new OptionParser(false)
     val dirOpt = parser.accepts("dir", "The directory to write to.")
                            .withRequiredArg
                            .describedAs("path")
@@ -84,9 +86,9 @@ object TestLinearWriteSpeed {
    val mmapOpt = parser.accepts("mmap", "Do writes to memory-mapped files.")
    val channelOpt = parser.accepts("channel", "Do writes to file channels.")
    val logOpt = parser.accepts("log", "Do writes to kafka logs.")
-                          
+
     val options = parser.parse(args : _*)
-    
+
     CommandLineUtils.checkRequiredArgs(parser, options, bytesOpt, sizeOpt, filesOpt)
 
     var bytesToWrite = options.valueOf(bytesOpt).longValue
@@ -101,7 +103,7 @@ object TestLinearWriteSpeed {
     val compressionCodec = CompressionCodec.getCompressionCodec(options.valueOf(compressionCodecOpt))
     val rand = new Random
     rand.nextBytes(buffer.array)
-    val numMessages = bufferSize / (messageSize + MessageSet.LogOverhead)
+    val numMessages = bufferSize / (messageSize + Records.LOG_OVERHEAD)
     val createTime = System.currentTimeMillis
     val messageSet = {
       val compressionType = CompressionType.forId(compressionCodec.codec)
@@ -124,14 +126,14 @@ object TestLinearWriteSpeed {
         logProperties.put(LogConfig.FlushMessagesProp, flushInterval: java.lang.Long)
         writables(i) = new LogWritable(new File(dir, "kafka-test-" + i), new LogConfig(logProperties), scheduler, messageSet)
       } else {
-        System.err.println("Must specify what to write to with one of --log, --channel, or --mmap") 
+        System.err.println("Must specify what to write to with one of --log, --channel, or --mmap")
         Exit.exit(1)
       }
     }
     bytesToWrite = (bytesToWrite / numFiles) * numFiles
-    
+
     println("%10s\t%10s\t%10s".format("mb_sec", "avg_latency", "max_latency"))
-    
+
     val beginTest = System.nanoTime
     var maxLatency = 0L
     var totalLatency = 0L
@@ -169,12 +171,12 @@ object TestLinearWriteSpeed {
     println(bytesToWrite / (1024.0 * 1024.0 * elapsedSecs) + " MB per sec")
     scheduler.shutdown()
   }
-  
+
   trait Writable {
     def write(): Int
     def close()
   }
-  
+
   class MmapWritable(val file: File, size: Long, val content: ByteBuffer) extends Writable {
     file.deleteOnExit()
     val raf = new RandomAccessFile(file, "rw")
@@ -183,32 +185,35 @@ object TestLinearWriteSpeed {
     def write(): Int = {
       buffer.put(content)
       content.rewind()
-      content.limit
+      content.limit()
     }
     def close() {
       raf.close()
+      Utils.delete(file)
     }
   }
-  
+
   class ChannelWritable(val file: File, val content: ByteBuffer) extends Writable {
     file.deleteOnExit()
-    val raf = new RandomAccessFile(file, "rw")
-    val channel = raf.getChannel
+    val channel = FileChannel.open(file.toPath, StandardOpenOption.CREATE, StandardOpenOption.READ,
+      StandardOpenOption.WRITE)
     def write(): Int = {
       channel.write(content)
       content.rewind()
-      content.limit
+      content.limit()
     }
     def close() {
-      raf.close()
+      channel.close()
+      Utils.delete(file)
     }
   }
-  
+
   class LogWritable(val dir: File, config: LogConfig, scheduler: Scheduler, val messages: MemoryRecords) extends Writable {
     Utils.delete(dir)
-    val log = new Log(dir, config, 0L, 0L, scheduler, Time.SYSTEM)
+    val log = Log(dir, config, 0L, 0L, scheduler, new BrokerTopicStats, Time.SYSTEM, 60 * 60 * 1000,
+      LogManager.ProducerIdExpirationCheckIntervalMs, new LogDirFailureChannel(10))
     def write(): Int = {
-      log.append(messages, true)
+      log.appendAsLeader(messages, leaderEpoch = 0)
       messages.sizeInBytes
     }
     def close() {
@@ -216,5 +221,5 @@ object TestLinearWriteSpeed {
       Utils.delete(log.dir)
     }
   }
-  
+
 }

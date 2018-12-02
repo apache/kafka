@@ -16,30 +16,47 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.List;
+import java.util.Properties;
+import java.util.UUID;
 
+import static java.time.Duration.ofHours;
+import static java.time.Duration.ofMinutes;
+import static java.time.Instant.ofEpochMilli;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.internals.ThreadCacheTest.memoryCacheEntrySize;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
+import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
@@ -52,29 +69,28 @@ public class CachingWindowStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 150;
     private static final long DEFAULT_TIMESTAMP = 10L;
-    private static final Long WINDOW_SIZE = 10000L;
+    private static final Long WINDOW_SIZE = 10L;
+    private static final long SEGMENT_INTERVAL = 100L;
+    private InternalMockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
     private CachingWindowStore<String, String> cachingStore;
-    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>> cacheListener;
+    private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
     private String topic;
     private WindowKeySchema keySchema;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         keySchema = new WindowKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", 30000, 3, keySchema);
-        final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false);
+        underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
+        final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray(), false, WINDOW_SIZE);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
-        cachingStore = new CachingWindowStore<>(windowStore,
-                                                Serdes.String(),
-                                                Serdes.String(),
-                                                WINDOW_SIZE);
-        cachingStore.setFlushListener(cacheListener);
-        cache = new ThreadCache("testCache", MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
+        cachingStore = new CachingWindowStore<>(windowStore, Serdes.String(), Serdes.String(), WINDOW_SIZE, SEGMENT_INTERVAL);
+        cachingStore.setFlushListener(cacheListener, false);
+        cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
-        final MockProcessorContext context = new MockProcessorContext(TestUtils.tempDirectory(), null, null, (RecordCollector) null, cache);
-        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic));
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
+        context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, topic, null));
         cachingStore.init(context, cachingStore);
     }
 
@@ -84,22 +100,193 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldPutFetchFromCache() throws Exception {
-        cachingStore.put("a", "a");
-        cachingStore.put("b", "b");
+    public void shouldNotReturnDuplicatesInRanges() {
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        final WindowStoreIterator<String> a = cachingStore.fetch("a", 10, 10);
-        final WindowStoreIterator<String> b = cachingStore.fetch("b", 10, 10);
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), a.next());
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "b"), b.next());
+        final StoreBuilder<WindowStore<String, String>> storeBuilder = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore("store-name", ofHours(1L), ofMinutes(1L), false),
+            Serdes.String(),
+            Serdes.String())
+            .withCachingEnabled();
+
+        builder.addStateStore(storeBuilder);
+
+        builder.stream(topic,
+            Consumed.with(Serdes.String(), Serdes.String()))
+            .transform(() -> new Transformer<String, String, KeyValue<String, String>>() {
+                private WindowStore<String, String> store;
+                private int numRecordsProcessed;
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public void init(final ProcessorContext processorContext) {
+                    this.store = (WindowStore<String, String>) processorContext.getStateStore("store-name");
+                    int count = 0;
+
+                    final KeyValueIterator<Windowed<String>, String> all = store.all();
+                    while (all.hasNext()) {
+                        count++;
+                        all.next();
+                    }
+
+                    assertThat(count, equalTo(0));
+                }
+
+                @Override
+                public KeyValue<String, String> transform(final String key, final String value) {
+                    int count = 0;
+
+                    final KeyValueIterator<Windowed<String>, String> all = store.all();
+                    while (all.hasNext()) {
+                        count++;
+                        all.next();
+                    }
+                    assertThat(count, equalTo(numRecordsProcessed));
+
+                    store.put(value, value);
+
+                    numRecordsProcessed++;
+
+                    return new KeyValue<>(key, value);
+                }
+
+                @Override
+                public void close() {
+
+                }
+            }, "store-name");
+
+        final String bootstrapServers = "localhost:9092";
+        final Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 10 * 1000);
+
+        final long initialWallClockTime = 0L;
+        final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), streamsConfiguration, initialWallClockTime);
+
+        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(Serdes.String().serializer(), Serdes.String().serializer(), initialWallClockTime);
+
+        for (int i = 0; i < 5; i++) {
+            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        }
+        driver.advanceWallClockTime(10 * 1000L);
+        recordFactory.advanceTimeMs(10 * 1000L);
+        for (int i = 0; i < 5; i++) {
+            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        }
+        driver.advanceWallClockTime(10 * 1000L);
+        recordFactory.advanceTimeMs(10 * 1000L);
+        for (int i = 0; i < 5; i++) {
+            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        }
+        driver.advanceWallClockTime(10 * 1000L);
+        recordFactory.advanceTimeMs(10 * 1000L);
+        for (int i = 0; i < 5; i++) {
+            driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
+        }
+    }
+
+    @Test
+    public void shouldPutFetchFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+
+        assertThat(cachingStore.fetch(bytesKey("a"), 10), equalTo(bytesValue("a")));
+        assertThat(cachingStore.fetch(bytesKey("b"), 10), equalTo(bytesValue("b")));
+        assertThat(cachingStore.fetch(bytesKey("c"), 10), equalTo(null));
+        assertThat(cachingStore.fetch(bytesKey("a"), 0), equalTo(null));
+
+        final WindowStoreIterator<byte[]> a = cachingStore.fetch(bytesKey("a"), ofEpochMilli(10), ofEpochMilli(10));
+        final WindowStoreIterator<byte[]> b = cachingStore.fetch(bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10));
+        verifyKeyValue(a.next(), DEFAULT_TIMESTAMP, "a");
+        verifyKeyValue(b.next(), DEFAULT_TIMESTAMP, "b");
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
         assertEquals(2, cache.size());
     }
 
+    private void verifyKeyValue(final KeyValue<Long, byte[]> next, final long expectedKey, final String expectedValue) {
+        assertThat(next.key, equalTo(expectedKey));
+        assertThat(next.value, equalTo(bytesValue(expectedValue)));
+    }
+
+    private static byte[] bytesValue(final String value) {
+        return value.getBytes();
+    }
+
+    private static Bytes bytesKey(final String key) {
+        return Bytes.wrap(key.getBytes());
+    }
+
     @Test
-    public void shouldFlushEvictedItemsIntoUnderlyingStore() throws Exception {
-        int added = addItemsToCache();
+    public void shouldPutFetchRangeFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(10), ofEpochMilli(10));
+        verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
+        verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "b");
+        assertFalse(iterator.hasNext());
+        assertEquals(2, cache.size());
+    }
+
+    @Test
+    public void shouldGetAllFromCache() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+        cachingStore.put(bytesKey("b"), bytesValue("b"));
+        cachingStore.put(bytesKey("c"), bytesValue("c"));
+        cachingStore.put(bytesKey("d"), bytesValue("d"));
+        cachingStore.put(bytesKey("e"), bytesValue("e"));
+        cachingStore.put(bytesKey("f"), bytesValue("f"));
+        cachingStore.put(bytesKey("g"), bytesValue("g"));
+        cachingStore.put(bytesKey("h"), bytesValue("h"));
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.all();
+        final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (final String s : array) {
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), s);
+        }
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldFetchAllWithinTimestampRange() {
+        final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
+        for (int i = 0; i < array.length; i++) {
+            context.setTime(i);
+            cachingStore.put(bytesKey(array[i]), bytesValue(array[i]));
+        }
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetchAll(ofEpochMilli(0), ofEpochMilli(7));
+        for (int i = 0; i < array.length; i++) {
+            final String str = array[i];
+            verifyWindowedKeyValue(iterator.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator.hasNext());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator1 = cachingStore.fetchAll(ofEpochMilli(2), ofEpochMilli(4));
+        for (int i = 2; i <= 4; i++) {
+            final String str = array[i];
+            verifyWindowedKeyValue(iterator1.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator1.hasNext());
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator2 = cachingStore.fetchAll(ofEpochMilli(5), ofEpochMilli(7));
+        for (int i = 5; i <= 7; i++) {
+            final String str = array[i];
+            verifyWindowedKeyValue(iterator2.next(), new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)), str);
+        }
+        assertFalse(iterator2.hasNext());
+    }
+
+    @Test
+    public void shouldFlushEvictedItemsIntoUnderlyingStore() {
+        final int added = addItemsToCache();
         // all dirty entries should have been flushed
         final KeyValueIterator<Bytes, byte[]> iter = underlying.fetch(Bytes.wrap("0".getBytes()), DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP);
         final KeyValue<Bytes, byte[]> next = iter.next();
@@ -110,103 +297,201 @@ public class CachingWindowStoreTest {
     }
 
     @Test
-    public void shouldForwardDirtyItemsWhenFlushCalled() throws Exception {
+    public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.put("1", "a");
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
         assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
     @Test
-    public void shouldForwardOldValuesWhenEnabled() throws Exception {
+    public void shouldForwardOldValuesWhenEnabled() {
+        cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
-        cachingStore.put("1", "a");
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
-        cachingStore.put("1", "b");
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("a", cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
     @Test
-    public void shouldForwardDirtyItemToListenerWhenEvicted() throws Exception {
-        int numRecords = addItemsToCache();
+    public void shouldForwardOldValuesWhenDisabled() {
+        final Windowed<String> windowedKey = new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.flush();
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.flush();
+        assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+    }
+
+    @Test
+    public void shouldForwardDirtyItemToListenerWhenEvicted() {
+        final int numRecords = addItemsToCache();
         assertEquals(numRecords, cacheListener.forwarded.size());
     }
 
     @Test
-    public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() throws Exception {
-        cachingStore.put("1", "a", DEFAULT_TIMESTAMP);
+    public void shouldTakeValueFromCacheIfSameTimestampFlushedToRocks() {
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
         cachingStore.flush();
-        cachingStore.put("1", "b", DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP);
 
-        final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP);
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "b"), fetch.next());
+        final WindowStoreIterator<byte[]> fetch = cachingStore.fetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP));
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "b");
         assertFalse(fetch.hasNext());
     }
 
     @Test
-    public void shouldIterateAcrossWindows() throws Exception {
-        cachingStore.put("1", "a", DEFAULT_TIMESTAMP);
-        cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
+    public void shouldIterateAcrossWindows() {
+        cachingStore.put(bytesKey("1"), bytesValue("a"), DEFAULT_TIMESTAMP);
+        cachingStore.put(bytesKey("1"), bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
 
-        final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP + WINDOW_SIZE, "b"), fetch.next());
+        final WindowStoreIterator<byte[]> fetch = cachingStore.fetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP + WINDOW_SIZE, "b");
         assertFalse(fetch.hasNext());
     }
 
     @Test
-    public void shouldIterateCacheAndStore() throws Exception {
-        final Bytes key = Bytes.wrap("1" .getBytes());
-        underlying.put(WindowStoreUtils.toBinaryKey(key, DEFAULT_TIMESTAMP, 0, WindowStoreUtils.getInnerStateSerde("app-id")), "a".getBytes());
-        cachingStore.put("1", "b", DEFAULT_TIMESTAMP + WINDOW_SIZE);
-        final WindowStoreIterator<String> fetch = cachingStore.fetch("1", DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE);
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP, "a"), fetch.next());
-        assertEquals(KeyValue.pair(DEFAULT_TIMESTAMP + WINDOW_SIZE, "b"), fetch.next());
+    public void shouldIterateCacheAndStore() {
+        final Bytes key = Bytes.wrap("1".getBytes());
+        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
+        final WindowStoreIterator<byte[]> fetch = cachingStore.fetch(bytesKey("1"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP, "a");
+        verifyKeyValue(fetch.next(), DEFAULT_TIMESTAMP + WINDOW_SIZE, "b");
         assertFalse(fetch.hasNext());
     }
 
     @Test
-    public void shouldClearNamespaceCacheOnClose() throws Exception {
-        cachingStore.put("a", "a");
+    public void shouldIterateCacheAndStoreKeyRange() {
+        final Bytes key = Bytes.wrap("1".getBytes());
+        underlying.put(WindowKeySchema.toStoreKeyBinary(key, DEFAULT_TIMESTAMP, 0), "a".getBytes());
+        cachingStore.put(key, bytesValue("b"), DEFAULT_TIMESTAMP + WINDOW_SIZE);
+
+        final KeyValueIterator<Windowed<Bytes>, byte[]> fetchRange =
+            cachingStore.fetch(key, bytesKey("2"), ofEpochMilli(DEFAULT_TIMESTAMP), ofEpochMilli(DEFAULT_TIMESTAMP + WINDOW_SIZE));
+        verifyWindowedKeyValue(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)), "a");
+        verifyWindowedKeyValue(fetchRange.next(), new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)), "b");
+        assertFalse(fetchRange.hasNext());
+    }
+
+    @Test
+    public void shouldClearNamespaceCacheOnClose() {
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
         assertEquals(1, cache.size());
         cachingStore.close();
         assertEquals(0, cache.size());
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToFetchFromClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.fetch("a", 0, 10);
+        cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(10));
     }
 
     @Test(expected = InvalidStateStoreException.class)
-    public void shouldThrowIfTryingToWriteToClosedCachingStore() throws Exception {
+    public void shouldThrowIfTryingToFetchRangeFromClosedCachingStore() {
         cachingStore.close();
-        cachingStore.put("a", "a");
+        cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10));
     }
 
-    @SuppressWarnings("unchecked")
+    @Test(expected = InvalidStateStoreException.class)
+    public void shouldThrowIfTryingToWriteToClosedCachingStore() {
+        cachingStore.close();
+        cachingStore.put(bytesKey("a"), bytesValue("a"));
+    }
+
     @Test
-    public void shouldFetchAndIterateOverExactKeys() throws Exception {
-        cachingStore.put("a", "0001", 0);
-        cachingStore.put("aa", "0002", 0);
-        cachingStore.put("a", "0003", 1);
-        cachingStore.put("aa", "0004", 1);
-        cachingStore.put("a", "0005", 60000);
+    public void shouldFetchAndIterateOverExactKeys() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
+        cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
+        cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
 
-        final List<KeyValue<Long, String>> expected = Utils.mkList(KeyValue.pair(0L, "0001"), KeyValue.pair(1L, "0003"), KeyValue.pair(60000L, "0005"));
-        assertThat(toList(cachingStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
+        final List<KeyValue<Long, byte[]>> expected = asList(
+            KeyValue.pair(0L, bytesValue("0001")),
+            KeyValue.pair(1L, bytesValue("0003")),
+            KeyValue.pair(SEGMENT_INTERVAL, bytesValue("0005"))
+        );
+        final List<KeyValue<Long, byte[]>> actual = toList(cachingStore.fetch(bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+        verifyKeyValueList(expected, actual);
     }
 
-    private int addItemsToCache() throws IOException {
+    @Test
+    public void shouldFetchAndIterateOverKeyRange() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 0);
+        cachingStore.put(bytesKey("a"), bytesValue("0003"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0004"), 1);
+        cachingStore.put(bytesKey("a"), bytesValue("0005"), SEGMENT_INTERVAL);
+
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0001", 0),
+                windowedPair("a", "0003", 1),
+                windowedPair("a", "0005", SEGMENT_INTERVAL)
+            ),
+            toList(cachingStore.fetch(bytesKey("a"), bytesKey("a"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+
+        verifyKeyValueList(
+            asList(windowedPair("aa", "0002", 0), windowedPair("aa", "0004", 1)),
+            toList(cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+
+        verifyKeyValueList(
+            asList(
+                windowedPair("a", "0001", 0),
+                windowedPair("a", "0003", 1),
+                windowedPair("aa", "0002", 0),
+                windowedPair("aa", "0004", 1),
+                windowedPair("a", "0005", SEGMENT_INTERVAL)
+            ),
+            toList(cachingStore.fetch(bytesKey("a"), bytesKey("aa"), ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)))
+        );
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPutNullKey() {
+        cachingStore.put(null, bytesValue("anyValue"));
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
+        cachingStore.put(bytesKey("a"), null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnFetchNullKey() {
+        cachingStore.fetch(null, ofEpochMilli(1L), ofEpochMilli(2L));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullFromKey() {
+        cachingStore.fetch(null, bytesKey("anyTo"), ofEpochMilli(1L), ofEpochMilli(2L));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
+        cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L));
+    }
+
+    private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {
+        return KeyValue.pair(new Windowed<>(bytesKey(key), new TimeWindow(timestamp, timestamp + WINDOW_SIZE)), bytesValue(value));
+    }
+
+    private int addItemsToCache() {
         int cachedSize = 0;
         int i = 0;
         while (cachedSize < MAX_CACHE_SIZE_BYTES) {
             final String kv = String.valueOf(i++);
-            cachingStore.put(kv, kv);
+            cachingStore.put(bytesKey(kv), bytesValue(kv));
             cachedSize += memoryCacheEntrySize(kv.getBytes(), kv.getBytes(), topic) +
                 8 + // timestamp
                 4; // sequenceNumber

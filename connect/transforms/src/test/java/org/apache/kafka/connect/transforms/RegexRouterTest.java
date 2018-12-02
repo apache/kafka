@@ -32,8 +32,9 @@ public class RegexRouterTest {
         props.put("replacement", replacement);
         final RegexRouter<SinkRecord> router = new RegexRouter<>();
         router.configure(props);
-        return router.apply(new SinkRecord(topic, 0, null, null, null, null, 0))
-                .topic();
+        String sinkTopic = router.apply(new SinkRecord(topic, 0, null, null, null, null, 0)).topic();
+        router.close();
+        return sinkTopic;
     }
 
     @Test

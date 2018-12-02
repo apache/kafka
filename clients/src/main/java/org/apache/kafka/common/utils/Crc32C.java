@@ -32,7 +32,7 @@ import java.util.zip.Checksum;
  *
  * NOTE: This class is intended for INTERNAL usage only within Kafka.
  */
-public class Crc32C {
+public final class Crc32C {
 
     private static final ChecksumFactory CHECKSUM_FACTORY;
 
@@ -42,6 +42,8 @@ public class Crc32C {
         else
             CHECKSUM_FACTORY = new PureJavaChecksumFactory();
     }
+
+    private Crc32C() {}
 
     /**
      * Compute the CRC32C (Castagnoli) of the segment of the byte array given by the specified size and offset

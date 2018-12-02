@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 
@@ -31,7 +33,8 @@ public class ClientResponse {
     private final long receivedTimeMs;
     private final long latencyMs;
     private final boolean disconnected;
-    private final RuntimeException versionMismatch;
+    private final UnsupportedVersionException versionMismatch;
+    private final AuthenticationException authenticationException;
     private final AbstractResponse responseBody;
 
     /**
@@ -51,7 +54,8 @@ public class ClientResponse {
                           long createdTimeMs,
                           long receivedTimeMs,
                           boolean disconnected,
-                          RuntimeException versionMismatch,
+                          UnsupportedVersionException versionMismatch,
+                          AuthenticationException authenticationException,
                           AbstractResponse responseBody) {
         this.requestHeader = requestHeader;
         this.callback = callback;
@@ -60,6 +64,7 @@ public class ClientResponse {
         this.latencyMs = receivedTimeMs - createdTimeMs;
         this.disconnected = disconnected;
         this.versionMismatch = versionMismatch;
+        this.authenticationException = authenticationException;
         this.responseBody = responseBody;
     }
 
@@ -71,8 +76,12 @@ public class ClientResponse {
         return disconnected;
     }
 
-    public RuntimeException versionMismatch() {
+    public UnsupportedVersionException versionMismatch() {
         return versionMismatch;
+    }
+
+    public AuthenticationException authenticationException() {
+        return authenticationException;
     }
 
     public RequestHeader requestHeader() {

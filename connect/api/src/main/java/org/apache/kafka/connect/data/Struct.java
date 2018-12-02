@@ -211,7 +211,9 @@ public class Struct {
      * @return the Struct, to allow chaining of {@link #put(String, Object)} calls
      */
     public Struct put(Field field, Object value) {
-        ConnectSchema.validateValue(field.schema(), value);
+        if (null == field)
+            throw new DataException("field cannot be null.");
+        ConnectSchema.validateValue(field.name(), field.schema(), value);
         values[field.index()] = value;
         return this;
     }
@@ -238,12 +240,12 @@ public class Struct {
         if (o == null || getClass() != o.getClass()) return false;
         Struct struct = (Struct) o;
         return Objects.equals(schema, struct.schema) &&
-                Arrays.equals(values, struct.values);
+                Arrays.deepEquals(values, struct.values);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(schema, Arrays.hashCode(values));
+        return Objects.hash(schema, Arrays.deepHashCode(values));
     }
 
     private Field lookupField(String fieldName) {

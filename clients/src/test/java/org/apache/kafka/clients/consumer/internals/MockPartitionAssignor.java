@@ -27,7 +27,7 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, List<String>> subscriptions) {
+                                                    Map<String, Subscription> subscriptions) {
         if (result == null)
             throw new IllegalStateException("Call to assign with no result prepared");
         return result;

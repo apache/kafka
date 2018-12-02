@@ -16,43 +16,40 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.junit.After;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
-
 import java.util.ArrayList;
+import java.util.Properties;
+
+import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapTest {
 
     private String topicName = "topic";
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-        driver = null;
-    }
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMap() {
-        KStreamBuilder builder = new KStreamBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
+        final KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
             new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
                 @Override
-                public Iterable<KeyValue<String, String>> apply(Number key, Object value) {
-                    ArrayList<KeyValue<String, String>> result = new ArrayList<>();
+                public Iterable<KeyValue<String, String>> apply(final Number key, final Object value) {
+                    final ArrayList<KeyValue<String, String>> result = new ArrayList<>();
                     for (int i = 0; i < key.intValue(); i++) {
                         result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
                     }
@@ -62,25 +59,25 @@ public class KStreamFlatMapTest {
 
         final int[] expectedKeys = {0, 1, 2, 3};
 
-        KStream<Integer, String> stream;
-        MockProcessorSupplier<String, String> processor;
+        final KStream<Integer, String> stream;
+        final MockProcessorSupplier<String, String> supplier;
 
-        processor = new MockProcessorSupplier<>();
-        stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
-        stream.flatMap(mapper).process(processor);
+        supplier = new MockProcessorSupplier<>();
+        stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.flatMap(mapper).process(supplier);
 
-        driver = new KStreamTestDriver(builder);
-        for (int expectedKey : expectedKeys) {
-            driver.process(topicName, expectedKey, "V" + expectedKey);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
         }
 
-        assertEquals(6, processor.processed.size());
+        assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
-        String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
+        final String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
 
         for (int i = 0; i < expected.length; i++) {
-            assertEquals(expected[i], processor.processed.get(i));
+            assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }
     }
-
 }

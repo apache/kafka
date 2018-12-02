@@ -30,8 +30,7 @@ public class IntegerDeserializer implements Deserializer<Integer> {
         if (data == null)
             return null;
         if (data.length != 4) {
-            throw new SerializationException("Size of data received by IntegerDeserializer is " +
-                    "not 4");
+            throw new SerializationException("Size of data received by IntegerDeserializer is not 4");
         }
 
         int value = 0;

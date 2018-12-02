@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
-import org.apache.kafka.common.Os;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
 
+import java.io.IOException;
+
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 import static org.junit.Assume.assumeTrue;
 
 public class ShellTest {
@@ -30,16 +33,42 @@ public class ShellTest {
 
     @Test
     public void testEchoHello() throws Exception {
-        assumeTrue(!Os.IS_WINDOWS);
+        assumeTrue(!OperatingSystem.IS_WINDOWS);
         String output = Shell.execCommand("echo", "hello");
         assertEquals("hello\n", output);
     }
 
     @Test
     public void testHeadDevZero() throws Exception {
-        assumeTrue(!Os.IS_WINDOWS);
+        assumeTrue(!OperatingSystem.IS_WINDOWS);
         final int length = 100000;
         String output = Shell.execCommand("head", "-c", Integer.toString(length), "/dev/zero");
         assertEquals(length, output.length());
+    }
+
+    private final static String NONEXISTENT_PATH = "/dev/a/path/that/does/not/exist/in/the/filesystem";
+
+    @Test
+    public void testAttemptToRunNonExistentProgram() {
+        assumeTrue(!OperatingSystem.IS_WINDOWS);
+        try {
+            Shell.execCommand(NONEXISTENT_PATH);
+            fail("Expected to get an exception when trying to run a program that does not exist");
+        } catch (IOException e) {
+            assertTrue(e.getMessage().contains("No such file"));
+        }
+    }
+
+    @Test
+    public void testRunProgramWithErrorReturn() throws Exception {
+        assumeTrue(!OperatingSystem.IS_WINDOWS);
+        try {
+            Shell.execCommand("head", "-c", "0", NONEXISTENT_PATH);
+            fail("Expected to get an exception when trying to head a nonexistent file");
+        } catch (Shell.ExitCodeException e) {
+            String message = e.getMessage();
+            assertTrue("Unexpected error message '" + message + "'",
+                    message.contains("No such file") || message.contains("illegal byte count"));
+        }
     }
 }

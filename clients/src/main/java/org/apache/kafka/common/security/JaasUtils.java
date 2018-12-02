@@ -22,7 +22,7 @@ import org.apache.kafka.common.KafkaException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class JaasUtils {
+public final class JaasUtils {
     private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
     public static final String JAVA_LOGIN_CONFIG_PARAM = "java.security.auth.login.config";
 
@@ -30,6 +30,8 @@ public class JaasUtils {
 
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
     public static final String ZK_LOGIN_CONTEXT_NAME_KEY = "zookeeper.sasl.clientconfig";
+
+    private JaasUtils() {}
 
     public static boolean isZkSecurityEnabled() {
         boolean zkSaslEnabled = Boolean.parseBoolean(System.getProperty(ZK_SASL_CLIENT, "true"));

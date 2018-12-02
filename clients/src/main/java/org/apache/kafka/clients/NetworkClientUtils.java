@@ -18,6 +18,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.utils.Time;
 
 import java.io.IOException;
@@ -26,7 +27,9 @@ import java.util.List;
 /**
  * Provides additional utilities for {@link NetworkClient} (e.g. to implement blocking behaviour).
  */
-public class NetworkClientUtils {
+public final class NetworkClientUtils {
+
+    private NetworkClientUtils() {}
 
     /**
      * Checks whether the node is currently connected, first calling `client.poll` to ensure that any pending
@@ -47,7 +50,7 @@ public class NetworkClientUtils {
      * It returns `true` if the call completes normally or `false` if the timeoutMs expires. If the connection fails,
      * an `IOException` is thrown instead. Note that if the `NetworkClient` has been configured with a positive
      * connection timeoutMs, it is possible for this method to raise an `IOException` for a previous connection which
-     * has recently disconnected.
+     * has recently disconnected. If authentication to the node fails, an `AuthenticationException` is thrown.
      *
      * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
      * care.
@@ -69,6 +72,8 @@ public class NetworkClientUtils {
             }
             long pollTimeout = expiryTime - attemptStartTime;
             client.poll(pollTimeout, attemptStartTime);
+            if (client.authenticationException(node) != null)
+                throw client.authenticationException(node);
             attemptStartTime = time.milliseconds();
         }
         return client.isReady(node, attemptStartTime);
@@ -79,25 +84,35 @@ public class NetworkClientUtils {
      * disconnection happens (which can happen for a number of reasons including a request timeout).
      *
      * In case of a disconnection, an `IOException` is thrown.
+     * If shutdown is initiated on the client during this method, an IOException is thrown.
      *
      * This method is useful for implementing blocking behaviour on top of the non-blocking `NetworkClient`, use it with
      * care.
      */
     public static ClientResponse sendAndReceive(KafkaClient client, ClientRequest request, Time time) throws IOException {
-        client.send(request, time.milliseconds());
-        while (true) {
-            List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
-            for (ClientResponse response : responses) {
-                if (response.requestHeader().correlationId() == request.correlationId()) {
-                    if (response.wasDisconnected()) {
-                        throw new IOException("Connection to " + response.destination() + " was disconnected before the response was read");
+        try {
+            client.send(request, time.milliseconds());
+            while (client.active()) {
+                List<ClientResponse> responses = client.poll(Long.MAX_VALUE, time.milliseconds());
+                for (ClientResponse response : responses) {
+                    if (response.requestHeader().correlationId() == request.correlationId()) {
+                        if (response.wasDisconnected()) {
+                            throw new IOException("Connection to " + response.destination() + " was disconnected before the response was read");
+                        }
+                        if (response.versionMismatch() != null) {
+                            throw response.versionMismatch();
+                        }
+                        return response;
                     }
-                    if (response.versionMismatch() != null) {
-                        throw response.versionMismatch();
-                    }
-                    return response;
                 }
             }
+            throw new IOException("Client was shutdown before response was read");
+        } catch (DisconnectException e) {
+            if (client.active())
+                throw e;
+            else
+                throw new IOException("Client was shutdown before response was read");
+
         }
     }
 }

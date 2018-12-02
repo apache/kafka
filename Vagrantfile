@@ -40,8 +40,10 @@ ec2_keypair_file = nil
 
 ec2_region = "us-east-1"
 ec2_az = nil # Uses set by AWS
-ec2_ami = "ami-9eaa1cf6"
+ec2_ami = "ami-905730e8"
 ec2_instance_type = "m3.medium"
+ec2_spot_instance = ENV['SPOT_INSTANCE'] ? ENV['SPOT_INSTANCE'] == 'true' : true
+ec2_spot_max_price = "0.113"  # On-demand price for instance type
 ec2_user = "ubuntu"
 ec2_instance_name_prefix = "kafka-vagrant"
 ec2_security_groups = nil
@@ -80,7 +82,7 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
       # share to a temporary location and the provisioning scripts symlink data
       # to the right location.
       override.cache.enable :generic, {
-        "oracle-jdk7" => { cache_dir: "/tmp/oracle-jdk7-installer-cache" },
+        "oracle-jdk8" => { cache_dir: "/tmp/oracle-jdk8-installer-cache" },
       }
     end
   end
@@ -133,6 +135,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
     else
       aws.associate_public_ip = ec2_associate_public_ip
     end
+    aws.region_config ec2_region do |region|
+      region.spot_instance = ec2_spot_instance
+      region.spot_max_price = ec2_spot_max_price
+    end
 
     # Exclude some directories that can grow very large from syncing
     override.vm.synced_folder ".", "/vagrant", type: "rsync", rsync__exclude: ['.git', 'core/data/', 'logs/', 'tests/results/', 'results/']
@@ -141,7 +147,10 @@ Vagrant.configure(VAGRANTFILE_API_VERSION) do |config|
   def name_node(node, name, ec2_instance_name_prefix)
     node.vm.hostname = name
     node.vm.provider :aws do |aws|
-      aws.tags = { 'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name }
+      aws.tags = {
+        'Name' => ec2_instance_name_prefix + "-" + Socket.gethostname + "-" + name,
+        'JenkinsBuildUrl' => ENV['BUILD_URL']
+      }
     end
   end
 

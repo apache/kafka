@@ -18,15 +18,34 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
+import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
+import static org.apache.kafka.common.protocol.types.Type.BOOLEAN;
+
 public class EndTxnRequest extends AbstractRequest {
-    private static final String TRANSACTIONAL_ID_KEY_NAME = "transactional_id";
-    private static final String PID_KEY_NAME = "producer_id";
-    private static final String EPOCH_KEY_NAME = "producer_epoch";
     private static final String TRANSACTION_RESULT_KEY_NAME = "transaction_result";
+
+    private static final Schema END_TXN_REQUEST_V0 = new Schema(
+            TRANSACTIONAL_ID,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            new Field(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction (0 = ABORT, 1 = COMMIT)"));
+
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema END_TXN_REQUEST_V1 = END_TXN_REQUEST_V0;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[]{END_TXN_REQUEST_V0, END_TXN_REQUEST_V1};
+    }
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
         private final String transactionalId;
@@ -42,9 +61,25 @@ public class EndTxnRequest extends AbstractRequest {
             this.result = result;
         }
 
+        public TransactionResult result() {
+            return result;
+        }
+
         @Override
         public EndTxnRequest build(short version) {
             return new EndTxnRequest(version, transactionalId, producerId, producerEpoch, result);
+        }
+
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(type=EndTxnRequest").
+                    append(", transactionalId=").append(transactionalId).
+                    append(", producerId=").append(producerId).
+                    append(", producerEpoch=").append(producerEpoch).
+                    append(", result=").append(result).
+                    append(")");
+            return bld.toString();
         }
     }
 
@@ -54,7 +89,7 @@ public class EndTxnRequest extends AbstractRequest {
     private final TransactionResult result;
 
     private EndTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, TransactionResult result) {
-        super(version);
+        super(ApiKeys.END_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -62,10 +97,10 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     public EndTxnRequest(Struct struct, short version) {
-        super(version);
-        this.transactionalId = struct.getString(TRANSACTIONAL_ID_KEY_NAME);
-        this.producerId = struct.getLong(PID_KEY_NAME);
-        this.producerEpoch = struct.getShort(EPOCH_KEY_NAME);
+        super(ApiKeys.END_TXN, version);
+        this.transactionalId = struct.get(TRANSACTIONAL_ID);
+        this.producerId = struct.get(PRODUCER_ID);
+        this.producerEpoch = struct.get(PRODUCER_EPOCH);
         this.result = TransactionResult.forId(struct.getBoolean(TRANSACTION_RESULT_KEY_NAME));
     }
 
@@ -88,16 +123,16 @@ public class EndTxnRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.END_TXN.requestSchema(version()));
-        struct.set(TRANSACTIONAL_ID_KEY_NAME, transactionalId);
-        struct.set(PID_KEY_NAME, producerId);
-        struct.set(EPOCH_KEY_NAME, producerEpoch);
+        struct.set(TRANSACTIONAL_ID, transactionalId);
+        struct.set(PRODUCER_ID, producerId);
+        struct.set(PRODUCER_EPOCH, producerEpoch);
         struct.set(TRANSACTION_RESULT_KEY_NAME, result.id);
         return struct;
     }
 
     @Override
-    public EndTxnResponse getErrorResponse(Throwable e) {
-        return new EndTxnResponse(Errors.forException(e));
+    public EndTxnResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        return new EndTxnResponse(throttleTimeMs, Errors.forException(e));
     }
 
     public static EndTxnRequest parse(ByteBuffer buffer, short version) {

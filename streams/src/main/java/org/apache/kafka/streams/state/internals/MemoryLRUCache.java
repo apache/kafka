@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * An in-memory LRU cache store based on HashSet and HashMap.
@@ -36,12 +37,9 @@ import java.util.Map;
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
-
  *
  * @param <K> The key type
  * @param <V> The value type
- *
- * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
@@ -52,44 +50,44 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     private final Serde<K> keySerde;
 
     private final Serde<V> valueSerde;
-    private String name;
-    protected Map<K, V> map;
+    private final String name;
+    protected final Map<K, V> map;
+
     private StateSerdes<K, V> serdes;
+    private boolean restoring = false;      // TODO: this is a sub-optimal solution to avoid logging during restoration.
+                                            // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
 
-    protected EldestEntryRemovalListener<K, V> listener;
+    private EldestEntryRemovalListener<K, V> listener;
 
-    // this is used for extended MemoryNavigableLRUCache only
-    public MemoryLRUCache(Serde<K> keySerde, Serde<V> valueSerde) {
+    MemoryLRUCache(final String name,
+                   final int maxCacheSize,
+                   final Serde<K> keySerde,
+                   final Serde<V> valueSerde) {
+        this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
-    }
-
-    public MemoryLRUCache(String name, final int maxCacheSize, Serde<K> keySerde, Serde<V> valueSerde) {
-        this(keySerde, valueSerde);
-        this.name = name;
 
         // leave room for one extra entry to handle adding an entry before the oldest can be removed
         this.map = new LinkedHashMap<K, V>(maxCacheSize + 1, 1.01f, true) {
             private static final long serialVersionUID = 1L;
 
             @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                if (super.size() > maxCacheSize) {
-                    K key = eldest.getKey();
-                    if (listener != null) listener.apply(key, eldest.getValue());
-                    return true;
+            protected boolean removeEldestEntry(final Map.Entry<K, V> eldest) {
+                final boolean evict = super.size() > maxCacheSize;
+                if (evict && !restoring && listener != null) {
+                    listener.apply(eldest.getKey(), eldest.getValue());
                 }
-                return false;
+                return evict;
             }
         };
     }
 
-    public KeyValueStore<K, V> enableLogging() {
+    KeyValueStore<K, V> enableLogging() {
         return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
 
-    public MemoryLRUCache<K, V> whenEldestRemoved(EldestEntryRemovalListener<K, V> listener) {
+    MemoryLRUCache<K, V> whenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
 
         return this;
@@ -102,7 +100,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -110,15 +108,17 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
-        context.register(root, true, new StateRestoreCallback() {
+        context.register(root, new StateRestoreCallback() {
             @Override
-            public void restore(byte[] key, byte[] value) {
+            public void restore(final byte[] key, final byte[] value) {
+                restoring = true;
                 // check value for null, to avoid  deserialization error.
                 if (value == null) {
-                    put(serdes.keyFrom(key), null);
+                    delete(serdes.keyFrom(key));
                 } else {
                     put(serdes.keyFrom(key), serdes.valueFrom(value));
                 }
+                restoring = false;
             }
         });
     }
@@ -134,18 +134,26 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(K key) {
+    public synchronized V get(final K key) {
+        Objects.requireNonNull(key);
+
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(K key, V value) {
-        this.map.put(key, value);
+    public synchronized void put(final K key, final V value) {
+        Objects.requireNonNull(key);
+        if (value == null) {
+            this.map.remove(key);
+        } else {
+            this.map.put(key, value);
+        }
     }
 
     @Override
-    public synchronized V putIfAbsent(K key, V value) {
-        V originalValue = get(key);
+    public synchronized V putIfAbsent(final K key, final V value) {
+        Objects.requireNonNull(key);
+        final V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -153,22 +161,22 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public void putAll(List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+    public void putAll(final List<KeyValue<K, V>> entries) {
+        for (final KeyValue<K, V> entry : entries)
             put(entry.key, entry.value);
     }
 
     @Override
-    public synchronized V delete(K key) {
-        V value = this.map.remove(key);
-        return value;
+    public synchronized V delete(final K key) {
+        Objects.requireNonNull(key);
+        return this.map.remove(key);
     }
 
     /**
      * @throws UnsupportedOperationException
      */
     @Override
-    public KeyValueIterator<K, V> range(K from, K to) {
+    public KeyValueIterator<K, V> range(final K from, final K to) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
     }
 

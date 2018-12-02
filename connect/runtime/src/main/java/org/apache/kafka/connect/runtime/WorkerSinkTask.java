@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -26,26 +25,39 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
+import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
+import org.apache.kafka.connect.header.ConnectHeaders;
+import org.apache.kafka.connect.header.Headers;
+import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
+import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
+import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 
@@ -57,16 +69,20 @@ class WorkerSinkTask extends WorkerTask {
 
     private final WorkerConfig workerConfig;
     private final SinkTask task;
+    private final ClusterConfigState configState;
     private Map<String, String> taskConfig;
     private final Time time;
     private final Converter keyConverter;
     private final Converter valueConverter;
+    private final HeaderConverter headerConverter;
     private final TransformationChain<SinkRecord> transformationChain;
+    private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private KafkaConsumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
     private Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
     private Map<TopicPartition, OffsetAndMetadata> currentOffsets;
+    private final Map<TopicPartition, OffsetAndMetadata> origOffsets;
     private RuntimeException rebalanceException;
     private long nextCommit;
     private int commitSeqno;
@@ -80,20 +96,29 @@ class WorkerSinkTask extends WorkerTask {
                           TaskStatus.Listener statusListener,
                           TargetState initialState,
                           WorkerConfig workerConfig,
+                          ClusterConfigState configState,
+                          ConnectMetrics connectMetrics,
                           Converter keyConverter,
                           Converter valueConverter,
+                          HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
-                          Time time) {
-        super(id, statusListener, initialState);
+                          KafkaConsumer<byte[], byte[]> consumer,
+                          ClassLoader loader,
+                          Time time,
+                          RetryWithToleranceOperator retryWithToleranceOperator) {
+        super(id, statusListener, initialState, loader, connectMetrics, retryWithToleranceOperator);
 
         this.workerConfig = workerConfig;
         this.task = task;
+        this.configState = configState;
         this.keyConverter = keyConverter;
         this.valueConverter = valueConverter;
+        this.headerConverter = headerConverter;
         this.transformationChain = transformationChain;
         this.time = time;
         this.messageBatch = new ArrayList<>();
         this.currentOffsets = new HashMap<>();
+        this.origOffsets = new HashMap<>();
         this.pausedForRedelivery = false;
         this.rebalanceException = null;
         this.nextCommit = time.milliseconds() +
@@ -102,16 +127,18 @@ class WorkerSinkTask extends WorkerTask {
         this.commitSeqno = 0;
         this.commitStarted = -1;
         this.commitFailures = 0;
+        this.sinkTaskMetricsGroup = new SinkTaskMetricsGroup(id, connectMetrics);
+        this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
+        this.consumer = consumer;
     }
 
     @Override
     public void initialize(TaskConfig taskConfig) {
         try {
             this.taskConfig = taskConfig.originalsStrings();
-            this.consumer = createConsumer();
-            this.context = new WorkerSinkTaskContext(consumer);
+            this.context = new WorkerSinkTaskContext(consumer, this, configState);
         } catch (Throwable t) {
-            log.error("Task {} failed initialization and will not be started.", t);
+            log.error("{} Task failed initialization and will not be started.", this, t);
             onFailure(t);
         }
     }
@@ -127,10 +154,28 @@ class WorkerSinkTask extends WorkerTask {
     protected void close() {
         // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
         // passed in
-        task.stop();
-        if (consumer != null)
-            consumer.close();
-        transformationChain.close();
+        try {
+            task.stop();
+        } catch (Throwable t) {
+            log.warn("Could not stop task", t);
+        }
+        if (consumer != null) {
+            try {
+                consumer.close();
+            } catch (Throwable t) {
+                log.warn("Could not close consumer", t);
+            }
+        }
+        try {
+            transformationChain.close();
+        } catch (Throwable t) {
+            log.warn("Could not close transformation chain", t);
+        }
+    }
+
+    @Override
+    protected void releaseResources() {
+        sinkTaskMetricsGroup.close();
     }
 
     @Override
@@ -154,7 +199,6 @@ class WorkerSinkTask extends WorkerTask {
 
     protected void iteration() {
         final long offsetCommitIntervalMs = workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG);
-        final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
 
         try {
             long now = time.milliseconds();
@@ -166,9 +210,11 @@ class WorkerSinkTask extends WorkerTask {
                 context.clearCommitRequest();
             }
 
+            final long commitTimeoutMs = commitStarted + workerConfig.getLong(WorkerConfig.OFFSET_COMMIT_TIMEOUT_MS_CONFIG);
+
             // Check for timed out commits
             if (committing && now >= commitTimeoutMs) {
-                log.warn("Commit of {} offsets timed out", this);
+                log.warn("{} Commit of offsets timed out", this);
                 commitFailures++;
                 committing = false;
             }
@@ -177,7 +223,7 @@ class WorkerSinkTask extends WorkerTask {
             long timeoutMs = Math.max(nextCommit - now, 0);
             poll(timeoutMs);
         } catch (WakeupException we) {
-            log.trace("{} consumer woken up", id);
+            log.trace("{} Consumer woken up", this);
 
             if (isStopping())
                 return;
@@ -193,19 +239,37 @@ class WorkerSinkTask extends WorkerTask {
         }
     }
 
-    private void onCommitCompleted(Throwable error, long seqno) {
+    /**
+     * Respond to a previous commit attempt that may or may not have succeeded. Note that due to our use of async commits,
+     * these invocations may come out of order and thus the need for the commit sequence number.
+     *
+     * @param error            the error resulting from the commit, or null if the commit succeeded without error
+     * @param seqno            the sequence number at the time the commit was requested
+     * @param committedOffsets the offsets that were committed; may be null if the commit did not complete successfully
+     *                         or if no new offsets were committed
+     */
+    private void onCommitCompleted(Throwable error, long seqno, Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         if (commitSeqno != seqno) {
-            log.debug("Got callback for timed out commit {}: {}, but most recent commit is {}",
-                    this,
-                    seqno, commitSeqno);
+            log.debug("{} Received out of order commit callback for sequence number {}, but most recent sequence number is {}",
+                    this, seqno, commitSeqno);
+            sinkTaskMetricsGroup.recordOffsetCommitSkip();
         } else {
+            long durationMillis = time.milliseconds() - commitStarted;
             if (error != null) {
-                log.error("Commit of {} offsets threw an unexpected exception: ", this, error);
+                log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
+                        this, seqno, committedOffsets, error);
                 commitFailures++;
+                recordCommitFailure(durationMillis, error);
             } else {
-                log.debug("Finished {} offset commit successfully in {} ms",
-                        this, time.milliseconds() - commitStarted);
+                log.debug("{} Finished offset commit successfully in {} ms for sequence number {}: {}",
+                        this, durationMillis, seqno, committedOffsets);
+                if (committedOffsets != null) {
+                    log.debug("{} Setting last committed offsets to {}", this, committedOffsets);
+                    lastCommittedOffsets = committedOffsets;
+                    sinkTaskMetricsGroup.recordCommittedOffsets(committedOffsets);
+                }
                 commitFailures = 0;
+                recordCommitSuccess(durationMillis);
             }
             committing = false;
         }
@@ -219,19 +283,27 @@ class WorkerSinkTask extends WorkerTask {
      * Initializes and starts the SinkTask.
      */
     protected void initializeAndStart() {
-        log.debug("Initializing task {} ", id);
-        String topicsStr = taskConfig.get(SinkTask.TOPICS_CONFIG);
-        if (topicsStr == null || topicsStr.isEmpty())
-            throw new ConnectException("Sink tasks require a list of topics.");
-        String[] topics = topicsStr.split(",");
-        log.debug("Task {} subscribing to topics {}", id, topics);
-        consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
+        SinkConnectorConfig.validate(taskConfig);
+
+        if (SinkConnectorConfig.hasTopicsConfig(taskConfig)) {
+            String[] topics = taskConfig.get(SinkTask.TOPICS_CONFIG).split(",");
+            consumer.subscribe(Arrays.asList(topics), new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics {}", this, topics);
+        } else {
+            String topicsRegexStr = taskConfig.get(SinkTask.TOPICS_REGEX_CONFIG);
+            Pattern pattern = Pattern.compile(topicsRegexStr);
+            consumer.subscribe(pattern, new HandleRebalance());
+            log.debug("{} Initializing and starting task for topics regex {}", this, topicsRegexStr);
+        }
+
         task.initialize(context);
         task.start(taskConfig);
-        log.info("Sink task {} finished initialization and start", this);
+        log.info("{} Sink task finished initialization and start", this);
     }
 
-    /** Poll for new messages with the given timeout. Should only be invoked by the worker thread. */
+    /**
+     * Poll for new messages with the given timeout. Should only be invoked by the worker thread.
+     */
     protected void poll(long timeoutMs) {
         rewind();
         long retryTimeout = context.timeout();
@@ -240,48 +312,54 @@ class WorkerSinkTask extends WorkerTask {
             context.timeout(-1L);
         }
 
-        log.trace("{} polling consumer with timeout {} ms", id, timeoutMs);
+        log.trace("{} Polling consumer with timeout {} ms", this, timeoutMs);
         ConsumerRecords<byte[], byte[]> msgs = pollConsumer(timeoutMs);
         assert messageBatch.isEmpty() || msgs.isEmpty();
-        log.trace("{} polling returned {} messages", id, msgs.count());
+        log.trace("{} Polling returned {} messages", this, msgs.count());
 
         convertMessages(msgs);
         deliverMessages();
     }
 
+    // Visible for testing
+    boolean isCommitting() {
+        return committing;
+    }
+
     private void doCommitSync(Map<TopicPartition, OffsetAndMetadata> offsets, int seqno) {
+        log.info("{} Committing offsets synchronously using sequence number {}: {}", this, seqno, offsets);
         try {
             consumer.commitSync(offsets);
-            lastCommittedOffsets = offsets;
-            onCommitCompleted(null, seqno);
+            onCommitCompleted(null, seqno, offsets);
         } catch (WakeupException e) {
             // retry the commit to ensure offsets get pushed, then propagate the wakeup up to poll
             doCommitSync(offsets, seqno);
             throw e;
         } catch (KafkaException e) {
-            onCommitCompleted(e, seqno);
+            onCommitCompleted(e, seqno, offsets);
         }
+    }
+
+    private void doCommitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, final int seqno) {
+        log.info("{} Committing offsets asynchronously using sequence number {}: {}", this, seqno, offsets);
+        OffsetCommitCallback cb = new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
+                onCommitCompleted(error, seqno, offsets);
+            }
+        };
+        consumer.commitAsync(offsets, cb);
     }
 
     /**
      * Starts an offset commit by flushing outstanding messages from the task and then starting
      * the write commit.
      **/
-    private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, final int seqno) {
-        log.info("{} Committing offsets", this);
+    private void doCommit(Map<TopicPartition, OffsetAndMetadata> offsets, boolean closing, int seqno) {
         if (closing) {
             doCommitSync(offsets, seqno);
         } else {
-            OffsetCommitCallback cb = new OffsetCommitCallback() {
-                @Override
-                public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception error) {
-                    if (error == null) {
-                        lastCommittedOffsets = offsets;
-                    }
-                    onCommitCompleted(error, seqno);
-                }
-            };
-            consumer.commitAsync(offsets, cb);
+            doCommitAsync(offsets, seqno);
         }
     }
 
@@ -292,33 +370,36 @@ class WorkerSinkTask extends WorkerTask {
         committing = true;
         commitSeqno += 1;
         commitStarted = now;
+        sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
 
         final Map<TopicPartition, OffsetAndMetadata> taskProvidedOffsets;
         try {
+            log.trace("{} Calling task.preCommit with current offsets: {}", this, currentOffsets);
             taskProvidedOffsets = task.preCommit(new HashMap<>(currentOffsets));
         } catch (Throwable t) {
             if (closing) {
-                log.warn("{} Offset commit failed during close");
-                onCommitCompleted(t, commitSeqno);
+                log.warn("{} Offset commit failed during close", this);
+                onCommitCompleted(t, commitSeqno, null);
             } else {
                 log.error("{} Offset commit failed, rewinding to last committed offsets", this, t);
                 for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : lastCommittedOffsets.entrySet()) {
-                    log.debug("{} Rewinding topic partition {} to offset {}", id, entry.getKey(), entry.getValue().offset());
+                    log.debug("{} Rewinding topic partition {} to offset {}", this, entry.getKey(), entry.getValue().offset());
                     consumer.seek(entry.getKey(), entry.getValue().offset());
                 }
                 currentOffsets = new HashMap<>(lastCommittedOffsets);
-                onCommitCompleted(t, commitSeqno);
+                onCommitCompleted(t, commitSeqno, null);
             }
             return;
         } finally {
-            // Close the task if needed before committing the offsets.
-            if (closing)
+            if (closing) {
+                log.trace("{} Closing the task before committing the offsets: {}", this, currentOffsets);
                 task.close(currentOffsets.keySet());
+            }
         }
 
         if (taskProvidedOffsets.isEmpty()) {
-            log.debug("{} Skipping offset commit, task opted-out", this);
-            onCommitCompleted(null, commitSeqno);
+            log.debug("{} Skipping offset commit, task opted-out by returning no offsets from preCommit", this);
+            onCommitCompleted(null, commitSeqno, null);
             return;
         }
 
@@ -327,23 +408,26 @@ class WorkerSinkTask extends WorkerTask {
             final TopicPartition partition = taskProvidedOffsetEntry.getKey();
             final OffsetAndMetadata taskProvidedOffset = taskProvidedOffsetEntry.getValue();
             if (commitableOffsets.containsKey(partition)) {
-                if (taskProvidedOffset.offset() <= currentOffsets.get(partition).offset()) {
+                long taskOffset = taskProvidedOffset.offset();
+                long currentOffset = currentOffsets.get(partition).offset();
+                if (taskOffset <= currentOffset) {
                     commitableOffsets.put(partition, taskProvidedOffset);
                 } else {
-                    log.warn("Ignoring invalid task provided offset {}/{} -- not yet consumed", partition, taskProvidedOffset);
+                    log.warn("{} Ignoring invalid task provided offset {}/{} -- not yet consumed, taskOffset={} currentOffset={}",
+                            this, partition, taskProvidedOffset, taskOffset, currentOffset);
                 }
             } else {
-                log.warn("Ignoring invalid task provided offset {}/{} -- partition not assigned", partition, taskProvidedOffset);
+                log.warn("{} Ignoring invalid task provided offset {}/{} -- partition not assigned, assignment={}",
+                        this, partition, taskProvidedOffset, consumer.assignment());
             }
         }
 
         if (commitableOffsets.equals(lastCommittedOffsets)) {
             log.debug("{} Skipping offset commit, no change since last commit", this);
-            onCommitCompleted(null, commitSeqno);
+            onCommitCompleted(null, commitSeqno, null);
             return;
         }
 
-        log.trace("{} Offsets to commit: {}", this, commitableOffsets);
         doCommit(commitableOffsets, closing, commitSeqno);
     }
 
@@ -356,7 +440,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
-        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
+        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(timeoutMs));
 
         // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
         if (rebalanceException != null) {
@@ -365,50 +449,74 @@ class WorkerSinkTask extends WorkerTask {
             throw e;
         }
 
+        sinkTaskMetricsGroup.recordRead(msgs.count());
         return msgs;
     }
 
-    private KafkaConsumer<byte[], byte[]> createConsumer() {
-        // Include any unknown worker configs so consumer configs can be set globally on the worker
-        // and through to the task
-        Map<String, Object> props = new HashMap<>();
-
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
-        props.putAll(workerConfig.originalsWithPrefix("consumer."));
-
-        KafkaConsumer<byte[], byte[]> newConsumer;
-        try {
-            newConsumer = new KafkaConsumer<>(props);
-        } catch (Throwable t) {
-            throw new ConnectException("Failed to create consumer", t);
-        }
-
-        return newConsumer;
-    }
-
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
+        origOffsets.clear();
         for (ConsumerRecord<byte[], byte[]> msg : msgs) {
-            log.trace("Consuming message with key {}, value {}", msg.key(), msg.value());
-            SchemaAndValue keyAndSchema = keyConverter.toConnectData(msg.topic(), msg.key());
-            SchemaAndValue valueAndSchema = valueConverter.toConnectData(msg.topic(), msg.value());
-            SinkRecord record = new SinkRecord(msg.topic(), msg.partition(),
-                    keyAndSchema.schema(), keyAndSchema.value(),
-                    valueAndSchema.schema(), valueAndSchema.value(),
-                    msg.offset(),
-                    ConnectUtils.checkAndConvertTimestamp(msg.timestamp()),
-                    msg.timestampType());
-            record = transformationChain.apply(record);
-            if (record != null) {
-                messageBatch.add(record);
+            log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
+                    this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
+
+            retryWithToleranceOperator.consumerRecord(msg);
+
+            SinkRecord transRecord = convertAndTransformRecord(msg);
+
+            origOffsets.put(
+                    new TopicPartition(msg.topic(), msg.partition()),
+                    new OffsetAndMetadata(msg.offset() + 1)
+            );
+            if (transRecord != null) {
+                messageBatch.add(transRecord);
+            } else {
+                log.trace(
+                        "{} Converters and transformations returned null, possibly because of too many retries, so " +
+                                "dropping record in topic '{}' partition {} at offset {}",
+                        this, msg.topic(), msg.partition(), msg.offset()
+                );
             }
         }
+        sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
+    }
+
+    private SinkRecord convertAndTransformRecord(final ConsumerRecord<byte[], byte[]> msg) {
+        SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(() -> keyConverter.toConnectData(msg.topic(), msg.key()),
+                Stage.KEY_CONVERTER, keyConverter.getClass());
+
+        SchemaAndValue valueAndSchema = retryWithToleranceOperator.execute(() -> valueConverter.toConnectData(msg.topic(), msg.value()),
+                Stage.VALUE_CONVERTER, valueConverter.getClass());
+
+        Headers headers = retryWithToleranceOperator.execute(() -> convertHeadersFor(msg), Stage.HEADER_CONVERTER, headerConverter.getClass());
+
+        if (retryWithToleranceOperator.failed()) {
+            return null;
+        }
+
+        Long timestamp = ConnectUtils.checkAndConvertTimestamp(msg.timestamp());
+        SinkRecord origRecord = new SinkRecord(msg.topic(), msg.partition(),
+                keyAndSchema.schema(), keyAndSchema.value(),
+                valueAndSchema.schema(), valueAndSchema.value(),
+                msg.offset(),
+                timestamp,
+                msg.timestampType(),
+                headers);
+        log.trace("{} Applying transformations to record in topic '{}' partition {} at offset {} and timestamp {} with key {} and value {}",
+                this, msg.topic(), msg.partition(), msg.offset(), timestamp, keyAndSchema.value(), valueAndSchema.value());
+        return transformationChain.apply(origRecord);
+    }
+
+    private Headers convertHeadersFor(ConsumerRecord<byte[], byte[]> record) {
+        Headers result = new ConnectHeaders();
+        org.apache.kafka.common.header.Headers recordHeaders = record.headers();
+        if (recordHeaders != null) {
+            String topic = record.topic();
+            for (org.apache.kafka.common.header.Header recordHeader : recordHeaders) {
+                SchemaAndValue schemaAndValue = headerConverter.toConnectHeader(topic, recordHeader.key(), recordHeader.value());
+                result.add(recordHeader.key(), schemaAndValue);
+            }
+        }
+        return result;
     }
 
     private void resumeAll() {
@@ -425,10 +533,12 @@ class WorkerSinkTask extends WorkerTask {
         // Finally, deliver this batch to the sink
         try {
             // Since we reuse the messageBatch buffer, ensure we give the task its own copy
+            log.trace("{} Delivering batch of {} messages to task", this, messageBatch.size());
+            long start = time.milliseconds();
             task.put(new ArrayList<>(messageBatch));
-            for (SinkRecord record : messageBatch)
-                currentOffsets.put(new TopicPartition(record.topic(), record.kafkaPartition()),
-                        new OffsetAndMetadata(record.kafkaOffset() + 1));
+            recordBatch(messageBatch.size());
+            sinkTaskMetricsGroup.recordPut(time.milliseconds() - start);
+            currentOffsets.putAll(origOffsets);
             messageBatch.clear();
             // If we had paused all consumer topic partitions to try to redeliver data, then we should resume any that
             // the task had not explicitly paused
@@ -438,16 +548,16 @@ class WorkerSinkTask extends WorkerTask {
                 pausedForRedelivery = false;
             }
         } catch (RetriableException e) {
-            log.error("RetriableException from SinkTask {}:", id, e);
+            log.error("{} RetriableException from SinkTask:", this, e);
             // If we're retrying a previous batch, make sure we've paused all topic partitions so we don't get new data,
             // but will still be able to poll in order to handle user-requested timeouts, keep group membership, etc.
             pausedForRedelivery = true;
             pauseAll();
             // Let this exit normally, the batch will be reprocessed on the next loop.
         } catch (Throwable t) {
-            log.error("Task {} threw an uncaught and unrecoverable exception", id, t);
-            log.error("Task is being killed and will not recover until manually restarted");
-            throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.");
+            log.error("{} Task threw an uncaught and unrecoverable exception. Task is being killed and will not "
+                    + "recover until manually restarted.", this, t);
+            throw new ConnectException("Exiting WorkerSinkTask due to unrecoverable exception.", t);
         }
     }
 
@@ -460,36 +570,61 @@ class WorkerSinkTask extends WorkerTask {
             TopicPartition tp = entry.getKey();
             Long offset = entry.getValue();
             if (offset != null) {
-                log.trace("Rewind {} to offset {}.", tp, offset);
+                log.trace("{} Rewind {} to offset {}", this, tp, offset);
                 consumer.seek(tp, offset);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(offset));
                 currentOffsets.put(tp, new OffsetAndMetadata(offset));
             } else {
-                log.warn("Cannot rewind {} to null offset.", tp);
+                log.warn("{} Cannot rewind {} to null offset", this, tp);
             }
         }
         context.clearOffsets();
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
+        sinkTaskMetricsGroup.recordPartitionCount(partitions.size());
         task.open(partitions);
     }
 
     private void closePartitions() {
         commitOffsets(time.milliseconds(), true);
+        sinkTaskMetricsGroup.recordPartitionCount(0);
+    }
+
+    @Override
+    protected void recordBatch(int size) {
+        super.recordBatch(size);
+        sinkTaskMetricsGroup.recordSend(size);
+    }
+
+    @Override
+    protected void recordCommitFailure(long duration, Throwable error) {
+        super.recordCommitFailure(duration, error);
+    }
+
+    @Override
+    protected void recordCommitSuccess(long duration) {
+        super.recordCommitSuccess(duration);
+        sinkTaskMetricsGroup.recordOffsetCommitSuccess();
+    }
+
+    SinkTaskMetricsGroup sinkTaskMetricsGroup() {
+        return sinkTaskMetricsGroup;
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {
         @Override
         public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            log.debug("{} Partitions assigned {}", WorkerSinkTask.this, partitions);
             lastCommittedOffsets = new HashMap<>();
             currentOffsets = new HashMap<>();
             for (TopicPartition tp : partitions) {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.debug("{} assigned topic partition {} with offset {}", id, tp, pos);
+                log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
             }
+            sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 
             // If we paused everything for redelivery (which is no longer relevant since we discarded the data), make
             // sure anything we paused that the task didn't request to be paused *and* which we still own is resumed.
@@ -521,8 +656,10 @@ class WorkerSinkTask extends WorkerTask {
 
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            log.debug("{} Partitions revoked", WorkerSinkTask.this);
             try {
                 closePartitions();
+                sinkTaskMetricsGroup.clearOffsets();
             } catch (RuntimeException e) {
                 // The consumer swallows exceptions raised in the rebalance listener, so we need to store
                 // exceptions and rethrow when poll() returns.
@@ -531,6 +668,143 @@ class WorkerSinkTask extends WorkerTask {
 
             // Make sure we don't have any leftover data since offsets will be reset to committed positions
             messageBatch.clear();
+        }
+    }
+
+    static class SinkTaskMetricsGroup {
+        private final ConnectorTaskId id;
+        private final ConnectMetrics metrics;
+        private final MetricGroup metricGroup;
+        private final Sensor sinkRecordRead;
+        private final Sensor sinkRecordSend;
+        private final Sensor partitionCount;
+        private final Sensor offsetSeqNum;
+        private final Sensor offsetCompletion;
+        private final Sensor offsetCompletionSkip;
+        private final Sensor putBatchTime;
+        private final Sensor sinkRecordActiveCount;
+        private long activeRecords;
+        private Map<TopicPartition, OffsetAndMetadata> consumedOffsets = new HashMap<>();
+        private Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
+
+        public SinkTaskMetricsGroup(ConnectorTaskId id, ConnectMetrics connectMetrics) {
+            this.metrics = connectMetrics;
+            this.id = id;
+
+            ConnectMetricsRegistry registry = connectMetrics.registry();
+            metricGroup = connectMetrics
+                                  .group(registry.sinkTaskGroupName(), registry.connectorTagName(), id.connector(), registry.taskTagName(),
+                                         Integer.toString(id.task()));
+            // prevent collisions by removing any previously created metrics in this group.
+            metricGroup.close();
+
+            sinkRecordRead = metricGroup.sensor("sink-record-read");
+            sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadRate), new Rate());
+            sinkRecordRead.add(metricGroup.metricName(registry.sinkRecordReadTotal), new Total());
+
+            sinkRecordSend = metricGroup.sensor("sink-record-send");
+            sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendRate), new Rate());
+            sinkRecordSend.add(metricGroup.metricName(registry.sinkRecordSendTotal), new Total());
+
+            sinkRecordActiveCount = metricGroup.sensor("sink-record-active-count");
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCount), new Value());
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountMax), new Max());
+            sinkRecordActiveCount.add(metricGroup.metricName(registry.sinkRecordActiveCountAvg), new Avg());
+
+            partitionCount = metricGroup.sensor("partition-count");
+            partitionCount.add(metricGroup.metricName(registry.sinkRecordPartitionCount), new Value());
+
+            offsetSeqNum = metricGroup.sensor("offset-seq-number");
+            offsetSeqNum.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSeqNum), new Value());
+
+            offsetCompletion = metricGroup.sensor("offset-commit-completion");
+            offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionRate), new Rate());
+            offsetCompletion.add(metricGroup.metricName(registry.sinkRecordOffsetCommitCompletionTotal), new Total());
+
+            offsetCompletionSkip = metricGroup.sensor("offset-commit-completion-skip");
+            offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipRate), new Rate());
+            offsetCompletionSkip.add(metricGroup.metricName(registry.sinkRecordOffsetCommitSkipTotal), new Total());
+
+            putBatchTime = metricGroup.sensor("put-batch-time");
+            putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeMax), new Max());
+            putBatchTime.add(metricGroup.metricName(registry.sinkRecordPutBatchTimeAvg), new Avg());
+        }
+
+        void computeSinkRecordLag() {
+            Map<TopicPartition, OffsetAndMetadata> consumed = this.consumedOffsets;
+            Map<TopicPartition, OffsetAndMetadata> committed = this.committedOffsets;
+            activeRecords = 0L;
+            for (Map.Entry<TopicPartition, OffsetAndMetadata> committedOffsetEntry : committed.entrySet()) {
+                final TopicPartition partition = committedOffsetEntry.getKey();
+                final OffsetAndMetadata consumedOffsetMeta = consumed.get(partition);
+                if (consumedOffsetMeta != null) {
+                    final OffsetAndMetadata committedOffsetMeta = committedOffsetEntry.getValue();
+                    long consumedOffset = consumedOffsetMeta.offset();
+                    long committedOffset = committedOffsetMeta.offset();
+                    long diff = consumedOffset - committedOffset;
+                    // Connector tasks can return offsets, so make sure nothing wonky happens
+                    activeRecords += Math.max(diff, 0L);
+                }
+            }
+            sinkRecordActiveCount.record(activeRecords);
+        }
+
+        void close() {
+            metricGroup.close();
+        }
+
+        void recordRead(int batchSize) {
+            sinkRecordRead.record(batchSize);
+        }
+
+        void recordSend(int batchSize) {
+            sinkRecordSend.record(batchSize);
+        }
+
+        void recordPut(long duration) {
+            putBatchTime.record(duration);
+        }
+
+        void recordPartitionCount(int assignedPartitionCount) {
+            partitionCount.record(assignedPartitionCount);
+        }
+
+        void recordOffsetSequenceNumber(int seqNum) {
+            offsetSeqNum.record(seqNum);
+        }
+
+        void recordConsumedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            consumedOffsets.putAll(offsets);
+            computeSinkRecordLag();
+        }
+
+        void recordCommittedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            committedOffsets = offsets;
+            computeSinkRecordLag();
+        }
+
+        void assignedOffsets(Map<TopicPartition, OffsetAndMetadata> offsets) {
+            consumedOffsets = new HashMap<>(offsets);
+            committedOffsets = offsets;
+            sinkRecordActiveCount.record(0.0);
+        }
+
+        void clearOffsets() {
+            consumedOffsets.clear();
+            committedOffsets.clear();
+            sinkRecordActiveCount.record(0.0);
+        }
+
+        void recordOffsetCommitSuccess() {
+            offsetCompletion.record(1.0);
+        }
+
+        void recordOffsetCommitSkip() {
+            offsetCompletionSkip.record(1.0);
+        }
+
+        protected MetricGroup metricGroup() {
+            return metricGroup;
         }
     }
 }

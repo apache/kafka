@@ -51,8 +51,9 @@ object ReplicationQuotaManagerConfig {
 }
 
 trait ReplicaQuota {
+  def record(value: Long): Unit
   def isThrottled(topicPartition: TopicPartition): Boolean
-  def isQuotaExceeded(): Boolean
+  def isQuotaExceeded: Boolean
 }
 
 object Constants {
@@ -74,8 +75,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val throttledPartitions = new ConcurrentHashMap[String, Seq[Int]]()
   private var quota: Quota = null
-  private val sensorAccess = new SensorAccess
-  private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString, s"Tracking byte-rate for ${replicationType}")
+  private val sensorAccess = new SensorAccess(lock, metrics)
+  private val rateMetricName = metrics.metricName("byte-rate", replicationType.toString,
+    s"Tracking byte-rate for ${replicationType}")
 
   /**
     * Update the quota
@@ -98,7 +100,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  override def isQuotaExceeded(): Boolean = {
+  override def isQuotaExceeded: Boolean = {
     try {
       sensor().checkQuotas()
     } catch {
@@ -194,11 +196,9 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     sensorAccess.getOrCreate(
       replicationType.toString,
       InactiveSensorExpirationTimeSeconds,
-      lock,
-      metrics,
-      () => rateMetricName,
-      () => getQuotaMetricConfig(quota),
-      () => new SimpleRate()
+      rateMetricName,
+      Some(getQuotaMetricConfig(quota)),
+      new SimpleRate
     )
   }
 }

@@ -22,15 +22,6 @@ import org.junit.Test;
 public class KafkaPrincipalTest {
 
     @Test
-    public void testPrincipalNameCanContainSeparator() {
-        String name = "name" + KafkaPrincipal.SEPARATOR + "with" + KafkaPrincipal.SEPARATOR + "in" + KafkaPrincipal.SEPARATOR + "it";
-
-        KafkaPrincipal principal = KafkaPrincipal.fromString(KafkaPrincipal.USER_TYPE + KafkaPrincipal.SEPARATOR + name);
-        Assert.assertEquals(KafkaPrincipal.USER_TYPE, principal.getPrincipalType());
-        Assert.assertEquals(name, principal.getName());
-    }
-
-    @Test
     public void testEqualsAndHashCode() {
         String name = "KafkaUser";
         KafkaPrincipal principal1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, name);

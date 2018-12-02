@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * The {@code Initializer} interface for creating an initial value in aggregations.
@@ -24,14 +23,13 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @param <VA> aggregate value type
  * @see Aggregator
- * @see KGroupedStream#aggregate(Initializer, Aggregator, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Merger, SessionWindows, org.apache.kafka.common.serialization.Serde, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator)
+ * @see KGroupedStream#aggregate(Initializer, Aggregator, Materialized)
+ * @see TimeWindowedKStream#aggregate(Initializer, Aggregator)
+ * @see TimeWindowedKStream#aggregate(Initializer, Aggregator, Materialized)
+ * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger)
+ * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  */
-@InterfaceStability.Unstable
 public interface Initializer<VA> {
 
     /**

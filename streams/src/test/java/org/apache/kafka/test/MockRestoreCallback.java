@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class MockRestoreCallback implements StateRestoreCallback {
-    public int restoreCount = 0;
+    public List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
+
 
     @Override
     public void restore(final byte[] key, final byte[] value) {
-        restoreCount++;
+        restored.add(KeyValue.pair(key, value));
     }
 }

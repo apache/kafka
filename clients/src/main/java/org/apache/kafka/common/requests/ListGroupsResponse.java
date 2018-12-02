@@ -18,44 +18,84 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.ArrayOf;
+import org.apache.kafka.common.protocol.types.Field;
+import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+
+import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
+import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
+import static org.apache.kafka.common.protocol.types.Type.STRING;
 
 public class ListGroupsResponse extends AbstractResponse {
 
-    public static final String ERROR_CODE_KEY_NAME = "error_code";
-    public static final String GROUPS_KEY_NAME = "groups";
-    public static final String GROUP_ID_KEY_NAME = "group_id";
-    public static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
+    private static final String GROUPS_KEY_NAME = "groups";
+    private static final String PROTOCOL_TYPE_KEY_NAME = "protocol_type";
+
+    private static final Schema LIST_GROUPS_RESPONSE_GROUP_V0 = new Schema(
+            GROUP_ID,
+            new Field(PROTOCOL_TYPE_KEY_NAME, STRING));
+    private static final Schema LIST_GROUPS_RESPONSE_V0 = new Schema(
+            ERROR_CODE,
+            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+    private static final Schema LIST_GROUPS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            new Field(GROUPS_KEY_NAME, new ArrayOf(LIST_GROUPS_RESPONSE_GROUP_V0)));
+
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema LIST_GROUPS_RESPONSE_V2 = LIST_GROUPS_RESPONSE_V1;
+
+    public static Schema[] schemaVersions() {
+        return new Schema[] {LIST_GROUPS_RESPONSE_V0, LIST_GROUPS_RESPONSE_V1,
+            LIST_GROUPS_RESPONSE_V2};
+    }
 
     /**
      * Possible error codes:
      *
+     * COORDINATOR_LOADING_IN_PROGRESS (14)
      * COORDINATOR_NOT_AVAILABLE (15)
      * AUTHORIZATION_FAILED (29)
      */
 
     private final Errors error;
+    private final int throttleTimeMs;
     private final List<Group> groups;
 
     public ListGroupsResponse(Errors error, List<Group> groups) {
+        this(DEFAULT_THROTTLE_TIME, error, groups);
+    }
+
+    public ListGroupsResponse(int throttleTimeMs, Errors error, List<Group> groups) {
+        this.throttleTimeMs = throttleTimeMs;
         this.error = error;
         this.groups = groups;
     }
 
     public ListGroupsResponse(Struct struct) {
-        this.error = Errors.forCode(struct.getShort(ERROR_CODE_KEY_NAME));
+        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
+        this.error = Errors.forCode(struct.get(ERROR_CODE));
         this.groups = new ArrayList<>();
         for (Object groupObj : struct.getArray(GROUPS_KEY_NAME)) {
             Struct groupStruct = (Struct) groupObj;
-            String groupId = groupStruct.getString(GROUP_ID_KEY_NAME);
+            String groupId = groupStruct.get(GROUP_ID);
             String protocolType = groupStruct.getString(PROTOCOL_TYPE_KEY_NAME);
             this.groups.add(new Group(groupId, protocolType));
         }
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return throttleTimeMs;
     }
 
     public List<Group> groups() {
@@ -64,6 +104,11 @@ public class ListGroupsResponse extends AbstractResponse {
 
     public Errors error() {
         return error;
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        return errorCounts(error);
     }
 
     public static class Group {
@@ -88,11 +133,12 @@ public class ListGroupsResponse extends AbstractResponse {
     @Override
     protected Struct toStruct(short version) {
         Struct struct = new Struct(ApiKeys.LIST_GROUPS.responseSchema(version));
-        struct.set(ERROR_CODE_KEY_NAME, error.code());
+        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
+        struct.set(ERROR_CODE, error.code());
         List<Struct> groupList = new ArrayList<>();
         for (Group group : groups) {
             Struct groupStruct = struct.instance(GROUPS_KEY_NAME);
-            groupStruct.set(GROUP_ID_KEY_NAME, group.groupId);
+            groupStruct.set(GROUP_ID, group.groupId);
             groupStruct.set(PROTOCOL_TYPE_KEY_NAME, group.protocolType);
             groupList.add(groupStruct);
         }
@@ -100,12 +146,12 @@ public class ListGroupsResponse extends AbstractResponse {
         return struct;
     }
 
-    public static ListGroupsResponse fromError(Errors error) {
-        return new ListGroupsResponse(error, Collections.<Group>emptyList());
-    }
-
     public static ListGroupsResponse parse(ByteBuffer buffer, short version) {
         return new ListGroupsResponse(ApiKeys.LIST_GROUPS.parseResponse(version, buffer));
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 2;
+    }
 }

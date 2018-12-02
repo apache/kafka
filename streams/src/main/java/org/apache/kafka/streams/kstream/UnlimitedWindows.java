@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import java.time.Instant;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * The unlimited window specifications used for aggregations.
@@ -35,15 +37,9 @@ import java.util.Map;
  * @see TimeWindows
  * @see SessionWindows
  * @see JoinWindows
- * @see KGroupedStream#count(Windows, String)
- * @see KGroupedStream#count(Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#reduce(Reducer, Windows, String)
- * @see KGroupedStream#reduce(Reducer, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.common.serialization.Serde, String)
- * @see KGroupedStream#aggregate(Initializer, Aggregator, Windows, org.apache.kafka.streams.processor.StateStoreSupplier)
+ * @see KGroupedStream#windowedBy(Windows)
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
 
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
@@ -68,12 +64,26 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @param startMs the window start time
      * @return a new unlimited window that starts at {@code startMs}
      * @throws IllegalArgumentException if the start time is negative
+     * @deprecated Use {@link #startOn(Instant)} instead
      */
+    @Deprecated
     public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
         if (startMs < 0) {
             throw new IllegalArgumentException("Window start time (startMs) cannot be negative.");
         }
         return new UnlimitedWindows(startMs);
+    }
+
+    /**
+     * Return a new unlimited window for the specified start timestamp.
+     *
+     * @param start the window start time
+     * @return a new unlimited window that starts at {@code start}
+     * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
+     */
+    public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
+        ApiUtils.validateMillisecondInstant(start, "start");
+        return startOn(start.toEpochMilli());
     }
 
     @Override
@@ -103,9 +113,12 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * Throws an {@link IllegalArgumentException} because the retention time for unlimited windows is always infinite
      * and cannot be changed.
      *
-     * @throws IllegalArgumentException on every invocation
+     * @throws IllegalArgumentException on every invocation.
+     * @deprecated since 2.1.
      */
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public UnlimitedWindows until(final long durationMs) {
         throw new IllegalArgumentException("Window retention time (durationMs) cannot be set for UnlimitedWindows.");
     }
@@ -115,29 +128,41 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * The retention time for unlimited windows in infinite and thus represented as {@link Long#MAX_VALUE}.
      *
      * @return the window retention time that is {@link Long#MAX_VALUE}
+     * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
+    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public long maintainMs() {
         return Long.MAX_VALUE;
     }
 
     @Override
-    public boolean equals(final Object o) {
-        if (o == this) {
-            return true;
-        }
-
-        if (!(o instanceof UnlimitedWindows)) {
-            return false;
-        }
-
-        final UnlimitedWindows other = (UnlimitedWindows) o;
-        return startMs == other.startMs;
+    public long gracePeriodMs() {
+        return 0L;
     }
 
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final UnlimitedWindows that = (UnlimitedWindows) o;
+        return startMs == that.startMs && segments == that.segments;
+    }
+
+    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return (int) (startMs ^ (startMs >>> 32));
+        return Objects.hash(startMs, segments);
     }
 
+    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    @Override
+    public String toString() {
+        return "UnlimitedWindows{" +
+            "startMs=" + startMs +
+            ", segments=" + segments +
+            '}';
+    }
 }

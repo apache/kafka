@@ -17,20 +17,19 @@
 
 package kafka.cluster
 
-import kafka.log.Log
+import kafka.server.epoch.LeaderEpochFileCache
+import kafka.log.{Log, LogOffsetSnapshot}
 import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult}
-import kafka.common.KafkaException
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
-import kafka.server.epoch.{LeaderEpochCache, LeaderEpochFileCache}
 import org.apache.kafka.common.utils.Time
 
 class Replica(val brokerId: Int,
-              val partition: Partition,
+              val topicPartition: TopicPartition,
               time: Time = Time.SYSTEM,
               initialHighWatermarkValue: Long = 0L,
-              val log: Option[Log] = None) extends Logging {
+              @volatile var log: Option[Log] = None) extends Logging {
   // the high watermark offset value, in non-leader replicas only its message offsets are kept
   @volatile private[this] var highWatermarkMetadata = new LogOffsetMetadata(initialHighWatermarkValue)
   // the log end offset value, kept in all replicas;
@@ -52,13 +51,14 @@ class Replica(val brokerId: Int,
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
-  val topicPartition = partition.topicPartition
-
   def isLocal: Boolean = log.isDefined
 
-  def lastCaughtUpTimeMs = _lastCaughtUpTimeMs
+  def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
-  val epochs = log.map(_.leaderEpochCache)
+  val epochs: Option[LeaderEpochFileCache] = log.map(_.leaderEpochCache)
+
+  info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
+  log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -72,7 +72,7 @@ class Replica(val brokerId: Int,
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  def updateLogReadResult(logReadResult : LogReadResult) {
+  def updateLogReadResult(logReadResult: LogReadResult) {
     if (logReadResult.info.fetchOffsetMetadata.messageOffset >= logReadResult.leaderLogEndOffset)
       _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, logReadResult.fetchTimeMs)
     else if (logReadResult.info.fetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
@@ -99,18 +99,22 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logEndOffset =
+  def logEndOffset: LogOffsetMetadata =
     if (isLocal)
       log.get.logEndOffsetMetadata
     else
       logEndOffsetMetadata
 
-  def maybeIncrementLogStartOffset(offset: Long) {
+  /**
+   * Increment the log start offset if the new offset is greater than the previous log start offset. The replica
+   * must be local and the new log start offset must be lower than the current high watermark.
+   */
+  def maybeIncrementLogStartOffset(newLogStartOffset: Long) {
     if (isLocal) {
-      if (highWatermark.messageOffset < offset)
-        throw new OffsetOutOfRangeException(s"The specified offset $offset is higher than the high watermark" +
-                                            s" ${highWatermark.messageOffset} of the partition $topicPartition")
-      log.get.maybeIncrementLogStartOffset(offset)
+      if (newLogStartOffset > highWatermark.messageOffset)
+        throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
+          s"since it is larger than the high watermark ${highWatermark.messageOffset}")
+      log.get.maybeIncrementLogStartOffset(newLogStartOffset)
     } else {
       throw new KafkaException(s"Should not try to delete records on partition $topicPartition's non-local replica $brokerId")
     }
@@ -126,7 +130,7 @@ class Replica(val brokerId: Int,
     }
   }
 
-  def logStartOffset =
+  def logStartOffset: Long =
     if (isLocal)
       log.get.logStartOffset
     else
@@ -134,21 +138,59 @@ class Replica(val brokerId: Int,
 
   def highWatermark_=(newHighWatermark: LogOffsetMetadata) {
     if (isLocal) {
+      if (newHighWatermark.messageOffset < 0)
+        throw new IllegalArgumentException("High watermark offset should be non-negative")
+
       highWatermarkMetadata = newHighWatermark
+      log.foreach(_.onHighWatermarkIncremented(newHighWatermark.messageOffset))
       trace(s"Setting high watermark for replica $brokerId partition $topicPartition to [$newHighWatermark]")
     } else {
       throw new KafkaException(s"Should not set high watermark on partition $topicPartition's non-local replica $brokerId")
     }
   }
 
-  def highWatermark = highWatermarkMetadata
+  def highWatermark: LogOffsetMetadata = highWatermarkMetadata
 
-  def convertHWToLocalOffsetMetadata() = {
+  /**
+   * The last stable offset (LSO) is defined as the first offset such that all lower offsets have been "decided."
+   * Non-transactional messages are considered decided immediately, but transactional messages are only decided when
+   * the corresponding COMMIT or ABORT marker is written. This implies that the last stable offset will be equal
+   * to the high watermark if there are no transactional messages in the log. Note also that the LSO cannot advance
+   * beyond the high watermark.
+   */
+  def lastStableOffset: LogOffsetMetadata = {
+    log.map { log =>
+      log.firstUnstableOffset match {
+        case Some(offsetMetadata) if offsetMetadata.messageOffset < highWatermark.messageOffset => offsetMetadata
+        case _ => highWatermark
+      }
+    }.getOrElse(throw new KafkaException(s"Cannot fetch last stable offset on partition $topicPartition's " +
+      s"non-local replica $brokerId"))
+  }
+
+  /*
+   * Convert hw to local offset metadata by reading the log at the hw offset.
+   * If the hw offset is out of range, return the first offset of the first log segment as the offset metadata.
+   */
+  def convertHWToLocalOffsetMetadata() {
     if (isLocal) {
-      highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset)
+      highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermarkMetadata.messageOffset).getOrElse {
+        log.get.convertToOffsetMetadata(logStartOffset).getOrElse {
+          val firstSegmentOffset = log.get.logSegments.head.baseOffset
+          new LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
+        }
+      }
     } else {
       throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
     }
+  }
+
+  def offsetSnapshot: LogOffsetSnapshot = {
+    LogOffsetSnapshot(
+      logStartOffset = logStartOffset,
+      logEndOffset = logEndOffset,
+      highWatermark =  highWatermark,
+      lastStableOffset = lastStableOffset)
   }
 
   override def equals(that: Any): Boolean = that match {
@@ -160,12 +202,16 @@ class Replica(val brokerId: Int,
 
   override def toString: String = {
     val replicaString = new StringBuilder
-    replicaString.append("ReplicaId: " + brokerId)
-    replicaString.append("; Topic: " + partition.topic)
-    replicaString.append("; Partition: " + partition.partitionId)
-    replicaString.append("; isLocal: " + isLocal)
-    replicaString.append("; lastCaughtUpTimeMs: " + lastCaughtUpTimeMs)
-    if (isLocal) replicaString.append("; Highwatermark: " + highWatermark)
+    replicaString.append("Replica(replicaId=" + brokerId)
+    replicaString.append(s", topic=${topicPartition.topic}")
+    replicaString.append(s", partition=${topicPartition.partition}")
+    replicaString.append(s", isLocal=$isLocal")
+    replicaString.append(s", lastCaughtUpTimeMs=$lastCaughtUpTimeMs")
+    if (isLocal) {
+      replicaString.append(s", highWatermark=$highWatermark")
+      replicaString.append(s", lastStableOffset=$lastStableOffset")
+    }
+    replicaString.append(")")
     replicaString.toString
   }
 }

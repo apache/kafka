@@ -23,17 +23,16 @@ import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * This class saves out a map of topic/partition=&gt;offsets to a file. The format of the file is UTF-8 text containing the following:
@@ -52,32 +51,40 @@ import java.util.Map;
  */
 public class OffsetCheckpoint {
 
+    private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
+
     private static final int VERSION = 0;
 
     private final File file;
     private final Object lock;
 
-    public OffsetCheckpoint(File file) {
+    public OffsetCheckpoint(final File file) {
         this.file = file;
-        this.lock = new Object();
+        lock = new Object();
     }
 
     /**
      * @throws IOException if any file operation fails with an IO exception
      */
-    public void write(Map<TopicPartition, Long> offsets) throws IOException {
+    public void write(final Map<TopicPartition, Long> offsets) throws IOException {
+        // if there is no offsets, skip writing the file to save disk IOs
+        if (offsets.isEmpty()) {
+            return;
+        }
+
         synchronized (lock) {
             // write to temp file and then swap with the existing file
-            File temp = new File(file.getAbsolutePath() + ".tmp");
+            final File temp = new File(file.getAbsolutePath() + ".tmp");
 
-            FileOutputStream fileOutputStream = new FileOutputStream(temp);
-            try (BufferedWriter writer = new BufferedWriter(
+            final FileOutputStream fileOutputStream = new FileOutputStream(temp);
+            try (final BufferedWriter writer = new BufferedWriter(
                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
 
-                for (Map.Entry<TopicPartition, Long> entry : offsets.entrySet())
+                for (final Map.Entry<TopicPartition, Long> entry : offsets.entrySet()) {
                     writeEntry(writer, entry.getKey(), entry.getValue());
+                }
 
                 writer.flush();
                 fileOutputStream.getFD().sync();
@@ -90,7 +97,8 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeIntLine(BufferedWriter writer, int number) throws IOException {
+    private void writeIntLine(final BufferedWriter writer,
+                              final int number) throws IOException {
         writer.write(Integer.toString(number));
         writer.newLine();
     }
@@ -98,7 +106,9 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file write operations failed with any IO exception
      */
-    private void writeEntry(BufferedWriter writer, TopicPartition part, long offset) throws IOException {
+    private void writeEntry(final BufferedWriter writer,
+                            final TopicPartition part,
+                            final long offset) throws IOException {
         writer.write(part.topic());
         writer.write(' ');
         writer.write(Integer.toString(part.partition()));
@@ -114,43 +124,37 @@ public class OffsetCheckpoint {
      */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
-            BufferedReader reader;
-            try {
-                reader = new BufferedReader(new InputStreamReader(new FileInputStream(file), StandardCharsets.UTF_8));
-            } catch (FileNotFoundException e) {
-                return Collections.emptyMap();
-            }
-
-            try {
-                int version = readInt(reader);
+            try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
+                final int version = readInt(reader);
                 switch (version) {
                     case 0:
-                        int expectedSize = readInt(reader);
-                        Map<TopicPartition, Long> offsets = new HashMap<>();
+                        final int expectedSize = readInt(reader);
+                        final Map<TopicPartition, Long> offsets = new HashMap<>();
                         String line = reader.readLine();
                         while (line != null) {
-                            String[] pieces = line.split("\\s+");
-                            if (pieces.length != 3)
-                                throw new IOException(String.format("Malformed line in offset checkpoint file: '%s'.",
-                                    line));
+                            final String[] pieces = WHITESPACE_MINIMUM_ONCE.split(line);
+                            if (pieces.length != 3) {
+                                throw new IOException(
+                                    String.format("Malformed line in offset checkpoint file: '%s'.", line));
+                            }
 
-                            String topic = pieces[0];
-                            int partition = Integer.parseInt(pieces[1]);
-                            long offset = Long.parseLong(pieces[2]);
+                            final String topic = pieces[0];
+                            final int partition = Integer.parseInt(pieces[1]);
+                            final long offset = Long.parseLong(pieces[2]);
                             offsets.put(new TopicPartition(topic, partition), offset);
                             line = reader.readLine();
                         }
-                        if (offsets.size() != expectedSize)
-                            throw new IOException(String.format("Expected %d entries but found only %d",
-                                expectedSize,
-                                offsets.size()));
+                        if (offsets.size() != expectedSize) {
+                            throw new IOException(
+                                String.format("Expected %d entries but found only %d", expectedSize, offsets.size()));
+                        }
                         return offsets;
 
                     default:
                         throw new IllegalArgumentException("Unknown offset checkpoint version: " + version);
                 }
-            } finally {
-                reader.close();
+            } catch (final NoSuchFileException e) {
+                return Collections.emptyMap();
             }
         }
     }
@@ -158,10 +162,11 @@ public class OffsetCheckpoint {
     /**
      * @throws IOException if file read ended prematurely
      */
-    private int readInt(BufferedReader reader) throws IOException {
-        String line = reader.readLine();
-        if (line == null)
+    private int readInt(final BufferedReader reader) throws IOException {
+        final String line = reader.readLine();
+        if (line == null) {
             throw new EOFException("File ended prematurely.");
+        }
         return Integer.parseInt(line);
     }
 
@@ -169,12 +174,12 @@ public class OffsetCheckpoint {
      * @throws IOException if there is any IO exception during delete
      */
     public void delete() throws IOException {
-        Files.delete(file.toPath());
+        Files.deleteIfExists(file.toPath());
     }
 
     @Override
     public String toString() {
-        return this.file.getAbsolutePath();
+        return file.getAbsolutePath();
     }
 
 }

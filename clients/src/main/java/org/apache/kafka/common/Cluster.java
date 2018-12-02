@@ -36,27 +36,15 @@ public final class Cluster {
     private final boolean isBootstrapConfigured;
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
+    private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
+    private final Node controller;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
     private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
-
-    /**
-     * Create a new cluster with the given nodes and partitions
-     * @param nodes The nodes in the cluster
-     * @param partitions Information about a subset of the topic-partitions this cluster hosts
-     * @deprecated Use the Cluster constructor with 5 parameters
-     */
-    @Deprecated
-    public Cluster(Collection<Node> nodes,
-                   Collection<PartitionInfo> partitions,
-                   Set<String> unauthorizedTopics) {
-        this(null, false, nodes, partitions, unauthorizedTopics, Collections.<String>emptySet());
-    }
-
 
     /**
      * Create a new cluster with the given id, nodes and partitions
@@ -68,7 +56,36 @@ public final class Cluster {
                    Collection<PartitionInfo> partitions,
                    Set<String> unauthorizedTopics,
                    Set<String> internalTopics) {
-        this(clusterId, false, nodes, partitions, unauthorizedTopics, internalTopics);
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, null);
+    }
+
+    /**
+     * Create a new cluster with the given id, nodes and partitions
+     * @param nodes The nodes in the cluster
+     * @param partitions Information about a subset of the topic-partitions this cluster hosts
+     */
+    public Cluster(String clusterId,
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> internalTopics,
+                   Node controller) {
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, Collections.emptySet(), internalTopics, controller);
+    }
+
+    /**
+     * Create a new cluster with the given id, nodes and partitions
+     * @param nodes The nodes in the cluster
+     * @param partitions Information about a subset of the topic-partitions this cluster hosts
+     */
+    public Cluster(String clusterId,
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> invalidTopics,
+                   Set<String> internalTopics,
+                   Node controller) {
+        this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller);
     }
 
     private Cluster(String clusterId,
@@ -76,7 +93,9 @@ public final class Cluster {
                     Collection<Node> nodes,
                     Collection<PartitionInfo> partitions,
                     Set<String> unauthorizedTopics,
-                    Set<String> internalTopics) {
+                    Set<String> invalidTopics,
+                    Set<String> internalTopics,
+                    Node controller) {
         this.isBootstrapConfigured = isBootstrapConfigured;
         this.clusterResource = new ClusterResource(clusterId);
         // make a randomized, unmodifiable copy of the nodes
@@ -98,11 +117,11 @@ public final class Cluster {
         HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
         HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
         for (Node n : this.nodes) {
-            partsForNode.put(n.id(), new ArrayList<PartitionInfo>());
+            partsForNode.put(n.id(), new ArrayList<>());
         }
         for (PartitionInfo p : partitions) {
             if (!partsForTopic.containsKey(p.topic()))
-                partsForTopic.put(p.topic(), new ArrayList<PartitionInfo>());
+                partsForTopic.put(p.topic(), new ArrayList<>());
             List<PartitionInfo> psTopic = partsForTopic.get(p.topic());
             psTopic.add(p);
 
@@ -129,15 +148,17 @@ public final class Cluster {
             this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
+        this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
         this.internalTopics = Collections.unmodifiableSet(internalTopics);
+        this.controller = controller;
     }
 
     /**
      * Create an empty cluster instance with no nodes and no topic-partitions.
      */
     public static Cluster empty() {
-        return new Cluster(null, new ArrayList<Node>(0), new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(),
-                Collections.<String>emptySet());
+        return new Cluster(null, new ArrayList<>(0), new ArrayList<>(0), Collections.emptySet(),
+            Collections.emptySet(), null);
     }
 
     /**
@@ -150,7 +171,8 @@ public final class Cluster {
         int nodeId = -1;
         for (InetSocketAddress address : addresses)
             nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-        return new Cluster(null, true, nodes, new ArrayList<PartitionInfo>(0), Collections.<String>emptySet(), Collections.<String>emptySet());
+        return new Cluster(null, true, nodes, new ArrayList<>(0),
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
     }
 
     /**
@@ -160,7 +182,8 @@ public final class Cluster {
         Map<TopicPartition, PartitionInfo> combinedPartitions = new HashMap<>(this.partitionsByTopicPartition);
         combinedPartitions.putAll(partitions);
         return new Cluster(clusterResource.clusterId(), this.nodes, combinedPartitions.values(),
-                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.internalTopics));
+                new HashSet<>(this.unauthorizedTopics), new HashSet<>(this.invalidTopics),
+                new HashSet<>(this.internalTopics), this.controller);
     }
 
     /**
@@ -169,7 +192,7 @@ public final class Cluster {
     public List<Node> nodes() {
         return this.nodes;
     }
-    
+
     /**
      * Get the node by the node id (or null if no such node exists)
      * @param id The id of the node
@@ -208,7 +231,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
         List<PartitionInfo> parts = this.partitionsByTopic.get(topic);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**
@@ -228,7 +251,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
         List<PartitionInfo> parts = this.availablePartitionsByTopic.get(topic);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**
@@ -238,7 +261,7 @@ public final class Cluster {
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
         List<PartitionInfo> parts = this.partitionsByNode.get(nodeId);
-        return (parts == null) ? Collections.<PartitionInfo>emptyList() : parts;
+        return (parts == null) ? Collections.emptyList() : parts;
     }
 
     /**
@@ -253,6 +276,10 @@ public final class Cluster {
         return unauthorizedTopics;
     }
 
+    public Set<String> invalidTopics() {
+        return invalidTopics;
+    }
+
     public Set<String> internalTopics() {
         return internalTopics;
     }
@@ -265,9 +292,14 @@ public final class Cluster {
         return clusterResource;
     }
 
+    public Node controller() {
+        return controller;
+    }
+
     @Override
     public String toString() {
-        return "Cluster(id = " + clusterResource.clusterId() + ", nodes = " + this.nodes + ", partitions = " + this.partitionsByTopicPartition.values() + ")";
+        return "Cluster(id = " + clusterResource.clusterId() + ", nodes = " + this.nodes +
+            ", partitions = " + this.partitionsByTopicPartition.values() + ", controller = " + controller + ")";
     }
 
 }

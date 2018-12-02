@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import java.util.HashMap;
 import java.util.Map;
 
 import org.apache.kafka.common.utils.Utils;
@@ -85,69 +84,6 @@ public final class MetricName {
         this.tags = Utils.notNull(tags);
     }
 
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, String...)}
-     *
-     * @param name          The name of the metric
-     * @param group         logical group name of the metrics to which this metric belongs
-     * @param description   A human-readable description to include in the metric
-     * @param keyValue      additional key/value attributes of the metric (must come in pairs)
-     */
-    @Deprecated
-    public MetricName(String name, String group, String description, String... keyValue) {
-        this(name, group, description, getTags(keyValue));
-    }
-
-    private static Map<String, String> getTags(String... keyValue) {
-        if ((keyValue.length % 2) != 0)
-            throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new HashMap<String, String>();
-
-        for (int i = 0; i < keyValue.length; i += 2)
-            tags.put(keyValue[i], keyValue[i + 1]);
-
-        return tags;
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, Map)}
-     *
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     * @param tags  key/value attributes of the metric
-     */
-    @Deprecated
-    public MetricName(String name, String group, Map<String, String> tags) {
-        this(name, group, "", tags);
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String)}
-     *
-     * @param name        The name of the metric
-     * @param group       logical group name of the metrics to which this metric belongs
-     * @param description A human-readable description to include in the metric
-     */
-    @Deprecated
-    public MetricName(String name, String group, String description) {
-        this(name, group, description, new HashMap<String, String>());
-    }
-
-    /**
-     * @deprecated This method will be removed in a future release.
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String)}
-     *
-     * @param name  The name of the metric
-     * @param group logical group name of the metrics to which this metric belongs
-     */
-    @Deprecated
-    public MetricName(String name, String group) {
-        this(name, group, "", new HashMap<String, String>());
-    }
-
     public String name() {
         return this.name;
     }
@@ -170,9 +106,9 @@ public final class MetricName {
             return hash;
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((group == null) ? 0 : group.hashCode());
-        result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ((tags == null) ? 0 : tags.hashCode());
+        result = prime * result + group.hashCode();
+        result = prime * result + name.hashCode();
+        result = prime * result + tags.hashCode();
         this.hash = result;
         return result;
     }
@@ -186,22 +122,7 @@ public final class MetricName {
         if (getClass() != obj.getClass())
             return false;
         MetricName other = (MetricName) obj;
-        if (group == null) {
-            if (other.group != null)
-                return false;
-        } else if (!group.equals(other.group))
-            return false;
-        if (name == null) {
-            if (other.name != null)
-                return false;
-        } else if (!name.equals(other.name))
-            return false;
-        if (tags == null) {
-            if (other.tags != null)
-                return false;
-        } else if (!tags.equals(other.tags))
-            return false;
-        return true;
+        return group.equals(other.group) && name.equals(other.name) && tags.equals(other.tags);
     }
 
     @Override

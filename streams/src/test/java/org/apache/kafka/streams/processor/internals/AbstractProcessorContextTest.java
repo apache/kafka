@@ -16,16 +16,29 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.test.MockStateStoreSupplier;
+import org.apache.kafka.test.MockKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.apache.kafka.test.StreamsTestUtils.minimalStreamsConfig;
+import java.util.Properties;
+
+import static org.apache.kafka.test.StreamsTestUtils.getStreamsConfig;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -35,8 +48,9 @@ public class AbstractProcessorContextTest {
 
     private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
-    private final MockStateStoreSupplier.MockStateStore stateStore = new MockStateStoreSupplier.MockStateStore("store", false);
-    private final RecordContext recordContext = new RecordContextStub(10, System.currentTimeMillis(), 1, "foo");
+    private final MockKeyValueStore stateStore = new MockKeyValueStore("store", false);
+    private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
+    private final ProcessorRecordContext recordContext = new ProcessorRecordContext(10, System.currentTimeMillis(), 1, "foo", headers);
 
     @Before
     public void before() {
@@ -44,28 +58,28 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() throws Exception {
-        context.initialized();
+    public void shouldThrowIllegalStateExceptionOnRegisterWhenContextIsInitialized() {
+        context.initialize();
         try {
-            context.register(stateStore, false, null);
+            context.register(stateStore, null);
             fail("should throw illegal state exception when context already initialized");
-        } catch (IllegalStateException e) {
+        } catch (final IllegalStateException e) {
             // pass
         }
     }
 
     @Test
-    public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() throws Exception {
-        context.register(stateStore, false, null);
+    public void shouldNotThrowIllegalStateExceptionOnRegisterWhenContextIsNotInitialized() {
+        context.register(stateStore, null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        context.register(null, false, null);
+        context.register(null, null);
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnTopicIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.topic();
@@ -76,18 +90,18 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnTopicFromRecordContext() throws Exception {
+    public void shouldReturnTopicFromRecordContext() {
         assertThat(context.topic(), equalTo(recordContext.topic()));
     }
 
     @Test
-    public void shouldReturnNullIfTopicEqualsNonExistTopic() throws Exception {
-        context.setRecordContext(new RecordContextStub(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
+    public void shouldReturnNullIfTopicEqualsNonExistTopic() {
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
         assertThat(context.topic(), nullValue());
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnPartitionIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.partition();
@@ -98,12 +112,12 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnPartitionFromRecordContext() throws Exception {
+    public void shouldReturnPartitionFromRecordContext() {
         assertThat(context.partition(), equalTo(recordContext.partition()));
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnOffsetIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.offset();
@@ -113,12 +127,12 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnOffsetFromRecordContext() throws Exception {
+    public void shouldReturnOffsetFromRecordContext() {
         assertThat(context.offset(), equalTo(recordContext.offset()));
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnTimestampIfNoRecordContext() {
         context.setRecordContext(null);
         try {
             context.timestamp();
@@ -129,14 +143,54 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldReturnTimestampFromRecordContext() throws Exception {
+    public void shouldReturnTimestampFromRecordContext() {
         assertThat(context.timestamp(), equalTo(recordContext.timestamp()));
+    }
+
+    @Test
+    public void shouldReturnHeadersFromRecordContext() {
+        assertThat(context.headers(), equalTo(recordContext.headers()));
+    }
+
+    @Test
+    public void shouldReturnNullIfHeadersAreNotSet() {
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, AbstractProcessorContext.NONEXIST_TOPIC));
+        assertThat(context.headers(), nullValue());
+    }
+
+    @Test
+    public void shouldThrowIllegalStateExceptionOnHeadersIfNoRecordContext() {
+        context.setRecordContext(null);
+        try {
+            context.headers();
+        } catch (final IllegalStateException e) {
+            // pass
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void appConfigsShouldReturnParsedValues() {
+        assertThat((Class<RocksDBConfigSetter>) context.appConfigs().get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG), equalTo(RocksDBConfigSetter.class));
+    }
+
+    @Test
+    public void appConfigsShouldReturnUnrecognizedValues() {
+        assertThat((String) context.appConfigs().get("user.supplied.config"), equalTo("user-suppplied-value"));
     }
 
 
     private static class TestProcessorContext extends AbstractProcessorContext {
-        public TestProcessorContext(final MockStreamsMetrics metrics) {
-            super(new TaskId(0, 0), "appId", new StreamsConfig(minimalStreamsConfig()), metrics, new StateManagerStub(), new ThreadCache("name", 0, metrics));
+        static Properties config;
+        static {
+            config = getStreamsConfig();
+            // Value must be a string to test className -> class conversion
+            config.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, RocksDBConfigSetter.class.getName());
+            config.put("user.supplied.config", "user-suppplied-value");
+        }
+
+        TestProcessorContext(final MockStreamsMetrics metrics) {
+            super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
         }
 
         @Override
@@ -144,29 +198,39 @@ public class AbstractProcessorContextTest {
             return null;
         }
 
+        @SuppressWarnings("deprecation")
         @Override
-        public void schedule(final long interval) {
-
+        public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+            return null;
         }
 
         @Override
-        public <K, V> void forward(final K key, final V value) {
-
+        public Cancellable schedule(final Duration interval,
+                                    final PunctuationType type,
+                                    final Punctuator callback) throws IllegalArgumentException {
+            return null;
         }
 
         @Override
-        public <K, V> void forward(final K key, final V value, final int childIndex) {
-
-        }
+        public <K, V> void forward(final K key, final V value) {}
 
         @Override
-        public <K, V> void forward(final K key, final V value, final String childName) {
+        public <K, V> void forward(final K key, final V value, final To to) {}
 
-        }
+        @SuppressWarnings("deprecation")
+        @Override
+        public <K, V> void forward(final K key, final V value, final int childIndex) {}
+
+        @SuppressWarnings("deprecation")
+        @Override
+        public <K, V> void forward(final K key, final V value, final String childName) {}
 
         @Override
-        public void commit() {
+        public void commit() {}
 
+        @Override
+        public long streamTime() {
+            throw new RuntimeException("not implemented");
         }
     }
 }

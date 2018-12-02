@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.utils.Time;
+
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.apache.kafka.clients.producer.RecordMetadata;
 
 /**
  * The future result of a record send
@@ -31,18 +32,21 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     private final ProduceRequestResult result;
     private final long relativeOffset;
     private final long createTimestamp;
-    private final long checksum;
+    private final Long checksum;
     private final int serializedKeySize;
     private final int serializedValueSize;
+    private final Time time;
+    private volatile FutureRecordMetadata nextRecordMetadata = null;
 
     public FutureRecordMetadata(ProduceRequestResult result, long relativeOffset, long createTimestamp,
-                                long checksum, int serializedKeySize, int serializedValueSize) {
+                                Long checksum, int serializedKeySize, int serializedValueSize, Time time) {
         this.result = result;
         this.relativeOffset = relativeOffset;
         this.createTimestamp = createTimestamp;
         this.checksum = checksum;
         this.serializedKeySize = serializedKeySize;
         this.serializedValueSize = serializedValueSize;
+        this.time = time;
     }
 
     @Override
@@ -58,15 +62,35 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
     @Override
     public RecordMetadata get() throws InterruptedException, ExecutionException {
         this.result.await();
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.get();
         return valueOrError();
     }
 
     @Override
     public RecordMetadata get(long timeout, TimeUnit unit) throws InterruptedException, ExecutionException, TimeoutException {
+        // Handle overflow.
+        long now = time.milliseconds();
+        long timeoutMillis = unit.toMillis(timeout);
+        long deadline = Long.MAX_VALUE - timeoutMillis < now ? Long.MAX_VALUE : now + timeoutMillis;
         boolean occurred = this.result.await(timeout, unit);
         if (!occurred)
-            throw new TimeoutException("Timeout after waiting for " + TimeUnit.MILLISECONDS.convert(timeout, unit) + " ms.");
+            throw new TimeoutException("Timeout after waiting for " + timeoutMillis + " ms.");
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.get(deadline - time.milliseconds(), TimeUnit.MILLISECONDS);
         return valueOrError();
+    }
+
+    /**
+     * This method is used when we have to split a large batch in smaller ones. A chained metadata will allow the
+     * future that has already returned to the users to wait on the newly created split batches even after the
+     * old big batch has been deemed as done.
+     */
+    void chain(FutureRecordMetadata futureRecordMetadata) {
+        if (nextRecordMetadata == null)
+            nextRecordMetadata = futureRecordMetadata;
+        else
+            nextRecordMetadata.chain(futureRecordMetadata);
     }
 
     RecordMetadata valueOrError() throws ExecutionException {
@@ -75,8 +99,14 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
         else
             return value();
     }
-    
+
+    Long checksumOrNull() {
+        return this.checksum;
+    }
+
     RecordMetadata value() {
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.value();
         return new RecordMetadata(result.topicPartition(), this.result.baseOffset(), this.relativeOffset,
                                   timestamp(), this.checksum, this.serializedKeySize, this.serializedValueSize);
     }
@@ -87,6 +117,8 @@ public final class FutureRecordMetadata implements Future<RecordMetadata> {
 
     @Override
     public boolean isDone() {
+        if (nextRecordMetadata != null)
+            return nextRecordMetadata.isDone();
         return this.result.completed();
     }
 

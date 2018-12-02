@@ -17,11 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.internals.RecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -33,15 +32,11 @@ import java.util.NoSuchElementException;
 /**
  * An in-memory LRU cache store similar to {@link MemoryLRUCache} but byte-based, not
  * record based
- *
- * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class ThreadCache {
-    private static final Logger log = LoggerFactory.getLogger(ThreadCache.class);
-
-    private final String name;
+    private final Logger log;
     private final long maxCacheSizeBytes;
-    private final StreamsMetrics metrics;
+    private final StreamsMetricsImpl metrics;
     private final Map<String, NamedCache> caches = new HashMap<>();
 
     // internal stats
@@ -54,10 +49,10 @@ public class ThreadCache {
         void apply(final List<DirtyEntry> dirty);
     }
 
-    public ThreadCache(final String name, long maxCacheSizeBytes, final StreamsMetrics metrics) {
-        this.name = name;
+    public ThreadCache(final LogContext logContext, final long maxCacheSizeBytes, final StreamsMetricsImpl metrics) {
         this.maxCacheSizeBytes = maxCacheSizeBytes;
         this.metrics = metrics;
+        this.log = logContext.logger(getClass());
     }
 
     public long puts() {
@@ -77,12 +72,44 @@ public class ThreadCache {
     }
 
     /**
+     * The thread cache maintains a set of {@link NamedCache}s whose names are a concatenation of the task ID and the
+     * underlying store name. This method creates those names.
+     * @param taskIDString Task ID
+     * @param underlyingStoreName Underlying store name
+     * @return
+     */
+    public static String nameSpaceFromTaskIdAndStore(final String taskIDString, final String underlyingStoreName) {
+        return taskIDString + "-" + underlyingStoreName;
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the task ID.
+     * @param cacheName
+     * @return
+     */
+    public static String taskIDfromCacheName(final String cacheName) {
+        final String[] tokens = cacheName.split("-", 2);
+        return tokens[0];
+    }
+
+    /**
+     * Given a cache name of the form taskid-storename, return the store name.
+     * @param cacheName
+     * @return
+     */
+    public static String underlyingStoreNamefromCacheName(final String cacheName) {
+        final String[] tokens = cacheName.split("-", 2);
+        return tokens[1];
+    }
+
+
+    /**
      * Add a listener that is called each time an entry is evicted from the cache or an explicit flush is called
      *
      * @param namespace
      * @param listener
      */
-    public void addDirtyEntryFlushListener(final String namespace, DirtyEntryFlushListener listener) {
+    public void addDirtyEntryFlushListener(final String namespace, final DirtyEntryFlushListener listener) {
         final NamedCache cache = getOrCreateCache(namespace);
         cache.setListener(listener);
     }
@@ -96,11 +123,12 @@ public class ThreadCache {
         }
         cache.flush();
 
-        log.trace("Thread {} cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}",
-                  name, puts(), gets(), evicts(), flushes());
+        if (log.isTraceEnabled()) {
+            log.trace("Cache stats on flush: #puts={}, #gets={}, #evicts={}, #flushes={}", puts(), gets(), evicts(), flushes());
+        }
     }
 
-    public LRUCacheEntry get(final String namespace, Bytes key) {
+    public LRUCacheEntry get(final String namespace, final Bytes key) {
         numGets++;
 
         if (key == null) {
@@ -114,7 +142,7 @@ public class ThreadCache {
         return cache.get(key);
     }
 
-    public void put(final String namespace, Bytes key, LRUCacheEntry value) {
+    public void put(final String namespace, final Bytes key, final LRUCacheEntry value) {
         numPuts++;
 
         final NamedCache cache = getOrCreateCache(namespace);
@@ -122,7 +150,7 @@ public class ThreadCache {
         maybeEvict(namespace);
     }
 
-    public LRUCacheEntry putIfAbsent(final String namespace, Bytes key, LRUCacheEntry value) {
+    public LRUCacheEntry putIfAbsent(final String namespace, final Bytes key, final LRUCacheEntry value) {
         final NamedCache cache = getOrCreateCache(namespace);
 
         final LRUCacheEntry result = cache.putIfAbsent(key, value);
@@ -135,7 +163,7 @@ public class ThreadCache {
     }
 
     public void putAll(final String namespace, final List<KeyValue<Bytes, LRUCacheEntry>> entries) {
-        for (KeyValue<Bytes, LRUCacheEntry> entry : entries) {
+        for (final KeyValue<Bytes, LRUCacheEntry> entry : entries) {
             put(namespace, entry.key, entry.value);
         }
     }
@@ -164,19 +192,14 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allKeys(), cache);
     }
-
-
+    
     public long size() {
         long size = 0;
-        for (NamedCache cache : caches.values()) {
+        for (final NamedCache cache : caches.values()) {
             size += cache.size();
             if (isOverflowing(size)) {
                 return Long.MAX_VALUE;
             }
-        }
-
-        if (isOverflowing(size)) {
-            return Long.MAX_VALUE;
         }
         return size;
     }
@@ -189,6 +212,9 @@ public class ThreadCache {
         long sizeInBytes = 0;
         for (final NamedCache namedCache : caches.values()) {
             sizeInBytes += namedCache.sizeInBytes();
+            if (isOverflowing(sizeInBytes)) {
+                return Long.MAX_VALUE;
+            }
         }
         return sizeInBytes;
     }
@@ -201,6 +227,7 @@ public class ThreadCache {
     }
 
     private void maybeEvict(final String namespace) {
+        int numEvicted = 0;
         while (sizeBytes() > maxCacheSizeBytes) {
             final NamedCache cache = getOrCreateCache(namespace);
             // we abort here as the put on this cache may have triggered
@@ -210,9 +237,12 @@ public class ThreadCache {
             if (cache.size() == 0) {
                 return;
             }
-            log.trace("Thread {} evicting cache {}", name, namespace);
             cache.evict();
             numEvicts++;
+            numEvicted++;
+        }
+        if (log.isTraceEnabled()) {
+            log.trace("Evicted {} entries from cache {}", numEvicted, namespace);
         }
     }
 
@@ -278,7 +308,7 @@ public class ThreadCache {
         }
 
         private void internalNext() {
-            Bytes cacheKey = keys.next();
+            final Bytes cacheKey = keys.next();
             final LRUCacheEntry entry = cache.get(cacheKey);
             if (entry == null) {
                 return;
@@ -301,9 +331,9 @@ public class ThreadCache {
     static class DirtyEntry {
         private final Bytes key;
         private final byte[] newValue;
-        private final RecordContext recordContext;
+        private final LRUCacheEntry recordContext;
 
-        DirtyEntry(final Bytes key, final byte[] newValue, final RecordContext recordContext) {
+        DirtyEntry(final Bytes key, final byte[] newValue, final LRUCacheEntry recordContext) {
             this.key = key;
             this.newValue = newValue;
             this.recordContext = recordContext;
@@ -317,7 +347,7 @@ public class ThreadCache {
             return newValue;
         }
 
-        public RecordContext recordContext() {
+        public LRUCacheEntry entry() {
             return recordContext;
         }
     }

@@ -69,7 +69,7 @@ public class JsonConverterTest {
 
     @Before
     public void setUp() {
-        converter.configure(Collections.EMPTY_MAP, false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     // Schema metadata
@@ -563,6 +563,20 @@ public class JsonConverterTest {
                 converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
+    @Test
+    public void structSchemaIdentical() {
+        Schema schema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
+                                              .field("field2", Schema.STRING_SCHEMA)
+                                              .field("field3", Schema.STRING_SCHEMA)
+                                              .field("field4", Schema.BOOLEAN_SCHEMA).build();
+        Schema inputSchema = SchemaBuilder.struct().field("field1", Schema.BOOLEAN_SCHEMA)
+                                                   .field("field2", Schema.STRING_SCHEMA)
+                                                   .field("field3", Schema.STRING_SCHEMA)
+                                                   .field("field4", Schema.BOOLEAN_SCHEMA).build();
+        Struct input = new Struct(inputSchema).put("field1", true).put("field2", "string2").put("field3", "string3").put("field4", false);
+        assertStructSchemaEqual(schema, input);
+    }
+
 
     @Test
     public void decimalToJson() throws IOException {
@@ -574,7 +588,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void dateToJson() throws IOException {
+    public void dateToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.DATE, 10000);
@@ -590,7 +604,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void timeToJson() throws IOException {
+    public void timeToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.MILLISECOND, 14400000);
@@ -606,7 +620,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void timestampToJson() throws IOException {
+    public void timestampToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.MILLISECOND, 2000000000);
@@ -735,7 +749,23 @@ public class JsonConverterTest {
 
         JsonConverter rc = new JsonConverter();
         rc.configure(workerProps, false);
+    }
 
+
+    // Note: the header conversion methods delegates to the data conversion methods, which are tested above.
+    // The following simply verify that the delegation works.
+
+    @Test
+    public void testStringHeaderToJson() {
+        JsonNode converted = parse(converter.fromConnectHeader(TOPIC, "headerName", Schema.STRING_SCHEMA, "test-string"));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"string\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals("test-string", converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME).textValue());
+    }
+
+    @Test
+    public void stringHeaderToConnect() {
+        assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
 
@@ -773,5 +803,10 @@ public class JsonConverterTest {
         assertTrue(env.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+    
+    private void assertStructSchemaEqual(Schema schema, Struct struct) {
+        converter.fromConnectData(TOPIC, schema, struct);
+        assertEquals(schema, struct.schema());
     }
 }

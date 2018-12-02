@@ -19,18 +19,17 @@ package org.apache.kafka.connect.storage;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.util.SafeObjectInputStream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.EOFException;
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileNotFoundException;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.NoSuchFileException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -69,8 +68,7 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
 
     @SuppressWarnings("unchecked")
     private void load() {
-        try {
-            ObjectInputStream is = new ObjectInputStream(new FileInputStream(file));
+        try (SafeObjectInputStream is = new SafeObjectInputStream(Files.newInputStream(file.toPath()))) {
             Object obj = is.readObject();
             if (!(obj instanceof HashMap))
                 throw new ConnectException("Expected HashMap but found " + obj.getClass());
@@ -81,18 +79,17 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 ByteBuffer value = (mapEntry.getValue() != null) ? ByteBuffer.wrap(mapEntry.getValue()) : null;
                 data.put(key, value);
             }
-            is.close();
-        } catch (FileNotFoundException | EOFException e) {
-            // FileNotFoundException: Ignore, may be new.
+        } catch (NoSuchFileException | EOFException e) {
+            // NoSuchFileException: Ignore, may be new.
             // EOFException: Ignore, this means the file was missing or corrupt
         } catch (IOException | ClassNotFoundException e) {
             throw new ConnectException(e);
         }
     }
 
+    @Override
     protected void save() {
-        try {
-            ObjectOutputStream os = new ObjectOutputStream(new FileOutputStream(file));
+        try (ObjectOutputStream os = new ObjectOutputStream(Files.newOutputStream(file.toPath()))) {
             Map<byte[], byte[]> raw = new HashMap<>();
             for (Map.Entry<ByteBuffer, ByteBuffer> mapEntry : data.entrySet()) {
                 byte[] key = (mapEntry.getKey() != null) ? mapEntry.getKey().array() : null;
@@ -100,7 +97,6 @@ public class FileOffsetBackingStore extends MemoryOffsetBackingStore {
                 raw.put(key, value);
             }
             os.writeObject(raw);
-            os.close();
         } catch (IOException e) {
             throw new ConnectException(e);
         }

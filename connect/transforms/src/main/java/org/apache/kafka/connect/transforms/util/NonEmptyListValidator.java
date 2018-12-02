@@ -25,7 +25,7 @@ public class NonEmptyListValidator implements ConfigDef.Validator {
 
     @Override
     public void ensureValid(String name, Object value) {
-        if (((List) value).isEmpty()) {
+        if (value == null || ((List) value).isEmpty()) {
             throw new ConfigException(name, value, "Empty list");
         }
     }

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+import java.time.Instant;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 /**
@@ -33,11 +33,13 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
  * @see org.apache.kafka.streams.kstream.internals.UnlimitedWindow
  * @see TimestampExtractor
  */
-@InterfaceStability.Unstable
 public abstract class Window {
 
     protected final long startMs;
     protected final long endMs;
+    private final Instant startTime;
+    private final Instant endTime;
+
 
     /**
      * Create a new window for the given start and end time.
@@ -55,6 +57,9 @@ public abstract class Window {
         }
         this.startMs = startMs;
         this.endMs = endMs;
+
+        this.startTime = Instant.ofEpochMilli(startMs);
+        this.endTime = Instant.ofEpochMilli(endMs);
     }
 
     /**
@@ -69,6 +74,24 @@ public abstract class Window {
      */
     public long end() {
         return endMs;
+    }
+
+    /**
+     * Return the start time of this window.
+     *
+     * @return The start time of this window.
+     */
+    public Instant startTime() {
+        return startTime;
+    }
+
+    /**
+     * Return the end time of this window.
+     *
+     * @return The end time of this window.
+     */
+    public Instant endTime() {
+        return endTime;
     }
 
     /**
@@ -105,8 +128,8 @@ public abstract class Window {
     @Override
     public String toString() {
         return "Window{" +
-            "start=" + startMs +
-            ", end=" + endMs +
+            "startMs=" + startMs +
+            ", endMs=" + endMs +
             '}';
     }
 }

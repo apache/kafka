@@ -79,4 +79,22 @@ public class StringConverterTest {
         assertEquals(Schema.OPTIONAL_STRING_SCHEMA, data.schema());
         assertEquals(SAMPLE_STRING, data.value());
     }
+
+    // Note: the header conversion methods delegates to the data conversion methods, which are tested above.
+    // The following simply verify that the delegation works.
+
+    @Test
+    public void testStringHeaderValueToBytes() throws UnsupportedEncodingException {
+        assertArrayEquals(SAMPLE_STRING.getBytes("UTF8"), converter.fromConnectHeader(TOPIC, "hdr", Schema.STRING_SCHEMA, SAMPLE_STRING));
+    }
+
+    @Test
+    public void testNonStringHeaderValueToBytes() throws UnsupportedEncodingException {
+        assertArrayEquals("true".getBytes("UTF8"), converter.fromConnectHeader(TOPIC, "hdr", Schema.BOOLEAN_SCHEMA, true));
+    }
+
+    @Test
+    public void testNullHeaderValueToBytes() {
+        assertEquals(null, converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
+    }
 }

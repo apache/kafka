@@ -20,14 +20,19 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
+import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
+import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireSchema;
 
 public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
+    private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =
             "Set the schema name, version or both on the record's key (<code>" + Key.class.getName() + "</code>)"
@@ -74,6 +79,8 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 isMap ? schema.keySchema() : null,
                 isMap || isArray ? schema.valueSchema() : null
         );
+        log.trace("Applying SetSchemaMetadata SMT. Original schema: {}, updated schema: {}",
+            schema, updatedSchema);
         return newRecord(record, updatedSchema);
     }
 
@@ -101,7 +108,8 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
         @Override
         protected R newRecord(R record, Schema updatedSchema) {
-            return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, record.key(), record.valueSchema(), record.value(), record.timestamp());
+            Object updatedKey = updateSchemaIn(record.key(), updatedSchema);
+            return record.newRecord(record.topic(), record.kafkaPartition(), updatedSchema, updatedKey, record.valueSchema(), record.value(), record.timestamp());
         }
     }
 
@@ -116,8 +124,34 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
 
         @Override
         protected R newRecord(R record, Schema updatedSchema) {
-            return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, record.value(), record.timestamp());
+            Object updatedValue = updateSchemaIn(record.value(), updatedSchema);
+            return record.newRecord(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(), updatedSchema, updatedValue, record.timestamp());
         }
     }
 
+    /**
+     * Utility to check the supplied key or value for references to the old Schema,
+     * and if so to return an updated key or value object that references the new Schema.
+     * Note that this method assumes that the new Schema may have a different name and/or version,
+     * but has fields that exactly match those of the old Schema.
+     * <p>
+     * Currently only {@link Struct} objects have references to the {@link Schema}.
+     *
+     * @param keyOrValue    the key or value object; may be null
+     * @param updatedSchema the updated schema that has been potentially renamed
+     * @return the original key or value object if it does not reference the old schema, or
+     * a copy of the key or value object with updated references to the new schema.
+     */
+    protected static Object updateSchemaIn(Object keyOrValue, Schema updatedSchema) {
+        if (keyOrValue instanceof Struct) {
+            Struct origStruct = (Struct) keyOrValue;
+            Struct newStruct = new Struct(updatedSchema);
+            for (Field field : updatedSchema.fields()) {
+                // assume both schemas have exact same fields with same names and schemas ...
+                newStruct.put(field, origStruct.get(field));
+            }
+            return newStruct;
+        }
+        return keyOrValue;
+    }
 }

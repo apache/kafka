@@ -16,17 +16,22 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KStreamBuilder;
-import org.apache.kafka.test.KStreamTestDriver;
-import org.junit.After;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
@@ -34,43 +39,39 @@ import static org.junit.Assert.fail;
 public class KStreamPeekTest {
 
     private final String topicName = "topic";
-
-    private KStreamTestDriver driver = null;
-
-    @After
-    public void cleanup() {
-        if (driver != null) {
-            driver.close();
-        }
-    }
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void shouldObserveStreamElements() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<Integer, String> stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         final List<KeyValue<Integer, String>> peekObserved = new ArrayList<>(), streamObserved = new ArrayList<>();
         stream.peek(collect(peekObserved)).foreach(collect(streamObserved));
 
-        driver = new KStreamTestDriver(builder);
-        final List<KeyValue<Integer, String>> expected = new ArrayList<>();
-        for (int key = 0; key < 32; key++) {
-            final String value = "V" + key;
-            driver.process(topicName, key, value);
-            expected.add(new KeyValue<>(key, value));
-        }
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final List<KeyValue<Integer, String>> expected = new ArrayList<>();
+            for (int key = 0; key < 32; key++) {
+                final String value = "V" + key;
+                driver.pipeInput(recordFactory.create(topicName, key, value));
+                expected.add(new KeyValue<>(key, value));
+            }
 
-        assertEquals(expected, peekObserved);
-        assertEquals(expected, streamObserved);
+            assertEquals(expected, peekObserved);
+            assertEquals(expected, streamObserved);
+        }
     }
 
     @Test
     public void shouldNotAllowNullAction() {
-        final KStreamBuilder builder = new KStreamBuilder();
-        final KStream<Integer, String> stream = builder.stream(Serdes.Integer(), Serdes.String(), topicName);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
         try {
             stream.peek(null);
             fail("expected null action to throw NPE");
-        } catch (NullPointerException expected) { }
+        } catch (final NullPointerException expected) {
+            // do nothing
+        }
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {

@@ -12,9 +12,23 @@
   */
 package kafka.api
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import kafka.utils.JaasTestUtils
+import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.{After, Before}
 
-class SaslPlaintextConsumerTest extends BaseConsumerTest with SaslTestHarness {
-  override protected val zkSaslEnabled = false
+class SaslPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
+
+  @Before
+  override def setUp(): Unit = {
+    startSasl(jaasSections(Seq("GSSAPI"), Some("GSSAPI"), KafkaSasl, JaasTestUtils.KafkaServerContextName))
+    super.setUp()
+  }
+
+  @After
+  override def tearDown(): Unit = {
+    super.tearDown()
+    closeSasl()
+  }
+
 }

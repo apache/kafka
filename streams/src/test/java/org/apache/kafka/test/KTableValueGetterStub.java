@@ -36,11 +36,15 @@ public class KTableValueGetterStub<K, V> implements KTableValueGetter<K, V> {
         return data.get(key);
     }
 
-    public void put(final K key, V value) {
+    public void put(final K key, final V value) {
         data.put(key, value);
     }
 
     public void remove(final K key) {
         data.remove(key);
+    }
+
+    @Override
+    public void close() {
     }
 }

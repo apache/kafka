@@ -23,24 +23,31 @@ import org.apache.kafka.streams.processor.StateStore;
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
  */
-interface WrappedStateStore extends StateStore {
+public interface WrappedStateStore extends StateStore {
 
     /**
-     * Return the inner storage engine
+     * Return the inner most storage engine
      *
      * @return wrapped inner storage engine
      */
     StateStore inner();
 
+    /**
+     * Return the state store this store directly wraps
+     * @return the state store this store directly wraps
+     */
+    StateStore wrappedStore();
+
     abstract class AbstractStateStore implements WrappedStateStore {
         final StateStore innerState;
 
-        AbstractStateStore(StateStore inner) {
+        AbstractStateStore(final StateStore inner) {
             this.innerState = inner;
         }
 
         @Override
-        public void init(ProcessorContext context, StateStore root) {
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
             innerState.init(context, root);
         }
 
@@ -81,6 +88,11 @@ interface WrappedStateStore extends StateStore {
         @Override
         public void close() {
             innerState.close();
+        }
+
+        @Override
+        public StateStore wrappedStore() {
+            return innerState;
         }
     }
 }

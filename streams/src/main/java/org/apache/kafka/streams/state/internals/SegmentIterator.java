@@ -32,11 +32,11 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
 
     private final Bytes from;
     private final Bytes to;
-    private final Iterator<Segment> segments;
-    private final HasNextCondition hasNextCondition;
+    protected final Iterator<Segment> segments;
+    protected final HasNextCondition hasNextCondition;
 
-    private KeyValueStore<Bytes, byte[]> currentSegment;
-    private KeyValueIterator<Bytes, byte[]> currentIterator;
+    protected KeyValueStore<Bytes, byte[]> currentSegment;
+    protected KeyValueIterator<Bytes, byte[]> currentIterator;
 
     SegmentIterator(final Iterator<Segment> segments,
                     final HasNextCondition hasNextCondition,
@@ -66,17 +66,31 @@ class SegmentIterator implements KeyValueIterator<Bytes, byte[]> {
     @Override
     public boolean hasNext() {
         boolean hasNext = false;
-        while ((currentIterator == null || !(hasNext = hasNextCondition.hasNext(currentIterator)) || !currentSegment.isOpen())
+        while ((currentIterator == null || !(hasNext = hasNextConditionHasNext()) || !currentSegment.isOpen())
                 && segments.hasNext()) {
             close();
             currentSegment = segments.next();
             try {
-                currentIterator = currentSegment.range(from, to);
-            } catch (InvalidStateStoreException e) {
+                if (from == null || to == null) {
+                    currentIterator = currentSegment.all();
+                } else {
+                    currentIterator = currentSegment.range(from, to);
+                }
+            } catch (final InvalidStateStoreException e) {
                 // segment may have been closed so we ignore it.
             }
         }
         return currentIterator != null && hasNext;
+    }
+
+    private boolean hasNextConditionHasNext() {
+        boolean hasNext = false;
+        try {
+            hasNext = hasNextCondition.hasNext(currentIterator);
+        } catch (final InvalidStateStoreException e) {
+            //already closed so ignore
+        }
+        return hasNext;
     }
 
     public KeyValue<Bytes, byte[]> next() {

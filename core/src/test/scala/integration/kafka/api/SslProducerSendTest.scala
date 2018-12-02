@@ -19,7 +19,7 @@ package kafka.api
 
 import java.io.File
 
-import org.apache.kafka.common.protocol.SecurityProtocol
+import org.apache.kafka.common.security.auth.SecurityProtocol
 
 class SslProducerSendTest extends BaseProducerSendTest {
   override protected def securityProtocol = SecurityProtocol.SSL

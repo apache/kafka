@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="checkstyle/java.header" />
+    <property name="headerFile" value="${headerFile}" />
   </module>
 
   <module name="TreeWalker">
@@ -57,16 +57,25 @@
     <module name="LocalFinalVariableName"/>
     <module name="MemberName"/>
     <module name="ClassTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="MethodTypeParameterName">
-      <property name="format" value="^[A-Z0-9]*$"/>
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
+    </module>
+    <module name="InterfaceTypeParameterName">
+      <property name="format" value="^[A-Z][a-zA-Z0-9]*$$"/>
     </module>
     <module name="PackageName"/>
     <module name="ParameterName"/>
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
     <module name="AvoidStarImport"/>
+
+    <!-- variables that can be final should be final (suppressed except for Streams) -->
+    <module name="FinalLocalVariable">
+      <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
+      <property name="validateEnhancedForLoopVariable" value="true"/>
+    </module>
 
     <!-- dependencies -->
     <module name="ImportControl">
@@ -102,16 +111,16 @@
     </module>
     <module name="ClassDataAbstractionCoupling">
       <!-- default is 7 -->
-      <property name="max" value="15"/>
+      <property name="max" value="25"/>
     </module>
     <module name="BooleanExpressionComplexity">
       <!-- default is 3 -->
-      <property name="max" value="4"/>
+      <property name="max" value="5"/>
     </module>
 
     <module name="ClassFanOutComplexity">
       <!-- default is 20 -->
-      <property name="max" value="35"/>
+      <property name="max" value="50"/>
     </module>
     <module name="CyclomaticComplexity">
       <!-- default is 10-->
@@ -128,6 +137,6 @@
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="checkstyle/suppressions.xml"/>
+    <property name="file" value="${suppressionsFile}"/>
   </module>
 </module>

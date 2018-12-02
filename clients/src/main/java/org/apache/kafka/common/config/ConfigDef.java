@@ -22,15 +22,15 @@ import org.apache.kafka.common.utils.Utils;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * This class is used for specifying the set of expected configurations. For each configuration, you can specify
@@ -56,7 +56,7 @@ import java.util.Set;
  * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
- * 
+ *
  * Map&lt;String, Object&gt; configs = defs.parse(props);
  * // will return &quot;some value&quot;
  * String someConfig = (String) configs.get(&quot;config_with_default&quot;);
@@ -72,6 +72,9 @@ import java.util.Set;
  * functionality for accessing configs.
  */
 public class ConfigDef {
+
+    private static final Pattern COMMA_WITH_WHITESPACE = Pattern.compile("\\s*,\\s*");
+
     /**
      * A unique Java object which represents the lack of a default value.
      */
@@ -82,15 +85,17 @@ public class ConfigDef {
     private Set<String> configsWithNoParent;
 
     public ConfigDef() {
-        configKeys = new HashMap<>();
+        configKeys = new LinkedHashMap<>();
         groups = new LinkedList<>();
         configsWithNoParent = null;
     }
 
     public ConfigDef(ConfigDef base) {
-        configKeys = new HashMap<>(base.configKeys);
+        configKeys = new LinkedHashMap<>(base.configKeys);
         groups = new LinkedList<>(base.groups);
-        configsWithNoParent = base.configsWithNoParent == null ? null : new HashSet<>(base.configsWithNoParent);
+        // It is not safe to copy this from the parent because we may subsequently add to the set of configs and
+        // invalidate this
+        configsWithNoParent = null;
     }
 
     /**
@@ -100,6 +105,15 @@ public class ConfigDef {
      */
     public Set<String> names() {
         return Collections.unmodifiableSet(configKeys.keySet());
+    }
+
+    public Map<String, Object> defaultValues() {
+        Map<String, Object> defaultValues = new HashMap<>();
+        for (ConfigKey key : configKeys.values()) {
+            if (key.defaultValue != NO_DEFAULT_VALUE)
+                defaultValues.put(key.name, key.defaultValue);
+        }
+        return defaultValues;
     }
 
     public ConfigDef define(ConfigKey key) {
@@ -171,7 +185,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -248,7 +262,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, Recommender recommender) {
-        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, defaultValue, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -321,7 +335,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Importance importance, String documentation, String group, int orderInGroup,
                             Width width, String displayName, Recommender recommender) {
-        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.<String>emptyList(), recommender);
+        return define(name, type, NO_DEFAULT_VALUE, null, importance, documentation, group, orderInGroup, width, displayName, Collections.emptyList(), recommender);
     }
 
     /**
@@ -527,7 +541,8 @@ public class ConfigDef {
         return new ArrayList<>(undefinedConfigKeys);
     }
 
-    private Set<String> getConfigsWithNoParent() {
+    // package accessible for testing
+    Set<String> getConfigsWithNoParent() {
         if (this.configsWithNoParent != null) {
             return this.configsWithNoParent;
         }
@@ -582,23 +597,15 @@ public class ConfigDef {
         if (!configKeys.containsKey(name)) {
             return;
         }
-        
         ConfigKey key = configKeys.get(name);
         ConfigValue value = configs.get(name);
-        
         if (key.recommender != null) {
             try {
                 List<Object> recommendedValues = key.recommender.validValues(name, parsed);
                 List<Object> originalRecommendedValues = value.recommendedValues();
                 if (!originalRecommendedValues.isEmpty()) {
                     Set<Object> originalRecommendedValueSet = new HashSet<>(originalRecommendedValues);
-                    Iterator<Object> it = recommendedValues.iterator();
-                    while (it.hasNext()) {
-                        Object o = it.next();
-                        if (!originalRecommendedValueSet.contains(o)) {
-                            it.remove();
-                        }
-                    }
+                    recommendedValues.removeIf(o -> !originalRecommendedValueSet.contains(o));
                 }
                 value.recommendedValues(recommendedValues);
                 value.visible(key.recommender.visible(name, parsed));
@@ -692,7 +699,7 @@ public class ConfigDef {
                         if (trimmed.isEmpty())
                             return Collections.emptyList();
                         else
-                            return Arrays.asList(trimmed.split("\\s*,\\s*", -1));
+                            return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
                 case CLASS:
@@ -735,10 +742,34 @@ public class ConfigDef {
                 return Utils.join(valueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
-                return clazz.getCanonicalName();
+                return clazz.getName();
             default:
                 throw new IllegalStateException("Unknown type.");
         }
+    }
+
+    /**
+     * Converts a map of config (key, value) pairs to a map of strings where each value
+     * is converted to a string. This method should be used with care since it stores
+     * actual password values to String. Values from this map should never be used in log entries.
+     */
+    public static  Map<String, String> convertToStringMapWithPasswordValues(Map<String, ?> configs) {
+        Map<String, String> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : configs.entrySet()) {
+            Object value = entry.getValue();
+            String strValue;
+            if (value instanceof Password)
+                strValue = ((Password) value).value();
+            else if (value instanceof List)
+                strValue = convertToString(value, Type.LIST);
+            else if (value instanceof Class)
+                strValue = convertToString(value, Type.CLASS);
+            else
+                strValue = convertToString(value, null);
+            if (strValue != null)
+                result.put(entry.getKey(), strValue);
+        }
+        return result;
     }
 
     /**
@@ -808,6 +839,11 @@ public class ConfigDef {
         private final Number min;
         private final Number max;
 
+        /**
+         *  A numeric range with inclusive upper bound and inclusive lower bound
+         * @param min  the lower bound
+         * @param max  the upper bound
+         */
         private Range(Number min, Number max) {
             this.min = min;
             this.max = max;
@@ -823,7 +859,7 @@ public class ConfigDef {
         }
 
         /**
-         * A numeric range that checks both the upper and lower bound
+         * A numeric range that checks both the upper (inclusive) and lower bound
          */
         public static Range between(Number min, Number max) {
             return new Range(min, max);
@@ -840,7 +876,9 @@ public class ConfigDef {
         }
 
         public String toString() {
-            if (min == null)
+            if (min == null && max == null)
+                return "[...]";
+            else if (min == null)
                 return "[...," + max + "]";
             else if (max == null)
                 return "[" + min + ",...]";
@@ -863,6 +901,7 @@ public class ConfigDef {
 
         @Override
         public void ensureValid(final String name, final Object value) {
+            @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
             for (String string : values) {
                 validString.ensureValid(name, string);
@@ -896,6 +935,106 @@ public class ConfigDef {
 
         public String toString() {
             return "[" + Utils.join(validStrings, ", ") + "]";
+        }
+    }
+
+    public static class NonNullValidator implements Validator {
+        @Override
+        public void ensureValid(String name, Object value) {
+            if (value == null) {
+                // Pass in the string null to avoid the spotbugs warning
+                throw new ConfigException(name, "null", "entry must be non null");
+            }
+        }
+
+        public String toString() {
+            return "non-null string";
+        }
+    }
+
+    public static class CompositeValidator implements Validator {
+        private final List<Validator> validators;
+
+        private CompositeValidator(List<Validator> validators) {
+            this.validators = Collections.unmodifiableList(validators);
+        }
+
+        public static CompositeValidator of(Validator... validators) {
+            return new CompositeValidator(Arrays.asList(validators));
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            for (Validator validator: validators) {
+                validator.ensureValid(name, value);
+            }
+        }
+
+        @Override
+        public String toString() {
+            if (validators == null) return "";
+            StringBuilder desc = new StringBuilder();
+            for (Validator v: validators) {
+                if (desc.length() > 0) {
+                    desc.append(',').append(' ');
+                }
+                desc.append(String.valueOf(v));
+            }
+            return desc.toString();
+        }
+    }
+
+    public static class NonEmptyString implements Validator {
+
+        @Override
+        public void ensureValid(String name, Object o) {
+            String s = (String) o;
+            if (s != null && s.isEmpty()) {
+                throw new ConfigException(name, o, "String must be non-empty");
+            }
+        }
+
+        @Override
+        public String toString() {
+            return "non-empty string";
+        }
+    }
+
+    public static class NonEmptyStringWithoutControlChars implements Validator {
+
+        public static NonEmptyStringWithoutControlChars nonEmptyStringWithoutControlChars() {
+            return new NonEmptyStringWithoutControlChars();
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            String s = (String) value;
+
+            if (s == null) {
+                // This can happen during creation of the config object due to no default value being defined for the
+                // name configuration - a missing name parameter is caught when checking for mandatory parameters,
+                // thus we can ok a null value here
+                return;
+            } else if (s.isEmpty()) {
+                throw new ConfigException(name, value, "String may not be empty");
+            }
+
+            // Check name string for illegal characters
+            ArrayList<Integer> foundIllegalCharacters = new ArrayList<>();
+
+            for (int i = 0; i < s.length(); i++) {
+                if (Character.isISOControl(s.codePointAt(i))) {
+                    foundIllegalCharacters.add(s.codePointAt(i));
+                }
+            }
+
+            if (!foundIllegalCharacters.isEmpty()) {
+                throw new ConfigException(name, value, "String may not contain control sequences but had the following ASCII chars: " + Utils.join(foundIllegalCharacters, ", "));
+            }
+        }
+
+        public String toString() {
+            return "non-empty string without ISO control characters";
         }
     }
 
@@ -974,16 +1113,40 @@ public class ConfigDef {
     }
 
     public String toHtmlTable() {
+        return toHtmlTable(Collections.<String, String>emptyMap());
+    }
+
+    private void addHeader(StringBuilder builder, String headerName) {
+        builder.append("<th>");
+        builder.append(headerName);
+        builder.append("</th>\n");
+    }
+
+    private void addColumnValue(StringBuilder builder, String value) {
+        builder.append("<td>");
+        builder.append(value);
+        builder.append("</td>");
+    }
+
+    /**
+     * Converts this config into an HTML table that can be embedded into docs.
+     * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" column
+     * will be included n the table with the value of the update mode. Default
+     * mode is "read-only".
+     * @param dynamicUpdateModes Config name -> update mode mapping
+     */
+    public String toHtmlTable(Map<String, String> dynamicUpdateModes) {
+        boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();
         List<ConfigKey> configs = sortedConfigs();
         StringBuilder b = new StringBuilder();
         b.append("<table class=\"data-table\"><tbody>\n");
         b.append("<tr>\n");
         // print column headers
         for (String headerName : headers()) {
-            b.append("<th>");
-            b.append(headerName);
-            b.append("</th>\n");
+            addHeader(b, headerName);
         }
+        if (hasUpdateModes)
+            addHeader(b, "Dynamic Update Mode");
         b.append("</tr>\n");
         for (ConfigKey key : configs) {
             if (key.internalConfig) {
@@ -992,9 +1155,14 @@ public class ConfigDef {
             b.append("<tr>\n");
             // print column values
             for (String headerName : headers()) {
-                b.append("<td>");
-                b.append(getConfigValue(key, headerName));
+                addColumnValue(b, getConfigValue(key, headerName));
                 b.append("</td>");
+            }
+            if (hasUpdateModes) {
+                String updateMode = dynamicUpdateModes.get(key.name);
+                if (updateMode == null)
+                    updateMode = "read-only";
+                addColumnValue(b, updateMode);
             }
             b.append("</tr>\n");
         }
@@ -1095,32 +1263,30 @@ public class ConfigDef {
         }
 
         List<ConfigKey> configs = new ArrayList<>(configKeys.values());
-        Collections.sort(configs, new Comparator<ConfigKey>() {
-            @Override
-            public int compare(ConfigKey k1, ConfigKey k2) {
-                int cmp = k1.group == null
-                        ? (k2.group == null ? 0 : -1)
-                        : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
-                if (cmp == 0) {
-                    cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
-                    if (cmp == 0) {
-                        // first take anything with no default value
-                        if (!k1.hasDefault() && k2.hasDefault()) {
-                            cmp = -1;
-                        } else if (!k2.hasDefault() && k1.hasDefault()) {
-                            cmp = 1;
-                        } else {
-                            cmp = k1.importance.compareTo(k2.importance);
-                            if (cmp == 0) {
-                                return k1.name.compareTo(k2.name);
-                            }
-                        }
-                    }
-                }
-                return cmp;
-            }
-        });
+        Collections.sort(configs, (k1, k2) -> compare(k1, k2, groupOrd));
         return configs;
+    }
+
+    private int compare(ConfigKey k1, ConfigKey k2, Map<String, Integer> groupOrd) {
+        int cmp = k1.group == null
+            ? (k2.group == null ? 0 : -1)
+            : (k2.group == null ? 1 : Integer.compare(groupOrd.get(k1.group), groupOrd.get(k2.group)));
+        if (cmp == 0) {
+            cmp = Integer.compare(k1.orderInGroup, k2.orderInGroup);
+            if (cmp == 0) {
+                // first take anything with no default value
+                if (!k1.hasDefault() && k2.hasDefault())
+                    cmp = -1;
+                else if (!k2.hasDefault() && k1.hasDefault())
+                    cmp = 1;
+                else {
+                    cmp = k1.importance.compareTo(k2.importance);
+                    if (cmp == 0)
+                        return k1.name.compareTo(k2.name);
+                }
+            }
+        }
+        return cmp;
     }
 
     public void embed(final String keyPrefix, final String groupPrefix, final int startingOrd, final ConfigDef child) {
@@ -1148,12 +1314,7 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return new ConfigDef.Validator() {
-            @Override
-            public void ensureValid(String name, Object value) {
-                base.ensureValid(name.substring(keyPrefix.length()), value);
-            }
-        };
+        return (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value);
     }
 
     /**

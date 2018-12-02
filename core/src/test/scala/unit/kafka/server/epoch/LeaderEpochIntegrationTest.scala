@@ -16,11 +16,10 @@
   */
 package kafka.server.epoch
 
-import java.util.{Map => JMap}
+import java.util.Optional
 
-import kafka.admin.AdminUtils
 import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaConfig, KafkaServer, ReplicaFetcherBlockingSend}
+import kafka.server.{BlockingSend, KafkaServer, ReplicaFetcherBlockingSend}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -29,18 +28,19 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.serialization.StringSerializer
-import org.apache.kafka.common.utils.SystemTime
+import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.common.TopicPartition
-
+import org.apache.kafka.common.protocol.ApiKeys
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.{After, Test}
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
+import scala.collection.mutable.ListBuffer
 
 class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
-  var brokers: Seq[KafkaServer] = null
+  var brokers: ListBuffer[KafkaServer] = ListBuffer()
   val topic1 = "foo"
   val topic2 = "bar"
   val t1p0 = new TopicPartition(topic1, 0)
@@ -51,26 +51,21 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   val tp = t1p0
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
 
-  @Before
-  override def setUp() {
-    super.setUp()
-    val props = createBrokerConfigs(2, zkConnect)
-    brokers = props.map(KafkaConfig.fromProps).map(TestUtils.createServer(_))
-  }
-
   @After
   override def tearDown() {
-    brokers.foreach(_.shutdown())
     if (producer != null)
       producer.close()
+    TestUtils.shutdownServers(brokers)
     super.tearDown()
   }
 
   @Test
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader() {
+    brokers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
-      createTopic(zkUtils, topic, Map(0 -> Seq(0, 1)), servers = brokers)
+      createTopic(zkClient, topic, Map(0 -> Seq(0, 1)), servers = brokers)
     }
 
     // When we send four messages
@@ -100,17 +95,16 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers = (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic1, Map(
-      0 -> Seq(100),
-      1 -> Seq(101)
-    ))
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, topic2, Map(
-      0 -> Seq(100)
-    ))
+    brokers ++= (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+
+    val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
+    TestUtils.createTopic(zkClient, topic1, assignment1, brokers)
+
+    val assignment2 = Map(0 -> Seq(100))
+    TestUtils.createTopic(zkClient, topic2, assignment2, brokers)
 
     //Send messages equally to the two partitions, then half as many to a third
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 5, acks = -1)
+    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
     (0 until 10).foreach { _ =>
       producer.send(new ProducerRecord(topic1, 0, null, "IHeartLogs".getBytes))
     }
@@ -134,7 +128,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //And should get no leader for partition error from t1p1 (as it's not on broker 0)
     assertTrue(offsetsForEpochs(t1p1).hasError)
-    assertEquals(UNKNOWN_TOPIC_OR_PARTITION, offsetsForEpochs(t1p1).error)
+    assertEquals(NOT_LEADER_FOR_PARTITION, offsetsForEpochs(t1p1).error)
     assertEquals(UNDEFINED_EPOCH_OFFSET, offsetsForEpochs(t1p1).endOffset)
 
     //Repointing to broker 1 we should get the correct offset for t1p1
@@ -145,22 +139,26 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
-
     //Setup: we are only interested in the single partition on broker 101
-    brokers = Seq(100, 101).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
-    def leo() = brokers(1).replicaManager.getReplica(tp).get.logEndOffset.messageOffset
-    AdminUtils.createOrUpdateTopicPartitionAssignmentPathInZK(zkUtils, tp.topic, Map(tp.partition -> Seq(101)))
-    producer = createNewProducer(getBrokerListStrFromServers(brokers), retries = 10, acks = -1)
+    brokers += createServer(fromProps(createBrokerConfig(100, zkConnect)))
+    assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
+
+    brokers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
+
+    def leo() = brokers(1).replicaManager.localReplica(tp).get.logEndOffset.messageOffset
+
+    TestUtils.createTopic(zkClient, tp.topic, Map(tp.partition -> Seq(101)), brokers)
+    producer = createProducer(getBrokerListStrFromServers(brokers), acks = -1)
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
     var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
     //Then epoch should be 0 and leo: 1
-    var offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
-    assertEquals(leo(), offset)
-
+    var epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
+    assertEquals(0, epochEndOffset.leaderEpoch)
+    assertEquals(1, epochEndOffset.endOffset)
+    assertEquals(1, leo())
 
     //2. When broker is bounced
     brokers(1).shutdown()
@@ -169,15 +167,23 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
 
-
     //Then epoch 0 should still be the start offset of epoch 1
-    offset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset()
-    assertEquals(1, offset)
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
+    assertEquals(1, epochEndOffset.endOffset)
+    assertEquals(0, epochEndOffset.leaderEpoch)
 
-    //Then epoch 2 should be the leo (NB: The leader epoch goes up in factors of 2 - This is because we have to first change leader to -1 and then change it again to the live replica)
-    assertEquals(2, fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
-    assertEquals(leo(), fetcher.leaderOffsetsFor(Map(tp -> 2))(tp).endOffset())
+    //No data written in epoch 1
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 1))(tp)
+    assertEquals(0, epochEndOffset.leaderEpoch)
+    assertEquals(1, epochEndOffset.endOffset)
 
+    //Then epoch 2 should be the leo (NB: The leader epoch goes up in factors of 2 -
+    //This is because we have to first change leader to -1 and then change it again to the live replica)
+    //Note that the expected leader changes depend on the controller being on broker 100, which is not restarted
+    epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 2))(tp)
+    assertEquals(2, epochEndOffset.leaderEpoch)
+    assertEquals(2, epochEndOffset.endOffset)
+    assertEquals(2, leo())
 
     //3. When broker is bounced again
     brokers(1).shutdown()
@@ -185,7 +191,6 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
     fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
-
 
     //Then Epoch 0 should still map to offset 1
     assertEquals(1, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset())
@@ -220,14 +225,14 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   }
 
   private def sender(from: KafkaServer, to: KafkaServer): BlockingSend = {
-    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.getBrokerEndPoint(from.config.interBrokerListenerName)
-    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher")
+    val endPoint = from.metadataCache.getAliveBrokers.find(_.id == to.config.brokerId).get.brokerEndPoint(from.config.interBrokerListenerName)
+    new ReplicaFetcherBlockingSend(endPoint, from.config, new Metrics(), new SystemTime(), 42, "TestFetcher", new LogContext())
   }
 
-  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Boolean = {
+  private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
       brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
-        case Some(m) => m.leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == epoch
+        case Some(m) => m.basePartitionState.leaderEpoch == epoch
         case None => false
       }
     }, "Epoch didn't change")
@@ -257,7 +262,8 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   private def sendFourMessagesToEachTopic() = {
     val testMessageList1 = List("test1", "test2", "test3", "test4")
     val testMessageList2 = List("test5", "test6", "test7", "test8")
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers), retries = 5, keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
+      keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
     val records =
       testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++
         testMessageList2.map(m => new ProducerRecord(topic2, m, m))
@@ -268,16 +274,16 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
   /**
     * Simulates how the Replica Fetcher Thread requests leader offsets for epochs
     */
-  private class TestFetcherThread(sender: BlockingSend) extends Logging {
+  private[epoch] class TestFetcherThread(sender: BlockingSend) extends Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
-      val request = new OffsetsForLeaderEpochRequest.Builder(toJavaFormat(partitions))
+      val partitionData = partitions.mapValues(
+        new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), _))
+      val request = new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion,
+        partitionData.asJava)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].responses.asScala
     }
 
-    def toJavaFormat(partitions: Map[TopicPartition, Int]): JMap[TopicPartition, Integer] = {
-      partitions.map { case (tp, epoch) => tp -> epoch.asInstanceOf[Integer] }.toMap.asJava
-    }
   }
 }

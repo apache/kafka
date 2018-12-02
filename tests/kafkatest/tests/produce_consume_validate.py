@@ -44,9 +44,6 @@ class ProduceConsumeValidateTest(Test):
         self.consumer_init_timeout_sec = 0
         self.enable_idempotence = False
 
-    def setup_producer_and_consumer(self):
-        raise NotImplementedError("Subclasses should implement this")
-
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.consumer.start()
@@ -59,12 +56,6 @@ class ProduceConsumeValidateTest(Test):
                        err_msg="Consumer process took more than %d s to fork" %\
                        self.consumer_init_timeout_sec)
             end = int(time.time())
-            # If `JMXConnectFactory.connect` is invoked during the
-            # initialization of the JMX server, it may fail to throw the
-            # specified IOException back to the calling code. The sleep is a
-            # workaround that should allow initialization to complete before we
-            # try to connect. See KAFKA-4620 for more details.
-            time.sleep(1)
             remaining_time = self.consumer_init_timeout_sec - (end - start)
             if remaining_time < 0 :
                 remaining_time = 0

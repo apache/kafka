@@ -20,7 +20,6 @@ package kafka.api
 import java.util.concurrent.{ExecutionException, TimeoutException}
 import java.util.Properties
 
-import kafka.common.Topic
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
@@ -28,6 +27,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
@@ -49,7 +49,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
 
-  def generateConfigs() =
+  def generateConfigs =
     TestUtils.createBrokerConfigs(numServers, zkConnect, false).map(KafkaConfig.fromProps(_, overridingProps))
 
   private var producer1: KafkaProducer[Array[Byte], Array[Byte]] = null
@@ -64,11 +64,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   override def setUp() {
     super.setUp()
 
-    producer1 = TestUtils.createNewProducer(brokerList, acks = 0, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+    producer1 = TestUtils.createProducer(brokerList, acks = 0, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer2 = TestUtils.createNewProducer(brokerList, acks = 1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+    producer2 = TestUtils.createProducer(brokerList, acks = 1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
-    producer3 = TestUtils.createNewProducer(brokerList, acks = -1, requestTimeoutMs = 30000L, maxBlockMs = 10000L,
+    producer3 = TestUtils.createProducer(brokerList, acks = -1, retries = 0, requestTimeoutMs = 30000, maxBlockMs = 10000L,
       bufferSize = producerBufferSize)
   }
 
@@ -88,11 +88,15 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testTooLargeRecordWithAckZero() {
     // create topic
-    TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
+    createTopic(topic1, replicationFactor = numServers)
 
     // send a too-large record
     val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
-    assertEquals("Returned metadata should have offset -1", producer1.send(record).get.offset, -1L)
+
+    val recordMetadata = producer1.send(record).get()
+    assertNotNull(recordMetadata)
+    assertFalse(recordMetadata.hasOffset)
+    assertEquals(-1L, recordMetadata.offset)
   }
 
   /**
@@ -101,7 +105,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testTooLargeRecordWithAckOne() {
     // create topic
-    TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
+    createTopic(topic1, replicationFactor = numServers)
 
     // send a too-large record
     val record = new ProducerRecord(topic1, null, "key".getBytes, new Array[Byte](serverMessageMaxBytes + 1))
@@ -118,7 +122,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // create topic
     val topic10 = "topic10"
-    TestUtils.createTopic(zkUtils, topic10, servers.size, numServers, servers, topicConfig)
+    createTopic(topic10, numPartitions = servers.size, replicationFactor = numServers, topicConfig)
 
     // send a record that is too large for replication, but within the broker max message limit
     val value = new Array[Byte](maxMessageSize - DefaultRecordBatch.RECORD_BATCH_OVERHEAD - DefaultRecord.MAX_RECORD_OVERHEAD)
@@ -165,10 +169,10 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testWrongBrokerList() {
     // create topic
-    TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
+    createTopic(topic1, replicationFactor = numServers)
 
     // producer with incorrect broker list
-    producer4 = TestUtils.createNewProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
+    producer4 = TestUtils.createProducer("localhost:8686,localhost:4242", acks = 1, maxBlockMs = 10000L, bufferSize = producerBufferSize)
 
     // send a record with incorrect broker list
     val record = new ProducerRecord(topic1, null, "key".getBytes, "value".getBytes)
@@ -184,7 +188,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testInvalidPartition() {
     // create topic with a single partition
-    TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
+    createTopic(topic1, numPartitions = 1, replicationFactor = numServers)
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
@@ -199,9 +203,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   @Test
   def testSendAfterClosed() {
     // create topic
-    TestUtils.createTopic(zkUtils, topic1, 1, numServers, servers)
+    createTopic(topic1, replicationFactor = numServers)
 
-    val record = new ProducerRecord[Array[Byte],Array[Byte]](topic1, null, "key".getBytes, "value".getBytes)
+    val record = new ProducerRecord[Array[Byte], Array[Byte]](topic1, null, "key".getBytes, "value".getBytes)
 
     // first send a message to make sure the metadata is refreshed
     producer1.send(record).get
@@ -224,9 +228,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
   @Test
   def testCannotSendToInternalTopic() {
-    TestUtils.createOffsetsTopic(zkUtils, servers)
+    TestUtils.createOffsetsTopic(zkClient, servers)
     val thrown = intercept[ExecutionException] {
-      producer2.send(new ProducerRecord(Topic.GroupMetadataTopicName, "test".getBytes, "test".getBytes)).get
+      producer2.send(new ProducerRecord(Topic.GROUP_METADATA_TOPIC_NAME, "test".getBytes, "test".getBytes)).get
     }
     assertTrue("Unexpected exception while sending to an invalid topic " + thrown.getCause, thrown.getCause.isInstanceOf[InvalidTopicException])
   }
@@ -237,7 +241,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas",(numServers+1).toString)
 
-    TestUtils.createTopic(zkUtils, topicName, 1, numServers, servers, topicProps)
+    createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
     try {
@@ -257,7 +261,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
     val topicProps = new Properties()
     topicProps.put("min.insync.replicas", numServers.toString)
 
-    TestUtils.createTopic(zkUtils, topicName, 1, numServers, servers,topicProps)
+    createTopic(topicName, replicationFactor = numServers, topicConfig = topicProps)
 
     val record = new ProducerRecord(topicName, null, "key".getBytes, "value".getBytes)
     // this should work with all brokers up and running

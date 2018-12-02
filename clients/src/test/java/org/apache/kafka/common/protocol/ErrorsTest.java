@@ -74,12 +74,12 @@ public class ErrorsTest {
     @Test
     public void testForExceptionDefault() {
         Errors error = Errors.forException(new ApiException());
-        assertEquals("forException should default to unknown", Errors.UNKNOWN, error);
+        assertEquals("forException should default to unknown", Errors.UNKNOWN_SERVER_ERROR, error);
     }
 
     @Test
     public void testExceptionName() {
-        String exceptionName = Errors.UNKNOWN.exceptionName();
+        String exceptionName = Errors.UNKNOWN_SERVER_ERROR.exceptionName();
         assertEquals("org.apache.kafka.common.errors.UnknownServerException", exceptionName);
         exceptionName = Errors.NONE.exceptionName();
         assertNull(exceptionName);

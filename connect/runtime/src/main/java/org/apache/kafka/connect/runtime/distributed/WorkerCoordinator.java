@@ -24,11 +24,12 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -44,11 +45,10 @@ import java.util.Map;
  * to workers.
  */
 public final class WorkerCoordinator extends AbstractCoordinator implements Closeable {
-    private static final Logger log = LoggerFactory.getLogger(WorkerCoordinator.class);
-
     // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
+    private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
     private ConnectProtocol.Assignment assignmentSnapshot;
@@ -61,7 +61,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     /**
      * Initialize the coordination manager.
      */
-    public WorkerCoordinator(ConsumerNetworkClient client,
+    public WorkerCoordinator(LogContext logContext,
+                             ConsumerNetworkClient client,
                              String groupId,
                              int rebalanceTimeoutMs,
                              int sessionTimeoutMs,
@@ -73,7 +74,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener) {
-        super(client,
+        super(logContext,
+              client,
               groupId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
@@ -83,6 +85,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
               time,
               retryBackoffMs,
               true);
+        this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
@@ -91,6 +94,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.rejoinRequested = false;
     }
 
+    @Override
     public void requestRejoin() {
         rejoinRequested = true;
     }
@@ -98,6 +102,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     @Override
     public String protocolType() {
         return "connect";
+    }
+
+    // expose for tests
+    @Override
+    protected synchronized boolean ensureCoordinatorReady(final Timer timer) {
+        return super.ensureCoordinatorReady(timer);
     }
 
     public void poll(long timeout) {
@@ -108,11 +118,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
         do {
             if (coordinatorUnknown()) {
-                ensureCoordinatorReady();
+                ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
                 now = time.milliseconds();
             }
 
-            if (needRejoin()) {
+            if (rejoinNeededOrPending()) {
                 ensureActiveGroup();
                 now = time.milliseconds();
             }
@@ -124,7 +134,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
             // Note that because the network client is shared with the background heartbeat thread,
             // we do not want to block in poll longer than the time to the next heartbeat.
-            client.poll(Math.min(Math.max(0, remaining), timeToNextHeartbeat(now)));
+            long pollTimeout = Math.min(Math.max(0, remaining), timeToNextHeartbeat(now));
+            client.poll(time.timer(pollTimeout));
 
             now = time.milliseconds();
             elapsed = now - start;
@@ -279,8 +290,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected boolean needRejoin() {
-        return super.needRejoin() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
+    protected boolean rejoinNeededOrPending() {
+        return super.rejoinNeededOrPending() || (assignmentSnapshot == null || assignmentSnapshot.failed()) || rejoinRequested;
     }
 
     public String memberId() {
@@ -295,13 +306,13 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public String ownerUrl(String connector) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(connector);
     }
 
     public String ownerUrl(ConnectorTaskId task) {
-        if (needRejoin() || !isLeader())
+        if (rejoinNeededOrPending() || !isLeader())
             return null;
         return leaderState.ownerUrl(task);
     }
@@ -313,12 +324,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
 
             Measurable numConnectors = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.connectors().size();
                 }
             };
 
             Measurable numTasks = new Measurable() {
+                @Override
                 public double measure(MetricConfig config, long now) {
                     return assignmentSnapshot.tasks().size();
                 }

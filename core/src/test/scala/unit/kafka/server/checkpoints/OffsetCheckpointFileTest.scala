@@ -16,10 +16,10 @@
   */
 package kafka.server.checkpoints
 
-import java.io.IOException
-
+import kafka.server.LogDirFailureChannel
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
@@ -89,12 +89,14 @@ class OffsetCheckpointFileTest extends JUnitSuite with Logging {
     assertEquals(Map(), checkpoint.read())
   }
 
-  @Test(expected = classOf[IOException])
+  @Test(expected = classOf[KafkaStorageException])
   def shouldThrowIfVersionIsNotRecognised(): Unit = {
-    val checkpointFile = new CheckpointFile(TestUtils.tempFile(), OffsetCheckpointFile.CurrentVersion + 1,
-      OffsetCheckpointFile.Formatter)
+    val file = TestUtils.tempFile()
+    val logDirFailureChannel = new LogDirFailureChannel(10)
+    val checkpointFile = new CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1,
+      OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
     checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
-    new OffsetCheckpointFile(checkpointFile.file).read()
+    new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read()
   }
 
 }

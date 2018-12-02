@@ -96,7 +96,7 @@ abstract public class Shell {
 
         // read error and input streams as this would free up the buffers
         // free the error stream buffer
-        Thread errThread = Utils.newThread("kafka-shell-thread", new Runnable() {
+        Thread errThread = KafkaThread.nonDaemon("kafka-shell-thread", new Runnable() {
             @Override
             public void run() {
                 try {
@@ -110,7 +110,7 @@ abstract public class Shell {
                     LOG.warn("Error reading the error stream", ioe);
                 }
             }
-        }, false);
+        });
         errThread.start();
 
         try {
@@ -251,7 +251,7 @@ abstract public class Shell {
      * @param cmd shell command to execute.
      * @return the output of the executed command.
      */
-    public static String execCommand(String ... cmd) throws IOException {
+    public static String execCommand(String... cmd) throws IOException {
         return execCommand(cmd, -1);
     }
 

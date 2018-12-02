@@ -16,22 +16,16 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Iterator;
-import java.util.List;
 
 public abstract class AbstractRecords implements Records {
 
-    private final Iterable<Record> records = new Iterable<Record>() {
-        @Override
-        public Iterator<Record> iterator() {
-            return recordsIterator();
-        }
-    };
+    private final Iterable<Record> records = this::recordsIterator;
 
     @Override
     public boolean hasMatchingMagic(byte magic) {
@@ -49,61 +43,6 @@ public abstract class AbstractRecords implements Records {
         return true;
     }
 
-    protected MemoryRecords downConvert(Iterable<? extends RecordBatch> batches, byte toMagic) {
-        // maintain the batch along with the decompressed records to avoid the need to decompress again
-        List<RecordBatchAndRecords> recordBatchAndRecordsList = new ArrayList<>();
-        int totalSizeEstimate = 0;
-
-        for (RecordBatch batch : batches) {
-            if (batch.magic() <= toMagic) {
-                totalSizeEstimate += batch.sizeInBytes();
-                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, null, null));
-            } else {
-                List<Record> records = Utils.toList(batch.iterator());
-                final long baseOffset;
-                if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2)
-                    baseOffset = batch.baseOffset();
-                else
-                    baseOffset = records.get(0).offset();
-                totalSizeEstimate += estimateSizeInBytes(toMagic, baseOffset, batch.compressionType(), records);
-                recordBatchAndRecordsList.add(new RecordBatchAndRecords(batch, records, baseOffset));
-            }
-        }
-
-        ByteBuffer buffer = ByteBuffer.allocate(totalSizeEstimate);
-        for (RecordBatchAndRecords recordBatchAndRecords : recordBatchAndRecordsList) {
-            if (recordBatchAndRecords.batch.magic() <= toMagic)
-                recordBatchAndRecords.batch.writeTo(buffer);
-            else
-                buffer = convertRecordBatch(toMagic, buffer, recordBatchAndRecords);
-        }
-
-        buffer.flip();
-        return MemoryRecords.readableRecords(buffer);
-    }
-
-    /**
-     * Return a buffer containing the converted record batches. The returned buffer may not be the same as the received
-     * one (e.g. it may require expansion).
-     */
-    private ByteBuffer convertRecordBatch(byte magic, ByteBuffer buffer, RecordBatchAndRecords recordBatchAndRecords) {
-        RecordBatch batch = recordBatchAndRecords.batch;
-        final TimestampType timestampType = batch.timestampType();
-        long logAppendTime = timestampType == TimestampType.LOG_APPEND_TIME ? batch.maxTimestamp() : RecordBatch.NO_TIMESTAMP;
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, batch.compressionType(),
-                timestampType, recordBatchAndRecords.baseOffset, logAppendTime);
-        for (Record record : recordBatchAndRecords.records) {
-            // control messages are only supported in v2 and above, so skip when down-converting
-            if (magic < RecordBatch.MAGIC_VALUE_V2 && record.isControlRecord())
-                continue;
-            builder.append(record);
-        }
-
-        builder.close();
-        return builder.buffer();
-    }
-
     /**
      * Get an iterator over the deep records.
      * @return An iterator over the records
@@ -111,6 +50,11 @@ public abstract class AbstractRecords implements Records {
     @Override
     public Iterable<Record> records() {
         return records;
+    }
+
+    @Override
+    public RecordsSend toSend(String destination) {
+        return new DefaultRecordsSend(destination, this);
     }
 
     private Iterator<Record> recordsIterator() {
@@ -164,23 +108,44 @@ public abstract class AbstractRecords implements Records {
         return compressionType == CompressionType.NONE ? size : Math.min(Math.max(size / 2, 1024), 1 << 16);
     }
 
-    public static int sizeInBytesUpperBound(byte magic, byte[] key, byte[] value) {
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, byte[] key, byte[] value, Header[] headers) {
+        return estimateSizeInBytesUpperBound(magic, compressionType, Utils.wrapNullable(key), Utils.wrapNullable(value), headers);
+    }
+
+    /**
+     * Get an upper bound estimate on the batch size needed to hold a record with the given fields. This is only
+     * an estimate because it does not take into account overhead from the compression algorithm.
+     */
+    public static int estimateSizeInBytesUpperBound(byte magic, CompressionType compressionType, ByteBuffer key,
+                                                    ByteBuffer value, Header[] headers) {
         if (magic >= RecordBatch.MAGIC_VALUE_V2)
-            return DefaultRecordBatch.batchSizeUpperBound(key, value, Record.EMPTY_HEADERS);
+            return DefaultRecordBatch.estimateBatchSizeUpperBound(key, value, headers);
+        else if (compressionType != CompressionType.NONE)
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic) + LegacyRecord.recordSize(magic, key, value);
         else
             return Records.LOG_OVERHEAD + LegacyRecord.recordSize(magic, key, value);
     }
 
-    private static class RecordBatchAndRecords {
-        private final RecordBatch batch;
-        private final List<Record> records;
-        private final Long baseOffset;
-
-        private RecordBatchAndRecords(RecordBatch batch, List<Record> records, Long baseOffset) {
-            this.batch = batch;
-            this.records = records;
-            this.baseOffset = baseOffset;
+    /**
+     * Return the size of the record batch header.
+     *
+     * For V0 and V1 with no compression, it's unclear if Records.LOG_OVERHEAD or 0 should be chosen. There is no header
+     * per batch, but a sequence of batches is preceded by the offset and size. This method returns `0` as it's what
+     * `MemoryRecordsBuilder` requires.
+     */
+    public static int recordBatchHeaderSizeInBytes(byte magic, CompressionType compressionType) {
+        if (magic > RecordBatch.MAGIC_VALUE_V1) {
+            return DefaultRecordBatch.RECORD_BATCH_OVERHEAD;
+        } else if (compressionType != CompressionType.NONE) {
+            return Records.LOG_OVERHEAD + LegacyRecord.recordOverhead(magic);
+        } else {
+            return 0;
         }
     }
+
 
 }

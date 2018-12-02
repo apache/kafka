@@ -20,9 +20,9 @@ class ACLs(KafkaPathResolverMixin):
     def __init__(self, context):
         self.context = context
 
-    def set_acls(self, protocol, kafka, zk, topic, group):
+    def set_acls(self, protocol, kafka, topic, group):
         node = kafka.nodes[0]
-        setting = zk.connect_setting()
+        setting = kafka.zk_connect_setting()
 
         # Set server ACLs
         kafka_principal = "User:CN=systemtest" if protocol == "SSL" else "User:kafka"

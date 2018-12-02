@@ -17,67 +17,142 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.processor.StateStoreSupplier;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
+import org.apache.kafka.streams.state.internals.RocksDBSessionStore;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
+import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.junit.Test;
 
-import java.util.Collections;
-import java.util.Map;
-
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
+import static java.time.Duration.ZERO;
+import static java.time.Duration.ofMillis;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.core.IsNot.not;
 
 public class StoresTest {
 
-    @Test
-    public void shouldCreateInMemoryStoreSupplierWithLoggedConfig() throws Exception {
-        final StateStoreSupplier supplier = Stores.create("store")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.String())
-                .inMemory()
-                .enableLogging(Collections.singletonMap("retention.ms", "1000"))
-                .build();
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfPersistentKeyValueStoreStoreNameIsNull() {
+        Stores.persistentKeyValueStore(null);
+    }
 
-        final Map<String, String> config = supplier.logConfig();
-        assertTrue(supplier.loggingEnabled());
-        assertEquals("1000", config.get("retention.ms"));
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIMemoryKeyValueStoreStoreNameIsNull() {
+        //noinspection ResultOfMethodCallIgnored
+        Stores.inMemoryKeyValueStore(null);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfILruMapStoreNameIsNull() {
+        Stores.lruMap(null, 0);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfILruMapStoreCapacityIsNegative() {
+        Stores.lruMap("anyName", -1);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
+        Stores.persistentWindowStore(null, ZERO, ZERO, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
+        Stores.persistentWindowStore("anyName", ofMillis(-1L), ZERO, false);
+    }
+
+    @Deprecated
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
+        Stores.persistentWindowStore("anyName", 0L, 1, 0L, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
+        Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIPersistentSessionStoreStoreNameIsNull() {
+        Stores.persistentSessionStore(null, ofMillis(0));
+
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentSessionStoreRetentionPeriodIsNegative() {
+        Stores.persistentSessionStore("anyName", ofMillis(-1));
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForWindowStoreBuilder() {
+        Stores.windowStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForKeyValueStoreBuilder() {
+        Stores.keyValueStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
+    }
+
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfSupplierIsNullForSessionStoreBuilder() {
+        Stores.sessionStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
     }
 
     @Test
-    public void shouldCreateInMemoryStoreSupplierNotLogged() throws Exception {
-        final StateStoreSupplier supplier = Stores.create("store")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.String())
-                .inMemory()
-                .disableLogging()
-                .build();
-
-        assertFalse(supplier.loggingEnabled());
+    public void shouldCreateInMemoryKeyValueStore() {
+        assertThat(Stores.inMemoryKeyValueStore("memory").get(), instanceOf(InMemoryKeyValueStore.class));
     }
 
     @Test
-    public void shouldCreatePersistenStoreSupplierWithLoggedConfig() throws Exception {
-        final StateStoreSupplier supplier = Stores.create("store")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.String())
-                .persistent()
-                .enableLogging(Collections.singletonMap("retention.ms", "1000"))
-                .build();
-
-        final Map<String, String> config = supplier.logConfig();
-        assertTrue(supplier.loggingEnabled());
-        assertEquals("1000", config.get("retention.ms"));
+    public void shouldCreateMemoryNavigableCache() {
+        assertThat(Stores.lruMap("map", 10).get(), instanceOf(MemoryNavigableLRUCache.class));
     }
 
     @Test
-    public void shouldCreatePersistenStoreSupplierNotLogged() throws Exception {
-        final StateStoreSupplier supplier = Stores.create("store")
-                .withKeys(Serdes.String())
-                .withValues(Serdes.String())
-                .persistent()
-                .disableLogging()
-                .build();
+    public void shouldCreateRocksDbStore() {
+        assertThat(Stores.persistentKeyValueStore("store").get(), instanceOf(RocksDBStore.class));
+    }
 
-        assertFalse(supplier.loggingEnabled());
+    @Test
+    public void shouldCreateRocksDbWindowStore() {
+        assertThat(Stores.persistentWindowStore("store", ofMillis(1L), ofMillis(1L), false).get(), instanceOf(RocksDBWindowStore.class));
+    }
+
+    @Test
+    public void shouldCreateRocksDbSessionStore() {
+        assertThat(Stores.persistentSessionStore("store", ofMillis(1)).get(), instanceOf(RocksDBSessionStore.class));
+    }
+
+    @Test
+    public void shouldBuildWindowStore() {
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildKeyValueStore() {
+        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildSessionStore() {
+        final SessionStore<String, String> store = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore("name", ofMillis(10)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
     }
 }

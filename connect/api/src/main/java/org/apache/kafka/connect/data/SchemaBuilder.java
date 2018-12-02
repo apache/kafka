@@ -75,7 +75,9 @@ public class SchemaBuilder implements Schema {
     // Additional parameters for logical types.
     private Map<String, String> parameters;
 
-    private SchemaBuilder(Type type) {
+    public SchemaBuilder(Type type) {
+        if (null == type)
+            throw new SchemaBuilderException("type cannot be null");
         this.type = type;
         if (type == Type.STRUCT) {
             fields = new LinkedHashMap<>();
@@ -319,6 +321,10 @@ public class SchemaBuilder implements Schema {
     public SchemaBuilder field(String fieldName, Schema fieldSchema) {
         if (type != Type.STRUCT)
             throw new SchemaBuilderException("Cannot create fields on type " + type);
+        if (null == fieldName || fieldName.isEmpty())
+            throw new SchemaBuilderException("fieldName cannot be null.");
+        if (null == fieldSchema)
+            throw new SchemaBuilderException("fieldSchema for field " + fieldName + " cannot be null.");
         int fieldIndex = fields.size();
         if (fields.containsKey(fieldName))
             throw new SchemaBuilderException("Cannot create field because of field name duplication " + fieldName);
@@ -330,12 +336,14 @@ public class SchemaBuilder implements Schema {
      * Get the list of fields for this Schema. Throws a DataException if this schema is not a struct.
      * @return the list of fields for this Schema
      */
+    @Override
     public List<Field> fields() {
         if (type != Type.STRUCT)
             throw new DataException("Cannot list fields on non-struct type");
         return new ArrayList<>(fields.values());
     }
 
+    @Override
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");
@@ -351,6 +359,8 @@ public class SchemaBuilder implements Schema {
      * @return a new {@link Schema.Type#ARRAY} SchemaBuilder
      */
     public static SchemaBuilder array(Schema valueSchema) {
+        if (null == valueSchema)
+            throw new SchemaBuilderException("valueSchema cannot be null.");
         SchemaBuilder builder = new SchemaBuilder(Type.ARRAY);
         builder.valueSchema = valueSchema;
         return builder;
@@ -362,6 +372,10 @@ public class SchemaBuilder implements Schema {
      * @return a new {@link Schema.Type#MAP} SchemaBuilder
      */
     public static SchemaBuilder map(Schema keySchema, Schema valueSchema) {
+        if (null == keySchema)
+            throw new SchemaBuilderException("keySchema cannot be null.");
+        if (null == valueSchema)
+            throw new SchemaBuilderException("valueSchema cannot be null.");
         SchemaBuilder builder = new SchemaBuilder(Type.MAP);
         builder.keySchema = keySchema;
         builder.valueSchema = valueSchema;

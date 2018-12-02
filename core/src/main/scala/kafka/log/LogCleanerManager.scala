@@ -24,48 +24,99 @@ import java.util.concurrent.locks.ReentrantLock
 import com.yammer.metrics.core.Gauge
 import kafka.common.LogCleaningAbortedException
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.{OffsetCheckpoint, OffsetCheckpointFile}
+import kafka.server.LogDirFailureChannel
+import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.errors.KafkaStorageException
 
-import scala.collection.{immutable, mutable}
+import scala.collection.{Iterable, immutable, mutable}
 
 private[log] sealed trait LogCleaningState
 private[log] case object LogCleaningInProgress extends LogCleaningState
 private[log] case object LogCleaningAborted extends LogCleaningState
-private[log] case object LogCleaningPaused extends LogCleaningState
+private[log] case class LogCleaningPaused(pausedCount: Int) extends LogCleaningState
 
 /**
- *  Manage the state of each partition being cleaned.
- *  If a partition is to be cleaned, it enters the LogCleaningInProgress state.
- *  While a partition is being cleaned, it can be requested to be aborted and paused. Then the partition first enters
- *  the LogCleaningAborted state. Once the cleaning task is aborted, the partition enters the LogCleaningPaused state.
- *  While a partition is in the LogCleaningPaused state, it won't be scheduled for cleaning again, until cleaning is
- *  requested to be resumed.
- */
-private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[TopicPartition, Log]) extends Logging with KafkaMetricsGroup {
+  * This class manages the state of each partition being cleaned.
+  * LogCleaningState defines the cleaning states that a TopicPartition can be in.
+  * 1. None                    : No cleaning state in a TopicPartition. In this state, it can become LogCleaningInProgress
+  *                              or LogCleaningPaused(1). Valid previous state are LogCleaningInProgress and LogCleaningPaused(1)
+  * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when log cleaning is finished
+  *                              or become LogCleaningAborted. Valid previous state is None.
+  * 3. LogCleaningAborted      : The cleaning abort is requested. In this state, it can become LogCleaningPaused(1).
+  *                              Valid previous state is LogCleaningInProgress.
+  * 4-a. LogCleaningPaused(1)  : The cleaning is paused once. No log cleaning can be done in this state.
+  *                              In this state, it can become None or LogCleaningPaused(2).
+  *                              Valid previous state is None, LogCleaningAborted or LogCleaningPaused(2).
+  * 4-b. LogCleaningPaused(i)  : The cleaning is paused i times where i>= 2. No log cleaning can be done in this state.
+  *                              In this state, it can become LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
+  *                              Valid previous state is LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
+  */
+private[log] class LogCleanerManager(val logDirs: Seq[File],
+                                     val logs: Pool[TopicPartition, Log],
+                                     val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
-  import LogCleanerManager._
-
-  override val loggerName = classOf[LogCleaner].getName
+  protected override def loggerName = classOf[LogCleaner].getName
 
   // package-private for testing
   private[log] val offsetCheckpointFile = "cleaner-offset-checkpoint"
-  
+
   /* the offset checkpoints holding the last cleaned point for each log */
-  private val checkpoints = logDirs.map(dir => (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile)))).toMap
+  @volatile private var checkpoints = logDirs.map(dir =>
+    (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()
 
+  /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
+   *   for each log directory */
+  private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()
+
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
-  
+
   /* for coordinating the pausing and the cleaning of a partition */
   private val pausedCleaningCond = lock.newCondition()
-  
+
+  /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
+  for (dir <- logDirs) {
+    newGauge(
+      "uncleanable-partitions-count",
+      new Gauge[Int] { def value = inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) } },
+      Map("logDirectory" -> dir.getAbsolutePath)
+    )
+  }
+
+  /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
+    for (dir <- logDirs) {
+      newGauge(
+        "uncleanable-bytes",
+        new Gauge[Long] {
+          def value = {
+            inLock(lock) {
+              uncleanablePartitions.get(dir.getAbsolutePath) match {
+                case Some(partitions) => {
+                  val lastClean = allCleanerCheckpoints
+                  val now = Time.SYSTEM.milliseconds
+                  partitions.map { tp =>
+                    val log = logs.get(tp)
+                    val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, tp, lastClean, now)
+                    val (_, uncleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, firstUncleanableDirtyOffset)
+                    uncleanableBytes
+                  }.sum
+                }
+                case _ => 0
+              }
+            }
+          }
+        },
+        Map("logDirectory" -> dir.getAbsolutePath)
+      )
+    }
+
   /* a gauge for tracking the cleanable ratio of the dirtiest log */
   @volatile private var dirtiestLogCleanableRatio = 0.0
   newGauge("max-dirty-percent", new Gauge[Int] { def value = (100 * dirtiestLogCleanableRatio).toInt })
@@ -77,8 +128,37 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   /**
    * @return the position processed for all logs.
    */
-  def allCleanerCheckpoints: Map[TopicPartition, Long] =
-    checkpoints.values.flatMap(_.read()).toMap
+  def allCleanerCheckpoints: Map[TopicPartition, Long] = {
+    inLock(lock) {
+      checkpoints.values.flatMap(checkpoint => {
+        try {
+          checkpoint.read()
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
+            Map.empty[TopicPartition, Long]
+        }
+      }).toMap
+    }
+  }
+
+  /**
+    * Package private for unit test. Get the cleaning state of the partition.
+    */
+  private[log] def cleaningState(tp: TopicPartition): Option[LogCleaningState] = {
+    inLock(lock) {
+      inProgress.get(tp)
+    }
+  }
+
+  /**
+    * Package private for unit test. Set the cleaning state of the partition.
+    */
+  private[log] def setCleaningState(tp: TopicPartition, state: LogCleaningState): Unit = {
+    inLock(lock) {
+      inProgress.put(tp, state)
+    }
+  }
 
    /**
     * Choose the log to clean next and add it to the in-progress set. We recompute this
@@ -93,7 +173,9 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
       val dirtyLogs = logs.filter {
         case (_, log) => log.config.compact  // match logs that are marked as compacted
       }.filterNot {
-        case (topicPartition, _) => inProgress.contains(topicPartition) // skip any logs already in-progress
+        case (topicPartition, log) =>
+          // skip any logs already in-progress and uncleanable partitions
+          inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
           val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, topicPartition,
@@ -115,12 +197,37 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   }
 
   /**
-    * Find any logs that have compact and delete enabled
+    * Pause logs cleaning for logs that do not have compaction enabled
+    * and do not have other deletion or compaction in progress.
+    * This is to handle potential race between retention and cleaner threads when users
+    * switch topic configuration between compacted and non-compacted topic.
+    * @return retention logs that have log cleaning successfully paused
+    */
+  def pauseCleaningForNonCompactedPartitions(): Iterable[(TopicPartition, Log)] = {
+    inLock(lock) {
+      val deletableLogs = logs.filter {
+        case (_, log) => !log.config.compact // pick non-compacted logs
+      }.filterNot {
+        case (topicPartition, _) => inProgress.contains(topicPartition) // skip any logs already in-progress
+      }
+
+      deletableLogs.foreach {
+        case (topicPartition, _) => inProgress.put(topicPartition, LogCleaningPaused(1))
+      }
+      deletableLogs
+    }
+  }
+
+  /**
+    * Find any logs that have compaction enabled. Mark them as being cleaned
+    * Include logs without delete enabled, as they may have segments
+    * that precede the start offset.
     */
   def deletableLogs(): Iterable[(TopicPartition, Log)] = {
     inLock(lock) {
       val toClean = logs.filter { case (topicPartition, log) =>
-        !inProgress.contains(topicPartition) && isCompactAndDelete(log)
+        !inProgress.contains(topicPartition) && log.config.compact &&
+          !isUncleanablePartition(log, topicPartition)
       }
       toClean.foreach { case (tp, _) => inProgress.put(tp, LogCleaningInProgress) }
       toClean
@@ -136,7 +243,7 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def abortCleaning(topicPartition: TopicPartition) {
     inLock(lock) {
       abortAndPauseCleaning(topicPartition)
-      resumeCleaning(topicPartition)
+      resumeCleaning(Seq(topicPartition))
     }
     info(s"The cleaning for partition $topicPartition is aborted")
   }
@@ -150,44 +257,51 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
    *     throws a LogCleaningAbortedException to stop the cleaning task.
    *  4. When the cleaning task is stopped, doneCleaning() is called, which sets the state of the partition as paused.
    *  5. abortAndPauseCleaning() waits until the state of the partition is changed to paused.
+   *  6. If the partition is already paused, a new call to this function
+   *     will increase the paused count by one.
    */
   def abortAndPauseCleaning(topicPartition: TopicPartition) {
     inLock(lock) {
       inProgress.get(topicPartition) match {
         case None =>
-          inProgress.put(topicPartition, LogCleaningPaused)
-        case Some(state) =>
-          state match {
-            case LogCleaningInProgress =>
-              inProgress.put(topicPartition, LogCleaningAborted)
-            case s =>
-              throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
-          }
+          inProgress.put(topicPartition, LogCleaningPaused(1))
+        case Some(LogCleaningInProgress) =>
+          inProgress.put(topicPartition, LogCleaningAborted)
+        case Some(LogCleaningPaused(count)) =>
+          inProgress.put(topicPartition, LogCleaningPaused(count + 1))
+        case Some(s) =>
+          throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be aborted and paused since it is in $s state.")
       }
-      while (!isCleaningInState(topicPartition, LogCleaningPaused))
+
+      while(!isCleaningInStatePaused(topicPartition))
         pausedCleaningCond.await(100, TimeUnit.MILLISECONDS)
     }
     info(s"The cleaning for partition $topicPartition is aborted and paused")
   }
 
   /**
-   *  Resume the cleaning of a paused partition. This call blocks until the cleaning of a partition is resumed.
-   */
-  def resumeCleaning(topicPartition: TopicPartition) {
+    *  Resume the cleaning of paused partitions.
+    *  Each call of this function will undo one pause.
+    */
+  def resumeCleaning(topicPartitions: Iterable[TopicPartition]){
     inLock(lock) {
-      inProgress.get(topicPartition) match {
-        case None =>
-          throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be resumed since it is not paused.")
-        case Some(state) =>
-          state match {
-            case LogCleaningPaused =>
-              inProgress.remove(topicPartition)
-            case s =>
-              throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be resumed since it is in $s state.")
+      topicPartitions.foreach {
+        topicPartition =>
+          inProgress.get(topicPartition) match {
+            case None =>
+              throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be resumed since it is not paused.")
+            case Some(state) =>
+              state match {
+                case LogCleaningPaused(count) if count == 1 =>
+                  inProgress.remove(topicPartition)
+                case LogCleaningPaused(count) if count > 1 =>
+                  inProgress.put(topicPartition, LogCleaningPaused(count - 1))
+                case s =>
+                  throw new IllegalStateException(s"Compaction for partition $topicPartition cannot be resumed since it is in $s state.")
+              }
           }
       }
     }
-    info(s"Compaction for partition $topicPartition is resumed")
   }
 
   /**
@@ -205,6 +319,22 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   }
 
   /**
+   *  Check if the cleaning for a partition is paused. The caller is expected to hold lock while making the call.
+   */
+  private def isCleaningInStatePaused(topicPartition: TopicPartition): Boolean = {
+    inProgress.get(topicPartition) match {
+      case None => false
+      case Some(state) =>
+        state match {
+          case LogCleaningPaused(s) =>
+            true
+          case _ =>
+            false
+        }
+    }
+  }
+
+  /**
    *  Check if the cleaning for a partition is aborted. If so, throw an exception.
    */
   def checkCleaningAborted(topicPartition: TopicPartition) {
@@ -217,8 +347,46 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
   def updateCheckpoints(dataDir: File, update: Option[(TopicPartition,Long)]) {
     inLock(lock) {
       val checkpoint = checkpoints(dataDir)
-      val existing = checkpoint.read().filterKeys(logs.keys) ++ update
-      checkpoint.write(existing)
+      if (checkpoint != null) {
+        try {
+          val existing = checkpoint.read().filterKeys(logs.keys) ++ update
+          checkpoint.write(existing)
+        } catch {
+          case e: KafkaStorageException =>
+            error(s"Failed to access checkpoint file ${checkpoint.file.getName} in dir ${checkpoint.file.getParentFile.getAbsolutePath}", e)
+        }
+      }
+    }
+  }
+
+  def alterCheckpointDir(topicPartition: TopicPartition, sourceLogDir: File, destLogDir: File): Unit = {
+    inLock(lock) {
+      try {
+        checkpoints.get(sourceLogDir).flatMap(_.read().get(topicPartition)) match {
+          case Some(offset) =>
+            // Remove this partition from the checkpoint file in the source log directory
+            updateCheckpoints(sourceLogDir, None)
+            // Add offset for this partition to the checkpoint file in the source log directory
+            updateCheckpoints(destLogDir, Option(topicPartition, offset))
+          case None =>
+        }
+      } catch {
+        case e: KafkaStorageException =>
+          error(s"Failed to access checkpoint file in dir ${sourceLogDir.getAbsolutePath}", e)
+      }
+
+      val logUncleanablePartitions = uncleanablePartitions.getOrElse(sourceLogDir.toString, mutable.Set[TopicPartition]())
+      if (logUncleanablePartitions.contains(topicPartition)) {
+        logUncleanablePartitions.remove(topicPartition)
+        markPartitionUncleanable(destLogDir.toString, topicPartition)
+      }
+    }
+  }
+
+  def handleLogDirFailure(dir: String) {
+    info(s"Stopping cleaning logs in dir $dir")
+    inLock(lock) {
+      checkpoints = checkpoints.filterKeys(_.getAbsolutePath != dir)
     }
   }
 
@@ -226,10 +394,11 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
     inLock(lock) {
       if (logs.get(topicPartition).config.compact) {
         val checkpoint = checkpoints(dataDir)
-        val existing = checkpoint.read()
-
-        if (existing.getOrElse(topicPartition, 0L) > offset)
-          checkpoint.write(existing + (topicPartition -> offset))
+        if (checkpoint != null) {
+          val existing = checkpoint.read()
+          if (existing.getOrElse(topicPartition, 0L) > offset)
+            checkpoint.write(existing + (topicPartition -> offset))
+        }
       }
     }
   }
@@ -239,22 +408,64 @@ private[log] class LogCleanerManager(val logDirs: Array[File], val logs: Pool[To
    */
   def doneCleaning(topicPartition: TopicPartition, dataDir: File, endOffset: Long) {
     inLock(lock) {
-      inProgress(topicPartition) match {
-        case LogCleaningInProgress =>
-          updateCheckpoints(dataDir,Option(topicPartition, endOffset))
+      inProgress.get(topicPartition) match {
+        case Some(LogCleaningInProgress) =>
+          updateCheckpoints(dataDir, Option(topicPartition, endOffset))
           inProgress.remove(topicPartition)
-        case LogCleaningAborted =>
-          inProgress.put(topicPartition, LogCleaningPaused)
+        case Some(LogCleaningAborted) =>
+          inProgress.put(topicPartition, LogCleaningPaused(1))
           pausedCleaningCond.signalAll()
+        case None =>
+          throw new IllegalStateException(s"State for partition $topicPartition should exist.")
         case s =>
           throw new IllegalStateException(s"In-progress partition $topicPartition cannot be in $s state.")
       }
     }
   }
 
-  def doneDeleting(topicPartition: TopicPartition): Unit = {
+  def doneDeleting(topicPartitions: Iterable[TopicPartition]): Unit = {
     inLock(lock) {
-      inProgress.remove(topicPartition)
+      topicPartitions.foreach {
+        topicPartition =>
+          inProgress.get(topicPartition) match {
+            case Some(LogCleaningInProgress) =>
+              inProgress.remove(topicPartition)
+            case Some(LogCleaningAborted) =>
+              inProgress.put(topicPartition, LogCleaningPaused(1))
+              pausedCleaningCond.signalAll()
+            case None =>
+              throw new IllegalStateException(s"State for partition $topicPartition should exist.")
+            case s =>
+              throw new IllegalStateException(s"In-progress partition $topicPartition cannot be in $s state.")
+          }
+      }
+    }
+  }
+
+  /**
+   * Returns an immutable set of the uncleanable partitions for a given log directory
+   * Only used for testing
+   */
+  private[log] def uncleanablePartitions(logDir: String): Set[TopicPartition] = {
+    var partitions: Set[TopicPartition] = Set()
+    inLock(lock) { partitions ++= uncleanablePartitions.getOrElse(logDir, partitions) }
+    partitions
+  }
+
+  def markPartitionUncleanable(logDir: String, partition: TopicPartition): Unit = {
+    inLock(lock) {
+      uncleanablePartitions.get(logDir) match {
+        case Some(partitions) =>
+          partitions.add(partition)
+        case None =>
+          uncleanablePartitions.put(logDir, mutable.Set(partition))
+      }
+    }
+  }
+
+  private def isUncleanablePartition(log: Log, topicPartition: TopicPartition): Boolean = {
+    inLock(lock) {
+      uncleanablePartitions.get(log.dir.getParent).exists(partitions => partitions.contains(topicPartition))
     }
   }
 }
@@ -287,36 +498,37 @@ private[log] object LogCleanerManager extends Logging {
       if (offset < logStartOffset) {
         // don't bother with the warning if compact and delete are enabled.
         if (!isCompactAndDelete(log))
-          warn(s"Resetting first dirty offset to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
+          warn(s"Resetting first dirty offset of ${log.name} to log start offset $logStartOffset since the checkpointed offset $offset is invalid.")
         logStartOffset
       } else {
         offset
       }
     }
 
-    // dirty log segments
-    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
-
     val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
 
     // find first segment that cannot be cleaned
     // neither the active segment, nor segments with any messages closer to the head of the log than the minimum compaction lag time
     // may be cleaned
-    val firstUncleanableDirtyOffset: Long = Seq (
+    val firstUncleanableDirtyOffset: Long = Seq(
 
-        // the active segment is always uncleanable
-        Option(log.activeSegment.baseOffset),
+      // we do not clean beyond the first unstable offset
+      log.firstUnstableOffset.map(_.messageOffset),
 
-        // the first segment whose largest message timestamp is within a minimum time lag from now
-        if (compactionLagMs > 0) {
-          dirtyNonActiveSegments.find {
-            s =>
-              val isUncleanable = s.largestTimestamp > now - compactionLagMs
-              debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
-              isUncleanable
-          } map(_.baseOffset)
-        } else None
-      ).flatten.min
+      // the active segment is always uncleanable
+      Option(log.activeSegment.baseOffset),
+
+      // the first segment whose largest message timestamp is within a minimum time lag from now
+      if (compactionLagMs > 0) {
+        // dirty log segments
+        val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
+        dirtyNonActiveSegments.find { s =>
+          val isUncleanable = s.largestTimestamp > now - compactionLagMs
+          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
+          isUncleanable
+        }.map(_.baseOffset)
+      } else None
+    ).flatten.min
 
     debug(s"Finding range of cleanable offsets for log=${log.name} topicPartition=$topicPartition. Last clean offset=$lastCleanOffset now=$now => firstDirtyOffset=$firstDirtyOffset firstUncleanableOffset=$firstUncleanableDirtyOffset activeSegment.baseOffset=${log.activeSegment.baseOffset}")
 

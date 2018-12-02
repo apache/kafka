@@ -24,7 +24,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest.Builder
@@ -35,6 +35,8 @@ trait BlockingSend {
 
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
+  def initiateClose()
+
   def close()
 }
 
@@ -43,7 +45,8 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
                                  metrics: Metrics,
                                  time: Time,
                                  fetcherId: Int,
-                                 clientId: String) extends BlockingSend {
+                                 clientId: String,
+                                 logContext: LogContext) extends BlockingSend {
 
   private val sourceNode = new Node(sourceBroker.id, sourceBroker.host, sourceBroker.port)
   private val socketTimeout: Int = brokerConfig.replicaSocketTimeoutMs
@@ -55,6 +58,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig,
       brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
+      time,
       brokerConfig.saslInterBrokerHandshakeRequestEnable
     )
     val selector = new Selector(
@@ -66,6 +70,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,
+      logContext，
       socketTimeout
     )
     new NetworkClient(
@@ -74,17 +79,20 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       clientId,
       1,
       0,
+      0,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       brokerConfig.replicaSocketReceiveBufferBytes,
       brokerConfig.requestTimeoutMs,
+      ClientDnsLookup.DEFAULT,
       time,
       false,
       new ApiVersions,
+      logContext，
       socketTimeout
     )
   }
 
-  override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse =  {
+  override def sendRequest(requestBuilder: Builder[_ <: AbstractRequest]): ClientResponse = {
     try {
       if (!NetworkClientUtils.awaitReady(networkClient, sourceNode, time, socketTimeout))
         throw new SocketTimeoutException(s"Failed to connect within $socketTimeout ms")
@@ -99,6 +107,10 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
         networkClient.close(sourceBroker.id.toString)
         throw e
     }
+  }
+
+  override def initiateClose(): Unit = {
+    networkClient.initiateClose()
   }
 
   def close(): Unit = {

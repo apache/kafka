@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
  * Indicates a run time error incurred while trying parse the {@link org.apache.kafka.streams.processor.TaskId task id}
@@ -24,7 +23,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
  *
  * @see org.apache.kafka.streams.processor.internals.StreamTask
  */
-@InterfaceStability.Unstable
 public class TaskIdFormatException extends StreamsException {
 
     private static final long serialVersionUID = 1L;

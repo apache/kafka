@@ -16,47 +16,79 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+
+import java.util.Collection;
 
 public class StateRestorer {
+
     static final int NO_CHECKPOINT = -1;
 
-    private final Long checkpoint;
     private final long offsetLimit;
     private final boolean persistent;
+    private final String storeName;
     private final TopicPartition partition;
-    private final StateRestoreCallback stateRestoreCallback;
+    private final CompositeRestoreListener compositeRestoreListener;
 
+    private long checkpointOffset;
     private long restoredOffset;
     private long startingOffset;
+    private long endingOffset;
 
     StateRestorer(final TopicPartition partition,
-                  final StateRestoreCallback stateRestoreCallback,
+                  final CompositeRestoreListener compositeRestoreListener,
                   final Long checkpoint,
                   final long offsetLimit,
-                  final boolean persistent) {
+                  final boolean persistent,
+                  final String storeName) {
         this.partition = partition;
-        this.stateRestoreCallback = stateRestoreCallback;
-        this.checkpoint = checkpoint;
+        this.compositeRestoreListener = compositeRestoreListener;
+        this.checkpointOffset = checkpoint == null ? NO_CHECKPOINT : checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
+        this.storeName = storeName;
     }
 
     public TopicPartition partition() {
         return partition;
     }
 
-    long checkpoint() {
-        return checkpoint == null ? NO_CHECKPOINT : checkpoint;
+    public String storeName() {
+        return storeName;
     }
 
-    void restore(final byte[] key, final byte[] value) {
-        stateRestoreCallback.restore(key, value);
+    long checkpoint() {
+        return checkpointOffset;
+    }
+
+    void setCheckpointOffset(final long checkpointOffset) {
+        this.checkpointOffset = checkpointOffset;
+    }
+
+    void restoreStarted() {
+        compositeRestoreListener.onRestoreStart(partition, storeName, startingOffset, endingOffset);
+    }
+
+    void restoreDone() {
+        compositeRestoreListener.onRestoreEnd(partition, storeName, restoredNumRecords());
+    }
+
+    void restoreBatchCompleted(final long currentRestoredOffset, final int numRestored) {
+        compositeRestoreListener.onBatchRestored(partition, storeName, currentRestoredOffset, numRestored);
+    }
+
+    void restore(final Collection<ConsumerRecord<byte[], byte[]>> records) {
+        compositeRestoreListener.restoreBatch(records);
     }
 
     boolean isPersistent() {
         return persistent;
+    }
+
+    void setUserRestoreListener(final StateRestoreListener userRestoreListener) {
+        this.compositeRestoreListener.setUserRestoreListener(userRestoreListener);
     }
 
     void setRestoredOffset(final long restoredOffset) {
@@ -65,6 +97,10 @@ public class StateRestorer {
 
     void setStartingOffset(final long startingOffset) {
         this.startingOffset = Math.min(offsetLimit, startingOffset);
+    }
+
+    void setEndingOffset(final long endingOffset) {
+        this.endingOffset = Math.min(offsetLimit, endingOffset);
     }
 
     long startingOffset() {
@@ -90,4 +126,5 @@ public class StateRestorer {
     private Long readTo(final long endOffset) {
         return endOffset < offsetLimit ? endOffset : offsetLimit;
     }
+
 }

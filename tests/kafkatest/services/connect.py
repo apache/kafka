@@ -20,6 +20,7 @@ import signal
 import time
 
 import requests
+from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
@@ -39,6 +40,16 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     STDERR_FILE = os.path.join(PERSISTENT_ROOT, "connect.stderr")
     LOG4J_CONFIG_FILE = os.path.join(PERSISTENT_ROOT, "connect-log4j.properties")
     PID_FILE = os.path.join(PERSISTENT_ROOT, "connect.pid")
+    EXTERNAL_CONFIGS_FILE = os.path.join(PERSISTENT_ROOT, "connect-external-configs.properties")
+    CONNECT_REST_PORT = 8083
+
+    # Currently the Connect worker supports waiting on three modes:
+    STARTUP_MODE_INSTANT = 'INSTANT'
+    """STARTUP_MODE_INSTANT: Start Connect worker and return immediately"""
+    STARTUP_MODE_LOAD = 'LOAD'
+    """STARTUP_MODE_LOAD: Start Connect worker and return after discovering and loading plugins"""
+    STARTUP_MODE_LISTEN = 'LISTEN'
+    """STARTUP_MODE_LISTEN: Start Connect worker and return after opening the REST port."""
 
     logs = {
         "connect_log": {
@@ -52,12 +63,15 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             "collect_default": True},
     }
 
-    def __init__(self, context, num_nodes, kafka, files):
+    def __init__(self, context, num_nodes, kafka, files, startup_timeout_sec = 60):
         super(ConnectServiceBase, self).__init__(context, num_nodes)
         self.kafka = kafka
         self.security_config = kafka.security_config.client_config()
         self.files = files
+        self.startup_mode = self.STARTUP_MODE_LISTEN
+        self.startup_timeout_sec = startup_timeout_sec
         self.environment = {}
+        self.external_config_template_func = None
 
     def pids(self, node):
         """Return process ids for Kafka Connect processes."""
@@ -76,6 +90,49 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         self.config_template_func = config_template_func
         self.connector_config_templates = connector_config_templates
 
+    def set_external_configs(self, external_config_template_func):
+        """
+        Set the properties that will be written in the external file properties
+        as used by the org.apache.kafka.common.config.provider.FileConfigProvider.
+        When this is used, the worker configuration must also enable the FileConfigProvider.
+        This is not provided in the constructor in case the worker
+        config generally needs access to ZK/Kafka services to
+        create the configuration.
+        """
+        self.external_config_template_func = external_config_template_func
+
+    def listening(self, node):
+        try:
+            cmd = "nc -z %s %s" % (node.account.hostname, self.CONNECT_REST_PORT)
+            node.account.ssh_output(cmd, allow_fail=False)
+            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname,
+                              self.CONNECT_REST_PORT)
+            return True
+        except (RemoteCommandError, ValueError) as e:
+            return False
+
+    def start(self, mode=STARTUP_MODE_LISTEN):
+        self.startup_mode = mode
+        super(ConnectServiceBase, self).start()
+
+    def start_and_return_immediately(self, node, worker_type, remote_connector_configs):
+        cmd = self.start_cmd(node, remote_connector_configs)
+        self.logger.debug("Connect %s command: %s", worker_type, cmd)
+        node.account.ssh(cmd)
+
+    def start_and_wait_to_load_plugins(self, node, worker_type, remote_connector_configs):
+        with node.account.monitor_log(self.LOG_FILE) as monitor:
+            self.start_and_return_immediately(node, worker_type, remote_connector_configs)
+            monitor.wait_until('Kafka version', timeout_sec=self.startup_timeout_sec,
+                               err_msg="Never saw message indicating Kafka Connect finished startup on node: " +
+                                       "%s in condition mode: %s" % (str(node.account), self.startup_mode))
+
+    def start_and_wait_to_start_listening(self, node, worker_type, remote_connector_configs):
+        self.start_and_return_immediately(node, worker_type, remote_connector_configs)
+        wait_until(lambda: self.listening(node), timeout_sec=self.startup_timeout_sec,
+                   err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
+                   (str(node.account), self.startup_mode))
+
     def stop_node(self, node, clean_shutdown=True):
         self.logger.info((clean_shutdown and "Cleanly" or "Forcibly") + " stopping Kafka Connect on " + str(node.account))
         pids = self.pids(node)
@@ -85,7 +142,8 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
             node.account.signal(pid, sig, allow_fail=True)
         if clean_shutdown:
             for pid in pids:
-                wait_until(lambda: not node.account.alive(pid), timeout_sec=60, err_msg="Kafka Connect process on " + str(node.account) + " took too long to exit")
+                wait_until(lambda: not node.account.alive(pid), timeout_sec=self.startup_timeout_sec, err_msg="Kafka Connect process on " + str(
+                    node.account) + " took too long to exit")
 
         node.account.ssh("rm -f " + self.PID_FILE, allow_fail=False)
 
@@ -102,7 +160,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def clean_node(self, node):
         node.account.kill_process("connect", clean_shutdown=False, allow_fail=True)
         self.security_config.clean_node(node)
-        all_files = " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE] + self.config_filenames() + self.files)
+        all_files = " ".join([self.CONFIG_FILE, self.LOG4J_CONFIG_FILE, self.PID_FILE, self.LOG_FILE, self.STDOUT_FILE, self.STDERR_FILE, self.EXTERNAL_CONFIGS_FILE] + self.config_filenames() + self.files)
         node.account.ssh("rm -rf " + all_files, allow_fail=False)
 
     def config_filenames(self):
@@ -192,14 +250,14 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         raise exception_to_throw
 
     def _base_url(self, node):
-        return 'http://' + node.account.externally_routable_ip + ':' + '8083'
+        return 'http://' + node.account.externally_routable_ip + ':' + str(self.CONNECT_REST_PORT)
 
 
 class ConnectStandaloneService(ConnectServiceBase):
     """Runs Kafka Connect in standalone mode."""
 
-    def __init__(self, context, kafka, files):
-        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files)
+    def __init__(self, context, kafka, files, startup_timeout_sec = 60):
+        super(ConnectStandaloneService, self).__init__(context, 1, kafka, files, startup_timeout_sec)
 
     # For convenience since this service only makes sense with a single node
     @property
@@ -220,6 +278,8 @@ class ConnectStandaloneService(ConnectServiceBase):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)
+        if self.external_config_template_func:
+            node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         remote_connector_configs = []
@@ -229,11 +289,13 @@ class ConnectStandaloneService(ConnectServiceBase):
             remote_connector_configs.append(target_file)
 
         self.logger.info("Starting Kafka Connect standalone process on " + str(node.account))
-        with node.account.monitor_log(self.LOG_FILE) as monitor:
-            cmd = self.start_cmd(node, remote_connector_configs)
-            self.logger.debug("Connect standalone command: %s", cmd)
-            node.account.ssh(cmd)
-            monitor.wait_until('Kafka Connect started', timeout_sec=30, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
+        if self.startup_mode == self.STARTUP_MODE_LOAD:
+            self.start_and_wait_to_load_plugins(node, 'standalone', remote_connector_configs)
+        elif self.startup_mode == self.STARTUP_MODE_INSTANT:
+            self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
+        else:
+            # The default mode is to wait until the complete startup of the worker
+            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -243,13 +305,14 @@ class ConnectDistributedService(ConnectServiceBase):
     """Runs Kafka Connect in distributed mode."""
 
     def __init__(self, context, num_nodes, kafka, files, offsets_topic="connect-offsets",
-                 configs_topic="connect-configs", status_topic="connect-status"):
-        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files)
+                 configs_topic="connect-configs", status_topic="connect-status", startup_timeout_sec = 60):
+        super(ConnectDistributedService, self).__init__(context, num_nodes, kafka, files, startup_timeout_sec)
         self.offsets_topic = offsets_topic
         self.configs_topic = configs_topic
         self.status_topic = status_topic
 
-    def start_cmd(self, node):
+    # connector_configs argument is intentionally ignored in distributed service.
+    def start_cmd(self, node, connector_configs):
         cmd = "( export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % self.LOG4J_CONFIG_FILE
         cmd += "export KAFKA_OPTS=%s; " % self.security_config.kafka_opts
         for envvar in self.environment:
@@ -262,20 +325,29 @@ class ConnectDistributedService(ConnectServiceBase):
         node.account.ssh("mkdir -p %s" % self.PERSISTENT_ROOT, allow_fail=False)
 
         self.security_config.setup_node(node)
+        if self.external_config_template_func:
+            node.account.create_file(self.EXTERNAL_CONFIGS_FILE, self.external_config_template_func(node))
         node.account.create_file(self.CONFIG_FILE, self.config_template_func(node))
         node.account.create_file(self.LOG4J_CONFIG_FILE, self.render('connect_log4j.properties', log_file=self.LOG_FILE))
         if self.connector_config_templates:
             raise DucktapeError("Config files are not valid in distributed mode, submit connectors via the REST API")
 
         self.logger.info("Starting Kafka Connect distributed process on " + str(node.account))
-        with node.account.monitor_log(self.LOG_FILE) as monitor:
-            cmd = self.start_cmd(node)
-            self.logger.debug("Connect distributed command: %s", cmd)
-            node.account.ssh(cmd)
-            monitor.wait_until('Kafka Connect started', timeout_sec=15, err_msg="Never saw message indicating Kafka Connect finished startup on " + str(node.account))
+        if self.startup_mode == self.STARTUP_MODE_LOAD:
+            self.start_and_wait_to_load_plugins(node, 'distributed', '')
+        elif self.startup_mode == self.STARTUP_MODE_INSTANT:
+            self.start_and_return_immediately(node, 'distributed', '')
+        else:
+            # The default mode is to wait until the complete startup of the worker
+            self.start_and_wait_to_start_listening(node, 'distributed', '')
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
+
+
+class ErrorTolerance(object):
+    ALL = "all"
+    NONE = "none"
 
 
 class ConnectRestError(RuntimeError):

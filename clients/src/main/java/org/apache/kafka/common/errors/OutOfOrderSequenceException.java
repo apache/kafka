@@ -16,6 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
+/**
+ * This exception indicates that the broker received an unexpected sequence number from the producer,
+ * which means that data may have been lost. If the producer is configured for idempotence only (i.e.
+ * if <code>enable.idempotence</code> is set and no <code>transactional.id</code> is configured), it
+ * is possible to continue sending with the same producer instance, but doing so risks reordering
+ * of sent records. For transactional producers, this is a fatal error and you should close the
+ * producer.
+ */
 public class OutOfOrderSequenceException extends ApiException {
 
     public OutOfOrderSequenceException(String msg) {
