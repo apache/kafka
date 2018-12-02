@@ -173,9 +173,15 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build(short version) {
-            // Validate the given records first
-            for (MemoryRecords records : partitionRecords.values()) {
-                ProduceRequest.validateRecords(version, records);
+            return build(version, true);
+        }
+
+        public ProduceRequest build(short version, boolean validate) {
+            if (validate) {
+                // Validate the given records first
+                for (MemoryRecords records : partitionRecords.values()) {
+                    ProduceRequest.validateRecords(version, records);
+                }
             }
             return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId);
         }
