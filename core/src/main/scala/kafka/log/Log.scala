@@ -41,7 +41,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ListOffsetRequest
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Time, OperatingSystem, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -241,8 +241,14 @@ class Log(@volatile var dir: File,
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
-    if (isMemoryMappedBufferClosed)
-      warn(s"The memory mapped buffer for log of $topicPartition is already closed")
+    if (isMemoryMappedBufferClosed) {
+      if (OperatingSystem.IS_WINDOWS)
+        warn(s"The memory mapped buffer for log of $topicPartition is already closed")
+      else
+        throw new KafkaStorageException(s"The memory mapped buffer for log of $topicPartition is already closed")
+    }
+
+
   }
 
   @volatile private var nextOffsetMetadata: LogOffsetMetadata = _
