@@ -37,7 +37,7 @@ class ControllerContext {
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
   private var liveBrokersUnderlying: Set[Broker] = Set.empty
-  private var liveBrokerIdsUnderlying: Set[Int] = Set.empty
+  private var liveBrokerIdAndEpochsUnderlying: Map[Int, Long] = Map.empty
 
   def partitionReplicaAssignment(topicPartition: TopicPartition): Seq[Int] = {
     partitionReplicaAssignmentUnderlying.getOrElse(topicPartition.topic, mutable.Map.empty)
@@ -71,18 +71,35 @@ class ControllerContext {
     }.toSet
   }
 
-  // setter
-  def liveBrokers_=(brokers: Set[Broker]) {
-    liveBrokersUnderlying = brokers
-    liveBrokerIdsUnderlying = liveBrokersUnderlying.map(_.id)
+  def setLiveBrokerAndEpochs(brokerAndEpochs: Map[Broker, Long]) {
+    liveBrokersUnderlying = brokerAndEpochs.keySet
+    liveBrokerIdAndEpochsUnderlying =
+      brokerAndEpochs map { case (broker, brokerEpoch) => (broker.id, brokerEpoch)}
+  }
+
+  def addLiveBrokersAndEpochs(brokerAndEpochs: Map[Broker, Long]): Unit = {
+    liveBrokersUnderlying = liveBrokersUnderlying ++ brokerAndEpochs.keySet
+    liveBrokerIdAndEpochsUnderlying = liveBrokerIdAndEpochsUnderlying ++
+      (brokerAndEpochs map { case (broker, brokerEpoch) => (broker.id, brokerEpoch)})
+  }
+
+  def removeLiveBrokersAndEpochs(brokerIds : Set[Int]): Unit = {
+    liveBrokersUnderlying = liveBrokersUnderlying.filter(broker => !brokerIds.contains(broker.id))
+    liveBrokerIdAndEpochsUnderlying = liveBrokerIdAndEpochsUnderlying.filterKeys(id => !brokerIds.contains(id))
+  }
+
+  def updateBrokerMetadata(oldMetadata: Option[Broker], newMetadata: Option[Broker]): Unit = {
+    liveBrokersUnderlying = liveBrokersUnderlying -- oldMetadata ++ newMetadata
   }
 
   // getter
   def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveBrokerIdsUnderlying -- shuttingDownBrokerIds
+  def liveBrokerIds = liveBrokerIdAndEpochsUnderlying.keySet -- shuttingDownBrokerIds
 
-  def liveOrShuttingDownBrokerIds = liveBrokerIdsUnderlying
+  def liveOrShuttingDownBrokerIds = liveBrokerIdAndEpochsUnderlying.keySet
   def liveOrShuttingDownBrokers = liveBrokersUnderlying
+
+  def liveBrokerIdAndEpochs = liveBrokerIdAndEpochsUnderlying
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionReplicaAssignmentUnderlying.flatMap {
@@ -147,7 +164,7 @@ class ControllerContext {
     epoch = 0
     epochZkVersion = 0
     clearTopicsState()
-    liveBrokers = Set.empty
+    setLiveBrokerAndEpochs(Map.empty)
   }
 
   def removeTopic(topic: String): Unit = {
