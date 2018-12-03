@@ -848,7 +848,7 @@ public class SslTransportLayerTest {
 
     @Test
     public void testClosePlaintext() throws Exception {
-        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(null));
+        testClose(SecurityProtocol.PLAINTEXT, new PlaintextChannelBuilder(Mode.CLIENT, null));
     }
 
     private void testClose(SecurityProtocol securityProtocol, ChannelBuilder clientChannelBuilder) throws Exception {

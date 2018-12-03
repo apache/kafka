@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelState;
+import org.apache.kafka.common.network.MemoryPoolHelper;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.network.Send;
@@ -64,7 +65,7 @@ import java.util.stream.Collectors;
  * <p>
  * This class is not thread-safe!
  */
-public class NetworkClient implements KafkaClient {
+public class NetworkClient implements KafkaClient, MemoryPoolHelper {
 
     private enum State {
         ACTIVE,
@@ -804,6 +805,7 @@ public class NetworkClient implements KafkaClient {
         for (NetworkReceive receive : this.selector.completedReceives()) {
             String source = receive.source();
             InFlightRequest req = inFlightRequests.completeNext(source);
+            System.out.println("APIKEY: " + req.header.apiKey() + " - Receive flag: " + receive.usePool());
             Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(receive.payload(), req.header,
                 throttleTimeSensor, now);
             if (log.isTraceEnabled()) {
@@ -1191,6 +1193,11 @@ public class NetworkClient implements KafkaClient {
                     ", callback=" + callback +
                     ", send=" + send + ")";
         }
+    }
+
+    @Override
+    public boolean usePool(String nodeId) {
+        return this.inFlightRequests.peekNext(nodeId).header.apiKey().requiresPoolAllocation;
     }
 
 }

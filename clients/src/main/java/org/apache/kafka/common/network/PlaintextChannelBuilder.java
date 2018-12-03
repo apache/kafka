@@ -35,12 +35,15 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
     private static final Logger log = LoggerFactory.getLogger(PlaintextChannelBuilder.class);
     private final ListenerName listenerName;
     private Map<String, ?> configs;
+    private MemoryPoolHelper memoryPoolHelper = MemoryPoolHelper.SERVER_MODE;
+    private Mode mode;
 
     /**
      * Constructs a plaintext channel builder. ListenerName is non-null whenever
      * it's instantiated in the broker and null otherwise.
      */
-    public PlaintextChannelBuilder(ListenerName listenerName) {
+    public PlaintextChannelBuilder(Mode mode, ListenerName listenerName) {
+        this.mode = mode;
         this.listenerName = listenerName;
     }
 
@@ -54,7 +57,7 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
             PlaintextTransportLayer transportLayer = new PlaintextTransportLayer(key);
             Supplier<Authenticator> authenticatorCreator = () -> new PlaintextAuthenticator(configs, transportLayer, listenerName);
             return new KafkaChannel(id, transportLayer, authenticatorCreator, maxReceiveSize,
-                    memoryPool != null ? memoryPool : MemoryPool.NONE);
+                    memoryPool != null ? memoryPool : MemoryPool.NONE, memoryPoolHelper);
         } catch (Exception e) {
             log.warn("Failed to create channel due to ", e);
             throw new KafkaException(e);
@@ -97,6 +100,13 @@ public class PlaintextChannelBuilder implements ChannelBuilder {
             if (principalBuilder instanceof Closeable)
                 Utils.closeQuietly((Closeable) principalBuilder, "principal builder");
         }
+    }
+
+    @Override
+    public void setMemoryPoolHelper(MemoryPoolHelper netClient) {
+        this.memoryPoolHelper = netClient;
+        // TODO Auto-generated method stub
+        
     }
 
 }

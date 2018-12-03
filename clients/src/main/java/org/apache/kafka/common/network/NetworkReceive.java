@@ -40,6 +40,7 @@ public class NetworkReceive implements Receive {
     private final MemoryPool memoryPool;
     private int requestedBufferSize = -1;
     private ByteBuffer buffer;
+    private Boolean usePool = null;
 
 
     public NetworkReceive(String source, ByteBuffer buffer) {
@@ -88,7 +89,8 @@ public class NetworkReceive implements Receive {
         return !size.hasRemaining() && buffer != null && !buffer.hasRemaining();
     }
 
-    public long readFrom(ScatteringByteChannel channel) throws IOException {
+    public long readFrom(ScatteringByteChannel channel, boolean usePool) throws IOException {
+        this.usePool = usePool;
         int read = 0;
         if (size.hasRemaining()) {
             int bytesRead = channel.read(size);
@@ -152,6 +154,12 @@ public class NetworkReceive implements Receive {
      */
     public int size() {
         return payload().limit() + size.limit();
+    }
+
+    @Override
+    public boolean usePool() {
+        // TODO Auto-generated method stub
+        return usePool;
     }
 
 }

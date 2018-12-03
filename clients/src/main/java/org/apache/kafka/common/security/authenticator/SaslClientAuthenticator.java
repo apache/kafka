@@ -404,7 +404,7 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private byte[] receiveResponseOrToken() throws IOException {
         if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
-        netInBuffer.readFrom(transportLayer);
+        netInBuffer.readFrom(transportLayer, false);
         byte[] serverPacket = null;
         if (netInBuffer.complete()) {
             netInBuffer.payload().rewind();

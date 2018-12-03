@@ -132,11 +132,13 @@ public class KafkaChannel implements AutoCloseable {
     private int successfulAuthentications;
     private boolean midWrite;
     private long lastReauthenticationStartNanos;
+    private MemoryPoolHelper memoryPoolHelper;
 
-    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool) {
+    public KafkaChannel(String id, TransportLayer transportLayer, Supplier<Authenticator> authenticatorCreator, int maxReceiveSize, MemoryPool memoryPool, MemoryPoolHelper memoryPoolHelper) {
         this.id = id;
         this.transportLayer = transportLayer;
         this.authenticatorCreator = authenticatorCreator;
+        this.memoryPoolHelper = memoryPoolHelper;
         this.authenticator = authenticatorCreator.get();
         this.networkThreadTimeNanos = 0L;
         this.maxReceiveSize = maxReceiveSize;
@@ -421,7 +423,7 @@ public class KafkaChannel implements AutoCloseable {
     }
 
     private long receive(NetworkReceive receive) throws IOException {
-        return receive.readFrom(transportLayer);
+        return receive.readFrom(transportLayer, memoryPoolHelper.usePool(id));
     }
 
     private boolean send(Send send) throws IOException {

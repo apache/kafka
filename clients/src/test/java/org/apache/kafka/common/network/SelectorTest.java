@@ -85,7 +85,7 @@ public class SelectorTest {
         this.server = new EchoServer(SecurityProtocol.PLAINTEXT, configs);
         this.server.start();
         this.time = new MockTime();
-        this.channelBuilder = new PlaintextChannelBuilder(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
+        this.channelBuilder = new PlaintextChannelBuilder(Mode.CLIENT, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT));
         this.channelBuilder.configure(configs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, this.metrics, time, "MetricGroup", channelBuilder, new LogContext());
@@ -310,7 +310,7 @@ public class SelectorTest {
 
     @Test
     public void registerFailure() throws Exception {
-        ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
+        ChannelBuilder channelBuilder = new PlaintextChannelBuilder(Mode.CLIENT, null) {
             @Override
             public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
                     MemoryPool memoryPool) throws KafkaException {

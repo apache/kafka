@@ -218,6 +218,7 @@ public enum ApiKeys {
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
     public final boolean requiresDelayedAllocation;
+    public final boolean requiresPoolAllocation;
 
     ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas) {
         this(id, name, false, requestSchemas, responseSchemas);
@@ -255,6 +256,7 @@ public enum ApiKeys {
             }
         }
         this.requiresDelayedAllocation = requestRetainsBufferReference;
+        this.requiresPoolAllocation = id == 1; //FETCH
         this.requestSchemas = requestSchemas;
         this.responseSchemas = responseSchemas;
     }

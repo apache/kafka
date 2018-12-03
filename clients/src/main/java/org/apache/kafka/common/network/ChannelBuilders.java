@@ -137,7 +137,7 @@ public class ChannelBuilders {
                         time);
                 break;
             case PLAINTEXT:
-                channelBuilder = new PlaintextChannelBuilder(listenerName);
+                channelBuilder = new PlaintextChannelBuilder(mode, listenerName);
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected securityProtocol " + securityProtocol);

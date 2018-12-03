@@ -264,7 +264,7 @@ public class SaslServerAuthenticator implements Authenticator {
             // allocate on heap (as opposed to any socket server memory pool)
             if (netInBuffer == null) netInBuffer = new NetworkReceive(MAX_RECEIVE_SIZE, connectionId);
     
-            netInBuffer.readFrom(transportLayer);
+            netInBuffer.readFrom(transportLayer, false);
             if (!netInBuffer.complete())
                 return;
             netInBuffer.payload().rewind();
