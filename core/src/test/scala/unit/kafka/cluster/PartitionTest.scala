@@ -484,17 +484,6 @@ class PartitionTest {
       case e: ApiException => fail(s"Expected LeaderNotAvailableException, got ${e}")
     }
 
-    // If request is not from a client, we skip the check
-    offsetAndTimestamp = partition.fetchOffsetForTimestamp(
-      timestamp = -1L,
-      isolationLevel = None,
-      currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
-      fetchOnlyFromLeader = true,
-      isFromClient = false
-    )
-    assertTrue(offsetAndTimestamp.isDefined)
-    assertEquals(offsetAndTimestamp.get.offset, 5)
-
     // Next fetch from replicas
     partition.updateReplicaLogReadResult(
       follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
