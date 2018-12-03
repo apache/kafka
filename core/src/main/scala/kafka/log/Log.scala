@@ -1584,6 +1584,10 @@ class Log(@volatile var dir: File,
                                      s"start offset $newOffset while it already exists. Existing " +
                                      s"segment is ${segments.get(newOffset)}.")
           }
+        } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+          throw new KafkaException(
+            s"Trying to roll a new log segment for topic partition $topicPartition with " +
+            s"start offset $newOffset lower than start offset of the active segment $activeSegment")
         } else {
           val offsetIdxFile = offsetIndexFile(dir, newOffset)
           val timeIdxFile = timeIndexFile(dir, newOffset)
