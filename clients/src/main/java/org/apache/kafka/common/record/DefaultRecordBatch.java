@@ -523,7 +523,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    static int incrementSequence(int baseSequence, int increment) {
+    public static int incrementSequence(int baseSequence, int increment) {
         if (baseSequence > Integer.MAX_VALUE - increment)
             return increment - (Integer.MAX_VALUE - baseSequence) - 1;
         return baseSequence + increment;

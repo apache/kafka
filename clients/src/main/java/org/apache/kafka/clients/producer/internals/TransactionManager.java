@@ -26,6 +26,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.DefaultRecordBatch;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
@@ -419,7 +420,7 @@ public class TransactionManager {
         if (currentSequenceNumber == null)
             throw new IllegalStateException("Attempt to increment sequence number for a partition with no current sequence.");
 
-        currentSequenceNumber += increment;
+        currentSequenceNumber = DefaultRecordBatch.incrementSequence(currentSequenceNumber, increment);
         nextSequence.put(topicPartition, currentSequenceNumber);
     }
 
