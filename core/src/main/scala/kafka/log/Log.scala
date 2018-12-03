@@ -1569,24 +1569,26 @@ class Log(@volatile var dir: File,
         checkIfMemoryMappedBufferClosed()
         val newOffset = math.max(expectedNextOffset, logEndOffset)
         val logFile = Log.logFile(dir, newOffset)
-        val offsetIdxFile = offsetIndexFile(dir, newOffset)
-        val timeIdxFile = timeIndexFile(dir, newOffset)
-        val txnIdxFile = transactionIndexFile(dir, newOffset)
 
         if (segments.containsKey(newOffset)) {
           // segment with the same base offset already exists and loaded
           if (activeSegment.baseOffset == newOffset && activeSegment.size == 0) {
             // We have seen this happen (see KAFKA-6388) after shouldRoll() returns true for an
             // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
-            warn(s"Trying to roll a new log segment for topic partition $topicPartition with start " +
-                 s"offset $newOffset while it already exists and is active with size 0.")
+            warn(s"Trying to roll a new log segment with start offset $newOffset while it already" +
+                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
+                 s" size of offset index: ${activeSegment.offsetIndex.entries}.")
             deleteSegment(activeSegment)
           } else {
             throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with " +
-                                     s"start offset $newOffset while it already exists. Current " +
-                                     s"active segment is $activeSegment.")
+                                     s"start offset $newOffset while it already exists. Existing " +
+                                     s"segment is ${segments.get(newOffset)}.")
           }
         } else {
+          val offsetIdxFile = offsetIndexFile(dir, newOffset)
+          val timeIdxFile = timeIndexFile(dir, newOffset)
+          val txnIdxFile = transactionIndexFile(dir, newOffset)
+
           for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
             warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
             Files.delete(file.toPath)
