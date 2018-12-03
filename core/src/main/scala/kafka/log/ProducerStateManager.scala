@@ -299,7 +299,9 @@ private[log] class ProducerAppendInfo(val producerId: Long,
                          producerEpoch: Short,
                          offset: Long,
                          timestamp: Long): CompletedTxn = {
-    checkProducerEpoch(producerEpoch)
+    // Similar to maybeValidateAppend(), we should skip check if validationType is None
+    if (validationType != ValidationType.None)
+      checkProducerEpoch(producerEpoch)
 
     if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch)
       throw new TransactionCoordinatorFencedException(s"Invalid coordinator epoch: ${endTxnMarker.coordinatorEpoch} " +
