@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.internals.metrics;
 
 
 import org.apache.kafka.common.MetricName;
@@ -23,12 +23,21 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.Test;
 
+import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThat;
 
 public class StreamsMetricsImplTest {
 
@@ -62,6 +71,60 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
+
+        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
+    }
+
+    @Test
+    public void testMutiLevelSensorRemoval() {
+        final Metrics registry = new Metrics();
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, "");
+        for (final MetricName defaultMetric : registry.metrics().keySet()) {
+            registry.removeMetric(defaultMetric);
+        }
+
+        final String taskName = "taskName";
+        final String operation = "operation";
+        final Map<String, String> taskTags = mkMap(mkEntry("tkey", "value"));
+
+        final String processorNodeName = "processorNodeName";
+        final Map<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
+
+        final Sensor parent1 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
+        addAvgMaxLatency(parent1, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+        addInvocationRateAndCount(parent1, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+
+        final int numberOfTaskMetrics = registry.metrics().size();
+
+        final Sensor sensor1 = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent1);
+        addAvgMaxLatency(sensor1, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+        addInvocationRateAndCount(sensor1, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+
+        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
+
+        metrics.removeAllNodeLevelSensors(taskName, processorNodeName);
+
+        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+
+        final Sensor parent2 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
+        addAvgMaxLatency(parent2, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+        addInvocationRateAndCount(parent2, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+
+        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+
+        final Sensor sensor2 = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent2);
+        addAvgMaxLatency(sensor2, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+        addInvocationRateAndCount(sensor2, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+
+        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
+
+        metrics.removeAllNodeLevelSensors(taskName, processorNodeName);
+
+        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
+
+        metrics.removeAllTaskLevelSensors(taskName);
+
+        assertThat(registry.metrics().size(), equalTo(0));
     }
 
     @Test
@@ -115,21 +178,21 @@ public class StreamsMetricsImplTest {
         final String operation = "op";
 
         final Sensor sensor = streamsMetrics.addLatencyAndThroughputSensor(
-                scope,
-                entity,
-                operation,
-                Sensor.RecordingLevel.INFO
+            scope,
+            entity,
+            operation,
+            Sensor.RecordingLevel.INFO
         );
 
         final double latency = 100.0;
         final MetricName totalMetricName = metrics.metricName(
-                "op-total",
-                "stream-scope-metrics",
-                "",
-                "client-id",
-                "",
-                "scope-id",
-                "entity"
+            "op-total",
+            "stream-scope-metrics",
+            "",
+            "client-id",
+            "",
+            "scope-id",
+            "entity"
         );
 
         final KafkaMetric totalMetric = metrics.metric(totalMetricName);

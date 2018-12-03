@@ -115,11 +115,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllTaskLevelSensors(final String taskName) {
         final String key = taskSensorPrefix(taskName);
         synchronized (taskLevelSensors) {
-            if (taskLevelSensors.containsKey(key)) {
-                while (!taskLevelSensors.get(key).isEmpty()) {
-                    metrics.removeSensor(taskLevelSensors.get(key).pop());
-                }
-                taskLevelSensors.remove(key);
+            final Deque<String> sensors = taskLevelSensors.remove(key);
+            while (sensors != null && !sensors.isEmpty()) {
+                metrics.removeSensor(sensors.pop());
             }
         }
     }
@@ -152,10 +150,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllNodeLevelSensors(final String taskName, final String processorNodeName) {
         final String key = nodeSensorPrefix(taskName, processorNodeName);
         synchronized (nodeLevelSensors) {
-            if (nodeLevelSensors.containsKey(key)) {
-                while (!nodeLevelSensors.get(key).isEmpty()) {
-                    metrics.removeSensor(nodeLevelSensors.get(key).pop());
-                }
+            final Deque<String> sensors = nodeLevelSensors.remove(key);
+            while (sensors != null && !sensors.isEmpty()) {
+                metrics.removeSensor(sensors.pop());
             }
         }
     }
@@ -188,11 +185,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllCacheLevelSensors(final String taskName, final String cacheName) {
         final String key = cacheSensorPrefix(taskName, cacheName);
         synchronized (cacheLevelSensors) {
-            if (cacheLevelSensors.containsKey(key)) {
-                while (!cacheLevelSensors.get(key).isEmpty()) {
-                    metrics.removeSensor(cacheLevelSensors.get(key).pop());
-                }
-                cacheLevelSensors.remove(key);
+            final Deque<String> strings = cacheLevelSensors.remove(key);
+            while (strings != null && !strings.isEmpty()) {
+                metrics.removeSensor(strings.pop());
             }
         }
     }
@@ -225,11 +220,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final void removeAllStoreLevelSensors(final String taskName, final String storeName) {
         final String key = storeSensorPrefix(taskName, storeName);
         synchronized (storeLevelSensors) {
-            if (storeLevelSensors.containsKey(key)) {
-                while (!storeLevelSensors.get(key).isEmpty()) {
-                    metrics.removeSensor(storeLevelSensors.get(key).pop());
-                }
-                storeLevelSensors.remove(key);
+            final Deque<String> sensors = storeLevelSensors.remove(key);
+            while (sensors != null && !sensors.isEmpty()) {
+                metrics.removeSensor(sensors.pop());
             }
         }
     }
@@ -413,10 +406,17 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         Objects.requireNonNull(sensor, "Sensor is null");
         metrics.removeSensor(sensor.name());
 
-        final Sensor parent = parentSensors.get(sensor);
+        final Sensor parent = parentSensors.remove(sensor);
         if (parent != null) {
             metrics.removeSensor(parent.name());
         }
+    }
+
+    /**
+     * Visible for testing
+     */
+    Map<Sensor, Sensor> parentSensors() {
+        return Collections.unmodifiableMap(parentSensors);
     }
 
     private static String groupNameFromScope(final String scopeName) {

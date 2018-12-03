@@ -20,7 +20,6 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 
-import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._

@@ -44,6 +44,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -543,6 +544,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(path)
     zkClient.deletePath(path)
     assertFalse(zkClient.pathExists(path))
+
+    zkClient.createRecursive(path)
+    zkClient.deletePath("/a")
+    assertFalse(zkClient.pathExists(path))
+
+    zkClient.createRecursive(path)
+    zkClient.deletePath(path, recursiveDelete =  false)
+    assertFalse(zkClient.pathExists(path))
+    assertTrue(zkClient.pathExists("/a/b"))
   }
 
   @Test
@@ -1141,6 +1151,25 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val actualConsumerGroupOffsetsPath = ConsumerOffset.path(consumerGroup, topic, partition)
 
     assertEquals(expectedConsumerGroupOffsetsPath, actualConsumerGroupOffsetsPath)
+  }
+
+  @Test
+  def testAclMethods(): Unit = {
+    val mockPath = "/foo"
+
+    intercept[NoNodeException] {
+      zkClient.getAcl(mockPath)
+    }
+
+    intercept[NoNodeException] {
+      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+    }
+
+    zkClient.createRecursive(mockPath)
+
+    zkClient.setAcl(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala)
+
+    assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getAcl(mockPath))
   }
 
   class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
