@@ -820,7 +820,7 @@ class Partition(val topicPartition: TopicPartition,
     // election is enabled
     val shouldCheckHW = {
       !logManager.currentDefaultConfig.uncleanLeaderElectionEnable &&
-        //isFromClient &&
+        isFromClient &&
         leaderEpochStartOffsetOpt.isDefined
     }
 
