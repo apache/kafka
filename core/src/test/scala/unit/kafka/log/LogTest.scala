@@ -144,7 +144,6 @@ class LogTest {
 
   @Test
   def testRollSegmentThatAlreadyExists() {
-    val recordsToAppend = TestUtils.singletonRecords("test".getBytes)
     val logConfig = LogTest.createLogConfig(segmentMs = 1 * 60 * 60L)
 
     // create a log
@@ -152,7 +151,7 @@ class LogTest {
     assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
 
     // roll active segment with the same base offset of size zero should recreate the segment
-    log.roll(0)
+    log.roll(Option(0L))
     assertEquals("Expect 1 segment after roll() empty segment with base offset.", 1, log.numberOfSegments)
 
     // should be able to append records to active segment
@@ -175,13 +174,13 @@ class LogTest {
 
     // rolling non-zero size segment with the same base offset actually sets new segment's base offset
     // to log end offset, so not able to get to state that throws KafkaException by using Log api
-    log.roll(0L)
+    log.roll(Option(0L))
     assertEquals(2L, log.activeSegment.baseOffset)
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
 
     // rolling active segment with the same base offset of size zero should still re-create the
     // active segment when we have more than one segment
-    log.roll(2L)
+    log.roll(Option(2L))
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
     val records3 = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds + 12, "k3".getBytes, "v3".getBytes)),
@@ -876,17 +875,17 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
-    log.roll(1L)
+    log.roll(Option(1L))
     assertEquals(Some(1L), log.latestProducerSnapshotOffset)
     assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("b".getBytes), leaderEpoch = 0)
-    log.roll(2L)
+    log.roll(Option(2L))
     assertEquals(Some(2L), log.latestProducerSnapshotOffset)
     assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("c".getBytes), leaderEpoch = 0)
-    log.roll(3L)
+    log.roll(Option(3L))
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
     // roll triggers a flush at the starting offset of the new segment, we should retain all snapshots
@@ -1330,7 +1329,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig()
     val log = createLog(logDir,  logConfig)
     log.closeHandlers()
-    log.roll(1)
+    log.roll(Option(1L))
   }
 
   @Test
