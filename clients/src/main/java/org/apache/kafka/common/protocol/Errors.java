@@ -66,6 +66,7 @@ import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
@@ -287,7 +288,10 @@ public enum Errors {
     UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
             UnknownLeaderEpochException::new),
     UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
-            UnsupportedCompressionTypeException::new);
+            UnsupportedCompressionTypeException::new),
+    OFFSET_NOT_AVAILABLE(77, "The leader high-water mark has not caught up from a recent leader " +
+            "election so the offsets cannot be guaranteed to be monotonically increasing",
+            OffsetNotAvailableException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

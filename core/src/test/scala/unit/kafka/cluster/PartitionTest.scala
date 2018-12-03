@@ -29,7 +29,7 @@ import kafka.server._
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ApiException, LeaderNotAvailableException, ReplicaNotAvailableException}
+import org.apache.kafka.common.errors.{ApiException, LeaderNotAvailableException, OffsetNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -480,8 +480,8 @@ class PartitionTest {
         isFromClient = true
       )
     } catch {
-      case e: LeaderNotAvailableException => // expected
-      case e: ApiException => fail(s"Expected LeaderNotAvailableException, got different API exception ${e.getMessage}")
+      case e: OffsetNotAvailableException => // expected
+      case e: ApiException => fail(s"Expected LeaderNotAvailableException, got ${e}")
     }
 
     // If request is not from a client, we skip the check

@@ -819,7 +819,7 @@ class Partition(val topicPartition: TopicPartition,
     // Only actually check the HW if this is a client request and _not_ while unclean leader
     // election is enabled
     val shouldCheckHW = {
-      !replicaManager.config.uncleanLeaderElectionEnable &&
+      !logManager.currentDefaultConfig.uncleanLeaderElectionEnable &&
         isFromClient &&
         leaderEpochStartOffsetOpt.isDefined
     }
@@ -827,7 +827,7 @@ class Partition(val topicPartition: TopicPartition,
     if(shouldCheckHW) {
       // Wait until the HW has caught up with the start offset from this epoch
       if(leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
-        throw Errors.LEADER_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+        throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
           s"partition $topicPartition with leader epoch ${currentLeaderEpoch.get} as this partition's " +
           s"high-water mark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +
           s"LEO (${leaderEpochStartOffsetOpt.get}).")
