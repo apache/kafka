@@ -150,7 +150,8 @@ public class QueryableStateIntegrationTest {
             @Override
             public int compare(final KeyValue<String, String> o1,
                                final KeyValue<String, String> o2) {
-                return o1.key.compareTo(o2.key);
+                final int keyComparison = o1.key.compareTo(o2.key);
+                return keyComparison != 0 ? keyComparison : o1.value.compareTo(o2.value);
             }
         };
         stringLongComparator = new Comparator<KeyValue<String, Long>>() {
@@ -158,7 +159,8 @@ public class QueryableStateIntegrationTest {
             @Override
             public int compare(final KeyValue<String, Long> o1,
                                final KeyValue<String, Long> o2) {
-                return o1.key.compareTo(o2.key);
+                final int keyComparison =  o1.key.compareTo(o2.key);
+                return keyComparison != 0 ? keyComparison : o1.value.compareTo(o2.value);
             }
         };
         inputValues = Arrays.asList(
