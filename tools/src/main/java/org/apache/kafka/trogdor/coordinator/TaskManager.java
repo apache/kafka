@@ -47,10 +47,8 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -295,9 +293,8 @@ public final class TaskManager {
      *
      * @throws RequestConflictException - if a task with that ID and a different spec already exists
      */
-    public void createAndScheduleTasks(Map<String, TaskSpec> tasks) throws RequestConflictException, InvalidRequestException {
-        List<ManagedTask> managedTasks = new ArrayList<>();
-
+    public void createAndScheduleTasks(Map<String, TaskSpec> givenTasks) {
+        Map<String, TaskSpec> tasks = new HashMap<>(givenTasks);
         Iterator<Map.Entry<String, TaskSpec>> it = tasks.entrySet().iterator();
         while (it.hasNext()) {
             Map.Entry<String, TaskSpec> idAndSpec = it.next();
@@ -312,62 +309,30 @@ public final class TaskManager {
                     throw new RequestConflictException("Task ID " + id + " already " +
                         "exists, and has a different spec " + duplicateTask.spec);
                 log.info("Task {} already exists with spec {}", id, spec);
-                if (tasks.size() == 1)
-                    return;
-                else
-                    it.remove();
+                it.remove();
             }
         }
+        if (tasks.isEmpty())
+            return;
+
         for (Map.Entry<String, TaskSpec> idAndSpec: tasks.entrySet()) {
             try {
-                ManagedTask createdTask = createTask(idAndSpec.getKey(), idAndSpec.getValue());
-                if (createdTask != null)
-                    managedTasks.add(createdTask);
-            } catch (Throwable e) {
-                log.info("Failed to create createTask(id={}, spec={}) error:", idAndSpec.getKey(), idAndSpec.getValue(), e);
+                executor.submit(new CreateTask(idAndSpec.getKey(), idAndSpec.getValue())).get();
+            } catch (ExecutionException e) {
+                log.info("createTask(id={}, spec={}) error", idAndSpec.getKey(), idAndSpec.getValue(), e);
+            } catch (Exception e) {
+                log.info("Failed to create a new task {} with spec {}: {}",
+                    idAndSpec.getKey(), idAndSpec.getValue(), e.getMessage());
             }
         }
 
-        boolean infoLogEnabled = managedTasks.size() < 5;
-        for (ManagedTask task: managedTasks) {
-            long delayMs = scheduleTask(task);
-            if (infoLogEnabled)
-                log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
-            else
-                log.debug("Created a new task {} with spec {}, scheduled to start {} ms from now.", task.id, task.spec, delayMs);
-        }
-
-        log.info("Created {} tasks.", managedTasks.size());
-    }
-
-    private long scheduleTask(ManagedTask task) {
-        tasks.put(task.id, task);
-        long delayMs = task.startDelayMs(time.milliseconds());
-        task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
-        return delayMs;
-    }
-
-    /**
-     * @return a #{@link ManagedTask} instance or #{@code null} if there was an error creating the task
-     *  or if the task already exists
-     */
-    private ManagedTask createTask(String id, TaskSpec spec) throws Throwable {
-        try {
-            return executor.submit(new CreateTask(id, spec)).get();
-        } catch (ExecutionException e) {
-            log.info("createTask(id={}, spec={}) error", id, spec, e);
-            throw e.getCause();
-        } catch (Exception e) {
-            log.info("Failed to create a new task {} with spec {}: {}",
-                id, spec, e.getMessage());
-            return null;
-        }
+        log.info("Created {} tasks.", tasks.size());
     }
 
     /**
      * Handles a request to create a new task.  Processed by the state change thread.
      */
-    class CreateTask implements Callable<ManagedTask> {
+    class CreateTask implements Callable<Void> {
         private final String id;
         private final TaskSpec spec;
 
@@ -377,13 +342,30 @@ public final class TaskManager {
         }
 
         @Override
-        public ManagedTask call() throws Exception {
+        public Void call() throws Exception {
+            TaskController controller = null;
+            String failure = null;
             try {
-                TaskController controller = spec.newController(id);
-                return new ManagedTask(id, spec, controller, TaskStateType.PENDING);
-            } catch (Exception t) {
-                throw new Exception("Failed to create TaskController: " + t.getMessage());
+                controller = spec.newController(id);
+            } catch (Throwable t) {
+                failure = "Failed to create TaskController: " + t.getMessage();
             }
+            if (failure != null) {
+                log.info("Failed to create a new task {} with spec {}: {}",
+                    id, spec, failure);
+                ManagedTask task = new ManagedTask(id, spec, null, TaskStateType.DONE);
+                task.doneMs = time.milliseconds();
+                task.maybeSetError(failure);
+                tasks.put(id, task);
+                return null;
+            }
+            ManagedTask task = new ManagedTask(id, spec, controller, TaskStateType.PENDING);
+            tasks.put(id, task);
+            long delayMs = task.startDelayMs(time.milliseconds());
+            task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
+            log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.",
+                id, spec, delayMs);
+            return null;
         }
     }
 

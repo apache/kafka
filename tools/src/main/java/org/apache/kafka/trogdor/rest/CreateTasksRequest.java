@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.trogdor.task.TaskSpec;
 
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -31,7 +32,7 @@ public class CreateTasksRequest extends Message {
 
     @JsonCreator
     public CreateTasksRequest(@JsonProperty(value = "tasks", required = true) Map<String, TaskSpec>  tasks) {
-        this.tasks = tasks;
+        this.tasks = tasks == null ? Collections.EMPTY_MAP : Collections.unmodifiableMap(tasks);
     }
 
     @JsonProperty
