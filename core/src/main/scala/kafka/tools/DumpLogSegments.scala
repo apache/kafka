@@ -292,7 +292,8 @@ object DumpLogSegments {
           }
           lastOffset = record.offset
 
-          print(s"$INDENT offset: ${record.offset} keysize: ${record.keySize} valuesize: ${record.valueSize}")
+          print(s"$INDENT offset: ${record.offset} isvalid: ${record.isValid} ${batch.timestampType}: ${record.timestamp} " +
+            s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
             print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
