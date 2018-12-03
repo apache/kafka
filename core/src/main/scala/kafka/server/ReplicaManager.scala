@@ -366,7 +366,7 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
       val responseMap = new collection.mutable.HashMap[TopicPartition, Errors]
-      if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
+      if (stopReplicaRequest.controllerEpoch() < controllerEpoch) {
         stateChangeLogger.warn("Received stop replica request from an old controller epoch " +
           s"${stopReplicaRequest.controllerEpoch}. Latest known controller epoch is $controllerEpoch")
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)

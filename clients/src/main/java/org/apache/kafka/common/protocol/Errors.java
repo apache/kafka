@@ -96,6 +96,7 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -289,7 +290,9 @@ public enum Errors {
             UnknownLeaderEpochException::new),
     UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
             UnsupportedCompressionTypeException::new),
-    OFFSET_NOT_AVAILABLE(77, "The leader high-water mark has not caught up from a recent leader " +
+    STALE_BROKER_EPOCH(77, "Broker epoch has changed",
+            StaleBrokerEpochException::new),
+    OFFSET_NOT_AVAILABLE(78, "The leader high-water mark has not caught up from a recent leader " +
             "election so the offsets cannot be guaranteed to be monotonically increasing",
             OffsetNotAvailableException::new);
 

@@ -157,12 +157,17 @@ public class RequestResponseTest {
         checkRequest(createProduceRequest(3));
         checkErrorResponse(createProduceRequest(3), new UnknownServerException());
         checkResponse(createProduceResponse(), 2);
-        checkRequest(createStopReplicaRequest(true));
-        checkRequest(createStopReplicaRequest(false));
-        checkErrorResponse(createStopReplicaRequest(true), new UnknownServerException());
+        checkRequest(createStopReplicaRequest(0, true));
+        checkRequest(createStopReplicaRequest(0, false));
+        checkErrorResponse(createStopReplicaRequest(0, true), new UnknownServerException());
+        checkRequest(createStopReplicaRequest(1, true));
+        checkRequest(createStopReplicaRequest(1, false));
+        checkErrorResponse(createStopReplicaRequest(1, true), new UnknownServerException());
         checkResponse(createStopReplicaResponse(), 0);
-        checkRequest(createLeaderAndIsrRequest());
-        checkErrorResponse(createLeaderAndIsrRequest(), new UnknownServerException());
+        checkRequest(createLeaderAndIsrRequest(0));
+        checkErrorResponse(createLeaderAndIsrRequest(0), new UnknownServerException());
+        checkRequest(createLeaderAndIsrRequest(1));
+        checkErrorResponse(createLeaderAndIsrRequest(1), new UnknownServerException());
         checkResponse(createLeaderAndIsrResponse(), 0);
         checkRequest(createSaslHandshakeRequest());
         checkErrorResponse(createSaslHandshakeRequest(), new UnknownServerException());
@@ -234,6 +239,12 @@ public class RequestResponseTest {
         checkRequest(createUpdateMetadataRequest(3, "rack1"));
         checkRequest(createUpdateMetadataRequest(3, null));
         checkErrorResponse(createUpdateMetadataRequest(3, "rack1"), new UnknownServerException());
+        checkRequest(createUpdateMetadataRequest(4, "rack1"));
+        checkRequest(createUpdateMetadataRequest(4, null));
+        checkErrorResponse(createUpdateMetadataRequest(4, "rack1"), new UnknownServerException());
+        checkRequest(createUpdateMetadataRequest(5, "rack1"));
+        checkRequest(createUpdateMetadataRequest(5, null));
+        checkErrorResponse(createUpdateMetadataRequest(5, "rack1"), new UnknownServerException());
         checkResponse(createUpdateMetadataResponse(), 0);
         checkRequest(createListOffsetRequest(0));
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException());
@@ -891,9 +902,9 @@ public class RequestResponseTest {
         return new ProduceResponse(responseData, 0);
     }
 
-    private StopReplicaRequest createStopReplicaRequest(boolean deletePartitions) {
+    private StopReplicaRequest createStopReplicaRequest(int version, boolean deletePartitions) {
         Set<TopicPartition> partitions = Utils.mkSet(new TopicPartition("test", 0));
-        return new StopReplicaRequest.Builder(0, 1, deletePartitions, partitions).build();
+        return new StopReplicaRequest.Builder((short) version, 0, 1, 0, deletePartitions, partitions).build();
     }
 
     private StopReplicaResponse createStopReplicaResponse() {
@@ -903,11 +914,11 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
-        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
+        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
-        return new ControlledShutdownRequest.Builder(10, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
+        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
@@ -918,7 +929,7 @@ public class RequestResponseTest {
         return new ControlledShutdownResponse(Errors.NONE, topicPartitions);
     }
 
-    private LeaderAndIsrRequest createLeaderAndIsrRequest() {
+    private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
         Map<TopicPartition, LeaderAndIsrRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
@@ -933,7 +944,7 @@ public class RequestResponseTest {
                 new Node(0, "test0", 1223),
                 new Node(1, "test1", 1223)
         );
-        return new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(), 1, 10, partitionStates, leaders).build();
+        return new LeaderAndIsrRequest.Builder((short) version, 1, 10, 0, partitionStates, leaders).build();
     }
 
     private LeaderAndIsrResponse createLeaderAndIsrResponse() {
@@ -974,7 +985,7 @@ public class RequestResponseTest {
                 new UpdateMetadataRequest.Broker(0, endPoints1, rack),
                 new UpdateMetadataRequest.Broker(1, endPoints2, rack)
         );
-        return new UpdateMetadataRequest.Builder((short) version, 1, 10, partitionStates,
+        return new UpdateMetadataRequest.Builder((short) version, 1, 10, 0, partitionStates,
                 liveBrokers).build();
     }
 
