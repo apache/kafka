@@ -1506,8 +1506,8 @@ public class DistributedHerderTest {
         assertEquals(isRebalancing ? 1.0d : 0.0d, rebalancing, 0.0001d);
         assertEquals(millisSinceLastRebalance, rebalanceTimeSinceLast, 0.0001d);
         if (rebalanceTime <= 0L) {
-            assertEquals(Double.NEGATIVE_INFINITY, rebalanceTimeMax, 0.0001d);
-            assertEquals(0.0d, rebalanceTimeAvg, 0.0001d);
+            assertEquals(Double.NaN, rebalanceTimeMax, 0.0001d);
+            assertEquals(Double.NaN, rebalanceTimeAvg, 0.0001d);
         } else {
             assertEquals(rebalanceTime, rebalanceTimeMax, 0.0001d);
             assertEquals(rebalanceTime, rebalanceTimeAvg, 0.0001d);

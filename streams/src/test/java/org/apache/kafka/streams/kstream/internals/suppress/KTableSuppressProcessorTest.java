@@ -77,9 +77,16 @@ public class KTableSuppressProcessorTest {
                 .withLoggingDisabled()
                 .build();
             final KTableSuppressProcessor<K, V> processor =
-                new KTableSuppressProcessor<>(getImpl(suppressed), storeName, keySerde, new FullChangeSerde<>(valueSerde));
+                new KTableSuppressProcessor<>(
+                    (SuppressedInternal<K>) suppressed,
+                    storeName,
+                    keySerde,
+                    new FullChangeSerde<>(valueSerde)
+                );
 
             final MockInternalProcessorContext context = new MockInternalProcessorContext();
+            context.setCurrentNode(new ProcessorNode("testNode"));
+
             buffer.init(context, buffer);
             processor.init(context);
 
@@ -459,10 +466,6 @@ public class KTableSuppressProcessorTest {
             }
 
         };
-    }
-
-    private static <K> SuppressedInternal<K> getImpl(final Suppressed<K> suppressed) {
-        return (SuppressedInternal<K>) suppressed;
     }
 
     private <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {

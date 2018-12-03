@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.streams;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -27,27 +30,37 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockMetricsReporter;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
+import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.rules.TestName;
 
 import java.io.File;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -57,6 +70,7 @@ import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Collectors;
 
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
@@ -78,6 +92,9 @@ public class KafkaStreamsTest {
     private final StreamsBuilder builder = new StreamsBuilder();
     private KafkaStreams globalStreams;
     private Properties props;
+
+    @Rule
+    public TestName testName = new TestName();
 
     @Before
     public void before() {
@@ -125,8 +142,8 @@ public class KafkaStreamsTest {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
-        Assert.assertEquals(globalStreams.state(), KafkaStreams.State.CREATED);
-        Assert.assertEquals(stateListener.numChanges, 0);
+        Assert.assertEquals(KafkaStreams.State.CREATED, globalStreams.state());
+        Assert.assertEquals(0, stateListener.numChanges);
 
         globalStreams.start();
         TestUtils.waitForCondition(
@@ -136,7 +153,7 @@ public class KafkaStreamsTest {
 
         globalStreams.close();
 
-        Assert.assertEquals(globalStreams.state(), KafkaStreams.State.NOT_RUNNING);
+        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
     @Test
@@ -158,7 +175,7 @@ public class KafkaStreamsTest {
         builder.globalTable("anyTopic");
         final List<Node> nodes = asList(new Node(0, "localhost", 8121));
         final Cluster cluster = new Cluster("mockClusterId", nodes,
-                                            Collections.emptySet(), Collections.<String>emptySet(),
+                                            Collections.emptySet(), Collections.emptySet(),
                                             Collections.emptySet(), nodes.get(0));
         final MockClientSupplier clientSupplier = new MockClientSupplier();
         clientSupplier.setClusterForAdminClient(cluster);
@@ -349,6 +366,7 @@ public class KafkaStreamsTest {
 
         try {
             globalStreams.start();
+            fail("Should throw an IllegalStateException");
         } catch (final IllegalStateException e) {
             // this is ok
         } finally {
@@ -572,6 +590,141 @@ public class KafkaStreamsTest {
             assertFalse(th.isAlive());
         } finally {
             streams.close();
+        }
+    }
+
+    @Test
+    public void statelessTopologyShouldNotCreateStateDirectory() throws Exception {
+        final String inputTopic = testName.getMethodName() + "-input";
+        final String outputTopic = testName.getMethodName() + "-output";
+        CLUSTER.createTopics(inputTopic, outputTopic);
+
+        final Topology topology = new Topology();
+        topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
+                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+                    @Override
+                    public void process(final String key, final String value) {
+                        if (value.length() % 2 == 0) {
+                            context().forward(key, key + value);
+                        }
+                    }
+                }, "source")
+                .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
+        startStreamsAndCheckDirExists(topology, Collections.singleton(inputTopic), outputTopic, false);
+    }
+
+    @Test
+    public void inMemoryStatefulTopologyShouldNotCreateStateDirectory() throws Exception {
+        final String inputTopic = testName.getMethodName() + "-input";
+        final String outputTopic = testName.getMethodName() + "-output";
+        final String globalTopicName = testName.getMethodName() + "-global";
+        final String storeName = testName.getMethodName() + "-counts";
+        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, false);
+        startStreamsAndCheckDirExists(topology, asList(inputTopic, globalTopicName), outputTopic, false);
+    }
+
+    @Test
+    public void statefulTopologyShouldCreateStateDirectory() throws Exception {
+        final String inputTopic = testName.getMethodName() + "-input";
+        final String outputTopic = testName.getMethodName() + "-output";
+        final String globalTopicName = testName.getMethodName() + "-global";
+        final String storeName = testName.getMethodName() + "-counts";
+        final String globalStoreName = testName.getMethodName() + "-globalStore";
+        final Topology topology = getStatefulTopology(inputTopic, outputTopic, globalTopicName, storeName, globalStoreName, true);
+        startStreamsAndCheckDirExists(topology, asList(inputTopic, globalTopicName), outputTopic, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private Topology getStatefulTopology(final String inputTopic,
+                                         final String outputTopic,
+                                         final String globalTopicName,
+                                         final String storeName,
+                                         final String globalStoreName,
+                                         final boolean isPersistentStore) throws Exception {
+        CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
+        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(isPersistentStore ?
+                Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName), 
+                Serdes.String(), Serdes.Long());
+        final Topology topology = new Topology();
+        topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
+                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+                    @Override
+                    public void process(final String key, final String value) {
+                        final KeyValueStore<String, Long> kvStore =
+                                (KeyValueStore<String, Long>) context().getStateStore(storeName);
+                        kvStore.put(key, 5L);
+
+                        context().forward(key, "5");
+                        context().commit();
+                    }
+                }, "source")
+                .addStateStore(storeBuilder, "process")
+                .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
+
+        final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                Serdes.String(), Serdes.String()).withLoggingDisabled();
+        topology.addGlobalStore(globalStoreBuilder,
+                "global",
+                Serdes.String().deserializer(),
+                Serdes.String().deserializer(),
+                globalTopicName,
+                globalTopicName + "-processor",
+                new MockProcessorSupplier());
+        return topology;
+    }
+
+    private void startStreamsAndCheckDirExists(final Topology topology,
+                                               final Collection<String> inputTopics,
+                                               final String outputTopic,
+                                               final boolean shouldFilesExist) throws Exception {
+        final File baseDir = new File(TestUtils.IO_TMP_DIR + File.separator + "kafka-" + TestUtils.randomString(5));
+        final Path basePath = baseDir.toPath();
+        if (!baseDir.exists()) {
+            Files.createDirectory(basePath);
+        }
+        // changing the path of state directory to make sure that it should not clash with other test cases.
+        final Properties localProps = new Properties();
+        localProps.putAll(props);
+        localProps.put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getAbsolutePath());
+
+        final KafkaStreams streams = new KafkaStreams(topology, localProps);
+        streams.start();
+
+        for (final String topic : inputTopics) {
+            IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
+                    Collections.singletonList(new KeyValue<>("A", "A")),
+                    TestUtils.producerConfig(
+                            CLUSTER.bootstrapServers(),
+                            StringSerializer.class,
+                            StringSerializer.class,
+                            new Properties()),
+                    System.currentTimeMillis());
+        }
+
+        IntegrationTestUtils.readKeyValues(outputTopic,
+                TestUtils.consumerConfig(
+                        CLUSTER.bootstrapServers(),
+                        outputTopic + "-group",
+                        StringDeserializer.class,
+                        StringDeserializer.class),
+                5000, 1);
+
+        try {
+            final List<Path> files = Files.find(basePath, 999, (p, bfa) -> !p.equals(basePath)).collect(Collectors.toList());
+            if (shouldFilesExist && files.isEmpty()) {
+                Assert.fail("Files should have existed, but it didn't: " + files);
+            }
+            if (!shouldFilesExist && !files.isEmpty()) {
+                Assert.fail("Files should not have existed, but it did: " + files);
+            }
+        } catch (final IOException e) {
+            Assert.fail("Couldn't read the state directory : " + baseDir.getPath());
+        } finally {
+            streams.close();
+            streams.cleanUp();
+            Utils.delete(baseDir);
         }
     }
 

@@ -34,6 +34,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.TreeMap;
 
 public class ExpectedTasks {
@@ -146,7 +147,7 @@ public class ExpectedTasks {
             public boolean conditionMet() {
                 TasksResponse tasks = null;
                 try {
-                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0));
+                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0, Optional.empty()));
                 } catch (Exception e) {
                     log.info("Unable to get coordinator tasks", e);
                     throw new RuntimeException(e);

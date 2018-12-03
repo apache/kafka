@@ -152,6 +152,24 @@ public class ProcessorTopology {
         return repartitionTopics.contains(topic);
     }
 
+    public boolean hasPersistentLocalStore() {
+        for (final StateStore store : stateStores) {
+            if (store.persistent()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public boolean hasPersistentGlobalStore() {
+        for (final StateStore store : globalStateStores) {
+            if (store.persistent()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";

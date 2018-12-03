@@ -20,11 +20,15 @@ import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.errors.Stage;
 import org.apache.kafka.connect.transforms.Transformation;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.StringJoiner;
 
 public class TransformationChain<R extends ConnectRecord<R>> {
+    private static final Logger log = LoggerFactory.getLogger(TransformationChain.class);
 
     private final List<Transformation<R>> transformations;
     private final RetryWithToleranceOperator retryWithToleranceOperator;
@@ -40,6 +44,8 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         for (final Transformation<R> transformation : transformations) {
             final R current = record;
 
+            log.trace("Applying transformation {} to {}",
+                transformation.getClass().getName(), record);
             // execute the operation
             record = retryWithToleranceOperator.execute(() -> transformation.apply(current), Stage.TRANSFORMATION, transformation.getClass());
 
@@ -68,4 +74,11 @@ public class TransformationChain<R extends ConnectRecord<R>> {
         return Objects.hash(transformations);
     }
 
+    public String toString() {
+        StringJoiner chain = new StringJoiner(", ", getClass().getName() + "{", "}");
+        for (Transformation<R> transformation : transformations) {
+            chain.add(transformation.getClass().getName());
+        }
+        return chain.toString();
+    }
 }
