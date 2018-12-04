@@ -1548,8 +1548,8 @@ class Log(@volatile var dir: File,
         in the header.
       */
       appendInfo.firstOffset match {
-        case Some(firstOffset) => roll(Option(firstOffset))
-        case None => roll(Option(maxOffsetInMessages - Integer.MAX_VALUE))
+        case Some(firstOffset) => roll(Some(firstOffset))
+        case None => roll(Some(maxOffsetInMessages - Integer.MAX_VALUE))
       }
     } else {
       segment
