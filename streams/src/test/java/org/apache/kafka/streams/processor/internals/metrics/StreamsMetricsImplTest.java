@@ -14,14 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.processor.internals.metrics;
 
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.common.metrics.stats.Count;
 import org.junit.Test;
 
+import java.util.Collections;
+import java.util.Map;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsMetricsImplTest {
@@ -57,6 +63,55 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor3 = streamsMetrics.addThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
+
+        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
+    }
+
+    @Test
+    public void testMutiLevelSensorRemoval() {
+        final Metrics registry = new Metrics();
+        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, "");
+        for (final MetricName defaultMetric : registry.metrics().keySet()) {
+            registry.removeMetric(defaultMetric);
+        }
+
+        final String taskName = "taskName";
+        final String operation = "operation";
+        final Map<String, String> threadTags = mkMap(mkEntry("threadkey", "value"));
+
+        final Map<String, String> taskTags = mkMap(mkEntry("taskkey", "value"));
+
+        final Sensor parent1 = metrics.threadLevelSensor(operation, Sensor.RecordingLevel.DEBUG);
+        parent1.add(new MetricName("name", "group", "description", threadTags), new Count());
+
+        assertEquals(1, registry.metrics().size());
+
+        final Sensor sensor1 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG, parent1);
+        sensor1.add(new MetricName("name", "group", "description", taskTags), new Count());
+
+        assertEquals(2, registry.metrics().size());
+
+        metrics.removeAllTaskLevelSensors(taskName);
+
+        assertEquals(1, registry.metrics().size());
+
+        final Sensor parent2 = metrics.threadLevelSensor(operation, Sensor.RecordingLevel.DEBUG);
+        parent2.add(new MetricName("name", "group", "description", threadTags), new Count());
+
+        assertEquals(1, registry.metrics().size());
+
+        final Sensor sensor2 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG, parent2);
+        sensor2.add(new MetricName("name", "group", "description", taskTags), new Count());
+
+        assertEquals(2, registry.metrics().size());
+
+        metrics.removeAllTaskLevelSensors(taskName);
+
+        assertEquals(1, registry.metrics().size());
+
+        metrics.removeAllThreadLevelSensors();
+
+        assertEquals(0, registry.metrics().size());
     }
 
     @Test
@@ -90,7 +145,7 @@ public class StreamsMetricsImplTest {
         final String entity = "entity";
         final String operation = "put";
 
-        final Sensor sensor1 = streamsMetrics.addThroughputSensor(taskName,  scope, entity, operation, Sensor.RecordingLevel.DEBUG);
+        final Sensor sensor1 = streamsMetrics.addThroughputSensor(taskName, scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
         final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
         // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
