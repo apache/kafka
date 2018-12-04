@@ -754,7 +754,7 @@ class Partition(val topicPartition: TopicPartition,
       tryCompleteDelayedRequests()
     else {
       // probably unblock some follower fetch requests since log end offset has been updated
-      replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
+      replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(topicPartition))
     }
 
     info
