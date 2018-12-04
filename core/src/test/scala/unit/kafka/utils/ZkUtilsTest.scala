@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
+@deprecated("Deprecated given that ZkUtils is deprecated", since = "2.0.0")
 class ZkUtilsTest extends ZooKeeperTestHarness {
 
   val path = "/path"

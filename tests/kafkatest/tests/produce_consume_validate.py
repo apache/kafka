@@ -44,9 +44,6 @@ class ProduceConsumeValidateTest(Test):
         self.consumer_init_timeout_sec = 0
         self.enable_idempotence = False
 
-    def setup_producer_and_consumer(self):
-        raise NotImplementedError("Subclasses should implement this")
-
     def start_producer_and_consumer(self):
         # Start background producer and consumer
         self.consumer.start()

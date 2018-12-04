@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -29,7 +28,10 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.time.Duration;
 import java.util.List;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
@@ -154,6 +156,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @Override
     @Deprecated
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        if (interval < 1) {
+            throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
+        }
         return task.schedule(interval, type, callback);
     }
 
@@ -161,7 +166,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(interval, "interval");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
+        ApiUtils.validateMillisecondDuration(interval, msgPrefix);
         return schedule(interval.toMillis(), type, callback);
     }
 

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -41,11 +40,13 @@ import org.junit.Test;
 
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
 
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -59,7 +60,7 @@ public class KTableMapValuesTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "2"));
             driver.pipeInput(recordFactory.create(topic1, "C", "3"));
             driver.pipeInput(recordFactory.create(topic1, "D", "4"));
-            assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
+            assertEquals(asList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
         }
     }
 

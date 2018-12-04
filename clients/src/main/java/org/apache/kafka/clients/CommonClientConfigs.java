@@ -113,8 +113,8 @@ public class CommonClientConfigs {
         HashMap<String, Object> rval = new HashMap<>();
         if ((!config.originals().containsKey(RECONNECT_BACKOFF_MAX_MS_CONFIG)) &&
                 config.originals().containsKey(RECONNECT_BACKOFF_MS_CONFIG)) {
-            log.debug("Disabling exponential reconnect backoff because " + RECONNECT_BACKOFF_MS_CONFIG +
-                " is set, but " + RECONNECT_BACKOFF_MAX_MS_CONFIG + " is not.");
+            log.debug("Disabling exponential reconnect backoff because {} is set, but {} is not.",
+                    RECONNECT_BACKOFF_MS_CONFIG, RECONNECT_BACKOFF_MAX_MS_CONFIG);
             rval.put(RECONNECT_BACKOFF_MAX_MS_CONFIG, parsedValues.get(RECONNECT_BACKOFF_MS_CONFIG));
         }
         return rval;

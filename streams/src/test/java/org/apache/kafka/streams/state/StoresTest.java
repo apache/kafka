@@ -24,6 +24,7 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.junit.Test;
 
+import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -55,12 +56,12 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
-        Stores.persistentWindowStore(null, 0L, 0L, false, 0L);
+        Stores.persistentWindowStore(null, ZERO, ZERO, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
-        Stores.persistentWindowStore("anyName", -1L, 0L, false, 0L);
+        Stores.persistentWindowStore("anyName", ofMillis(-1L), ZERO, false);
     }
 
     @Deprecated
@@ -72,11 +73,6 @@ public class StoresTest {
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
         Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfIPersistentWindowStoreIfSegmentIntervalIsTooSmall() {
-        Stores.persistentWindowStore("anyName", 1L, 1L, false, -1L);
     }
 
     @Test(expected = NullPointerException.class)

@@ -21,21 +21,21 @@ import java.util.Properties
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
-import kafka.utils.Implicits._
-import kafka.utils.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
+import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
-import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._
+import scala.io.StdIn
 
 object TopicCommand extends Logging {
 
@@ -43,8 +43,7 @@ object TopicCommand extends Logging {
 
     val opts = new TopicCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to create, delete, describe, or change a topic.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
@@ -102,7 +101,7 @@ object TopicCommand extends Logging {
     try {
       if (opts.options.has(opts.replicaAssignmentOpt)) {
         val assignment = parseReplicaAssignment(opts.options.valueOf(opts.replicaAssignmentOpt))
-        adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, assignment, configs, update = false)
+        adminZkClient.createTopicWithAssignment(topic, configs, assignment)
       } else {
         CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.partitionsOpt, opts.replicationFactorOpt)
         val partitions = opts.options.valueOf(opts.partitionsOpt).intValue
@@ -298,8 +297,7 @@ object TopicCommand extends Logging {
     ret.toMap
   }
 
-  class TopicCommandOptions(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
                                       "Multiple hosts can be given to allow fail-over.")
                            .withRequiredArg
@@ -310,9 +308,9 @@ object TopicCommand extends Logging {
     val deleteOpt = parser.accepts("delete", "Delete a topic")
     val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
     val describeOpt = parser.accepts("describe", "List details for the given topics.")
-    val helpOpt = parser.accepts("help", "Print usage information.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                                           "expression except for --create option")
+    val topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
+                                           "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
+                                           "to escape regular expression symbols; e.g. \"test\\.topic\".")
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
@@ -358,7 +356,7 @@ object TopicCommand extends Logging {
 
     val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
@@ -390,7 +388,7 @@ object TopicCommand extends Logging {
 
   def askToProceed(): Unit = {
     println("Are you sure you want to continue? [y/n]")
-    if (!Console.readLine().equalsIgnoreCase("y")) {
+    if (!StdIn.readLine().equalsIgnoreCase("y")) {
       println("Ending your session")
       Exit.exit(0)
     }

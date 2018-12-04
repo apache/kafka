@@ -222,6 +222,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         @Override
                         public void onSuccess(ClientResponse resp) {
                             synchronized (Fetcher.this) {
+                                @SuppressWarnings("unchecked")
                                 FetchResponse<Records> response = (FetchResponse<Records>) resp.responseBody();
                                 FetchSessionHandler handler = sessionHandler(fetchTarget.id());
                                 if (handler == null) {
@@ -239,7 +240,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                     TopicPartition partition = entry.getKey();
                                     long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                    FetchResponse.PartitionData fetchData = entry.getValue();
+                                    FetchResponse.PartitionData<Records> fetchData = entry.getValue();
 
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, fetchData);
@@ -1280,18 +1281,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
         }
 
-        private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData partition) {
+        private PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions(FetchResponse.PartitionData<?> partition) {
             if (partition.abortedTransactions == null || partition.abortedTransactions.isEmpty())
                 return null;
 
             PriorityQueue<FetchResponse.AbortedTransaction> abortedTransactions = new PriorityQueue<>(
-                    partition.abortedTransactions.size(),
-                    new Comparator<FetchResponse.AbortedTransaction>() {
-                        @Override
-                        public int compare(FetchResponse.AbortedTransaction o1, FetchResponse.AbortedTransaction o2) {
-                            return Long.compare(o1.firstOffset, o2.firstOffset);
-                        }
-                    }
+                    partition.abortedTransactions.size(), Comparator.comparingLong(o -> o.firstOffset)
             );
             abortedTransactions.addAll(partition.abortedTransactions);
             return abortedTransactions;

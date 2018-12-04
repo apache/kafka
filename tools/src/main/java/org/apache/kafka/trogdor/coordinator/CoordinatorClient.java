@@ -32,12 +32,17 @@ import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.UriBuilder;
+
+import java.util.Optional;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
@@ -151,6 +156,13 @@ public class CoordinatorClient {
         return resp.body();
     }
 
+    public TaskState task(TaskRequest request) throws Exception {
+        String uri = UriBuilder.fromPath(url("/coordinator/tasks/{taskId}")).build(request.taskId()).toString();
+        HttpResponse<TaskState> resp = JsonRestServer.httpRequest(log, uri, "GET",
+            null, new TypeReference<TaskState>() { }, maxTries);
+        return resp.body();
+    }
+
     public void shutdown() throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/shutdown"), "PUT",
@@ -181,6 +193,12 @@ public class CoordinatorClient {
             .type(Boolean.class)
             .dest("show_tasks")
             .help("Show coordinator tasks.");
+        actions.addArgument("--show-task")
+            .action(store())
+            .type(String.class)
+            .dest("show_task")
+            .metavar("TASK_ID")
+            .help("Show a specific coordinator task.");
         actions.addArgument("--create-task")
             .action(store())
             .type(String.class)
@@ -228,7 +246,16 @@ public class CoordinatorClient {
         } else if (res.getBoolean("show_tasks")) {
             System.out.println("Got coordinator tasks: " +
                 JsonUtil.toPrettyJsonString(client.tasks(
-                    new TasksRequest(null, 0, 0, 0, 0))));
+                    new TasksRequest(null, 0, 0, 0, 0, Optional.empty()))));
+        } else if (res.getString("show_task") != null) {
+            String taskId = res.getString("show_task");
+            TaskRequest req = new TaskRequest(res.getString("show_task"));
+            try {
+                String taskOutput = String.format("Got coordinator task \"%s\": %s", taskId, JsonUtil.toPrettyJsonString(client.task(req)));
+                System.out.println(taskOutput);
+            } catch (NotFoundException e) {
+                System.out.println(e.getMessage());
+            }
         } else if (res.getString("create_task") != null) {
             CreateTaskRequest req = JsonUtil.JSON_SERDE.
                 readValue(res.getString("create_task"), CreateTaskRequest.class);

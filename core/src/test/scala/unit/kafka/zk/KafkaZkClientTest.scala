@@ -44,6 +44,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.security.JaasUtils
+import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.Stat
 
 class KafkaZkClientTest extends ZooKeeperTestHarness {
@@ -59,6 +60,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   val controllerEpochZkVersion = 0
 
   var otherZkClient: KafkaZkClient = _
+  var expiredSessionZkClient: ExpiredKafkaZkClient = _
 
   @Before
   override def setUp(): Unit = {
@@ -66,6 +68,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createControllerEpochRaw(1)
     otherZkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
       zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
+    expiredSessionZkClient = ExpiredKafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled),
+      zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
   }
 
   @After
@@ -73,6 +77,8 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     if (otherZkClient != null)
       otherZkClient.close()
     zkClient.deletePath(ControllerEpochZNode.path)
+    if (expiredSessionZkClient != null)
+      expiredSessionZkClient.close()
     super.tearDown()
   }
 
@@ -538,6 +544,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.createRecursive(path)
     zkClient.deletePath(path)
     assertFalse(zkClient.pathExists(path))
+
+    zkClient.createRecursive(path)
+    zkClient.deletePath("/a")
+    assertFalse(zkClient.pathExists(path))
+
+    zkClient.createRecursive(path)
+    zkClient.deletePath(path, recursiveDelete =  false)
+    assertFalse(zkClient.pathExists(path))
+    assertTrue(zkClient.pathExists("/a/b"))
   }
 
   @Test
@@ -684,11 +699,36 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testRetryRegisterBrokerInfo(): Unit = {
+    val brokerId = 5
+    val brokerPort = 9999
+    val brokerHost = "test.host"
+    val expiredBrokerInfo = createBrokerInfo(brokerId, brokerHost, brokerPort, SecurityProtocol.PLAINTEXT)
+    expiredSessionZkClient.createTopLevelPaths()
+
+    // Register the broker, for the first time
+    expiredSessionZkClient.registerBroker(expiredBrokerInfo)
+    assertEquals(Some(expiredBrokerInfo.broker), expiredSessionZkClient.getBroker(brokerId))
+    val originalCzxid = expiredSessionZkClient.getPathCzxid(BrokerIdZNode.path(brokerId))
+
+    // Here, the node exists already, when trying to register under a different session id,
+    // the node will be deleted and created again using the new session id.
+    expiredSessionZkClient.registerBroker(expiredBrokerInfo)
+
+    // The broker info should be the same, no error should be raised
+    assertEquals(Some(expiredBrokerInfo.broker), expiredSessionZkClient.getBroker(brokerId))
+    val newCzxid = expiredSessionZkClient.getPathCzxid(BrokerIdZNode.path(brokerId))
+
+    assertNotEquals("The Czxid of original ephemeral znode should be different " +
+      "from the new ephemeral znode Czxid", originalCzxid, newCzxid)
+  }
+
+  @Test
   def testGetBrokerMethods(): Unit = {
     zkClient.createTopLevelPaths()
 
     assertEquals(Seq.empty,zkClient.getAllBrokersInCluster)
-    assertEquals(Seq.empty, zkClient.getSortedBrokerList())
+    assertEquals(Seq.empty, zkClient.getSortedBrokerList)
     assertEquals(None, zkClient.getBroker(0))
 
     val brokerInfo0 = createBrokerInfo(0, "test.host0", 9998, SecurityProtocol.PLAINTEXT)
@@ -697,7 +737,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     zkClient.registerBroker(brokerInfo1)
     otherZkClient.registerBroker(brokerInfo0)
 
-    assertEquals(Seq(0, 1), zkClient.getSortedBrokerList())
+    assertEquals(Seq(0, 1), zkClient.getSortedBrokerList)
     assertEquals(
       Seq(brokerInfo0.broker, brokerInfo1.broker),
       zkClient.getAllBrokersInCluster
@@ -822,9 +862,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       TopicPartitionStateZNode.decode(response.data, statWithVersion(zkVersion)))
   }
 
-  private def eraseUncheckedInfoInCreateResponse(response: CreateResponse): CreateResponse =
-    response.copy(metadata = ResponseMetadata(0, 0), zkVersionCheckResult = None)
-  
+  private def eraseMetadata(response: CreateResponse): CreateResponse =
+    response.copy(metadata = ResponseMetadata(0, 0))
+
   @Test
   def testGetTopicsAndPartitions(): Unit = {
     assertTrue(zkClient.getAllTopicsInCluster.isEmpty)
@@ -854,7 +894,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
         CreateResponse(Code.OK, TopicPartitionStateZNode.path(topicPartition11), Some(topicPartition11),
           TopicPartitionStateZNode.path(topicPartition11), ResponseMetadata(0, 0))),
       zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion)
-        .map(eraseUncheckedInfoInCreateResponse).toList)
+        .map(eraseMetadata).toList)
 
     val getResponses = zkClient.getTopicPartitionStatesRaw(topicPartitions10_11)
     assertEquals(2, getResponses.size)
@@ -865,7 +905,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
       Seq(
         CreateResponse(Code.NODEEXISTS, TopicPartitionStateZNode.path(topicPartition10), Some(topicPartition10), null, ResponseMetadata(0, 0)),
         CreateResponse(Code.NODEEXISTS, TopicPartitionStateZNode.path(topicPartition11), Some(topicPartition11), null, ResponseMetadata(0, 0))),
-      zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion).map(eraseUncheckedInfoInCreateResponse).toList)
+      zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion).map(eraseMetadata).toList)
   }
 
   @Test
@@ -874,7 +914,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     def expectedSetDataResponses(topicPartitions: TopicPartition*)(resultCode: Code, stat: Stat) =
       topicPartitions.map { topicPartition =>
         SetDataResponse(resultCode, TopicPartitionStateZNode.path(topicPartition),
-          Some(topicPartition), stat, ResponseMetadata(0, 0), None)
+          Some(topicPartition), stat, ResponseMetadata(0, 0))
       }
 
     zkClient.createRecursive(TopicZNode.path(topic1))
@@ -883,14 +923,14 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.NONODE, null),
       zkClient.setTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion).map {
-        _.copy(metadata = ResponseMetadata(0, 0), zkVersionCheckResult = None)}.toList)
+        _.copy(metadata = ResponseMetadata(0, 0))}.toList)
 
     zkClient.createTopicPartitionStatesRaw(initialLeaderIsrAndControllerEpochs, controllerEpochZkVersion)
 
     assertEquals(
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.OK, statWithVersion(1)),
       zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion).map {
-        eraseUncheckedInfoInSetDataResponse}.toList)
+        eraseMetadataAndStat}.toList)
 
     // Mismatch controller epoch zkVersion
     intercept[ControllerMovedException](zkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 1, zkVersion = 0), controllerEpochZkVersion + 1))
@@ -903,7 +943,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(
       expectedSetDataResponses(topicPartition10, topicPartition11)(Code.OK, statWithVersion(2)),
       otherZkClient.setTopicPartitionStatesRaw(leaderIsrAndControllerEpochs(state = 2, zkVersion = 1), controllerEpochZkVersion).map {
-        eraseUncheckedInfoInSetDataResponse}.toList)
+        eraseMetadataAndStat}.toList)
   }
 
   @Test
@@ -945,9 +985,9 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
   }
 
-  private def eraseUncheckedInfoInSetDataResponse(response: SetDataResponse): SetDataResponse = {
+  private def eraseMetadataAndStat(response: SetDataResponse): SetDataResponse = {
     val stat = if (response.stat != null) statWithVersion(response.stat.getVersion) else null
-    response.copy(metadata = ResponseMetadata(0, 0), stat = stat, zkVersionCheckResult = None)
+    response.copy(metadata = ResponseMetadata(0, 0), stat = stat)
   }
 
   @Test
@@ -958,25 +998,25 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals("Setting non existing nodes should return NONODE results",
       SetDataResponse(Code.NONODE, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseUncheckedInfoInSetDataResponse(zkClient.setControllerEpochRaw(1, 0)))
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
 
     assertEquals("Creating non existing nodes is OK",
       CreateResponse(Code.OK, ControllerEpochZNode.path, None, ControllerEpochZNode.path, ResponseMetadata(0, 0)),
-      eraseUncheckedInfoInCreateResponse(zkClient.createControllerEpochRaw(0)))
+      eraseMetadata(zkClient.createControllerEpochRaw(0)))
     assertEquals(0, zkClient.getControllerEpoch.get._1)
 
     assertEquals("Attemt to create existing nodes should return NODEEXISTS",
       CreateResponse(Code.NODEEXISTS, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseUncheckedInfoInCreateResponse(zkClient.createControllerEpochRaw(0)))
+      eraseMetadata(zkClient.createControllerEpochRaw(0)))
 
     assertEquals("Updating existing nodes is OK",
       SetDataResponse(Code.OK, ControllerEpochZNode.path, None, statWithVersion(1), ResponseMetadata(0, 0)),
-      eraseUncheckedInfoInSetDataResponse(zkClient.setControllerEpochRaw(1, 0)))
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
     assertEquals(1, zkClient.getControllerEpoch.get._1)
 
     assertEquals("Updating with wrong ZK version returns BADVERSION",
       SetDataResponse(Code.BADVERSION, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
-      eraseUncheckedInfoInSetDataResponse(zkClient.setControllerEpochRaw(1, 0)))
+      eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)))
   }
 
   @Test
@@ -1111,5 +1151,54 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val actualConsumerGroupOffsetsPath = ConsumerOffset.path(consumerGroup, topic, partition)
 
     assertEquals(expectedConsumerGroupOffsetsPath, actualConsumerGroupOffsetsPath)
+  }
+
+  @Test
+  def testAclMethods(): Unit = {
+    val mockPath = "/foo"
+
+    intercept[NoNodeException] {
+      zkClient.getAcl(mockPath)
+    }
+
+    intercept[NoNodeException] {
+      zkClient.setAcl(mockPath, ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala)
+    }
+
+    zkClient.createRecursive(mockPath)
+
+    zkClient.setAcl(mockPath, ZooDefs.Ids.READ_ACL_UNSAFE.asScala)
+
+    assertEquals(ZooDefs.Ids.READ_ACL_UNSAFE.asScala, zkClient.getAcl(mockPath))
+  }
+
+  class ExpiredKafkaZkClient private (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time)
+    extends KafkaZkClient(zooKeeperClient, isSecure, time) {
+    // Overwriting this method from the parent class to force the client to re-register the Broker.
+    override def shouldReCreateEphemeralZNode(ephemeralOwnerId: Long): Boolean = {
+      true
+    }
+
+    def getPathCzxid(path: String): Long = {
+      val getDataRequest = GetDataRequest(path)
+      val getDataResponse = retryRequestUntilConnected(getDataRequest)
+
+      getDataResponse.stat.getCzxid
+    }
+  }
+
+  private object ExpiredKafkaZkClient {
+    def apply(connectString: String,
+              isSecure: Boolean,
+              sessionTimeoutMs: Int,
+              connectionTimeoutMs: Int,
+              maxInFlightRequests: Int,
+              time: Time,
+              metricGroup: String = "kafka.server",
+              metricType: String = "SessionExpireListener") = {
+      val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
+        time, metricGroup, metricType)
+      new ExpiredKafkaZkClient(zooKeeperClient, isSecure, time)
+    }
   }
 }

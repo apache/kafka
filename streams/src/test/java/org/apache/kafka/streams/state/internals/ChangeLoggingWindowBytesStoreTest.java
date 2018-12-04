@@ -43,7 +43,7 @@ import static org.junit.Assert.assertArrayEquals;
 public class ChangeLoggingWindowBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map sent = new HashMap<>();
+    private final Map<Object, Object> sent = new HashMap<>();
     private final NoOpRecordCollector collector = new NoOpRecordCollector() {
         @Override
         public <K, V> void send(final String topic,
