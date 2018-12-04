@@ -39,7 +39,7 @@ import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, Li
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
-import org.easymock.{Capture, EasyMock}
+import org.easymock.{Capture, EasyMock, IAnswer}
 
 import scala.collection.JavaConverters._
 
@@ -713,10 +713,12 @@ class PartitionTest {
     // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
     val tpKey: Capture[TopicPartitionOperationKey] = EasyMock.newCapture()
     EasyMock.expect(replicaManager.tryCompleteDelayedFetch(EasyMock.capture(tpKey)))
-      .andAnswer(() => {
-        val anotherPartition = (tpKey.getValue.partition + 1) % topicPartitions.size
-        val partition = partitions(anotherPartition)
-        partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+      .andAnswer(new IAnswer[Unit] {
+        override def answer(): Unit = {
+          val anotherPartition = (tpKey.getValue.partition + 1) % topicPartitions.size
+          val partition = partitions(anotherPartition)
+          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+        }
       }).anyTimes()
     EasyMock.replay(replicaManager, zkClient)
 
