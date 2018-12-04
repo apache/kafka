@@ -31,6 +31,8 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.time.Duration;
 import java.util.List;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
 
     private final StreamTask task;
@@ -164,7 +166,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(interval, "interval");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
+        ApiUtils.validateMillisecondDuration(interval, msgPrefix);
         return schedule(interval.toMillis(), type, callback);
     }
 
