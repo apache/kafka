@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 object DumpLogSegments {
 
   // visible for testing
-  private[tools] val INDENT = "|"
+  private[tools] val RECORD_INDENT = "|"
 
   def main(args: Array[String]) {
     val opts = new DumpLogSegmentsOptions(args)
@@ -292,13 +292,13 @@ object DumpLogSegments {
           }
           lastOffset = record.offset
 
-          print(s"$INDENT offset: ${record.offset} isvalid: ${record.isValid} ${batch.timestampType}: ${record.timestamp} " +
+          print(s"$RECORD_INDENT offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
             s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
             print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {
-            print(" crc: " + record.checksumOrNull)
+            print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
           }
 
           if (batch.isControlBatch) {
@@ -336,9 +336,8 @@ object DumpLogSegments {
       print("offset: " + batch.lastOffset)
 
     println(" position: " + accumulativeBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
-      " isvalid: " + batch.isValid +
       " size: " + batch.sizeInBytes + " magic: " + batch.magic +
-      " compresscodec: " + batch.compressionType + " crc: " + batch.checksum)
+      " compresscodec: " + batch.compressionType + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
   }
 
   class TimeIndexDumpErrors {

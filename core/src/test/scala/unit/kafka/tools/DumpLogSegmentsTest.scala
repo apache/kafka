@@ -67,7 +67,7 @@ class DumpLogSegmentsTest {
         if (i % 3 == 0)
           assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: ${i / 3 * 2} lastOffset: "))
         else
-          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.INDENT} offset: ${i - 1 - i / 3} isvalid:"))
+          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RECORD_INDENT} offset: ${i - 1 - i / 3}"))
       }
     }
 
