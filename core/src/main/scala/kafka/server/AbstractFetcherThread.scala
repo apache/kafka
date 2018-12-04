@@ -273,7 +273,8 @@ abstract class AbstractFetcherThread(name: String,
 
                     logAppendInfoOpt.foreach { logAppendInfo =>
                       val nextOffset = logAppendInfo.lastOffset + 1
-                      fetcherLagStats.getAndMaybePut(topicPartition).lag = Math.max(0L, partitionData.highWatermark - nextOffset)
+                      fetcherLagStats.getAndMaybePut(topicPartition).lag =
+                        if (nextOffset == 0) 0 else Math.max(0L, partitionData.highWatermark - nextOffset)
 
                       val validBytes = logAppendInfo.validBytes
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
