@@ -836,6 +836,20 @@ class Partition(val topicPartition: TopicPartition,
     localReplica.offsetSnapshot
   }
 
+  def maybeFetchOffsetSnapshot(currentLeaderEpoch: Optional[Integer],
+                          fetchOnlyFromLeader: Boolean): Option[LogOffsetSnapshot] = {
+    if (leaderIsrUpdateLock.readLock().tryLock()) {
+      try {
+        // decide whether to only fetch from leader
+        val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
+        Some(localReplica.offsetSnapshot)
+      } finally {
+        leaderIsrUpdateLock.readLock().unlock()
+      }
+    } else
+      None
+  }
+
   def fetchOffsetSnapshotOrError(currentLeaderEpoch: Optional[Integer],
                                  fetchOnlyFromLeader: Boolean): Either[LogOffsetSnapshot, Errors] = {
     inReadLock(leaderIsrUpdateLock) {
