@@ -172,7 +172,7 @@ class LogTest {
     assertEquals(0, readLog(log, 0, 100, Some(1)).records.batches.iterator.next().lastOffset)
     assertEquals(1, readLog(log, 1, 100, Some(2)).records.batches.iterator.next().lastOffset)
 
-    // roll to make an empty active segment
+    // roll so that active segment is empty
     log.roll()
     assertEquals("Expect base offset of active segment to be LEO", 2L, log.activeSegment.baseOffset)
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
