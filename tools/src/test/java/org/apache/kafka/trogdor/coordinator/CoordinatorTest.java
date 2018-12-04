@@ -103,7 +103,7 @@ public class CoordinatorTest {
             tasks.put("foo", fooSpec1);
             tasks.put("bar", fooSpec1);
             tasks.put("foobar", fooSpec1);
-            cluster.coordinatorClient().createMultipleTasks(
+            cluster.coordinatorClient().createTasks(
                 new CreateTasksRequest(tasks)
             );
             new ExpectedTasks()
@@ -140,7 +140,7 @@ public class CoordinatorTest {
             tasks.put("foo", fooSpec2);
             tasks.put("bar", fooSpec1);
             tasks.put("foobar", fooSpec1);
-            cluster.coordinatorClient().createMultipleTasks(
+            cluster.coordinatorClient().createTasks(
                 new CreateTasksRequest(tasks)
             );
 
@@ -160,7 +160,7 @@ public class CoordinatorTest {
             Map<String, TaskSpec> duplicateTasks = new HashMap<>();
             duplicateTasks.put("foo", fooSpec1);
             try {
-                cluster.coordinatorClient().createMultipleTasks(
+                cluster.coordinatorClient().createTasks(
                     new CreateTasksRequest(duplicateTasks)
                 );
                 fail("Expected to get an exception when submitting duplicate tasks.");
@@ -179,7 +179,7 @@ public class CoordinatorTest {
             differentAndDuplicateTasks.put("barfoo2", fooSpec1);
             differentAndDuplicateTasks.put("foo", fooSpec1); // duplicate id, different spec
             try {
-                cluster.coordinatorClient().createMultipleTasks(
+                cluster.coordinatorClient().createTasks(
                     new CreateTasksRequest(differentAndDuplicateTasks)
                 );
                 fail("Expected to get an exception when submitting duplicate tasks.");

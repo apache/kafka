@@ -301,16 +301,6 @@ public final class TaskManager {
             String id = idAndSpec.getKey();
             if (id.isEmpty())
                 throw new InvalidRequestException("Invalid empty ID in createTask request.");
-
-            TaskSpec spec = idAndSpec.getValue();
-            ManagedTask duplicateTask = this.tasks.get(id);
-            if (duplicateTask != null) {
-                if (!duplicateTask.spec.equals(spec))
-                    throw new RequestConflictException("Task ID " + id + " already " +
-                        "exists, and has a different spec " + duplicateTask.spec);
-                log.info("Task {} already exists with spec {}", id, spec);
-                it.remove();
-            }
         }
         if (tasks.isEmpty())
             return;
@@ -318,6 +308,8 @@ public final class TaskManager {
         for (Map.Entry<String, TaskSpec> idAndSpec: tasks.entrySet()) {
             try {
                 executor.submit(new CreateTask(idAndSpec.getKey(), idAndSpec.getValue())).get();
+            } catch (RequestConflictException e) {
+                throw e;
             } catch (ExecutionException e) {
                 log.info("createTask(id={}, spec={}) error", idAndSpec.getKey(), idAndSpec.getValue(), e);
             } catch (Exception e) {
@@ -350,6 +342,15 @@ public final class TaskManager {
             } catch (Throwable t) {
                 failure = "Failed to create TaskController: " + t.getMessage();
             }
+
+            ManagedTask duplicateTask = tasks.get(id);
+            if (duplicateTask != null) {
+                if (!duplicateTask.spec.equals(spec))
+                    throw new RequestConflictException("Task ID " + id + " already " +
+                        "exists, and has a different spec " + duplicateTask.spec);
+                log.info("Task {} already exists with spec {}", id, spec);
+            }
+
             if (failure != null) {
                 log.info("Failed to create a new task {} with spec {}: {}",
                     id, spec, failure);

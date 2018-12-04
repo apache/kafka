@@ -88,11 +88,11 @@ public class CoordinatorRestResource {
 
     @POST
     @Path("/task/creates")
-    public Response createMultipleTasks(CreateTasksRequest request) throws Throwable {
+    public Response createTasks(CreateTasksRequest request) throws Throwable {
         if (request.tasks().size() == 0)
             throw new BadRequestException("No tasks were given.");
 
-        coordinator().createMultipleTasks(request);
+        coordinator().createTasks(request);
         return Response.status(201).entity(Empty.INSTANCE).build();
     }
 

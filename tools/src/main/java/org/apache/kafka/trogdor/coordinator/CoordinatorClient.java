@@ -128,7 +128,7 @@ public class CoordinatorClient {
         resp.body();
     }
 
-    public void createMultipleTasks(CreateTasksRequest request) throws Exception {
+    public void createTasks(CreateTasksRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/creates"), "POST",
                 request, new TypeReference<Empty>() { }, maxTries);
@@ -278,7 +278,7 @@ public class CoordinatorClient {
         } else if (res.getString("create_tasks") != null) {
             CreateTasksRequest req = JsonUtil.JSON_SERDE.
                 readValue(res.getString("create_tasks"), CreateTasksRequest.class);
-            client.createMultipleTasks(req);
+            client.createTasks(req);
             System.out.print("Sent CreateTasksRequest for multiple tasks.");
         } else if (res.getString("stop_task") != null) {
             String taskId = res.getString("stop_task");

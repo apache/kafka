@@ -98,7 +98,7 @@ public final class Coordinator {
         taskManager.createAndScheduleTasks(Collections.singletonMap(request.id(), request.spec()));
     }
 
-    public void createMultipleTasks(CreateTasksRequest request)
+    public void createTasks(CreateTasksRequest request)
         throws RequestConflictException, InvalidRequestException {
         taskManager.createAndScheduleTasks(request.tasks());
     }
