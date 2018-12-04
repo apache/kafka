@@ -151,7 +151,7 @@ class LogTest {
     assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
 
     // roll active segment with the same base offset of size zero should recreate the segment
-    log.roll(Option(0L))
+    log.roll(Some(0L))
     assertEquals("Expect 1 segment after roll() empty segment with base offset.", 1, log.numberOfSegments)
 
     // should be able to append records to active segment
@@ -172,21 +172,20 @@ class LogTest {
     assertEquals(0, readLog(log, 0, 100, Option(1)).records.batches.iterator.next().lastOffset)
     assertEquals(1, readLog(log, 1, 100, Option(2)).records.batches.iterator.next().lastOffset)
 
-    // rolling non-zero size segment with the same base offset actually sets new segment's base offset
-    // to log end offset, so not able to get to state that throws KafkaException by using Log api
-    log.roll(Option(0L))
-    assertEquals(2L, log.activeSegment.baseOffset)
+    // roll to make an empty active segment
+    log.roll()
+    assertEquals("Expect base offset of active segment to be LEO", 2L, log.activeSegment.baseOffset)
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
 
-    // rolling active segment with the same base offset of size zero should still re-create the
-    // active segment when we have more than one segment
-    log.roll(Option(2L))
-    assertEquals("Expect two segments.", 2, log.numberOfSegments)
+    // manually resize offset index to force roll of an empty active segment on next append
+    log.activeSegment.offsetIndex.resize(0)
     val records3 = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds + 12, "k3".getBytes, "v3".getBytes)),
       baseOffset = 2L, partitionLeaderEpoch = 0)
     log.appendAsFollower(records3)
+    assertTrue(log.activeSegment.offsetIndex.maxEntries > 1)
     assertEquals(2, readLog(log, 2, 100, Option(3)).records.batches.iterator.next().lastOffset)
+    assertEquals("Expect two segments.", 2, log.numberOfSegments)
   }
 
   @Test(expected = classOf[OutOfOrderSequenceException])
