@@ -805,8 +805,7 @@ class Partition(val topicPartition: TopicPartition,
   def fetchOffsetForTimestamp(timestamp: Long,
                               isolationLevel: Option[IsolationLevel],
                               currentLeaderEpoch: Optional[Integer],
-                              fetchOnlyFromLeader: Boolean,
-                              isFromClient: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
+                              fetchOnlyFromLeader: Boolean): Option[TimestampAndOffset] = inReadLock(leaderIsrUpdateLock) {
     // decide whether to only fetch from leader
     val localReplica = localReplicaWithEpochOrException(currentLeaderEpoch, fetchOnlyFromLeader)
 
@@ -816,17 +815,10 @@ class Partition(val topicPartition: TopicPartition,
       case None => localReplica.logEndOffset.messageOffset
     }
 
-    // Only actually check the HW if this is a client request and _not_ while unclean leader
-    // election is enabled
-    val shouldCheckHW = {
-      !logManager.currentDefaultConfig.uncleanLeaderElectionEnable &&
-        isFromClient &&
-        leaderEpochStartOffsetOpt.isDefined
-    }
-
-    if(shouldCheckHW) {
+    // Only actually check the HW if this is a client request (isolation level is null)
+    if (isolationLevel.isEmpty && leaderEpochStartOffsetOpt.isDefined) {
       // Wait until the HW has caught up with the start offset from this epoch
-      if(leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
+      if (leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
         throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
           s"partition $topicPartition with leader epoch ${currentLeaderEpoch.get} as this partition's " +
           s"high-water mark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +

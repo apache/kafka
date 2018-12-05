@@ -849,8 +849,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             partitionData.timestamp,
             isolationLevelOpt,
             partitionData.currentLeaderEpoch,
-            fetchOnlyFromLeader,
-            isFromClient = isClientRequest)
+            fetchOnlyFromLeader)
 
           val response = foundOpt match {
             case Some(found) =>
