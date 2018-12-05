@@ -934,6 +934,12 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount)
   }
 
+  def allThreadStackTraces(): String = {
+    Thread.getAllStackTraces.asScala.map { case (thread, stackTrace) =>
+      thread.getName + "\n\t" + stackTrace.toList.map(_.toString).mkString("\n\t")
+    }.mkString("\n")
+  }
+
   /**
    * Create new LogManager instance with default configuration for testing
    */

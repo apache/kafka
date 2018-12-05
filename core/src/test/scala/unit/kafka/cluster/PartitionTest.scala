@@ -19,14 +19,14 @@ package kafka.cluster
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.api.Request
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import kafka.utils.{CoreUtils, MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, Li
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
-import org.easymock.EasyMock
+import org.easymock.{Capture, EasyMock, IAnswer}
 
 import scala.collection.JavaConverters._
 
@@ -651,7 +651,95 @@ class PartitionTest {
     partition.updateReplicaLogReadResult(follower1Replica,
                                          readResult(FetchDataInfo(LogOffsetMetadata(currentLeaderEpochStartOffset), batch3), leaderReplica))
     assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicas.map(_.brokerId))
- }
+  }
+
+  /**
+   * Verify that delayed fetch operations which are completed when records are appended don't result in deadlocks.
+   * Delayed fetch operations acquire Partition leaderIsrUpdate read lock for one or more partitions. So they
+   * need to be completed after releasing the lock acquired to append records. Otherwise, waiting writers
+   * (e.g. to check if ISR needs to be shrinked) can trigger deadlock in request handler threads waiting for
+   * read lock of one Partition while holding on to read lock of another Partition.
+   */
+  @Test
+  def testDelayedFetchAfterAppendRecords(): Unit = {
+    val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
+    val zkClient: KafkaZkClient = EasyMock.mock(classOf[KafkaZkClient])
+    val controllerId = 0
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val replicaIds = List[Integer](brokerId, brokerId + 1).asJava
+    val isr = replicaIds
+    val logConfig = LogConfig(new Properties)
+
+    val topicPartitions = (0 until 5).map { i => new TopicPartition("test-topic", i) }
+    val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, logConfig) }
+    val replicas = logs.map { log => new Replica(brokerId, log.topicPartition, time, log = Some(log)) }
+    val partitions = replicas.map { replica =>
+      val tp = replica.topicPartition
+      val partition = new Partition(tp,
+        isOffline = false,
+        replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+        localBrokerId = brokerId,
+        time,
+        replicaManager,
+        logManager,
+        zkClient)
+      partition.addReplicaIfNotExists(replica)
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+        leaderEpoch, isr, 1, replicaIds, true), 0)
+      partition
+    }
+
+    // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
+    val tpKey: Capture[TopicPartitionOperationKey] = EasyMock.newCapture()
+    EasyMock.expect(replicaManager.tryCompleteDelayedFetch(EasyMock.capture(tpKey)))
+      .andAnswer(new IAnswer[Unit] {
+        override def answer(): Unit = {
+          val anotherPartition = (tpKey.getValue.partition + 1) % topicPartitions.size
+          val partition = partitions(anotherPartition)
+          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+        }
+      }).anyTimes()
+    EasyMock.replay(replicaManager, zkClient)
+
+    def createRecords(baseOffset: Long): MemoryRecords = {
+      val records = List(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes))
+      val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+      val builder = MemoryRecords.builder(
+        buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
+        baseOffset, time.milliseconds, 0)
+      records.foreach(builder.append)
+      builder.build()
+    }
+
+    val done = new AtomicBoolean()
+    val executor = Executors.newFixedThreadPool(topicPartitions.size + 1)
+    try {
+      // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
+      executor.submit(CoreUtils.runnable {
+        while (!done.get) {
+          partitions.foreach(_.maybeShrinkIsr(10000))
+        }
+      })
+      // Append records to partitions, one partition-per-thread
+      val futures = partitions.map { partition =>
+        executor.submit(CoreUtils.runnable {
+          (1 to 10000).foreach { _ => partition.appendRecordsToLeader(createRecords(baseOffset = 0), isFromClient = true) }
+        })
+      }
+      futures.foreach(_.get(10, TimeUnit.SECONDS))
+      done.set(true)
+    } catch {
+      case e: TimeoutException =>
+        val allThreads = TestUtils.allThreadStackTraces()
+        fail(s"Test timed out with exception $e, thread stack traces: $allThreads")
+    } finally {
+      executor.shutdownNow()
+      executor.awaitTermination(5, TimeUnit.SECONDS)
+    }
+  }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
