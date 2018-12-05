@@ -194,6 +194,7 @@
 
             <p>
                 GlobalKTable provides the ability to look up <em>current</em> values of data records by keys. This table-lookup functionality is available through <code class="interpreted-text">join operations</code>.
+                Note that a GlobalKTable has <strong>no</strong> notion of time in contrast to a KTable.
             </p>
             <p>Benefits of global tables:</p>
 
@@ -2635,7 +2636,7 @@
                             <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">GlobalKTable</span></a> (entire changelog stream) upon receiving a new record from the
                             KStream (record stream).  An example use case would be &#8220;star queries&#8221; or &#8220;star joins&#8221;, where you would enrich a stream
                             of user activities (KStream) with the latest user profile information (GlobalKTable) and further context information
-                            (further GlobalKTables).</p>
+                            (further GlobalKTables). However, because GlobalKTables have no notion of time, a KStream-GlobalKTable join is not a temporal join, and there is no event-time synchronization between updates to a GlobalKTable and processing of KStream records.</p>
                         <p>At a high-level, KStream-GlobalKTable joins are very similar to
                             <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a>.  However, global tables provide you
                             with much more flexibility at the <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">some expense</span></a> when compared to partitioned
@@ -2783,9 +2784,9 @@
                             </tr>
                             </tbody>
                         </table>
-                        <p><strong>Semantics of stream-table joins:</strong>
-                            The join semantics are identical to <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a>.
-                            The only difference is that, for KStream-GlobalKTable joins, the left input record is first &#8220;mapped&#8221; with
+                        <p><strong>Semantics of stream-global-table joins:</strong>
+                            The join semantics are different to <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a> because it's not a temporal join.
+                            Another difference is that, for KStream-GlobalKTable joins, the left input record is first &#8220;mapped&#8221; with
                             a user-supplied <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> into the table&#8217;s keyspace prior to the table lookup.</p>
                     </div>
                 </div>
