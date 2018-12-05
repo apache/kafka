@@ -96,7 +96,7 @@ public class AbstractCoordinatorTest {
 
         mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
-        this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        this.coordinatorNode = new Node(node.id(), node.host(), node.port(), true);
         this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs);
     }
 
@@ -104,8 +104,8 @@ public class AbstractCoordinatorTest {
     public void testCoordinatorDiscoveryBackoff() {
         setupCoordinator();
 
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(groupCoordinatorResponse(coordinatorNode, Errors.NONE));
+        mockClient.prepareResponse(groupCoordinatorResponse(coordinatorNode, Errors.NONE));
 
         // blackout the coordinator for 10 milliseconds to simulate a disconnect.
         // after backing off, we should be able to connect.

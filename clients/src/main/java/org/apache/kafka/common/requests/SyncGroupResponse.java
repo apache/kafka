@@ -22,6 +22,7 @@ import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Map;
 
@@ -79,10 +80,11 @@ public class SyncGroupResponse extends AbstractResponse {
         this.memberState = memberState;
     }
 
-    public SyncGroupResponse(Struct struct) {
+    public SyncGroupResponse(Struct struct, Closeable closeable) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         this.error = Errors.forCode(struct.get(ERROR_CODE));
         this.memberState = struct.getBytes(MEMBER_ASSIGNMENT_KEY_NAME);
+        this.closeable = closeable;
     }
 
     @Override
@@ -112,8 +114,9 @@ public class SyncGroupResponse extends AbstractResponse {
         return struct;
     }
 
+    // Used by tests
     public static SyncGroupResponse parse(ByteBuffer buffer, short version) {
-        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer));
+        return new SyncGroupResponse(ApiKeys.SYNC_GROUP.parseResponse(version, buffer), null);
     }
 
     @Override

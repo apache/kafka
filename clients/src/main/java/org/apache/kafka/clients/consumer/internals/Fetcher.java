@@ -70,6 +70,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -245,7 +246,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                     log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
                                             isolationLevel, fetchOffset, partition, fetchData);
                                     completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                            resp.requestHeader().apiVersion()));
+                                            resp.requestHeader().apiVersion(), response));
+                                }
+                                if (response.responseData().isEmpty()) {
+                                    response.close();
                                 }
 
                                 sensors.fetchLatency.record(resp.requestLatencyMs());
@@ -480,6 +484,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
         Map<TopicPartition, List<ConsumerRecord<K, V>>> fetched = new HashMap<>();
         int recordsRemaining = maxPollRecords;
+        List<CompletedFetch> cfs = new ArrayList<>();
 
         try {
             while (recordsRemaining > 0) {
@@ -495,15 +500,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         // The first condition ensures that the completedFetches is not stuck with the same completedFetch
                         // in cases such as the TopicAuthorizationException, and the second condition ensures that no
                         // potential data loss due to an exception in a following record.
-                        FetchResponse.PartitionData partition = completedFetch.partitionData;
+                        FetchResponse.PartitionData<Records> partition = completedFetch.partitionData;
                         if (fetched.isEmpty() && (partition.records == null || partition.records.sizeInBytes() == 0)) {
-                            completedFetches.poll();
+                            cfs.add(completedFetches.poll());
                         }
                         throw e;
                     }
-                    completedFetches.poll();
+                    cfs.add(completedFetches.poll());
                 } else {
                     List<ConsumerRecord<K, V>> records = fetchRecords(nextInLineRecords, recordsRemaining);
+                    // memory pool optimization - we might close the completedFetch here
                     TopicPartition partition = nextInLineRecords.partition;
                     if (!records.isEmpty()) {
                         List<ConsumerRecord<K, V>> currentRecords = fetched.get(partition);
@@ -525,6 +531,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } catch (KafkaException e) {
             if (fetched.isEmpty())
                 throw e;
+        } finally {
+            for (CompletedFetch cf : cfs) {
+                cf.close();
+            }
         }
         return fetched;
     }
@@ -1311,17 +1321,28 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final FetchResponse.PartitionData<Records> partitionData;
         private final FetchResponseMetricAggregator metricAggregator;
         private final short responseVersion;
+        private final Closeable closeable;
 
         private CompletedFetch(TopicPartition partition,
                                long fetchedOffset,
                                FetchResponse.PartitionData<Records> partitionData,
                                FetchResponseMetricAggregator metricAggregator,
-                               short responseVersion) {
+                               short responseVersion,
+                               Closeable closeable) {
             this.partition = partition;
             this.fetchedOffset = fetchedOffset;
             this.partitionData = partitionData;
             this.metricAggregator = metricAggregator;
             this.responseVersion = responseVersion;
+            this.closeable = closeable;
+        }
+
+        private void close() {
+            try {
+                closeable.close();
+            } catch (IOException e) {
+                // NetworkReceive objects don't throw IOException
+            }
         }
     }
 

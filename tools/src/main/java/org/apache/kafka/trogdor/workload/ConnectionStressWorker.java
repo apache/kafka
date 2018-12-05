@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
@@ -173,7 +174,7 @@ public class ConnectionStressWorker implements TaskWorker {
                     try (Metrics metrics = new Metrics()) {
                         LogContext logContext = new LogContext();
                         try (Selector selector = new Selector(conf.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
-                            metrics, TIME, "", channelBuilder, logContext)) {
+                            metrics, TIME, "", channelBuilder, MemoryPool.NONE, logContext)) {
                             try (NetworkClient client = new NetworkClient(selector,
                                     updater,
                                     "ConnectionStressWorker",

@@ -120,13 +120,11 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         config.saslInterBrokerHandshakeRequestEnable
       )
       val selector = new Selector(
-        NetworkReceive.UNLIMITED,
         Selector.NO_IDLE_TIMEOUT_MS,
         metrics,
         time,
         "controller-channel",
         Map("broker-id" -> brokerNode.idString).asJava,
-        false,
         channelBuilder,
         logContext
       )

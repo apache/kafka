@@ -55,13 +55,11 @@ object TransactionMarkerChannelManager {
       config.saslInterBrokerHandshakeRequestEnable
     )
     val selector = new Selector(
-      NetworkReceive.UNLIMITED,
       config.connectionsMaxIdleMs,
       metrics,
       time,
       "txn-marker-channel",
       Map.empty[String, String].asJava,
-      false,
       channelBuilder,
       logContext
     )

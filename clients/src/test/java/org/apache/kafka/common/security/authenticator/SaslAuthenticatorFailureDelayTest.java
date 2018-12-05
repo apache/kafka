@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
@@ -201,9 +202,10 @@ public class SaslAuthenticatorFailureDelayTest {
                     new TestSecurityConfig(saslServerConfigs), credentialCache, time);
     }
 
-    private void createClientConnection(SecurityProtocol securityProtocol, String node) throws Exception {
+    private void createClientConnection(SecurityProtocol securityProtocol, String nodeId) throws Exception {
         createSelector(securityProtocol, saslClientConfigs);
-        InetSocketAddress addr = new InetSocketAddress("127.0.0.1", server.port());
+        Node node = new Node(Integer.parseInt(nodeId), "127.0.0.1", server.port());
+        InetSocketAddress addr = new InetSocketAddress(node.host(), node.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
     }
 

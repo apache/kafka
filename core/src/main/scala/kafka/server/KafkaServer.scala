@@ -424,13 +424,11 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           time,
           config.saslInterBrokerHandshakeRequestEnable)
         val selector = new Selector(
-          NetworkReceive.UNLIMITED,
-          config.connectionsMaxIdleMs,
+          config.connectionsMaxIdleMs.longValue,
           metrics,
           time,
           "kafka-server-controlled-shutdown",
-          Map.empty.asJava,
-          false,
+          Map.empty[String, String].asJava,
           channelBuilder,
           logContext
         )

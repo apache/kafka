@@ -217,7 +217,8 @@ public enum ApiKeys {
 
     public final Schema[] requestSchemas;
     public final Schema[] responseSchemas;
-    public final boolean requiresDelayedAllocation;
+    public final boolean requestRequiresDelayedAllocation;
+    public final boolean responseRequiresDelayedAllocation;
 
     ApiKeys(int id, String name, Schema[] requestSchemas, Schema[] responseSchemas) {
         this(id, name, false, requestSchemas, responseSchemas);
@@ -254,7 +255,15 @@ public enum ApiKeys {
                 break;
             }
         }
-        this.requiresDelayedAllocation = requestRetainsBufferReference;
+        boolean responseRetainsBufferReference = false;
+        for (Schema responseVersionSchema : responseSchemas) {
+            if (retainsBufferReference(responseVersionSchema)) {
+                responseRetainsBufferReference = true;
+                break;
+            }
+        }
+        this.requestRequiresDelayedAllocation = requestRetainsBufferReference;
+        this.responseRequiresDelayedAllocation = responseRetainsBufferReference;
         this.requestSchemas = requestSchemas;
         this.responseSchemas = responseSchemas;
     }

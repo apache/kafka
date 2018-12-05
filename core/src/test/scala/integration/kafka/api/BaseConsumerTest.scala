@@ -14,6 +14,7 @@ package kafka.api
 
 import java.time.Duration
 import java.util
+import java.util.{Collections, Properties}
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}

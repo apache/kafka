@@ -94,7 +94,7 @@ object RequestChannel extends Logging {
     //most request types are parsed entirely into objects at this point. for those we can release the underlying buffer.
     //some (like produce, or any time the schema contains fields of types BYTES or NULLABLE_BYTES) retain a reference
     //to the buffer. for those requests we cannot release the buffer early, but only when request processing is done.
-    if (!header.apiKey.requiresDelayedAllocation) {
+    if (!header.apiKey.requestRequiresDelayedAllocation) {
       releaseBuffer()
     }
 

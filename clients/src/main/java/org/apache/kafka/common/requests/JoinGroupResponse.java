@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -127,7 +128,7 @@ public class JoinGroupResponse extends AbstractResponse {
         this.members = groupMembers;
     }
 
-    public JoinGroupResponse(Struct struct) {
+    public JoinGroupResponse(Struct struct, Closeable closeable) {
         this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
         members = new HashMap<>();
 
@@ -142,6 +143,7 @@ public class JoinGroupResponse extends AbstractResponse {
         groupProtocol = struct.getString(GROUP_PROTOCOL_KEY_NAME);
         memberId = struct.get(MEMBER_ID);
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
+        this.closeable = closeable;
     }
 
     @Override
@@ -182,8 +184,9 @@ public class JoinGroupResponse extends AbstractResponse {
         return members;
     }
 
+    // Used by tests
     public static JoinGroupResponse parse(ByteBuffer buffer, short version) {
-        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer));
+        return new JoinGroupResponse(ApiKeys.JOIN_GROUP.parseResponse(version, buffer), null);
     }
 
     @Override

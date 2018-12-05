@@ -68,7 +68,8 @@ public class RequestContextTest {
         assertEquals(correlationId, responseHeader.correlationId());
 
         Struct struct = ApiKeys.API_VERSIONS.parseResponse((short) 0, responseBuffer);
-        ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS, struct);
+        // No MemoryPool used hence null Closeable
+        ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS, struct, null);
         assertEquals(Errors.UNSUPPORTED_VERSION, response.error());
         assertTrue(response.apiVersions().isEmpty());
     }

@@ -403,7 +403,7 @@ public class SaslClientAuthenticator implements Authenticator {
     }
 
     private byte[] receiveResponseOrToken() throws IOException {
-        if (netInBuffer == null) netInBuffer = new NetworkReceive(node);
+        if (netInBuffer == null) netInBuffer = new NetworkReceive(NetworkReceive.UNLIMITED, node);
         netInBuffer.readFrom(transportLayer);
         byte[] serverPacket = null;
         if (netInBuffer.complete()) {
@@ -491,14 +491,14 @@ public class SaslClientAuthenticator implements Authenticator {
 
     private AbstractResponse receiveKafkaResponse() throws IOException {
         if (netInBuffer == null)
-            netInBuffer = new NetworkReceive(node);
+            netInBuffer = new NetworkReceive(NetworkReceive.UNLIMITED, node);
         NetworkReceive receive = netInBuffer;
         try {
             byte[] responseBytes = receiveResponseOrToken();
             if (responseBytes == null)
                 return null;
             else {
-                AbstractResponse response = NetworkClient.parseResponse(ByteBuffer.wrap(responseBytes), currentRequestHeader);
+                AbstractResponse response = NetworkClient.parseSaslResponse(ByteBuffer.wrap(responseBytes), currentRequestHeader);
                 currentRequestHeader = null;
                 return response;
             }

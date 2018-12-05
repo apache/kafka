@@ -39,7 +39,26 @@ public class SimpleMemoryPool implements MemoryPool {
     protected final AtomicLong startOfNoMemPeriod = new AtomicLong(); //nanoseconds
     protected volatile Sensor oomTimeSensor;
 
-    public SimpleMemoryPool(long sizeInBytes, int maxSingleAllocationBytes, boolean strict, Sensor oomPeriodSensor) {
+    /**
+     * @param sizeInBytes Size of MemoryPool, -1 and Long.MAX_VALUE mean unbounded
+     * @param maxSingleAllocationBytes Size of the larger allocation allowed
+     * @param oomPeriodSensor Sensor used to track time spent out of memory
+     */
+    public static MemoryPool create(long sizeInBytes, int maxSingleAllocationBytes, Sensor oomPeriodSensor) {
+        // -1 means unbounded on the broker
+        // max long means unbounded on the consumer
+        if (sizeInBytes == Long.MAX_VALUE || sizeInBytes == -1L) {
+            return MemoryPool.NONE;
+        } else {
+            if (GarbageCollectedMemoryPool.useInTest) {
+                return new GarbageCollectedMemoryPool(sizeInBytes, maxSingleAllocationBytes, false, oomPeriodSensor);
+            } else {
+                return new SimpleMemoryPool(sizeInBytes, maxSingleAllocationBytes, false, oomPeriodSensor);
+            }
+        }
+    }
+
+    SimpleMemoryPool(long sizeInBytes, int maxSingleAllocationBytes, boolean strict, Sensor oomPeriodSensor) {
         if (sizeInBytes <= 0 || maxSingleAllocationBytes <= 0 || maxSingleAllocationBytes > sizeInBytes)
             throw new IllegalArgumentException("must provide a positive size and max single allocation size smaller than size."
                 + "provided " + sizeInBytes + " and " + maxSingleAllocationBytes + " respectively");

@@ -24,6 +24,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
@@ -61,16 +62,15 @@ public class NetworkTestUtils {
     }
 
     public static Selector createSelector(ChannelBuilder channelBuilder, Time time) {
-        return new Selector(5000, new Metrics(), time, "MetricGroup", channelBuilder, new LogContext());
+        return new Selector(5000L, new Metrics(), time, "MetricGroup", channelBuilder, MemoryPool.NONE, new LogContext());
     }
 
-    public static void checkClientConnection(Selector selector, String node, int minMessageSize, int messageCount) throws Exception {
-
-        waitForChannelReady(selector, node);
+    public static void checkClientConnection(Selector selector, String nodeId, int minMessageSize, int messageCount) throws Exception {
+        waitForChannelReady(selector, nodeId);
         String prefix = TestUtils.randomString(minMessageSize);
         int requests = 0;
         int responses = 0;
-        selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-0").getBytes())));
+        selector.send(new NetworkSend(nodeId, ByteBuffer.wrap((prefix + "-0").getBytes())));
         requests++;
         while (responses < messageCount) {
             selector.poll(0L);
@@ -81,8 +81,8 @@ public class NetworkTestUtils {
                 responses++;
             }
 
-            for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(node); i++, requests++) {
-                selector.send(new NetworkSend(node, ByteBuffer.wrap((prefix + "-" + requests).getBytes())));
+            for (int i = 0; i < selector.completedSends().size() && requests < messageCount && selector.isChannelReady(nodeId); i++, requests++) {
+                selector.send(new NetworkSend(nodeId, ByteBuffer.wrap((prefix + "-" + requests).getBytes())));
             }
         }
     }
