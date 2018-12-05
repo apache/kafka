@@ -235,8 +235,10 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         log.debug("Closing producer");
-        producer.close();
-        producer = null;
+        if (producer != null) {
+            producer.close();
+            producer = null;
+        }
         checkForException();
     }
 
