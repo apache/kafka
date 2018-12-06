@@ -132,6 +132,12 @@ class LogCleaner(initialConfig: CleanerConfig,
            new Gauge[Int] {
              def value: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
            })
+  // a metric to track delay between the time when a log is required to be compacted
+  // as determined by max compaction lag and the time of last cleaner run.
+  newGauge("max-compaction-delay-secs",
+          new Gauge[Int] {
+          def value: Int = Math.max(0, (cleaners.map(_.lastPreCleanStats).map(_.maxCompactionDelayMs).max / 1000).toInt)
+          })
 
   /**
    * Start the background cleaning
@@ -285,6 +291,7 @@ class LogCleaner(initialConfig: CleanerConfig,
                               checkDone = checkDone)
 
     @volatile var lastStats: CleanerStats = new CleanerStats()
+    @volatile var lastPreCleanStats: PreCleanStats = new PreCleanStats()
 
     private def checkDone(topicPartition: TopicPartition) {
       if (!isRunning)
@@ -310,10 +317,12 @@ class LogCleaner(initialConfig: CleanerConfig,
       var currentLog: Option[Log] = None
 
       try {
-        val cleaned = cleanerManager.grabFilthiestCompactedLog(time) match {
+        val preCleanStats = new PreCleanStats()
+        val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
           case None =>
             false
           case Some(cleanable) =>
+            this.lastPreCleanStats = preCleanStats
             // there's a log, clean it
             currentLog = Some(cleanable.log)
             cleanLog(cleanable)
@@ -932,6 +941,17 @@ private[log] class Cleaner(val id: Int,
 }
 
 /**
+  * A simple struct for collecting pre-clean stats
+  */
+private class PreCleanStats() {
+  var maxCompactionDelayMs = 0L
+
+  def updateMaxCompactionDelay(delayMs: Long): Unit = {
+    maxCompactionDelayMs = Math.max(maxCompactionDelayMs, delayMs)
+  }
+}
+
+/**
  * A simple struct for collecting stats about log cleaning
  */
 private class CleanerStats(time: Time = Time.SYSTEM) {
@@ -984,9 +1004,11 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
 }
 
 /**
- * Helper class for a log, its topic/partition, the first cleanable position, and the first uncleanable dirty position
- */
-private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
+  * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
+  * and whether it needs compaction immediately.
+  */
+private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long,
+                              uncleanableOffset: Long, needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes
