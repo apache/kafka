@@ -82,6 +82,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -921,7 +922,8 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalArgumentException if {@code timeout} can't be represented as {@code long milliseconds}
      */
     public synchronized boolean close(final Duration timeout) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(timeout, "timeout");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeout, "timeout");
+        ApiUtils.validateMillisecondDuration(timeout, msgPrefix);
 
         final long timeoutMs = timeout.toMillis();
         if (timeoutMs < 0) {

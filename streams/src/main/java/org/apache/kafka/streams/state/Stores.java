@@ -34,6 +34,8 @@ import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import java.time.Duration;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * Factory for creating state stores in Kafka Streams.
  * <p>
@@ -195,8 +197,10 @@ public class Stores {
                                                                  final Duration windowSize,
                                                                  final boolean retainDuplicates) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
-        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
-        ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
 
         final long defaultSegmentInterval = Math.max(retentionPeriod.toMillis() / 2, 60_000L);
 
@@ -259,7 +263,8 @@ public class Stores {
     @SuppressWarnings("deprecation")
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
-        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
         return persistentSessionStore(name, retentionPeriod.toMillis());
     }
 
