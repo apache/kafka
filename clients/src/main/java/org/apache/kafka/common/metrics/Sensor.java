@@ -22,12 +22,14 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.unmodifiableList;
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -130,6 +132,10 @@ public final class Sensor {
      */
     public String name() {
         return this.name;
+    }
+
+    List<Sensor> parents() {
+        return unmodifiableList(asList(parents));
     }
 
     /**
@@ -266,6 +272,6 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return Collections.unmodifiableList(this.metrics);
+        return unmodifiableList(this.metrics);
     }
 }
