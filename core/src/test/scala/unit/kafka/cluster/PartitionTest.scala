@@ -319,8 +319,7 @@ class PartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
-          fetchOnlyFromLeader = true,
-          isFromClient = false)
+          fetchOnlyFromLeader = true)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
       } catch {
@@ -347,8 +346,7 @@ class PartitionTest {
         partition.fetchOffsetForTimestamp(0L,
           isolationLevel = None,
           currentLeaderEpoch = currentLeaderEpochOpt,
-          fetchOnlyFromLeader = fetchOnlyLeader,
-          isFromClient = false)
+          fetchOnlyFromLeader = fetchOnlyLeader)
         if (error != Errors.NONE)
           fail(s"Expected readRecords to fail with error $error")
       } catch {
@@ -376,8 +374,7 @@ class PartitionTest {
     val timestampAndOffsetOpt = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.empty(),
-      fetchOnlyFromLeader = true,
-      isFromClient = false)
+      fetchOnlyFromLeader = true)
 
     assertTrue(timestampAndOffsetOpt.isDefined)
 
@@ -449,18 +446,19 @@ class PartitionTest {
     partition.updateReplicaLogReadResult(
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
 
+    // At this point, the leader has gotten 5 writes, but followers have only fetched two
+
     // Get offsets
     var offsetAndTimestamp = partition.fetchOffsetForTimestamp(
       timestamp = -1L,
-      isolationLevel = None,
+      isolationLevel = Option(IsolationLevel.READ_UNCOMMITTED), // uncommitted == HW
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
-      fetchOnlyFromLeader = true,
-      isFromClient = true
+      fetchOnlyFromLeader = true
     )
 
     assertTrue(offsetAndTimestamp.isDefined)
-    assertEquals(offsetAndTimestamp.get.offset, 5) // Current LEO on leader is 5
-    assertEquals(partition.localReplica.get.highWatermark.messageOffset, 2) // HW is still 2
+    assertEquals(offsetAndTimestamp.get.offset, 2) // Leader HW is 2
+    assertEquals(partition.localReplica.get.highWatermark.messageOffset, 2) // Leader HW is 2
 
     // Make into a follower
     assertTrue(partition.makeFollower(controllerId,
@@ -476,8 +474,7 @@ class PartitionTest {
         timestamp = -1L,
         isolationLevel = None,
         currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
-        fetchOnlyFromLeader = true,
-        isFromClient = true
+        fetchOnlyFromLeader = true
       )
     } catch {
       case e: OffsetNotAvailableException => // expected
@@ -487,15 +484,14 @@ class PartitionTest {
     // If request is not from a client, we skip the check
     offsetAndTimestamp = partition.fetchOffsetForTimestamp(
       timestamp = -1L,
-      isolationLevel = None,
+      isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED),
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
-      fetchOnlyFromLeader = true,
-      isFromClient = false
+      fetchOnlyFromLeader = true
     )
     assertTrue(offsetAndTimestamp.isDefined)
-    assertEquals(offsetAndTimestamp.get.offset, 5)
+    assertEquals(offsetAndTimestamp.get.offset, 2)
 
-    // Next fetch from replicas
+    // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
     partition.updateReplicaLogReadResult(
       follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
     partition.updateReplicaLogReadResult(
@@ -506,8 +502,7 @@ class PartitionTest {
       timestamp = -1L,
       isolationLevel = None,
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
-      fetchOnlyFromLeader = true,
-      isFromClient = true
+      fetchOnlyFromLeader = true
     )
     assertTrue(offsetAndTimestamp.isDefined)
     assertEquals(offsetAndTimestamp.get.offset, 5)
@@ -655,8 +650,7 @@ class PartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true,
-        isFromClient = false)
+        fetchOnlyFromLeader = true)
       assertTrue(res.isDefined)
       res.get
     }
@@ -665,8 +659,7 @@ class PartitionTest {
       val res = partition.fetchOffsetForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP,
         isolationLevel = isolationLevel,
         currentLeaderEpoch = Optional.empty(),
-        fetchOnlyFromLeader = true,
-        isFromClient = false)
+        fetchOnlyFromLeader = true)
       assertTrue(res.isDefined)
       res.get
     }

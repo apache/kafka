@@ -378,8 +378,7 @@ class KafkaApisTest {
       EasyMock.eq(ListOffsetRequest.EARLIEST_TIMESTAMP),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
-      fetchOnlyFromLeader = EasyMock.eq(true),
-      isFromClient = EasyMock.anyBoolean())
+      fetchOnlyFromLeader = EasyMock.eq(true))
     ).andThrow(error.exception)
 
     val capturedResponse = expectNoThrottling()
@@ -472,8 +471,7 @@ class KafkaApisTest {
       EasyMock.eq(ListOffsetRequest.LATEST_TIMESTAMP),
       EasyMock.eq(Some(isolationLevel)),
       EasyMock.eq(currentLeaderEpoch),
-      fetchOnlyFromLeader = EasyMock.eq(true),
-      isFromClient = EasyMock.anyBoolean())
+      fetchOnlyFromLeader = EasyMock.eq(true))
     ).andReturn(Some(new TimestampAndOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, latestOffset, currentLeaderEpoch)))
 
     val capturedResponse = expectNoThrottling()
