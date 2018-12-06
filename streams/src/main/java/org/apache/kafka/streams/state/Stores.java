@@ -264,7 +264,7 @@ public class Stores {
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
     }
 
 

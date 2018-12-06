@@ -134,7 +134,7 @@ public final class JoinWindows extends Windows<Window> {
     @SuppressWarnings("deprecation")
     public static JoinWindows of(final Duration timeDifference) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(timeDifference, "timeDifference");
-        return ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix);
+        return of(ApiUtils.validateMillisecondDuration(timeDifference, msgPrefix));
     }
 
     /**

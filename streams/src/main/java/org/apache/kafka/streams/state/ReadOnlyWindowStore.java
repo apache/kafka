@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.time.Instant;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
+
+import java.time.Instant;
 
 /**
  * A window store that only supports read operations
@@ -73,7 +74,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
-     * @deprecated Use {@link #fetch(K, Instant, Instant)} instead
+     * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
      */
     @Deprecated
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
@@ -107,7 +108,7 @@ public interface ReadOnlyWindowStore<K, V> {
      *
      * @param key       the key to fetch
      * @param from      time range start (inclusive)
-     * @param from      time range end (inclusive)
+     * @param to        time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
