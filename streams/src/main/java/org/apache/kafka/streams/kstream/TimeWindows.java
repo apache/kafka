@@ -26,6 +26,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
 
 /**
@@ -125,7 +126,8 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      */
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(size, "size");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
+        ApiUtils.validateMillisecondDuration(size, msgPrefix);
         return of(size.toMillis());
     }
 
@@ -138,14 +140,15 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param advanceMs The advance interval ("hop") in milliseconds of the window, with the requirement that {@code 0 < advanceMs <= sizeMs}.
      * @return a new window definition with default maintain duration of 1 day
-     * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
+     * @throws IllegalArgumentException if the advance interval is negative, zero, or larger than the window size
      * @deprecated Use {@link #advanceBy(Duration)} instead
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     @Deprecated
     public TimeWindows advanceBy(final long advanceMs) {
         if (advanceMs <= 0 || advanceMs > sizeMs) {
-            throw new IllegalArgumentException(String.format("AdvanceMs must lie within interval (0, %d].", sizeMs));
+            throw new IllegalArgumentException(String.format("Window advancement interval should be more than zero " +
+                    "and less than window duration which is %d ms, but given advancement interval is: %d ms", sizeMs, advanceMs));
         }
         return new TimeWindows(sizeMs, advanceMs, grace, maintainDurationMs, segments);
     }
@@ -159,11 +162,12 @@ public final class TimeWindows extends Windows<TimeWindow> {
      *
      * @param advance The advance interval ("hop") of the window, with the requirement that {@code 0 < advance.toMillis() <= sizeMs}.
      * @return a new window definition with default maintain duration of 1 day
-     * @throws IllegalArgumentException if the advance interval is negative, zero, or larger-or-equal the window size
+     * @throws IllegalArgumentException if the advance interval is negative, zero, or larger than the window size
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows advanceBy(final Duration advance) {
-        ApiUtils.validateMillisecondDuration(advance, "advance");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
+        ApiUtils.validateMillisecondDuration(advance, msgPrefix);
         return advanceBy(advance.toMillis());
     }
 
@@ -196,7 +200,8 @@ public final class TimeWindows extends Windows<TimeWindow> {
      */
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(afterWindowEnd, "afterWindowEnd");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
+        ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
         if (afterWindowEnd.toMillis() < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
