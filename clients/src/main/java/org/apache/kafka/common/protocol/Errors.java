@@ -292,7 +292,7 @@ public enum Errors {
             UnsupportedCompressionTypeException::new),
     STALE_BROKER_EPOCH(77, "Broker epoch has changed",
             StaleBrokerEpochException::new),
-    OFFSET_NOT_AVAILABLE(78, "The leader high-water mark has not caught up from a recent leader " +
+    OFFSET_NOT_AVAILABLE(78, "The leader high watermark has not caught up from a recent leader " +
             "election so the offsets cannot be guaranteed to be monotonically increasing",
             OffsetNotAvailableException::new);
 

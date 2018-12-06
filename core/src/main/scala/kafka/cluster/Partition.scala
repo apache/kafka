@@ -823,7 +823,7 @@ class Partition(val topicPartition: TopicPartition,
       if (leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
         throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
           s"partition $topicPartition with leader epoch ${currentLeaderEpoch.get} as this partition's " +
-          s"high-water mark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +
+          s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +
           s"LEO (${leaderEpochStartOffsetOpt.get}).")
       }
     }
