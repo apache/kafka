@@ -292,7 +292,9 @@ public class ProcessorStateManager extends AbstractStateManager {
         try {
             checkpoint.write(this.checkpointableOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {}: {}", checkpoint, e);
+            if (log.isWarnEnabled()) {
+                log.warn("Failed to write offset checkpoint file to [" + checkpoint + "]", e);
+            }
         }
     }
 

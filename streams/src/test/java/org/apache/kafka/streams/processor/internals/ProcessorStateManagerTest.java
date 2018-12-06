@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -51,7 +52,11 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
@@ -562,6 +567,41 @@ public class ProcessorStateManagerTest {
         } catch (final ProcessorStateException e) {
             // pass
         }
+    }
+
+    @Test
+    public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final ProcessorStateManager stateMgr;
+        try {
+            stateMgr = new ProcessorStateManager(
+                taskId,
+                noPartitions,
+                false,
+                stateDirectory,
+                Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
+                changelogReader,
+                false,
+                logContext);
+        } catch (IOException e) {
+            e.printStackTrace();
+            throw new AssertionError(e);
+        }
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        stateDirectory.clean();
+        stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
+        LogCaptureAppender.unregister(appender);
+
+        final List<LogCaptureAppender.Event> messages = appender.getEvents();
+
+        final LogCaptureAppender.Event lastEvent = messages.get(messages.size() - 1);
+
+        assertThat(lastEvent.getLevel(), is("WARN"));
+        assertThat(lastEvent.getMessage(), startsWith("process-state-manager-test Failed to write offset checkpoint file to [/tmp/"));
+        assertThat(lastEvent.getMessage(), endsWith("test-application/0_1/.checkpoint]"));
+        assertThat(lastEvent.getThrowableInfo().get(), startsWith("java.io.FileNotFoundException: "));
     }
 
     @Test
