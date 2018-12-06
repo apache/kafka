@@ -285,7 +285,7 @@ abstract class QuotaTestClients(topic: String,
 
   def waitForQuotaUpdate(producerQuota: Long, consumerQuota: Long, requestQuota: Double, server: KafkaServer = leaderNode) {
     TestUtils.retry(10000) {
-      val quotaManagers = server.apis.quotas
+      val quotaManagers = server.dataPlaneRequestProcessor.quotas
       val overrideProducerQuota = quota(quotaManagers.produce, userPrincipal, producerClientId)
       val overrideConsumerQuota = quota(quotaManagers.fetch, userPrincipal, consumerClientId)
       val overrideProducerRequestQuota = quota(quotaManagers.request, userPrincipal, producerClientId)

@@ -74,7 +74,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertNotEquals("Controller id should switch to a new broker", controllerId, controllerId2)
     TestUtils.waitUntilTrue(() => {
       val metadataResponse2 = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
-      metadataResponse2.controller != null && controllerServer2.apis.brokerId == metadataResponse2.controller.id
+      metadataResponse2.controller != null && controllerServer2.dataPlaneRequestProcessor.brokerId == metadataResponse2.controller.id
     }, "Controller id should match the active controller after failover", 5000)
   }
 
@@ -178,7 +178,7 @@ class MetadataRequestTest extends BaseRequestTest {
     assertEquals(topic1, topicMetadata1.topic)
     assertEquals(Errors.INVALID_TOPIC_EXCEPTION, topicMetadata2.error)
     assertEquals(topic2, topicMetadata2.topic)
-    
+
     TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic1, 0)
     TestUtils.waitUntilMetadataIsPropagated(servers, topic1, 0)
 
@@ -250,7 +250,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val metadataResponse = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
     val partitionMetadata = metadataResponse.topicMetadata.asScala.head.partitionMetadata.asScala.head
     val downNode = servers.find { server =>
-      val serverId = server.apis.brokerId
+      val serverId = server.dataPlaneRequestProcessor.brokerId
       val leaderId = partitionMetadata.leader.id
       val replicaIds = partitionMetadata.replicas.asScala.map(_.id)
       serverId != leaderId && replicaIds.contains(serverId)
@@ -260,7 +260,7 @@ class MetadataRequestTest extends BaseRequestTest {
     TestUtils.waitUntilTrue(() => {
       val response = sendMetadataRequest(new MetadataRequest(List(replicaDownTopic).asJava, true, 1.toShort))
       val metadata = response.topicMetadata.asScala.head.partitionMetadata.asScala.head
-      val replica = metadata.replicas.asScala.find(_.id == downNode.apis.brokerId).get
+      val replica = metadata.replicas.asScala.find(_.id == downNode.dataPlaneRequestProcessor.brokerId).get
       replica.host == "" & replica.port == -1
     }, "Replica was not found down", 5000)
 
