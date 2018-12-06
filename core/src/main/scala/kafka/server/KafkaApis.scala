@@ -806,7 +806,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val clientId = request.header.clientId
     val offsetRequest = request.body[ListOffsetRequest]
-    val isV5Schema = request.header.apiVersion() >= 5
 
     val (authorizedRequestInfo, unauthorizedRequestInfo) = offsetRequest.partitionTimestamps.asScala.partition {
       case (topicPartition, _) => authorize(request.session, Describe, Resource(Topic, topicPartition.topic, LITERAL))
@@ -874,7 +873,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
           case e: OffsetNotAvailableException =>
-            if(isV5Schema) {
+            if(request.header.apiVersion >= 5) {
               buildErrorResponse(Errors.forException(e))
             } else {
               buildErrorResponse(Errors.LEADER_NOT_AVAILABLE)

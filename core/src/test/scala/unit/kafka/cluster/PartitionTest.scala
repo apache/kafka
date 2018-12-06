@@ -451,13 +451,13 @@ class PartitionTest {
     // Get offsets
     var offsetAndTimestamp = partition.fetchOffsetForTimestamp(
       timestamp = -1L,
-      isolationLevel = Option(IsolationLevel.READ_UNCOMMITTED), // uncommitted == HW
+      isolationLevel = None,
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
     )
 
     assertTrue(offsetAndTimestamp.isDefined)
-    assertEquals(offsetAndTimestamp.get.offset, 2) // Leader HW is 2
+    assertEquals(offsetAndTimestamp.get.offset, 5) // Leader LEO is 5
     assertEquals(partition.localReplica.get.highWatermark.messageOffset, 2) // Leader HW is 2
 
     // Make into a follower
@@ -472,7 +472,7 @@ class PartitionTest {
       // Try to get offsets as a client
       partition.fetchOffsetForTimestamp(
         timestamp = -1L,
-        isolationLevel = None,
+        isolationLevel = Some(IsolationLevel.READ_COMMITTED),
         currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
         fetchOnlyFromLeader = true
       )
@@ -484,12 +484,12 @@ class PartitionTest {
     // If request is not from a client, we skip the check
     offsetAndTimestamp = partition.fetchOffsetForTimestamp(
       timestamp = -1L,
-      isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED),
+      isolationLevel = None,
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
     )
     assertTrue(offsetAndTimestamp.isDefined)
-    assertEquals(offsetAndTimestamp.get.offset, 2)
+    assertEquals(offsetAndTimestamp.get.offset, 5)
 
     // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
     partition.updateReplicaLogReadResult(
@@ -500,7 +500,7 @@ class PartitionTest {
     // Error goes away
     offsetAndTimestamp = partition.fetchOffsetForTimestamp(
       timestamp = -1L,
-      isolationLevel = None,
+      isolationLevel = Some(IsolationLevel.READ_COMMITTED),
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
     )

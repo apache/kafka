@@ -818,7 +818,7 @@ class Partition(val topicPartition: TopicPartition,
     }
 
     // Only actually check the HW if this is a client request (isolation level is null)
-    if (isolationLevel.isEmpty && leaderEpochStartOffsetOpt.isDefined) {
+    if (isolationLevel.isDefined && leaderEpochStartOffsetOpt.isDefined) {
       // Wait until the HW has caught up with the start offset from this epoch
       if (leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
         throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
