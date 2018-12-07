@@ -52,10 +52,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
-import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -569,6 +567,7 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Test
     public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();

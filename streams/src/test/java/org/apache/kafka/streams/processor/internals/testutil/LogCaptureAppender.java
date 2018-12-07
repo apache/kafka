@@ -29,12 +29,13 @@ import java.util.Optional;
 public class LogCaptureAppender extends AppenderSkeleton {
     private final LinkedList<LoggingEvent> events = new LinkedList<>();
 
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
     public static class Event {
         private String level;
         private String message;
         private Optional<String> throwableInfo;
 
-        public Event(final String level, final String message, final Optional<String> throwableInfo) {
+        Event(final String level, final String message, final Optional<String> throwableInfo) {
             this.level = level;
             this.message = message;
             this.throwableInfo = throwableInfo;
