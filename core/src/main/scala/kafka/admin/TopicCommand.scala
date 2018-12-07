@@ -23,7 +23,7 @@ import joptsimple._
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.Implicits._
-import kafka.utils.{Whitelist, _}
+import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
