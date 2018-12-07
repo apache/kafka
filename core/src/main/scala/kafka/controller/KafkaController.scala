@@ -501,7 +501,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.partitionReplicaAssignment(topicPartition)
   }
 
-  //TODO: write test for "reassignment with offline brokers with DR"
   /**
    * This callback is invoked by the reassigned partitions listener. When an admin command initiates a partition
    * reassignment, it creates the /admin/reassign_partitions path that triggers the zookeeper listener.
@@ -567,7 +566,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           // 11. replicas in DR -> NonExistentReplica (force those replicas to be deleted)
           if (!reassignmentStep.drop.contains(zkClient.getLeaderForPartition(topicPartition).get)) {
             debug(s"Stopping [${reassignmentStep.drop.mkString(",")}] when leader is ${zkClient.getLeaderForPartition(topicPartition).get}")
-            // FIXME stop all old replicas, not only the ones in the current step
             stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, reassignmentStep.drop.toSet)
           }
         }
@@ -1690,7 +1688,6 @@ private[controller] object ReassignmentHelper {
   def calculateReassignmentStep(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int) = {
     val drop: Seq[Int] = calculateExcessISRs(finalTargetReplicas, currentReplicas, leader)
     val add = finalTargetReplicas.filterNot(currentReplicas.contains).headOption
-    // TODO: check what happens if toBeDropped.isEmpty, newReplica.isEmpty or both are empty
     val targetReplicasInThisStep = currentReplicas.filterNot(drop.contains) ++ add.toSeq
     val isLastStep = targetReplicasInThisStep.toSet == finalTargetReplicas.toSet
     val targetReplicasInThisStepInOrder = if (isLastStep) finalTargetReplicas else targetReplicasInThisStep
@@ -1698,7 +1695,6 @@ private[controller] object ReassignmentHelper {
   }
 
   private def calculateExcessISRs(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int) = {
-    // TODO: what if it's negative
     val numberOfExcessISRs = currentReplicas.size - finalTargetReplicas.size
     // TODO: what if it's empty
     val notInReassigned = currentReplicas.filterNot(finalTargetReplicas.contains)

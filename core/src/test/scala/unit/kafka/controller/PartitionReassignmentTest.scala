@@ -39,6 +39,7 @@ import org.scalatest.junit.JUnitSuite
 // old broker fails / gets out of ISR
 // old broker not in ISR from beginning
 // more topics, partitions
+// write test for "reassignment with offline brokers with DR"
 class PartitionReassignmentTest  extends JUnitSuite {
 
   @Test
@@ -72,8 +73,18 @@ class PartitionReassignmentTest  extends JUnitSuite {
     testSteps(Seq(0, 1, 2, 3, 4), 0, Seq(1, 2))
   }
 
+  @Test
+  def testCalculateReassignmentWithBiggerTargetSet(): Unit = {
+    testSteps(Seq(0, 1), 0, Seq(1, 2, 3, 4, 5))
+  }
+
+  @Test
+  def testCalculateReassignmentNoOP(): Unit = {
+    testSteps(Seq(0, 1), 0, Seq(0, 1))
+  }
+
   def calculateSteps(startingReplicas: Seq[Int], startingLeader: Int, targetReplicas:Seq[Int]) = {
-    var currentReplicas = startingReplicas;
+    var currentReplicas = startingReplicas
     var steps = Seq.empty[ReassignmentStep]
 
     // we can remove any number of replicas, but we can add one in each step
