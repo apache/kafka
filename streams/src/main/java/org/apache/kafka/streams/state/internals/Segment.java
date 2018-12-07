@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.TableFormatConfig;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -39,6 +41,13 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
         return Long.compare(id, segment.id);
     }
 
+    @Override
+    protected TableFormatConfig getTableConfig() {
+        final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+        tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
+        tableConfig.setBlockSize(BLOCK_SIZE);
+        return tableConfig;
+    }
 
     @Override
     public void openDB(final ProcessorContext context) {

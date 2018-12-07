@@ -41,6 +41,7 @@ import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
@@ -76,8 +77,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
     private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
-    private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
-    private static final long BLOCK_SIZE = 4096L;
+    protected static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
+    protected static final long BLOCK_SIZE = 4096L;
     private static final int MAX_WRITE_BUFFERS = 3;
     private static final String DB_FILE_DIR = "rocksdb";
 
@@ -110,16 +111,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         this.parentDir = parentDir;
     }
 
-    @SuppressWarnings("unchecked")
-    public void openDB(final ProcessorContext context) {
-        // initialize the default rocksdb options
+    protected TableFormatConfig getTableConfig() {
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
+        tableConfig.setFilter(new BloomFilter());
+        return tableConfig;
+    }
+
+    @SuppressWarnings("unchecked")
+    public void openDB(final ProcessorContext context) {
+        // initialize the default rocksdb options
 
         options = new Options();
-        tableConfig.setFilter(new BloomFilter());
-        options.setTableFormatConfig(tableConfig);
+
+        options.setTableFormatConfig(getTableConfig());
         options.setWriteBufferSize(WRITE_BUFFER_SIZE);
         options.setCompressionType(COMPRESSION_TYPE);
         options.setCompactionStyle(COMPACTION_STYLE);
