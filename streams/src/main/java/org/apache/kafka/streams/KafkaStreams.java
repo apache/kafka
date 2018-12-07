@@ -397,18 +397,21 @@ public class KafkaStreams implements AutoCloseable {
     final class StreamStateListener implements StreamThread.StateListener {
         private final Map<Long, StreamThread.State> threadState;
         private GlobalStreamThread.State globalThreadState;
+        // this lock should always be held before the state lock
+        private final Object threadStatesLock;
 
         StreamStateListener(final Map<Long, StreamThread.State> threadState,
                             final GlobalStreamThread.State globalThreadState) {
             this.threadState = threadState;
             this.globalThreadState = globalThreadState;
+            this.threadStatesLock = new Object();
         }
 
         /**
          * If all threads are dead set to ERROR
          */
         private void maybeSetError() {
-            // check if we have enough threads running
+            // check if we have at least one thread running
             for (final StreamThread.State state : threadState.values()) {
                 if (state != StreamThread.State.DEAD) {
                     return;
@@ -424,9 +427,9 @@ public class KafkaStreams implements AutoCloseable {
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
-            // one thread is running, check others, including global thread
+            // one thread is running, check others are either running or already dead, including global thread
             for (final StreamThread.State state : threadState.values()) {
-                if (state != StreamThread.State.RUNNING) {
+                if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {
                     return;
                 }
             }
@@ -444,26 +447,28 @@ public class KafkaStreams implements AutoCloseable {
         public synchronized void onChange(final Thread thread,
                                           final ThreadStateTransitionValidator abstractNewState,
                                           final ThreadStateTransitionValidator abstractOldState) {
-            // StreamThreads first
-            if (thread instanceof StreamThread) {
-                final StreamThread.State newState = (StreamThread.State) abstractNewState;
-                threadState.put(thread.getId(), newState);
+            synchronized (threadStatesLock) {
+                // StreamThreads first
+                if (thread instanceof StreamThread) {
+                    final StreamThread.State newState = (StreamThread.State) abstractNewState;
+                    threadState.put(thread.getId(), newState);
 
-                if (newState == StreamThread.State.PARTITIONS_REVOKED && state != State.REBALANCING) {
-                    setState(State.REBALANCING);
-                } else if (newState == StreamThread.State.RUNNING && state != State.RUNNING) {
-                    maybeSetRunning();
-                } else if (newState == StreamThread.State.DEAD && state != State.ERROR) {
-                    maybeSetError();
-                }
-            } else if (thread instanceof GlobalStreamThread) {
-                // global stream thread has different invariants
-                final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
-                globalThreadState = newState;
+                    if (newState == StreamThread.State.PARTITIONS_REVOKED) {
+                        setState(State.REBALANCING);
+                    } else if (newState == StreamThread.State.RUNNING) {
+                        maybeSetRunning();
+                    } else if (newState == StreamThread.State.DEAD) {
+                        maybeSetError();
+                    }
+                } else if (thread instanceof GlobalStreamThread) {
+                    // global stream thread has different invariants
+                    final GlobalStreamThread.State newState = (GlobalStreamThread.State) abstractNewState;
+                    globalThreadState = newState;
 
-                // special case when global thread is dead
-                if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
-                    log.warn("Global thread has died. The instance will be in error state and should be closed.");
+                    // special case when global thread is dead
+                    if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
+                        log.warn("Global thread has died. The instance will be in error state and should be closed.");
+                    }
                 }
             }
         }
