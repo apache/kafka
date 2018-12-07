@@ -27,14 +27,13 @@ import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
-import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.TopicPartition
-
 import scala.collection.mutable
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
@@ -216,7 +215,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
     // Then
     class TestAdminZkClient(val zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
-      override def changeTopicConfig(topic: String, configChange: Properties) = {
+      override def changeTopicConfig(topic: String, configChange: Properties): Unit = {
         assertEquals(Set("0:104","0:105"), toReplicaSet(configChange.get(FollowerReplicationThrottledReplicasProp))) //Should only be follower-throttle the moving replicas
         assertEquals(Set("0:100","0:101","0:102","0:103"), toReplicaSet(configChange.get(LeaderReplicationThrottledReplicasProp))) //Should leader-throttle all existing (pre move) replicas
         calls += 1
@@ -428,7 +427,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = createBrokers(4)
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
@@ -457,7 +456,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
     // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = createBrokers(4)
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
@@ -485,7 +484,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val expectedReplicaAssignment = Map(0  -> List(0, 1))
     val topic = "test"
     // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = createBrokers(4)
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // reassign partition 0
@@ -512,7 +511,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
   def testReassigningNonExistingPartition() {
     val topic = "test"
     // create brokers
-    servers = TestUtils.createBrokerConfigs(4, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = createBrokers(4)
     // reassign partition 0
     val newReplicas = Seq(2, 3)
     val partitionToBeReassigned = 0
@@ -537,7 +536,7 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, None, Map(topicAndPartition -> newReplicas), adminZkClient = adminZkClient)
     reassignPartitionsCommand.reassignPartitions()
     // create brokers
-    servers = TestUtils.createBrokerConfigs(2, zkConnect, false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    servers = createBrokers(2)
 
     // wait until reassignment completes
     TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress(),
@@ -576,5 +575,9 @@ class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {
 
   def toReplicaSet(throttledReplicasString: Any): Set[String] = {
     throttledReplicasString.toString.split(",").toSet
+  }
+
+  private def createBrokers(numConfigs: Int): Seq[KafkaServer] = {
+    TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = false).map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
   }
 }

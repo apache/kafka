@@ -16,13 +16,31 @@
  */
 package kafka.controller
 
-import org.junit.Test
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
+
+// TODO: Test cases:
+// [0, 1, 2] -> [1, 0, 2]
+// [0, 1, 2] -> [3, 4, 5]
+// [0, 1, 2] -> [0, 1, 3]
+// [0, 1, 2] -> [3, 1, 2]
+// [0, 1, 2] -> [0, 1]
+// [0, 1, 2] -> [0]
+// [0, 1, 2] -> [3]
+// [0, 1, 2] -> [1, 2] ?
+// [0, 1, 2] -> [3, 4]
+// [0, 1] -> [0, 1, 2]
+// [0, 1] -> [3, 4, 5]
+// [0, 1, 2] -> []
+//
+// controller failover in the middle
+// old broker fails / gets out of ISR
+// old broker not in ISR from beginning
+// more topics, partitions
 class PartitionReassignmentTest  extends JUnitSuite {
-  // FIXME: restore previous version, see git history:440445e7c58508413006d37a475d642283ef984b
-  // This class vs ReassignmentHelperTest
+
   @Test
   def testCalculateReassignmentStepReplaceAllNodes(): Unit = {
     assertEquals(Seq(
@@ -30,8 +48,8 @@ class PartitionReassignmentTest  extends JUnitSuite {
       ReassignmentStep(List(0, 1, 2),List(1),Some(3),List(0, 2, 3)),
       ReassignmentStep(List(0, 2, 3),List(0),None,List(2, 3))
     ),
-      testSteps(Seq(0, 1), 0, Seq(2, 3)
-      ))
+      testSteps(Seq(0, 1), 0, Seq(2, 3))
+    )
   }
 
   @Test
@@ -42,6 +60,16 @@ class PartitionReassignmentTest  extends JUnitSuite {
   @Test
   def testCalculateReassignmentX(): Unit = {
     testSteps(Seq(0, 1, 2), 0, Seq(3, 1, 2))
+  }
+
+  @Test
+  def testFullCalculateReassignment(): Unit = {
+    testSteps(Seq(0, 1, 2), 0, Seq(3, 4, 5))
+  }
+
+  @Test
+  def testCalculateReassignmentWithMultiDrop(): Unit = {
+    testSteps(Seq(0, 1, 2, 3, 4), 0, Seq(1, 2))
   }
 
   def calculateSteps(startingReplicas: Seq[Int], startingLeader: Int, targetReplicas:Seq[Int]) = {

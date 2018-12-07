@@ -24,15 +24,15 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.TestUtils
+import kafka.utils.{LogCaptureAppender, TestUtils}
 import kafka.zk._
-import org.junit.{After, Before, Test}
-import org.junit.Assert.{assertEquals, assertTrue}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.log4j.Level
 import kafka.utils.LogCaptureAppender
 import org.apache.kafka.common.metrics.KafkaMetric
+import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -264,27 +264,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       "partition reassignment path should remain while reassignment in progress")
   }
 
-
-  // TODO: Test cases:
-  // [0, 1, 2] -> [1, 0, 2]
-  // [0, 1, 2] -> [3, 4, 5]
-  // [0, 1, 2] -> [0, 1, 3]
-  // [0, 1, 2] -> [3, 1, 2]
-  // [0, 1, 2] -> [0, 1]
-  // [0, 1, 2] -> [0]
-  // [0, 1, 2] -> [3]
-  // [0, 1, 2] -> [1, 2] ?
-  // [0, 1, 2] -> [3, 4]
-  // [0, 1] -> [0, 1, 2]
-  // [0, 1] -> [3, 4, 5]
-  // [0, 1, 2] -> []
-  //
-  // controller failover in the middle
-  // old broker fails / gets out of ISR
-  // old broker not in ISR from beginning
-  // more topics, partitions
-
-  var serverStarted = false
   @Test
   def testPartitionReassignmentResumesAfterReplicaComesOnline(): Unit = {
     servers = makeServers(2)
@@ -300,7 +279,6 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch,
       "failed to get expected partition state during partition reassignment with offline replica")
     servers(otherBrokerId).startup()
-    serverStarted = true
     waitForPartitionState(tp, firstControllerEpoch, otherBrokerId, LeaderAndIsr.initialLeaderEpoch + 4,
       "failed to get expected partition state after partition reassignment")
     TestUtils.waitUntilTrue(() => zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment,
@@ -628,6 +606,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                                        controllerEpoch: Int,
                                        leader: Int,
                                        leaderEpoch: Int) = {
+    println(s"expected controllerEpoch: $controllerEpoch, leader: $leader, leaderEpoch: $leaderEpoch")
+    println(s"actual   controllerEpoch: ${leaderIsrAndControllerEpoch.controllerEpoch}, leader: ${leaderIsrAndControllerEpoch.leaderAndIsr.leader}, leaderEpoch: ${leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch}")
     leaderIsrAndControllerEpoch.controllerEpoch == controllerEpoch &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
