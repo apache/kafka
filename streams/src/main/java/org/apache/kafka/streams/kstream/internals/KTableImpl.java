@@ -112,7 +112,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                   final boolean filterNot) {
         // we actually do not need generate store names at all since if it is not specified, we will not
         // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal == null || materializedInternal.storeName() == null) {
+        if (materializedInternal != null && materializedInternal.storeName() == null) {
             builder.newStoreName(FILTER_NAME);
         }
 
@@ -184,7 +184,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         // we actually do not need generate store names at all since if it is not specified, we will not
         // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal == null || materializedInternal.storeName() == null) {
+        if (materializedInternal != null && materializedInternal.storeName() == null) {
             builder.newStoreName(MAPVALUES_NAME);
         }
 
