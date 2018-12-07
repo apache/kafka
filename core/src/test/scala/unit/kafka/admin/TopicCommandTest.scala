@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.admin
+package kafka.admin
 
-import kafka.admin.{AdminOperationException, RackAwareTest, TopicCommand}
 import kafka.admin.TopicCommand.TopicCommandOptions
 import kafka.server.ConfigType
-import kafka.utils.{Logging, TestUtils}
 import kafka.utils.ZkUtils.getDeleteTopicPath
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidReplicaAssignmentException, TopicExistsException}

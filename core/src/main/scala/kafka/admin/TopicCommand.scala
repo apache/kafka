@@ -20,19 +20,17 @@ package kafka.admin
 import java.util.Properties
 
 import joptsimple._
-import kafka.common.AdminCommandFailedException
-import kafka.utils.Implicits._
-import kafka.utils.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
-import kafka.utils._
+import kafka.utils.Implicits._
+import kafka.utils.{Whitelist, _}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
-import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._

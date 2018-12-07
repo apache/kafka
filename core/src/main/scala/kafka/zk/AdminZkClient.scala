@@ -96,17 +96,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     writeTopicPartitionAssignment(topic, partitionReplicaAssignment, isUpdate = false)
   }
 
-  def validatePartitionReplicaAssignment(topic: String,
-                                         partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                         rackAwareMode: RackAwareMode = RackAwareMode.Enforced): Unit = {
-    val assignmentPartition0 = partitionReplicaAssignment.getOrElse(0,
-      throw new AdminOperationException(
-        s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
-          s"Assignment: $partitionReplicaAssignment"))
-    val allBrokers = getBrokerMetadatas(rackAwareMode)
-    validateReplicaAssignment(partitionReplicaAssignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
-  }
-
   /**
    * Validate topic creation parameters
    */
@@ -131,7 +120,12 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     }
 
     //Validate partition replica assignment during topic creation.
-    validatePartitionReplicaAssignment(topic, partitionReplicaAssignment, rackAwareMode)
+    val assignmentPartition0 = partitionReplicaAssignment.getOrElse(0,
+      throw new AdminOperationException(
+        s"Unexpected replica assignment for topic '$topic', partition id 0 is missing. " +
+          s"Assignment: $partitionReplicaAssignment"))
+    val allBrokers = getBrokerMetadatas(rackAwareMode)
+    validateReplicaAssignment(partitionReplicaAssignment, assignmentPartition0.size, allBrokers.map(_.id).toSet)
 
     LogConfig.validate(config)
   }
