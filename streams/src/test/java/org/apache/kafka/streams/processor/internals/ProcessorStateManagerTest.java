@@ -567,6 +567,7 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    // if the optional is absent, it'll throw an exception and fail the test.
     @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Test
     public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
@@ -598,8 +599,8 @@ public class ProcessorStateManagerTest {
         final LogCaptureAppender.Event lastEvent = messages.get(messages.size() - 1);
 
         assertThat(lastEvent.getLevel(), is("WARN"));
-        assertThat(lastEvent.getMessage(), startsWith("process-state-manager-test Failed to write offset checkpoint file to [/tmp/"));
-        assertThat(lastEvent.getMessage(), endsWith("test-application/0_1/.checkpoint]"));
+        assertThat(lastEvent.getMessage(), startsWith("process-state-manager-test Failed to write offset checkpoint file to ["));
+        assertThat(lastEvent.getMessage(), endsWith(".checkpoint]"));
         assertThat(lastEvent.getThrowableInfo().get(), startsWith("java.io.FileNotFoundException: "));
     }
 
