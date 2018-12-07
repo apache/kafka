@@ -37,7 +37,7 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
                                 final String generatedStorePrefix) {
         super(materialized);
 
-        // if not storeName is provided, the corresponding KTable would never be queryable;
+        // if storeName is not provided, the corresponding KTable would never be queryable;
         // but we still need to provide an internal name for it in case we materialize.
         queriable = storeName() != null;
         if (!queriable && nameProvider != null) {
