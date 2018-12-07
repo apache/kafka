@@ -143,9 +143,7 @@ do
 done
 
 # classpath addition for release
-set -o noglob
 CLASSPATH="${CLASSPATH}:${base_dir}/libs/*"
-set +o noglob
 
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
