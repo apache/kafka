@@ -100,9 +100,8 @@ class ApiVersionTest {
     })
 
     val uniqueIds: Set[Int] = allIds.toSet
-    assertTrue(CollectionUtils.isEqualCollection(
-      JavaConverters.seqAsJavaList(allIds),
-      JavaConverters.setAsJavaSet(uniqueIds)))
+
+    assertEquals(allIds.size, uniqueIds.size)
   }
 
   @Test
