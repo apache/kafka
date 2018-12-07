@@ -584,7 +584,7 @@ public class ProcessorStateManagerTest {
                 changelogReader,
                 false,
                 logContext);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             e.printStackTrace();
             throw new AssertionError(e);
         }
