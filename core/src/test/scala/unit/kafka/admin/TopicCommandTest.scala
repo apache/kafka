@@ -16,15 +16,10 @@
  */
 package kafka.admin
 
-import org.junit.Assert._
-import org.junit.Test
-import kafka.utils.Logging
-import kafka.utils.TestUtils
-import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
-import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
-import org.apache.kafka.common.errors.TopicExistsException
-import org.apache.kafka.common.internals.Topic
+import kafka.server.ConfigType
+import kafka.utils.{Logging, TestUtils}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidReplicaAssignmentException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
