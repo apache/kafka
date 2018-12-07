@@ -374,7 +374,6 @@ public class ProducerConfig extends AbstractConfig {
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
->>>>>>> 9b476bc5f4a2fdbd62ad84e50e65331c21b321d0
     }
 
     public static Map<String, Object> addSerializerToConfig(Map<String, Object> configs,
