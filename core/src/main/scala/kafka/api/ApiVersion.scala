@@ -86,7 +86,7 @@ object ApiVersion {
     // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
     KAFKA_2_2_IV0,
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
-    KAFKA_2_2_IV1,
+    KAFKA_2_2_IV1
   )
 
   // Map keys are the union of the short and full versions
