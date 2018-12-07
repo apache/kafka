@@ -22,7 +22,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -31,7 +30,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -50,6 +48,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
@@ -100,7 +99,7 @@ public class KStreamWindowAggregateTest {
         }
 
         assertEquals(
-            Utils.mkList(
+            asList(
                 "[A@0/10]:0+1",
                 "[B@0/10]:0+2",
                 "[C@0/10]:0+3",
@@ -261,7 +260,7 @@ public class KStreamWindowAggregateTest {
         final String topic = "topic";
 
         final KStream<String, String> stream1 = builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        stream1.groupByKey(Serialized.with(Serdes.String(), Serdes.String()))
+        stream1.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
                .windowedBy(TimeWindows.of(ofMillis(10)).advanceBy(ofMillis(5)).until(100))
                .aggregate(
                    () -> "",

@@ -24,7 +24,7 @@ import kafka.cluster.Partition
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
-import kafka.utils.{LogCaptureAppender, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -33,7 +33,6 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.{EpochEndOffset, OffsetsForLeaderEpochRequest}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.utils.SystemTime
-import org.apache.log4j.Level
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, IAnswer}
 import org.junit.Assert._
@@ -80,7 +79,7 @@ class ReplicaFetcherThreadTest {
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "0.10.2")
     props.put(KafkaConfig.LogMessageFormatVersionProp, "0.10.2")
     val config = KafkaConfig.fromProps(props)
-    val leaderEndpoint = createMock(classOf[BlockingSend])
+    val leaderEndpoint: BlockingSend = createMock(classOf[BlockingSend])
     expect(leaderEndpoint.sendRequest(anyObject())).andAnswer(new IAnswer[ClientResponse] {
       override def answer(): ClientResponse = {
         toFail = true // assert no leader request is sent
@@ -124,7 +123,7 @@ class ReplicaFetcherThreadTest {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     props.put(KafkaConfig.InterBrokerProtocolVersionProp, "1.0.0")
     val config = KafkaConfig.fromProps(props)
-    val leaderEndpoint = createMock(classOf[BlockingSend])
+    val leaderEndpoint: BlockingSend = createMock(classOf[BlockingSend])
 
     expect(leaderEndpoint.sendRequest(anyObject())).andAnswer(new IAnswer[ClientResponse] {
       override def answer(): ClientResponse = {
@@ -163,13 +162,13 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
 
@@ -262,7 +261,7 @@ class ReplicaFetcherThreadTest {
   def shouldHandleExceptionFromBlockingSend(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend = createMock(classOf[BlockingSend])
+    val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
 
     expect(mockBlockingSend.sendRequest(anyObject())).andThrow(new NullPointerException).once()
     replay(mockBlockingSend)
@@ -296,12 +295,12 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all dependencies
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
 
@@ -356,13 +355,13 @@ class ReplicaFetcherThreadTest {
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
     val initialLEO = 200
@@ -405,13 +404,13 @@ class ReplicaFetcherThreadTest {
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpochAtFollower = 5
     val leaderEpochAtLeader = 4
@@ -459,13 +458,13 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     // Setup all dependencies
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val initialLEO = 200
 
@@ -530,13 +529,13 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(props)
 
     // Setup all dependencies
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val initialLEO = 200
 
@@ -591,13 +590,13 @@ class ReplicaFetcherThreadTest {
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val initialFetchOffset = 100
     val initialLeo = 300
@@ -636,13 +635,13 @@ class ReplicaFetcherThreadTest {
 
     // Setup all the dependencies
     val configs = TestUtils.createBrokerConfigs(1, "localhost:1234").map(KafkaConfig.fromProps)
-    val quota = createNiceMock(classOf[kafka.server.ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createMock(classOf[kafka.log.LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createMock(classOf[kafka.server.ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createMock(classOf[ReplicaManager])
 
     val leaderEpoch = 5
     val highWaterMark = 100
@@ -694,13 +693,13 @@ class ReplicaFetcherThreadTest {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))
 
     //Setup all stubs
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createNiceMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createNiceMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createNiceMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
 
     val leaderEpoch = 4
 
@@ -747,13 +746,13 @@ class ReplicaFetcherThreadTest {
     val initialLEO = 100
 
     //Setup all stubs
-    val quota = createNiceMock(classOf[ReplicationQuotaManager])
-    val leaderEpochs = createNiceMock(classOf[LeaderEpochFileCache])
-    val logManager = createNiceMock(classOf[LogManager])
-    val replicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
-    val replica = createNiceMock(classOf[Replica])
-    val partition = createMock(classOf[Partition])
-    val replicaManager = createNiceMock(classOf[ReplicaManager])
+    val quota: ReplicationQuotaManager = createNiceMock(classOf[ReplicationQuotaManager])
+    val leaderEpochs: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createNiceMock(classOf[LogManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = createMock(classOf[ReplicaAlterLogDirsManager])
+    val replica: Replica = createNiceMock(classOf[Replica])
+    val partition: Partition = createMock(classOf[Partition])
+    val replicaManager: ReplicaManager = createNiceMock(classOf[ReplicaManager])
 
     //Stub return values
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).once
@@ -797,9 +796,10 @@ class ReplicaFetcherThreadTest {
   def shouldCatchExceptionFromBlockingSendWhenShuttingDownReplicaFetcherThread(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost:1234")
     val config = KafkaConfig.fromProps(props)
-    val mockBlockingSend = createMock(classOf[BlockingSend])
+    val mockBlockingSend: BlockingSend = createMock(classOf[BlockingSend])
 
-    expect(mockBlockingSend.close()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.initiateClose()).andThrow(new IllegalArgumentException()).once()
+    expect(mockBlockingSend.close()).andThrow(new IllegalStateException()).once()
     replay(mockBlockingSend)
 
     val thread = new ReplicaFetcherThread(
@@ -812,24 +812,15 @@ class ReplicaFetcherThreadTest {
       time = new SystemTime(),
       quota = null,
       leaderEndpointBlockingSend = Some(mockBlockingSend))
+    thread.start()
 
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(thread.getClass, Level.DEBUG)
-    val logCaptureAppender = LogCaptureAppender.createAndRegister()
-
-    try {
-      thread.initiateShutdown()
-
-      val event = logCaptureAppender.getMessages.find(e => e.getLevel == Level.DEBUG
-        && e.getRenderedMessage.contains(s"Fail to close leader endpoint $mockBlockingSend after initiating replica fetcher thread shutdown")
-        && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new IllegalArgumentException().getClass.getName))
-      assertTrue(event.isDefined)
-
-      verify(mockBlockingSend)
-    } finally {
-      LogCaptureAppender.unregister(logCaptureAppender)
-      LogCaptureAppender.setClassLoggerLevel(thread.getClass, previousLevel)
-    }
+    // Verify that:
+    //   1) IllegalArgumentException thrown by BlockingSend#initiateClose() during `initiateShutdown` is not propagated
+    //   2) BlockingSend.close() is invoked even if BlockingSend#initiateClose() fails
+    //   3) IllegalStateException thrown by BlockingSend.close() during `awaitShutdown` is not propagated
+    thread.initiateShutdown()
+    thread.awaitShutdown()
+    verify(mockBlockingSend)
   }
 
   def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager) = {

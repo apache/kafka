@@ -142,8 +142,8 @@ abstract class AbstractFetcherThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   private def buildLeaderEpochRequest(): ResultWithPartitions[Map[TopicPartition, EpochData]] = inLock(partitionMapLock) {
-    var partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
-    var partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
+    val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
+    val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
 
     partitionStates.partitionStates.asScala.foreach { state =>
       val tp = state.topicPartition
@@ -272,10 +272,10 @@ abstract class AbstractFetcherThread(name: String,
                       partitionData)
 
                     logAppendInfoOpt.foreach { logAppendInfo =>
-                      val nextOffset = logAppendInfo.lastOffset + 1
+                      val validBytes = logAppendInfo.validBytes
+                      val nextOffset = if (validBytes > 0) logAppendInfo.lastOffset + 1 else currentFetchState.fetchOffset
                       fetcherLagStats.getAndMaybePut(topicPartition).lag = Math.max(0L, partitionData.highWatermark - nextOffset)
 
-                      val validBytes = logAppendInfo.validBytes
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                       if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                         // Update partitionStates only if there is no exception during processPartitionData

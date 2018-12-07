@@ -184,7 +184,7 @@ public class SaslAuthenticatorFailureDelayTest {
 
         String saslMechanism = (String) saslClientConfigs.get(SaslConfigs.SASL_MECHANISM);
         this.channelBuilder = ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT,
-                new TestSecurityConfig(clientConfigs), null, saslMechanism, true);
+                new TestSecurityConfig(clientConfigs), null, saslMechanism, time, true);
         this.selector = NetworkTestUtils.createSelector(channelBuilder, time);
     }
 

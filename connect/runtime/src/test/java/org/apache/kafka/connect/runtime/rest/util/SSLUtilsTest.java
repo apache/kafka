@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+@SuppressWarnings("deprecation")
 public class SSLUtilsTest {
     private static final Map<String, String> DEFAULT_CONFIG = new HashMap<>();
     static {

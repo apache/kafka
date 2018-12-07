@@ -928,7 +928,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Empty.toString, summary.state)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = EasyMock.niceMock(classOf[Partition])
 
     EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
@@ -1425,7 +1425,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, leaveGroupResult)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = EasyMock.niceMock(classOf[Partition])
 
     EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
@@ -1466,7 +1466,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, leaveGroupResult)
 
     val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
-    val partition = EasyMock.niceMock(classOf[Partition])
+    val partition: Partition = EasyMock.niceMock(classOf[Partition])
 
     EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))

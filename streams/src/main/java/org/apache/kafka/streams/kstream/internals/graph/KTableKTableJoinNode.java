@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -29,18 +31,18 @@ import java.util.Arrays;
 /**
  * Too much specific information to generalize so the KTable-KTable join requires a specific node.
  */
-public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V2, VR> {
+public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, Change<V1>, Change<V2>, Change<VR>> {
 
     private final String[] joinThisStoreNames;
     private final String[] joinOtherStoreNames;
-    private final MaterializedInternal materializedInternal;
+    private final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal;
 
     KTableKTableJoinNode(final String nodeName,
-                         final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                         final ProcessorParameters<K, V1> joinThisProcessorParameters,
-                         final ProcessorParameters<K, V2> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, VR> joinMergeProcessorParameters,
-                         final MaterializedInternal materializedInternal,
+                         final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner,
+                         final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
+                         final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
+                         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
+                         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                          final String thisJoinSide,
                          final String otherJoinSide,
                          final String[] joinThisStoreNames,
@@ -107,12 +109,12 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
         private String nodeName;
         private String[] joinThisStoreNames;
-        private ProcessorParameters<K, V1> joinThisProcessorParameters;
+        private ProcessorParameters<K, Change<V1>> joinThisProcessorParameters;
         private String[] joinOtherStoreNames;
-        private MaterializedInternal materializedInternal;
-        private ProcessorParameters<K, V2> joinOtherProcessorParameters;
-        private ProcessorParameters<K, VR> joinMergeProcessorParameters;
-        private ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner;
+        private MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal;
+        private ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters;
+        private ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters;
+        private ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner;
         private String thisJoinSide;
         private String otherJoinSide;
 
@@ -124,7 +126,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, V1> joinThisProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
@@ -139,17 +141,17 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, V2> joinOtherProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, VR> joinMergeProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters) {
             this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner) {
             this.valueJoiner = valueJoiner;
             return this;
         }
@@ -164,7 +166,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withMaterializedInternal(final MaterializedInternal materializedInternal) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withMaterializedInternal(
+                final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
             this.materializedInternal = materializedInternal;
             return this;
         }

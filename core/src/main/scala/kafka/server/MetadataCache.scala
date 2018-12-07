@@ -214,13 +214,6 @@ class MetadataCache(brokerId: Int) extends Logging {
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
 
-      //since kafka may do partial metadata updates, we start by copying the previous state
-      val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]](metadataSnapshot.partitionStates.size)
-      metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
-        val copy = new mutable.LongMap[UpdateMetadataRequest.PartitionState](oldPartitionStates.size)
-        copy ++= oldPartitionStates
-        partitionStates += (topic -> copy)
-      }
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
       val controllerId = updateMetadataRequest.controllerId match {
@@ -248,21 +241,32 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
 
       val deletedPartitions = new mutable.ArrayBuffer[TopicPartition]
-      updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
-        val controllerId = updateMetadataRequest.controllerId
-        val controllerEpoch = updateMetadataRequest.controllerEpoch
-        if (info.basePartitionState.leader == LeaderAndIsr.LeaderDuringDelete) {
-          removePartitionInfo(partitionStates, tp.topic, tp.partition)
-          stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
-            s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
-          deletedPartitions += tp
-        } else {
-          addOrUpdatePartitionInfo(partitionStates, tp.topic, tp.partition, info)
-          stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to " +
-            s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+      if (updateMetadataRequest.partitionStates().isEmpty) {
+        metadataSnapshot = MetadataSnapshot(metadataSnapshot.partitionStates, controllerId, aliveBrokers, aliveNodes)
+      } else {
+        //since kafka may do partial metadata updates, we start by copying the previous state
+        val partitionStates = new mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataRequest.PartitionState]](metadataSnapshot.partitionStates.size)
+        metadataSnapshot.partitionStates.foreach { case (topic, oldPartitionStates) =>
+          val copy = new mutable.LongMap[UpdateMetadataRequest.PartitionState](oldPartitionStates.size)
+          copy ++= oldPartitionStates
+          partitionStates += (topic -> copy)
         }
+        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, info) =>
+          val controllerId = updateMetadataRequest.controllerId
+          val controllerEpoch = updateMetadataRequest.controllerEpoch
+          if (info.basePartitionState.leader == LeaderAndIsr.LeaderDuringDelete) {
+            removePartitionInfo(partitionStates, tp.topic, tp.partition)
+            stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
+              s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+            deletedPartitions += tp
+          } else {
+            addOrUpdatePartitionInfo(partitionStates, tp.topic, tp.partition, info)
+            stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to " +
+              s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
+          }
+        }
+        metadataSnapshot = MetadataSnapshot(partitionStates, controllerId, aliveBrokers, aliveNodes)
       }
-      metadataSnapshot = MetadataSnapshot(partitionStates, controllerId, aliveBrokers, aliveNodes)
       deletedPartitions
     }
   }

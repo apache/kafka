@@ -25,6 +25,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * The unlimited window specifications used for aggregations.
  * <p>
@@ -82,7 +84,8 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(start, "start");
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
+        ApiUtils.validateMillisecondInstant(start, msgPrefix);
         return startOn(start.toEpochMilli());
     }
 

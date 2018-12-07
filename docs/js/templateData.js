@@ -20,5 +20,5 @@ var context={
     "version": "21",
     "dotVersion": "2.1",
     "fullDotVersion": "2.1.0",
-    "scalaVersion": "2.11"
+    "scalaVersion": "2.12"
 };

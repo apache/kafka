@@ -140,7 +140,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedBasicValidation() throws Exception {
+    public void testCreateConnectorFailedBasicValidation() {
         // Basic validation should be performed and return an error, but should still evaluate the connector's config
         connector = PowerMock.createMock(BogusSourceConnector.class);
 
@@ -172,7 +172,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCreateConnectorFailedCustomValidation() throws Exception {
+    public void testCreateConnectorFailedCustomValidation() {
         connector = PowerMock.createMock(BogusSourceConnector.class);
 
         Connector connectorMock = PowerMock.createMock(SourceConnector.class);
@@ -604,7 +604,7 @@ public class StandaloneHerderTest {
         PowerMock.verifyAll();
     }
 
-    private void expectAdd(SourceSink sourceSink) throws Exception {
+    private void expectAdd(SourceSink sourceSink) {
 
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -101,6 +102,22 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         inner.setFlushListener(cacheFlushListener, false);
         store.init(context, store);
         return store;
+    }
+
+    @Test
+    public void shouldCloseAfterErrorWithFlush() {
+        try {
+            cache = EasyMock.niceMock(ThreadCache.class);
+            context = new InternalMockProcessorContext(null, null, null, (RecordCollector) null, cache);
+            context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
+            store.init(context, null);
+            cache.flush("0_0-store");
+            EasyMock.expectLastCall().andThrow(new NullPointerException("Simulating an error on flush"));
+            EasyMock.replay(cache);
+            store.close();
+        } catch (final NullPointerException npe) {
+            assertFalse(underlyingStore.isOpen());
+        }
     }
 
     @Test
@@ -274,7 +291,8 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         try {
             store.putAll(entries);
             fail("Should have thrown NullPointerException while putAll null key");
-        } catch (final NullPointerException e) { }
+        } catch (final NullPointerException e) {
+        }
     }
 
     @Test

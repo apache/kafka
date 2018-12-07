@@ -138,6 +138,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         return new MeteredWindowStoreIterator<>(inner.fetch(keyBytes(key), timeFrom, timeTo),
@@ -152,6 +153,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         return new MeteredWindowedKeyValueIterator<>(inner.all(), fetchTime, metrics, serdes, time);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(inner.fetchAll(timeFrom, timeTo),
@@ -161,6 +163,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
                                                      time);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(inner.fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),

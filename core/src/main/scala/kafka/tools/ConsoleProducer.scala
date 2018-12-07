@@ -17,15 +17,14 @@
 
 package kafka.tools
 
-import kafka.common._
-import kafka.message._
-import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
-import kafka.utils.Implicits._
-import java.util.Properties
 import java.io._
 import java.nio.charset.StandardCharsets
+import java.util.Properties
 
-import joptsimple._
+import kafka.common._
+import kafka.message._
+import kafka.utils.Implicits._
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
@@ -39,7 +38,7 @@ object ConsoleProducer {
 
     try {
         val config = new ProducerConfig(args)
-        val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[MessageReader]
+        val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[MessageReader]
         reader.init(System.in, getReaderProps(config))
 
         val producer = new KafkaProducer[Array[Byte], Array[Byte]](producerProps(config))
@@ -109,8 +108,7 @@ object ConsoleProducer {
     props
   }
 
-  class ProducerConfig(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ProducerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
     val topicOpt = parser.accepts("topic", "REQUIRED: The topic id to produce messages to.")
       .withRequiredArg
       .describedAs("topic")
@@ -204,9 +202,9 @@ object ConsoleProducer {
       .describedAs("config file")
       .ofType(classOf[String])
 
-    val options = parser.parse(args : _*)
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "Read data from standard input and publish it to Kafka.")
+    options = parser.parse(args : _*)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from standard input and publish it to Kafka.")
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, brokerListOpt)
 
     val topic = options.valueOf(topicOpt)

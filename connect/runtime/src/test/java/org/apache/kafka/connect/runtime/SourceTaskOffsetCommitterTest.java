@@ -48,12 +48,12 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 public class SourceTaskOffsetCommitterTest extends ThreadedTest {
 
-    private final ConcurrentHashMap committers = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<ConnectorTaskId, ScheduledFuture<?>> committers = new ConcurrentHashMap<>();
 
     @Mock private ScheduledExecutorService executor;
     @Mock private Logger mockLog;
-    @Mock private ScheduledFuture commitFuture;
-    @Mock private ScheduledFuture taskFuture;
+    @Mock private ScheduledFuture<?> commitFuture;
+    @Mock private ScheduledFuture<?> taskFuture;
     @Mock private ConnectorTaskId taskId;
     @Mock private WorkerSourceTask task;
 
@@ -79,6 +79,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         Whitebox.setInternalState(SourceTaskOffsetCommitter.class, "log", mockLog);
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testSchedule() {
         Capture<Runnable> taskWrapper = EasyMock.newCapture();
@@ -86,7 +87,7 @@ public class SourceTaskOffsetCommitterTest extends ThreadedTest {
         EasyMock.expect(executor.scheduleWithFixedDelay(
                 EasyMock.capture(taskWrapper), eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS),
                 eq(DEFAULT_OFFSET_COMMIT_INTERVAL_MS), eq(TimeUnit.MILLISECONDS))
-        ).andReturn(commitFuture);
+        ).andReturn((ScheduledFuture) commitFuture);
 
         PowerMock.replayAll();
 

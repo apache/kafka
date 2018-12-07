@@ -22,6 +22,7 @@ import java.io.{Closeable, File, FileWriter}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
+import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
@@ -147,7 +148,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads.foreach(_.join(5 * 1000))
     executors.foreach(_.shutdownNow())
     producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
-    consumers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    consumers.foreach(_.close(Duration.ofMillis(0)))
     adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -993,10 +994,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
-    do {
-      consumer.poll(1)
-    } while (consumer.assignment.isEmpty)
-    consumer.assignment.asScala.foreach(tp => consumer.position(tp))
+    TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
+    consumer.assignment.asScala.foreach(consumer.position)
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
@@ -1025,12 +1024,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
                                    topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
-    var received = 0
-    TestUtils.waitUntilTrue(() => {
-      received += consumer.poll(50).count
-      received >= numRecords
-    }, s"Consumed $received records until timeout instead of the expected $numRecords records")
-    assertEquals(numRecords, received)
+    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
   }
 
   private def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {

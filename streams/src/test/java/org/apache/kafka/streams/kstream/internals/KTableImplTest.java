@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
@@ -29,12 +28,12 @@ import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -61,11 +60,13 @@ import java.lang.reflect.Field;
 import java.util.List;
 import java.util.Properties;
 
+import static java.util.Arrays.asList;
 import static org.easymock.EasyMock.mock;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KTableImplTest {
 
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
@@ -128,10 +129,10 @@ public class KTableImplTest {
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
-        assertEquals(Utils.mkList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
-        assertEquals(Utils.mkList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
-        assertEquals(Utils.mkList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
+        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
+        assertEquals(asList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
+        assertEquals(asList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
+        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
     }
 
     @Test
@@ -183,8 +184,8 @@ public class KTableImplTest {
 
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).keySerde(), null);
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).valueSerde(), null);
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Serialized.with(mySerde, mySerde))).keySerde(), mySerde);
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Serialized.with(mySerde, mySerde))).valueSerde(), mySerde);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).keySerde(), mySerde);
+        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) table1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
         assertEquals(((AbstractStream) table1.join(table1, joiner)).valueSerde(), null);

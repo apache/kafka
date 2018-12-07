@@ -141,7 +141,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
-    val zkMock = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val zkMock: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
     EasyMock.expect(zkMock.topicExists(topic)).andReturn(false)
     EasyMock.expect(zkMock.getAllTopicsInCluster).andReturn(Seq("some.topic", topic, "some.other.topic"))
     EasyMock.replay(zkMock)
@@ -170,7 +170,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       assertEquals(props, savedProps)
     }
 
-    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(createTopic, createTopic),
+    TestUtils.assertConcurrent("Concurrent topic creation failed", Seq(() => createTopic, () => createTopic),
       JTestUtils.DEFAULT_MAX_WAIT_MS.toInt)
   }
 
@@ -307,7 +307,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     zkClient.setOrCreateEntityConfigs(ConfigType.Client, clientId, props)
 
     val configInZk: Map[String, Properties] = adminZkClient.fetchAllEntityConfigs(ConfigType.Client)
-    assertEquals("Must have 1 overriden client config", 1, configInZk.size)
+    assertEquals("Must have 1 overridden client config", 1, configInZk.size)
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read
