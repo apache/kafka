@@ -22,7 +22,6 @@ import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -33,7 +32,7 @@ import java.util.Collections;
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNode<K, V> {
+public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
     private final MaterializedInternal<K, V, ?> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
@@ -68,7 +67,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
                "} " + super.toString();
     }
 
-    public static <K, V, S extends StateStore> TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder() {
+    public static <K, V> TableSourceNodeBuilder<K, V> tableSourceNodeBuilder() {
         return new TableSourceNodeBuilder<>();
     }
 
@@ -111,7 +110,7 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
 
     }
 
-    public static final class TableSourceNodeBuilder<K, V, S extends StateStore> {
+    public static final class TableSourceNodeBuilder<K, V> {
 
         private String nodeName;
         private String sourceName;
@@ -124,42 +123,42 @@ public class TableSourceNode<K, V, S extends StateStore> extends StreamSourceNod
         private TableSourceNodeBuilder() {
         }
 
-        public TableSourceNodeBuilder<K, V, S> withSourceName(final String sourceName) {
+        public TableSourceNodeBuilder<K, V> withSourceName(final String sourceName) {
             this.sourceName = sourceName;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withTopic(final String topic) {
+        public TableSourceNodeBuilder<K, V> withTopic(final String topic) {
             this.topic = topic;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withMaterializedInternal(final MaterializedInternal<K, V, ?> materializedInternal) {
+        public TableSourceNodeBuilder<K, V> withMaterializedInternal(final MaterializedInternal<K, V, ?> materializedInternal) {
             this.materializedInternal = materializedInternal;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
+        public TableSourceNodeBuilder<K, V> withConsumedInternal(final ConsumedInternal<K, V> consumedInternal) {
             this.consumedInternal = consumedInternal;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> withNodeName(final String nodeName) {
+        public TableSourceNodeBuilder<K, V> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V, S> isGlobalKTable(final boolean isGlobaKTable) {
+        public TableSourceNodeBuilder<K, V> isGlobalKTable(final boolean isGlobaKTable) {
             this.isGlobalKTable = isGlobaKTable;
             return this;
         }
 
-        public TableSourceNode<K, V, S> build() {
+        public TableSourceNode<K, V> build() {
             return new TableSourceNode<>(nodeName,
                                          sourceName,
                                          topic,

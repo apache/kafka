@@ -29,13 +29,18 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     private final boolean queriable;
 
     public MaterializedInternal(final Materialized<K, V, S> materialized) {
-        super(materialized);
-        queriable = storeName() != null;
+        this(materialized, null, null);
     }
 
-    public void generateStoreNameIfNeeded(final InternalNameProvider nameProvider,
-                                          final String generatedStorePrefix) {
-        if (storeName() == null) {
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix) {
+        super(materialized);
+
+        // if not storeName is provided, the corresponding KTable would never be queryable;
+        // but we still need to provide an internal name for it in case we materialize.
+        queriable = storeName() != null;
+        if (!queriable && nameProvider != null) {
             storeName = nameProvider.newStoreName(generatedStorePrefix);
         }
     }

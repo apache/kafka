@@ -70,6 +70,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valSerde) {
+        assert(queryableStoreName == null || queryableStoreName.equals(storeBuilder.name()));
 
         final String aggFunctionName = builder.newProcessorName(functionName);
 

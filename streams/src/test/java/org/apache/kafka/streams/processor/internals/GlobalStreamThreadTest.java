@@ -35,7 +35,6 @@ import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -72,25 +71,24 @@ public class GlobalStreamThreadTest {
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
-        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.with(null, null));
-        materialized.generateStoreNameIfNeeded(
-            new InternalNameProvider() {
-                @Override
-                public String newProcessorName(final String prefix) {
-                    return "processorName";
-                }
+        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.with(null, null),
+                new InternalNameProvider() {
+                    @Override
+                    public String newProcessorName(final String prefix) {
+                        return "processorName";
+                    }
 
-                @Override
-                public String newStoreName(final String prefix) {
-                    return GLOBAL_STORE_NAME;
-                }
-            },
-            "store-"
-        );
+                    @Override
+                    public String newStoreName(final String prefix) {
+                        return GLOBAL_STORE_NAME;
+                    }
+                },
+                "store-"
+            );
 
         builder.addGlobalStore(
-            (StoreBuilder) new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
             null,
             null,

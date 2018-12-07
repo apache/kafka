@@ -112,8 +112,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                   final boolean filterNot) {
         // we actually do not need generate store names at all since if it is not specified, we will not
         // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal != null) {
-            materializedInternal.generateStoreNameIfNeeded(builder, FILTER_NAME);
+        if (materializedInternal.storeName() == null) {
+            builder.newStoreName(FILTER_NAME);
         }
 
         final String name = builder.newProcessorName(FILTER_NAME);
@@ -184,8 +184,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
         // we actually do not need generate store names at all since if it is not specified, we will not
         // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal != null) {
-            materializedInternal.generateStoreNameIfNeeded(builder, MAPVALUES_NAME);
+        if (materializedInternal.storeName() == null) {
+            builder.newStoreName(MAPVALUES_NAME);
         }
 
         final String name = builder.newProcessorName(MAPVALUES_NAME);
@@ -409,8 +409,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, false, false);
     }
@@ -426,8 +426,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                             final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, true, true);
     }
@@ -443,8 +443,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, MERGE_NAME);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, true, false);
     }
