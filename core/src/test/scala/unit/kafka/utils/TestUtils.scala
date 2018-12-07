@@ -142,6 +142,11 @@ object TestUtils extends Logging {
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
 
+  def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           epoch: Long = 0): (Broker, Long) = {
+    (new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol), epoch)
+  }
+
   /**
    * Create a test config for the provided parameters.
    *
@@ -951,6 +956,12 @@ object TestUtils extends Logging {
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
     assertEquals(0, threadCount)
+  }
+
+  def allThreadStackTraces(): String = {
+    Thread.getAllStackTraces.asScala.map { case (thread, stackTrace) =>
+      thread.getName + "\n\t" + stackTrace.toList.map(_.toString).mkString("\n\t")
+    }.mkString("\n")
   }
 
   /**
