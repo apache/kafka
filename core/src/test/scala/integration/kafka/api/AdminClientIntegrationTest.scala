@@ -148,10 +148,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testCreateDeleteTopics(): Unit = {
     client = AdminClient.create(createConfig())
-    val topics = Seq("mytopic", "mytopic2")
+
+    /*
+    Valid Topic creation tests
+     */
+    val topics = Seq(
+      "topicWithAllValidBrokersReplicaAssignment",
+      "topicWithPartitionRF",
+      "topicWithSomeValidBrokersReplicaAssignment"
+    )
     val newTopics = Seq(
-      new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
-      new NewTopic("mytopic2", 3, 3)
+      new NewTopic("topicWithAllValidBrokersReplicaAssignment", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
+      new NewTopic("topicWithPartitionRF", 3, 3),
+      new NewTopic("topicWithSomeValidBrokersReplicaAssignment", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 3).asJava).asJava)
     )
     client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
     waitForTopics(client, List(), topics)
@@ -160,17 +169,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForTopics(client, topics, List())
 
     val results = client.createTopics(newTopics.asJava).values()
-    assertTrue(results.containsKey("mytopic"))
-    assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
-    assertTrue(results.containsKey("mytopic2"))
-    assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
+    assertTrue(results.containsKey("topicWithAllValidBrokersReplicaAssignment"))
+    assertFutureExceptionTypeEquals(results.get("topicWithAllValidBrokersReplicaAssignment"), classOf[TopicExistsException])
+    assertTrue(results.containsKey("topicWithPartitionRF"))
+    assertFutureExceptionTypeEquals(results.get("topicWithPartitionRF"), classOf[TopicExistsException])
+    assertTrue(results.containsKey("topicWithSomeValidBrokersReplicaAssignment"))
+    assertFutureExceptionTypeEquals(results.get("topicWithSomeValidBrokersReplicaAssignment"), classOf[TopicExistsException])
 
     val topicToDescription = client.describeTopics(topics.asJava).all.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
 
-    val topic0 = topicToDescription.get("mytopic")
+    val topic0 = topicToDescription.get("topicWithAllValidBrokersReplicaAssignment")
     assertEquals(false, topic0.isInternal)
-    assertEquals("mytopic", topic0.name)
+    assertEquals("topicWithAllValidBrokersReplicaAssignment", topic0.name)
     assertEquals(2, topic0.partitions.size)
     val topic0Partition0 = topic0.partitions.get(0)
     assertEquals(1, topic0Partition0.leader.id)
@@ -183,9 +194,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(Seq(2, 0), topic0Partition1.isr.asScala.map(_.id))
     assertEquals(Seq(2, 0), topic0Partition1.replicas.asScala.map(_.id))
 
-    val topic1 = topicToDescription.get("mytopic2")
+    val topic1 = topicToDescription.get("topicWithPartitionRF")
     assertEquals(false, topic1.isInternal)
-    assertEquals("mytopic2", topic1.name)
+    assertEquals("topicWithPartitionRF", topic1.name)
     assertEquals(3, topic1.partitions.size)
     for (partitionId <- 0 until 3) {
       val partition = topic1.partitions.get(partitionId)
@@ -202,8 +213,47 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       assertTrue(partition.replicas.contains(partition.leader))
     }
 
+    val topic2 = topicToDescription.get("topicWithSomeValidBrokersReplicaAssignment")
+    assertEquals(false, topic2.isInternal)
+    assertEquals("topicWithSomeValidBrokersReplicaAssignment", topic2.name)
+    assertEquals(2, topic2.partitions.size)
+    val topic2Partition0 = topic2.partitions.get(0)
+    assertEquals(1, topic2Partition0.leader.id)
+    assertEquals(0, topic2Partition0.partition)
+    assertEquals(Seq(1, 2), topic2Partition0.isr.asScala.map(_.id))
+    assertEquals(Seq(1, 2), topic2Partition0.replicas.asScala.map(_.id))
+    val topic2Partition1 = topic2.partitions.get(1)
+    assertEquals(2, topic2Partition1.leader.id)
+    assertEquals(1, topic2Partition1.partition)
+    assertEquals(Seq(2), topic2Partition1.isr.asScala.map(_.id))
+    assertEquals(Seq(2, 3), topic2Partition1.replicas.asScala.map(_.id))
+
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
+
+    /*
+    Invalid Topic creation tests
+     */
+    val invalidTopics = Seq(
+      "topicWithInvalidBrokersReplicaAssignment",
+      "topicWithDifferentRFReplicaAssignment"
+    )
+    val newInvalidTopics = Seq(
+      new NewTopic("topicWithInvalidBrokersReplicaAssignment", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](3, 4).asJava).asJava),
+      new NewTopic("topicWithDifferentRFReplicaAssignment", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](0, 1, 2).asJava).asJava)
+    )
+    var invalidTopicResults = client.createTopics(newInvalidTopics.asJava, new CreateTopicsOptions().validateOnly(true)).values()
+    assertTrue(invalidTopicResults.containsKey("topicWithInvalidBrokersReplicaAssignment"))
+    assertFutureExceptionTypeEquals(invalidTopicResults.get("topicWithInvalidBrokersReplicaAssignment"), classOf[BrokerNotAvailableException])
+    assertTrue(invalidTopicResults.containsKey("topicWithDifferentRFReplicaAssignment"))
+    assertFutureExceptionTypeEquals(invalidTopicResults.get("topicWithDifferentRFReplicaAssignment"), classOf[InvalidReplicaAssignmentException])
+
+    invalidTopicResults = client.createTopics(newInvalidTopics.asJava).values()
+    assertTrue(invalidTopicResults.containsKey("topicWithInvalidBrokersReplicaAssignment"))
+    assertFutureExceptionTypeEquals(invalidTopicResults.get("topicWithInvalidBrokersReplicaAssignment"), classOf[BrokerNotAvailableException])
+    assertTrue(invalidTopicResults.containsKey("topicWithDifferentRFReplicaAssignment"))
+    assertFutureExceptionTypeEquals(invalidTopicResults.get("topicWithDifferentRFReplicaAssignment"), classOf[InvalidReplicaAssignmentException])
+
   }
 
   @Test
