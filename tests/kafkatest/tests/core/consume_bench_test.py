@@ -180,7 +180,7 @@ class ConsumeBenchTest(Test):
         Runs multiple consumers in the same group to read messages from specific partitions.
         It is an invalid configuration to provide a consumer group and specific partitions.
         """
-        expected_error_msg = 'You may not specify an explicit partition assignment when using multiple consumers in the same group'
+        expected_error_msg = 'explicit partition assignment'
         self.produce_messages(self.active_topics, max_messages=20000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
