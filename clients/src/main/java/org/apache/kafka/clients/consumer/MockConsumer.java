@@ -191,8 +191,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (!subscriptions.isPaused(entry.getKey())) {
                 final List<ConsumerRecord<K, V>> recs = entry.getValue();
                 for (final ConsumerRecord<K, V> rec : recs) {
-                    if(rec.offset() > subscriptions.position(entry.getKey())) {
-                        log.info("poll offset{} less than changelog topic start offset {}, throw OffsetOutOfRangeException!", rec.offset(), subscriptions.position(entry.getKey()));
+                    if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > subscriptions.position(entry.getKey())) {
+                        log.info("poll offset {} less than changelog topic start offset {}, throw OffsetOutOfRangeException!", subscriptions.position(entry.getKey()), beginningOffsets.get(entry.getKey()));
                         RuntimeException exception = new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), subscriptions.position(entry.getKey())));
                         throw exception;
                     }
