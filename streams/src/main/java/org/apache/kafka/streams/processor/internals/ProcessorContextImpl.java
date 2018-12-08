@@ -75,20 +75,26 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
+        StateStore stateStore = getStateStore0(name);
+
+        if (stateStore instanceof KeyValueStore) {
+            return new KeyValueStoreReadOnlyDecorator((KeyValueStore) stateStore);
+        } else if (stateStore instanceof WindowStore) {
+            return new WindowStoreReadOnlyDecorator((WindowStore) stateStore);
+        } else if (stateStore instanceof SessionStore) {
+            return new SessionStoreReadOnlyDecorator((SessionStore) stateStore);
+        }
+
+        return stateStore;
+    }
+
+    private StateStore getStateStore0(final String name) {
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
         }
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueStore) {
-                return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
-            } else if (global instanceof WindowStore) {
-                return new WindowStoreReadOnlyDecorator((WindowStore) global);
-            } else if (global instanceof SessionStore) {
-                return new SessionStoreReadOnlyDecorator((SessionStore) global);
-            }
-
             return global;
         }
 
