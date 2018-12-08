@@ -159,11 +159,16 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldRecoverFromOffsetOutOfRangeExceptionAndRestoreFromStart() {
-        final int message = 10;
-        setupConsumer(message, topicPartition);
-        consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 5L));
+        final int messages = 10;
+        final int startOffset = 5;
+        assignPartition(messages, topicPartition);
+        consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, (long) startOffset));
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, (long) (messages + startOffset)));
 
-        StateRestorer stateRestorer = new StateRestorer(topicPartition, restoreListener, 1L, Long.MAX_VALUE, true,
+        addRecords(messages, topicPartition, startOffset);
+        consumer.assign(Collections.<TopicPartition>emptyList());
+
+        final StateRestorer stateRestorer = new StateRestorer(topicPartition, restoreListener, 1L, Long.MAX_VALUE, true,
                 "storeName");
         changelogReader.register(stateRestorer);
 
@@ -172,13 +177,15 @@ public class StoreChangelogReaderTest {
 
         // first restore call "fails" since OffsetOutOfRangeException but we should not die with an exception
         assertEquals(0, changelogReader.restore(active).size());
-        // the stateRestorer startoffset is set to NO_CHECKPOINT in the catch block.
-        assertEquals(StateRestorer.NO_CHECKPOINT, stateRestorer.startingOffset());
+        //the starting offset for stateRestorer is set to NO_CHECKPOINT
+        assertThat(stateRestorer.checkpoint(), equalTo(-1L));
 
         //restore the active task again
-        changelogReader.restore(active);
+        changelogReader.register(stateRestorer);
+        //the restored task should return completed partition without Exception.
+        assertEquals(1, changelogReader.restore(active).size());
         //the restored size should be equal to message length.
-        assertThat(callback.restored.size(), equalTo(message));
+        assertThat(callback.restored.size(), equalTo(messages));
     }
 
     @Test

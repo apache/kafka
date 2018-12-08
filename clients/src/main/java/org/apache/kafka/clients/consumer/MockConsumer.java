@@ -24,6 +24,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -61,6 +63,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private KafkaException exception;
     private AtomicBoolean wakeup;
     private boolean closed;
+    private static final Logger log = LoggerFactory.getLogger(MockConsumer.class);
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(offsetResetStrategy);
@@ -188,6 +191,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (!subscriptions.isPaused(entry.getKey())) {
                 final List<ConsumerRecord<K, V>> recs = entry.getValue();
                 for (final ConsumerRecord<K, V> rec : recs) {
+                    if(rec.offset() > subscriptions.position(entry.getKey())) {
+                        log.info("poll offset{} less than changelog topic start offset {}, throw OffsetOutOfRangeException!", rec.offset(), subscriptions.position(entry.getKey()));
+                        RuntimeException exception = new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), rec.offset()));
+                        throw exception;
+                    }
+
                     if (assignment().contains(entry.getKey()) && rec.offset() >= subscriptions.position(entry.getKey())) {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
                         subscriptions.position(entry.getKey(), rec.offset() + 1);
