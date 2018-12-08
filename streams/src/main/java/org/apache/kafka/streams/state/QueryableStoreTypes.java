@@ -74,8 +74,7 @@ public class QueryableStoreTypes {
         }
     }
 
-    private static class KeyValueStoreType<K, V> extends
-                                                 QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+    static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
         KeyValueStoreType() {
             super(ReadOnlyKeyValueStore.class);
         }
@@ -88,7 +87,7 @@ public class QueryableStoreTypes {
 
     }
 
-    private static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
+    static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
         WindowStoreType() {
             super(ReadOnlyWindowStore.class);
         }
@@ -100,7 +99,7 @@ public class QueryableStoreTypes {
         }
     }
 
-    private static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+    static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
         SessionStoreType() {
             super(ReadOnlySessionStore.class);
         }

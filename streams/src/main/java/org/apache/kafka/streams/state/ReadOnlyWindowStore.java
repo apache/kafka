@@ -48,7 +48,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -63,7 +62,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
@@ -86,7 +85,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -101,7 +99,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", Instant.ofEpochMilli(10), Instant.ofEpochMilli(20))} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.

@@ -188,7 +188,6 @@ public interface TimeWindowedKStream<K, V> {
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute aggregate functions like
      * count (c.f. {@link #count()}).
      * <p>
-     * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to
      * the same window and key if caching is enabled on the {@link Materialized} instance.
      * When caching is enable the rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
@@ -312,7 +311,8 @@ public interface TimeWindowedKStream<K, V> {
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
+     * @param reducer       a {@link Reducer} that computes a new aggregate result
+     * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */

@@ -245,6 +245,7 @@ public class Materialized<K, V, S extends StateStore> {
      * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
      * from window-start through window-end, and for the entire grace period.
      *
+     * @param retention the retention time
      * @return itself
      * @throws IllegalArgumentException if retention is negative or can't be represented as {@code long milliseconds}
      */
