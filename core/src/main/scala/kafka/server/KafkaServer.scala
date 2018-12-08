@@ -432,7 +432,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           Map.empty.asJava,
           false,
           channelBuilder,
-          logContext，
+          logContext,
           Selector.DEFAULT_CONNECT_TIMEOUT_MS
         )
         new NetworkClient(
@@ -449,7 +449,7 @@ class KafkaServer(val config: KafkaConfig, time: Time = Time.SYSTEM, threadNameP
           time,
           false,
           new ApiVersions,
-          logContext，
+          logContext,
           NetworkClient.DEFAULT_CONNECT_TIMEOUT_MS)
       }
 

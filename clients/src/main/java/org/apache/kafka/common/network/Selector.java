@@ -200,7 +200,7 @@ public class Selector implements Selectable, AutoCloseable {
                     boolean recordTimePerConnection,
                     ChannelBuilder channelBuilder,
                     MemoryPool memoryPool,
-                    LogContext logContext，
+                    LogContext logContext,
                     long connectTimeoutMs) {
         this(maxReceiveSize, connectionMaxIdleMs, NO_FAILED_AUTHENTICATION_DELAY, metrics, time, metricGrpPrefix, metricTags,
                 metricsPerConnection, recordTimePerConnection, channelBuilder, memoryPool, logContext, connectTimeoutMs);
@@ -236,6 +236,10 @@ public class Selector implements Selectable, AutoCloseable {
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext, long connectTimeoutMs) {
         this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext, connectTimeoutMs);
+    }
+
+    public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext, DEFAULT_CONNECT_TIMEOUT_MS);
     }
 
     public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext, long connectTimeoutMs) {
@@ -756,7 +760,9 @@ public class Selector implements Selectable, AutoCloseable {
                     String channelId = entry.getKey();
                     iter.remove();
                     log.warn("Connecting to node " + channelId + " timeout for " + (currentTimeNanos - connectingTime) / 1000 / 1000 + " millis");
-                    close(channelId);
+                    KafkaChannel channel = this.channels.get(channelId);
+                    if (channel != null)
+                        close(channel, CloseMode.GRACEFUL);
                 }
             }
         }
