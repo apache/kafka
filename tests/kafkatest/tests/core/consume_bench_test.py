@@ -177,10 +177,10 @@ class ConsumeBenchTest(Test):
 
     def test_multiple_consumers_specified_group_partitions_should_raise(self):
         """
-        Runs multiple consumers in to read messages from specific partitions.
-        Since a consumerGroup isn't specified, each consumer will get assigned a random group
-        and consume from all partitions
+        Runs multiple consumers in the same group to read messages from specific partitions.
+        It is an invalid configuration to provide a consumer group and specific partitions.
         """
+        expected_error_msg = 'explicit partition assignment'
         self.produce_messages(self.active_topics, max_messages=20000)
         consume_spec = ConsumeBenchWorkloadSpec(0, TaskSpec.MAX_DURATION_MS,
                                                 self.consumer_workload_service.consumer_node,
@@ -198,7 +198,7 @@ class ConsumeBenchTest(Test):
             consume_workload.wait_for_done(timeout_sec=360)
             raise Exception("Should have raised an exception due to an invalid configuration")
         except RuntimeError as e:
-            if 'Will not split partitions' not in str(e):
+            if expected_error_msg not in str(e):
                 raise RuntimeError("Unexpected Exception - " + str(e))
             self.logger.info(e)
 
