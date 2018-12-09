@@ -22,13 +22,11 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 
 class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
     private final InternalProcessorContext context;
-    private final boolean sendOldValues;
     private final ProcessorNode myNode;
 
-    ForwardingCacheFlushListener(final ProcessorContext context, final boolean sendOldValues) {
+    ForwardingCacheFlushListener(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         myNode = this.context.currentNode();
-        this.sendOldValues = sendOldValues;
     }
 
     @Override
@@ -36,11 +34,7 @@ class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            if (sendOldValues) {
-                context.forward(key, new Change<>(newValue, oldValue));
-            } else {
-                context.forward(key, new Change<>(newValue, null));
-            }
+            context.forward(key, new Change<>(newValue, oldValue));
         } finally {
             context.setCurrentNode(prev);
         }

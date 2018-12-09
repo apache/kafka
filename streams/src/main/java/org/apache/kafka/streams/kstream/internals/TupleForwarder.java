@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 class TupleForwarder<K, V> {
     private final CachedStateStore cachedStateStore;
     private final ProcessorContext context;
-    private final boolean sendOldValues;
 
     @SuppressWarnings("unchecked")
     TupleForwarder(final StateStore store,
@@ -41,7 +40,6 @@ class TupleForwarder<K, V> {
                    final boolean sendOldValues) {
         this.cachedStateStore = cachedStateStore(store);
         this.context = context;
-        this.sendOldValues = sendOldValues;
         if (this.cachedStateStore != null) {
             cachedStateStore.setFlushListener(flushListener, sendOldValues);
         }
@@ -61,11 +59,7 @@ class TupleForwarder<K, V> {
                              final V newValue,
                              final V oldValue) {
         if (cachedStateStore == null) {
-            if (sendOldValues) {
-                context.forward(key, new Change<>(newValue, oldValue));
-            } else {
-                context.forward(key, new Change<>(newValue, null));
-            }
+            context.forward(key, new Change<>(newValue, oldValue));
         }
     }
 }
