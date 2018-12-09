@@ -1249,23 +1249,6 @@ public class StreamThread extends Thread {
         return indent + "\tStreamsThread threadId: " + getName() + "\n" + taskManager.toString(indent);
     }
 
-    // the following are for testing only
-    void setNow(final long now) {
-        this.now = now;
-    }
-
-    TaskManager taskManager() {
-        return taskManager;
-    }
-
-    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
-        return standbyRecords;
-    }
-
-    int currentNumIterations() {
-        return numIterations;
-    }
-
     public Map<MetricName, Metric> producerMetrics() {
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         if (producer != null) {
@@ -1299,5 +1282,26 @@ public class StreamThread extends Thread {
         final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
         result.putAll(adminClientMetrics);
         return result;
+    }
+
+    // the following are for testing only
+    void setNow(final long now) {
+        this.now = now;
+    }
+
+    TaskManager taskManager() {
+        return taskManager;
+    }
+
+    Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> standbyRecords() {
+        return standbyRecords;
+    }
+
+    int currentNumIterations() {
+        return numIterations;
+    }
+
+    public StreamThread.StateListener stateListener() {
+        return stateListener;
     }
 }

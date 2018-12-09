@@ -252,6 +252,13 @@ public class KafkaStreams implements AutoCloseable {
                 // when the state is already in NOT_RUNNING, its transition to PENDING_SHUTDOWN or NOT_RUNNING (due to consecutive close calls)
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
+            } else if (state == State.REBALANCING && newState == State.REBALANCING) {
+                // when the state is already in REBALANCING, it should not transit to REBALANCING
+                return false;
+            } else if (state == State.RUNNING && newState == State.RUNNING) {
+                // when the state is already in RUNNING, it should not transit to RUNNING
+                // this can happen during starting up
+                return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
@@ -264,23 +271,6 @@ public class KafkaStreams implements AutoCloseable {
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
             stateListener.onChange(state, oldState);
-        }
-
-        return true;
-    }
-
-    private boolean setRunningFromCreated() {
-        synchronized (stateLock) {
-            if (state != State.CREATED) {
-                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + state + " to " + State.RUNNING);
-            }
-            state = State.RUNNING;
-            stateLock.notifyAll();
-        }
-
-        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
-        if (stateListener != null) {
-            stateListener.onChange(State.RUNNING, State.CREATED);
         }
 
         return true;
@@ -330,8 +320,7 @@ public class KafkaStreams implements AutoCloseable {
         if (state == State.CREATED) {
             stateListener = listener;
         } else {
-            throw new IllegalStateException("Can only set StateListener in CREATED state. " +
-                    "Current state is: " + state);
+            throw new IllegalStateException("Can only set StateListener in CREATED state. Current state is: " + state);
         }
     }
 
@@ -427,12 +416,13 @@ public class KafkaStreams implements AutoCloseable {
          * If all threads are up, including the global thread, set to RUNNING
          */
         private void maybeSetRunning() {
-            // one thread is running, check others are either running or already dead, including global thread
+            // state can be transferred to RUNNING if all threads are either RUNNING or DEAD
             for (final StreamThread.State state : threadState.values()) {
                 if (state != StreamThread.State.RUNNING && state != StreamThread.State.DEAD) {
                     return;
                 }
             }
+
             // the global state thread is relevant only if it is started. There are cases
             // when we don't have a global state thread at all, e.g., when we don't have global KTables
             if (globalThreadState != null && globalThreadState != GlobalStreamThread.State.RUNNING) {
@@ -760,6 +750,23 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return new HostInfo(host, port);
+    }
+
+    private boolean setRunningFromCreated() {
+        synchronized (stateLock) {
+            if (state != State.CREATED) {
+                throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + state + " to " + State.RUNNING);
+            }
+            state = State.RUNNING;
+            stateLock.notifyAll();
+        }
+
+        // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
+        if (stateListener != null) {
+            stateListener.onChange(State.RUNNING, State.CREATED);
+        }
+
+        return true;
     }
 
     /**
