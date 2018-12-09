@@ -226,7 +226,7 @@ public class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext(), 5000L);
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

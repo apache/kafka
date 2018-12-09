@@ -115,7 +115,7 @@ public class WorkerGroupMember {
                     time,
                     true,
                     new ApiVersions(),
-                    logContext，
+                    logContext,
                     NetworkClient.DEFAULT_CONNECT_TIMEOUT_MS);
             this.client = new ConsumerNetworkClient(
                     logContext,
