@@ -76,9 +76,17 @@ public class JoinGroupRequest extends AbstractRequest {
      */
     private static final Schema JOIN_GROUP_REQUEST_V3 = JOIN_GROUP_REQUEST_V2;
 
+    /**
+     * The version number is bumped to indicate that client needs to issue a second join group request under first try
+     * with UNKNOWN_MEMBER_ID.
+     * TODO: Define v4 schema to include `group.instance.id` for KIP-345.
+     */
+    private static final Schema JOIN_GROUP_REQUEST_V4 = JOIN_GROUP_REQUEST_V3;
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2,
-            JOIN_GROUP_REQUEST_V3};
+            JOIN_GROUP_REQUEST_V3, JOIN_GROUP_REQUEST_V4};
     }
 
     public static final String UNKNOWN_MEMBER_ID = "";

@@ -112,6 +112,11 @@ private object GroupMetadata {
       Stable -> Set(CompletingRebalance),
       PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
       Empty -> Set(PreparingRebalance))
+  val unknownMemberMetadata = new MemberMetadata("", "", "", "", 0, 0, "", List[(String, Array[Byte])]())
+  def isUnknownMember(member: MemberMetadata): Boolean = member == unknownMemberMetadata
+
+  // TODO: decide if ids should be predictable or random
+  def generateMemberIdSuffix = UUID.randomUUID().toString
 
   def loadGroup(groupId: String,
                 initialState: GroupState,
@@ -223,6 +228,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       numMembersAwaitingJoin += 1
   }
 
+  def addUnknownMember(memberId: String) {
+    members.put(memberId, GroupMetadata.unknownMemberMetadata)
+  }
+
   def remove(memberId: String) {
     members.remove(memberId).foreach { member =>
       member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
@@ -241,7 +250,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
+  // TODO: deprecate the kick out logic for normal member's rejoin failure within rebalance timeout.
+  // Only remove unknown members because they are not real members to work with assignment.
+  def notYetRejoinedMembers = members.values.filter((member) => GroupMetadata.isUnknownMember(member)
+    || member.awaitingJoinCallback == null).toList
 
   def hasAllMembersJoined = members.size <= numMembersAwaitingJoin
 
@@ -252,9 +264,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def rebalanceTimeoutMs = members.values.foldLeft(0) { (timeout, member) =>
     timeout.max(member.rebalanceTimeoutMs)
   }
-
-  // TODO: decide if ids should be predictable or random
-  def generateMemberIdSuffix = UUID.randomUUID().toString
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 

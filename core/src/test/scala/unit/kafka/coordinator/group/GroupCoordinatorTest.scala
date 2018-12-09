@@ -60,6 +60,10 @@ class GroupCoordinatorTest extends JUnitSuite {
   val GroupMaxSessionTimeout = 10 * 60 * 1000
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
+  // Starting from 2.2, we shall require member id for allowing new member to join the group.
+  // So the default setting is to enable this change, and for backward compatibility we also
+  // keep the logical tests for older request versions.
+  val DefaultRequireKnownMemberId = true
   val GroupInitialRebalanceDelay = 50
   var timer: MockTimer = null
   var groupCoordinator: GroupCoordinator = null
@@ -126,7 +130,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     // JoinGroup
     var joinGroupResponse: Option[JoinGroupResult] = None
-    groupCoordinator.handleJoinGroup(otherGroupId, memberId, "clientId", "clientHost", 60000, 10000, "consumer",
+    groupCoordinator.handleJoinGroup(otherGroupId, memberId, DefaultRequireKnownMemberId, "clientId", "clientHost", 60000, 10000, "consumer",
       List("range" -> new Array[Byte](0)), result => { joinGroupResponse = Some(result)})
     assertEquals(Some(Errors.COORDINATOR_LOAD_IN_PROGRESS), joinGroupResponse.map(_.error))
 
@@ -336,14 +340,12 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testHeartbeatWrongCoordinator() {
-
     val heartbeatResult = heartbeat(otherGroupId, memberId, -1)
     assertEquals(Errors.NOT_COORDINATOR, heartbeatResult)
   }
 
   @Test
   def testHeartbeatUnknownGroup() {
-
     val heartbeatResult = heartbeat(groupId, memberId, -1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }
@@ -1627,12 +1629,13 @@ class GroupCoordinatorTest extends JUnitSuite {
                             protocolType: String,
                             protocols: List[(String, Array[Byte])],
                             rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                            sessionTimeout: Int = DefaultSessionTimeout): Future[JoinGroupResult] = {
+                            sessionTimeout: Int = DefaultSessionTimeout,
+                            requireKnownMemberId: Boolean = DefaultRequireKnownMemberId): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleJoinGroup(groupId, memberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout,
+    groupCoordinator.handleJoinGroup(groupId, memberId, requireKnownMemberId, "clientId", "clientHost", rebalanceTimeout, sessionTimeout,
       protocolType, protocols, responseCallback)
     responseFuture
   }
@@ -1682,11 +1685,20 @@ class GroupCoordinatorTest extends JUnitSuite {
                         protocolType: String,
                         protocols: List[(String, Array[Byte])],
                         sessionTimeout: Int = DefaultSessionTimeout,
-                        rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
-    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, rebalanceTimeout, sessionTimeout)
+                        rebalanceTimeout: Int = DefaultRebalanceTimeout,
+                        requireKnownMemberId: Boolean = DefaultRequireKnownMemberId): JoinGroupResult = {
+    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, rebalanceTimeout, sessionTimeout, requireKnownMemberId)
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
     // should only have to wait as long as session timeout, but allow some extra time in case of an unexpected delay
-    Await.result(responseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
+    val joinGroupResult = Await.result(responseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
+    // Since member id is required, we need another bounce to get the successful join group result.
+    if (requireKnownMemberId) {
+      assertEquals(Errors.MEMBER_ID_REQUIRED, joinGroupResult.error)
+      EasyMock.reset(replicaManager)
+      val knownMemberResponseFuture = sendJoinGroup(groupId, joinGroupResult.memberId, protocolType, protocols, rebalanceTimeout, sessionTimeout, requireKnownMemberId)
+      return Await.result(knownMemberResponseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
+    }
+    joinGroupResult
   }
 
 

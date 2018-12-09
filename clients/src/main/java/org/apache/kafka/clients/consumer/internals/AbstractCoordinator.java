@@ -548,6 +548,13 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
+            } else if (error == Errors.MEMBER_ID_REQUIRED) {
+                // requires a concrete member id to be allowed to join the group. Update the generation
+                // and issue another join group request in next cycle.
+                AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
+                        joinResponse.memberId(), joinResponse.groupProtocol());
+                requestRejoin();
+                future.raise(Errors.MEMBER_ID_REQUIRED);
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));

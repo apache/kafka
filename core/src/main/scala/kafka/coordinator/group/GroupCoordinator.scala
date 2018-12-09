@@ -101,6 +101,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleJoinGroup(groupId: String,
                       memberId: String,
+                      requireKnownMemberId: Boolean,
                       clientId: String,
                       clientHost: String,
                       rebalanceTimeoutMs: Int,
@@ -116,21 +117,97 @@ class GroupCoordinator(val brokerId: Int,
     if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
       sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
       responseCallback(joinError(memberId, Errors.INVALID_SESSION_TIMEOUT))
-    } else {
+      return
+    }
+
+    if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+      doUnknownJoinGroup(groupId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+      return
+    }
+
+    groupManager.getGroup(groupId) match {
+      case None =>
+        responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+      case Some(group) =>
+        doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+    }
+  }
+
+  private def protocolNotMatch(group: GroupMetadata,
+                               memberId: String,
+                               protocolType: String,
+                               protocols: List[(String, Array[Byte])],
+                               responseCallback: JoinCallback): Boolean = {
+    val groupProtocolNotSupportedByNewMember = !group.is(Empty) &&
+      (!group.protocolType.contains(protocolType) || !group.supportsProtocols(protocols.map(_._1).toSet))
+    val firstMemberWithEmptyProtocolOrProtocolType = group.is(Empty) && (protocols.isEmpty || protocolType.isEmpty)
+    val notMatch = groupProtocolNotSupportedByNewMember || firstMemberWithEmptyProtocolOrProtocolType
+    if (notMatch) {
+      responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
+    }
+    notMatch
+  }
+
+  private def doUnknownJoinGroup(groupId: String,
+                                 requireKnownMemberId: Boolean,
+                                 clientId: String,
+                                 clientHost: String,
+                                 rebalanceTimeoutMs: Int,
+                                 sessionTimeoutMs: Int,
+                                 protocolType: String,
+                                 protocols: List[(String, Array[Byte])],
+                                 responseCallback: JoinCallback): Unit = {
+    val newMemberId = clientId + "-" + GroupMetadata.generateMemberIdSuffix
+    var group = groupManager.getGroup(groupId).orNull
+    if (group == null) {
       // only try to create the group if the group is not unknown AND
       // the member id is UNKNOWN, if member is specified but group does not
-      // exist we should reject the request
-      groupManager.getGroup(groupId) match {
-        case None =>
-          if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-            responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-          } else {
-            val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-            doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-          }
+      // exist we should reject the request.
+      group = new GroupMetadata(groupId, Empty, time)
+      groupManager.addGroup(group)
+    }
 
-        case Some(group) =>
-          doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+    group.inLock {
+      if (group.currentState == Dead) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the member retry
+        // joining without the specified member id.
+        responseCallback(joinError(newMemberId, Errors.UNKNOWN_MEMBER_ID))
+        return
+      } else if (protocolNotMatch(group, newMemberId, protocolType, protocols, responseCallback)) {
+        return
+      }
+
+      // update the newMemberAdded flag to indicate that the join group can be further delayed
+      if (group.is(PreparingRebalance) && group.generationId == 0)
+        group.newMemberAdded = true
+
+      // If member id required, register the member with unknown metadata,
+      // and send back a response to call for another join group request with allocated member id.
+      if (requireKnownMemberId) {
+        group.addUnknownMember(newMemberId)
+        responseCallback(JoinGroupResult(
+          members = Map.empty,
+          memberId = newMemberId,
+          generationId = group.generationId,
+          subProtocol = null,
+          leaderId = group.leaderOrNull,
+          error = Errors.MEMBER_ID_REQUIRED))
+      } else {
+        val member = new MemberMetadata(newMemberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+          sessionTimeoutMs, protocolType, protocols)
+        member.isNew = true
+        group.add(member, responseCallback)
+
+        // The session timeout does not affect new members since they do not have their memberId and
+        // cannot send heartbeats. Furthermore, we cannot detect disconnects because sockets are muted
+        // while the JoinGroup is in purgatory. If the client does disconnect (e.g. because of a request
+        // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
+        // members in the rebalance. To prevent this going on indefinitely, we timeout JoinGroup requests
+        // for new members. If the new member is still there, we expect it to retry.
+        completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
+        maybePrepareRebalance(group, s"Adding new member $newMemberId")
       }
     }
   }
@@ -145,15 +222,11 @@ class GroupCoordinator(val brokerId: Int,
                           protocols: List[(String, Array[Byte])],
                           responseCallback: JoinCallback) {
     group.inLock {
-      if (!group.is(Empty) && (!group.protocolType.contains(protocolType) || !group.supportsProtocols(protocols.map(_._1).toSet))) {
-        // if the new member does not support the group protocol, reject it
-        responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
-      } else if (group.is(Empty) && (protocols.isEmpty || protocolType.isEmpty)) {
-        //reject if first member with empty group protocol or protocolType is empty
-        responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
-      } else if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && !group.has(memberId)) {
+      if (protocolNotMatch(group, memberId, protocolType, protocols, responseCallback)) {
+        return
+      } else if (!group.has(memberId)) {
         // if the member trying to register with a un-recognized id, send the response to let
-        // it reset its member id and retry
+        // it reset its member id and retry.
         responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
       } else {
         group.currentState match {
@@ -161,67 +234,49 @@ class GroupCoordinator(val brokerId: Int,
             // if the group is marked as dead, it means some other thread has just removed the group
             // from the coordinator metadata; this is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
-            // joining without the specified member id,
+            // joining without the specified member id.
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           case PreparingRebalance =>
-            if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
-                protocols, group, responseCallback)
-            } else {
-              val member = group.get(memberId)
-              updateMemberAndRebalance(group, member, protocols, responseCallback)
-            }
-
+            val member = group.get(memberId)
+            updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
           case CompletingRebalance =>
-            if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
-                protocols, group, responseCallback)
+            val member = group.get(memberId)
+            if (member.matches(protocols)) {
+              // member is joining with the same metadata (which could be because it failed to
+              // receive the initial JoinGroup response), so just return current group information
+              // for the current generation.
+              responseCallback(JoinGroupResult(
+                members = if (group.isLeader(memberId)) {
+                  group.currentMemberMetadata
+                } else {
+                  Map.empty
+                },
+                memberId = memberId,
+                generationId = group.generationId,
+                subProtocol = group.protocolOrNull,
+                leaderId = group.leaderOrNull,
+                error = Errors.NONE))
             } else {
-              val member = group.get(memberId)
-              if (member.matches(protocols)) {
-                // member is joining with the same metadata (which could be because it failed to
-                // receive the initial JoinGroup response), so just return current group information
-                // for the current generation.
-                responseCallback(JoinGroupResult(
-                  members = if (group.isLeader(memberId)) {
-                    group.currentMemberMetadata
-                  } else {
-                    Map.empty
-                  },
-                  memberId = memberId,
-                  generationId = group.generationId,
-                  subProtocol = group.protocolOrNull,
-                  leaderId = group.leaderOrNull,
-                  error = Errors.NONE))
-              } else {
-                // member has changed metadata, so force a rebalance
-                updateMemberAndRebalance(group, member, protocols, responseCallback)
-              }
+              // member has changed metadata, so force a rebalance
+              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
             }
-
           case Empty | Stable =>
-            if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-              // if the member id is unknown, register the member to the group
-              addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType,
-                protocols, group, responseCallback)
+            val member = group.get(memberId)
+            if (group.isLeader(memberId) || !member.matches(protocols)) {
+              // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
+              // The latter allows the leader to trigger rebalances for changes affecting assignment
+              // which do not affect the member metadata (such as topic metadata changes for the consumer)
+              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
             } else {
-              val member = group.get(memberId)
-              if (group.isLeader(memberId) || !member.matches(protocols)) {
-                // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
-                // The latter allows the leader to trigger rebalances for changes affecting assignment
-                // which do not affect the member metadata (such as topic metadata changes for the consumer)
-                updateMemberAndRebalance(group, member, protocols, responseCallback)
-              } else {
-                // for followers with no actual change to their metadata, just return group information
-                // for the current generation which will allow them to issue SyncGroup
-                responseCallback(JoinGroupResult(
-                  members = Map.empty,
-                  memberId = memberId,
-                  generationId = group.generationId,
-                  subProtocol = group.protocolOrNull,
-                  leaderId = group.leaderOrNull,
-                  error = Errors.NONE))
-              }
+              // for followers with no actual change to their metadata, just return group information
+              // for the current generation which will allow them to issue SyncGroup
+              responseCallback(JoinGroupResult(
+                members = Map.empty,
+                memberId = memberId,
+                generationId = group.generationId,
+                subProtocol = group.protocolOrNull,
+                leaderId = group.leaderOrNull,
+                error = Errors.NONE))
             }
         }
 
@@ -404,7 +459,7 @@ class GroupCoordinator(val brokerId: Int,
             // if the group is marked as dead, it means some other thread has just removed the group
             // from the coordinator metadata; this is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
-            // joining without the specified member id,
+            // joining without the specified member id.
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
           case Empty =>
@@ -695,44 +750,24 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
-  private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
-                                    sessionTimeoutMs: Int,
-                                    clientId: String,
-                                    clientHost: String,
-                                    protocolType: String,
-                                    protocols: List[(String, Array[Byte])],
-                                    group: GroupMetadata,
-                                    callback: JoinCallback): MemberMetadata = {
-    val memberId = clientId + "-" + group.generateMemberIdSuffix
-    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, protocols)
-
-    member.isNew = true
-
-    // update the newMemberAdded flag to indicate that the join group can be further delayed
-    if (group.is(PreparingRebalance) && group.generationId == 0)
-      group.newMemberAdded = true
-
-    group.add(member, callback)
-
-    // The session timeout does not affect new members since they do not have their memberId and
-    // cannot send heartbeats. Furthermore, we cannot detect disconnects because sockets are muted
-    // while the JoinGroup is in purgatory. If the client does disconnect (e.g. because of a request
-    // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
-    // members in the rebalance. To prevent this going on indefinitely, we timeout JoinGroup requests
-    // for new members. If the new member is still there, we expect it to retry.
-    completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
-
-    maybePrepareRebalance(group, s"Adding new member $memberId")
-    member
-  }
-
   private def updateMemberAndRebalance(group: GroupMetadata,
                                        member: MemberMetadata,
-                                       protocols: List[(String, Array[Byte])],
-                                       callback: JoinCallback) {
-    group.updateMember(member, protocols, callback)
-    maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
+                                       memberId: String,
+                                       rebalanceTimeoutMs: Int,
+                                       sessionTimeoutMs: Int,
+                                       clientId: String,
+                                       clientHost: String,
+                                       protocolType: String,
+                                       callback: JoinCallback,
+                                       protocols: List[(String, Array[Byte])]) {
+    var updatedMember = member
+    // When the current member is unknown member, we are officially accepting this registered member.
+    if (GroupMetadata.isUnknownMember(member)) {
+      updatedMember = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+        sessionTimeoutMs, protocolType, protocols)
+    }
+    group.updateMember(updatedMember, protocols, callback)
+    maybePrepareRebalance(group, s"Updating metadata for member ${updatedMember.memberId}")
   }
 
   private def maybePrepareRebalance(group: GroupMetadata, reason: String) {
