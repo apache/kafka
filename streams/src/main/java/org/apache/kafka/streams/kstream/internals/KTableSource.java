@@ -77,7 +77,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             metrics = (StreamsMetricsImpl) context.metrics();
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
             }
         }
 

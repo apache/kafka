@@ -61,7 +61,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
             metrics = (StreamsMetricsImpl) context.metrics();
 
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
 
@@ -89,7 +89,7 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
     }
 
