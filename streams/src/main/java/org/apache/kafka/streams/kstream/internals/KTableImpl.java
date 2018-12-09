@@ -104,13 +104,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public String queryableStoreName() {
-        return this.queryableStoreName;
+        return queryableStoreName;
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                   final boolean filterNot) {
-        // we actually do not need generate store names at all since if it is not specified, we will not
+        // we actually do not need to generate store names at all since if it is not specified, we will not
         // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
         if (materializedInternal != null && materializedInternal.storeName() == null) {
             builder.newStoreName(FILTER_NAME);

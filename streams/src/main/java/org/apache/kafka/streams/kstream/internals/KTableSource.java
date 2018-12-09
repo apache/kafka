@@ -94,8 +94,9 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final V oldValue = store.get(key);
                 store.put(key, value);
+
+                final V oldValue = sendOldValues ? store.get(key) : null;
                 tupleForwarder.maybeForward(key, value, oldValue);
             } else {
                 context().forward(key, new Change<>(value, null));
