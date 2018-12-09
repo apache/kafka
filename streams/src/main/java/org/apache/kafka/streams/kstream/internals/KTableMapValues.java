@@ -132,5 +132,4 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             parentGetter.close();
         }
     }
-
 }

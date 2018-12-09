@@ -35,19 +35,17 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
     public StreamSourceNode(final String nodeName,
                             final Collection<String> topicNames,
                             final ConsumedInternal<K, V> consumedInternal) {
-        super(nodeName,
-              false);
+        super(nodeName, false);
 
         this.topicNames = topicNames;
         this.consumedInternal = consumedInternal;
     }
 
     public StreamSourceNode(final String nodeName,
-                     final Pattern topicPattern,
-                     final ConsumedInternal<K, V> consumedInternal) {
+                            final Pattern topicPattern,
+                            final ConsumedInternal<K, V> consumedInternal) {
 
-        super(nodeName,
-              false);
+        super(nodeName, false);
 
         this.topicPattern = topicPattern;
         this.consumedInternal = consumedInternal;
