@@ -662,11 +662,6 @@ public class ProcessorTopologyTest {
         public void process(final String key, final String value) {
             store.put(key, value);
         }
-
-        @Override
-        public void close() {
-            store.close();
-        }
     }
 
     private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
