@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.ApiUtils;
@@ -75,26 +76,20 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
-        StateStore stateStore = getStateStore0(name);
-
-        if (stateStore instanceof KeyValueStore) {
-            return new KeyValueStoreReadOnlyDecorator((KeyValueStore) stateStore);
-        } else if (stateStore instanceof WindowStore) {
-            return new WindowStoreReadOnlyDecorator((WindowStore) stateStore);
-        } else if (stateStore instanceof SessionStore) {
-            return new SessionStoreReadOnlyDecorator((SessionStore) stateStore);
-        }
-
-        return stateStore;
-    }
-
-    private StateStore getStateStore0(final String name) {
         if (currentNode() == null) {
             throw new StreamsException("Accessing from an unknown node");
         }
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
+            if (global instanceof KeyValueStore) {
+                return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
+            } else if (global instanceof WindowStore) {
+                return new WindowStoreReadOnlyDecorator((WindowStore) global);
+            } else if (global instanceof SessionStore) {
+                return new SessionStoreReadOnlyDecorator((SessionStore) global);
+            }
+
             return global;
         }
 
@@ -108,7 +103,16 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                     "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
-        return stateManager.getStore(name);
+        final StateStore store = stateManager.getStore(name);
+        if (store instanceof KeyValueStore) {
+            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+        } else if (store instanceof WindowStore) {
+            return new WindowStoreReadWriteDecorator((WindowStore) store);
+        } else if (store instanceof SessionStore) {
+            return new SessionStoreReadWriteDecorator((SessionStore) store);
+        }
+
+        return store;
     }
 
     @SuppressWarnings("unchecked")
@@ -355,6 +359,172 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final Windowed<K> sessionKey, final AGG aggregate) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
+            return underlying.fetch(key);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from, final K to) {
+            return underlying.fetch(from, to);
+        }
+    }
+
+    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> implements StateStore {
+        static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
+
+        final T underlying;
+
+        StateStoreReadWriteDecorator(final T underlying) {
+            this.underlying = underlying;
+        }
+
+        @Override
+        public void init(final ProcessorContext context, final StateStore root) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public void close() {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public String name() {
+            return underlying.name();
+        }
+
+        @Override
+        public void flush() {
+            underlying.flush();
+        }
+
+        @Override
+        public boolean persistent() {
+            return underlying.persistent();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return underlying.isOpen();
+        }
+    }
+
+    private static class KeyValueStoreReadWriteDecorator<K, V> extends StateStoreReadWriteDecorator<KeyValueStore<K, V>> implements KeyValueStore<K, V> {
+        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> underlying) {
+            super(underlying);
+        }
+
+        @Override
+        public V get(final K key) {
+            return underlying.get(key);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> range(final K from, final K to) {
+            return underlying.range(from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, V> all() {
+            return underlying.all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return underlying.approximateNumEntries();
+        }
+
+        @Override
+        public void put(final K key, final V value) {
+            underlying.put(key, value);
+        }
+
+        @Override
+        public V putIfAbsent(final K key, final V value) {
+            return underlying.putIfAbsent(key, value);
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, V>> entries) {
+            underlying.putAll(entries);
+        }
+
+        @Override
+        public V delete(final K key) {
+            return underlying.delete(key);
+        }
+    }
+
+    private static class WindowStoreReadWriteDecorator<K, V> extends StateStoreReadWriteDecorator<WindowStore<K, V>> implements WindowStore<K, V> {
+        WindowStoreReadWriteDecorator(final WindowStore<K, V> underlying) {
+            super(underlying);
+        }
+
+        @Override
+        public void put(final K key, final V value) {
+            underlying.put(key, value);
+        }
+
+        @Override
+        public void put(final K key, final V value, final long windowStartTimestamp) {
+            underlying.put(key, value, windowStartTimestamp);
+        }
+
+        @Override
+        public V fetch(final K key, final long time) {
+            return underlying.fetch(key, time);
+        }
+
+        @Deprecated
+        @Override
+        public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
+            return underlying.fetch(key, timeFrom, timeTo);
+        }
+
+        @Deprecated
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
+            return underlying.fetch(from, to, timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> all() {
+            return underlying.all();
+        }
+
+        @Deprecated
+        @Override
+        public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+            return underlying.fetchAll(timeFrom, timeTo);
+        }
+    }
+
+    private static class SessionStoreReadWriteDecorator<K, AGG> extends StateStoreReadWriteDecorator<SessionStore<K, AGG>> implements SessionStore<K, AGG> {
+        SessionStoreReadWriteDecorator(final SessionStore<K, AGG> underlying) {
+            super(underlying);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return underlying.findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return underlying.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        }
+
+        @Override
+        public void remove(final Windowed<K> sessionKey) {
+            underlying.remove(sessionKey);
+        }
+
+        @Override
+        public void put(final Windowed<K> sessionKey, final AGG aggregate) {
+            underlying.put(sessionKey, aggregate);
         }
 
         @Override
