@@ -176,7 +176,12 @@ public class ProduceRequest extends AbstractRequest {
             return build(version, true);
         }
 
-        public ProduceRequest build(short version, boolean validate) {
+        // Visible for testing only
+        public ProduceRequest buildUnsafe(short version) {
+            return build(version, false);
+        }
+
+        private ProduceRequest build(short version, boolean validate) {
             if (validate) {
                 // Validate the given records first
                 for (MemoryRecords records : partitionRecords.values()) {

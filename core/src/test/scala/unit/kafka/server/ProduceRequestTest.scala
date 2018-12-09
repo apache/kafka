@@ -142,7 +142,7 @@ class ProduceRequestTest extends BaseRequestTest {
     // produce request with v3: returns Errors.UNSUPPORTED_COMPRESSION_TYPE.
     val res2 = sendProduceRequest(leader,
       new ProduceRequest.Builder(3, 3, -1, 3000, partitionRecords.asJava, null)
-        .build(3, false))
+        .buildUnsafe(3))
     val (tp2, partitionResponse2) = res2.responses.asScala.head
     assertEquals(topicPartition, tp2)
     assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, partitionResponse2.error)
