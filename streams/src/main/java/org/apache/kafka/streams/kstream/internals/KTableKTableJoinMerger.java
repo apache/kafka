@@ -100,7 +100,11 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
                 store.put(key, value.newValue);
                 tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
             } else {
-                context().forward(key, value);
+                if (sendOldValues) {
+                    context().forward(key, value);
+                } else {
+                    context().forward(key, new Change<>(value.newValue, null));
+                }
             }
         }
     }
