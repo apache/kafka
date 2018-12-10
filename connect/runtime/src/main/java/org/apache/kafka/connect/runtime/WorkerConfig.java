@@ -171,6 +171,11 @@ public class WorkerConfig extends AbstractConfig {
     public static final String REST_ADVERTISED_LISTENER_CONFIG = "rest.advertised.listener";
     private static final String REST_ADVERTISED_LISTENER_DOC
             = "Sets the advertised listener (HTTP or HTTPS) which will be given to other workers to use.";
+    public static final String REST_ENABLE_WADL_CONFIG = "rest.wadl.enable";
+    private static final String REST_ENABLE_WADL_DOC =
+        "If true, OPTIONS request to Connect REST replies with WADL information. "
+        + "It's recommended to disable it, since exposing WADL information can pose a security risk.";
+    private static final Boolean REST_ENABLE_WADL_DEFAULT = true;
 
     public static final String ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG = "access.control.allow.origin";
     protected static final String ACCESS_CONTROL_ALLOW_ORIGIN_DOC =
@@ -255,6 +260,7 @@ public class WorkerConfig extends AbstractConfig {
                 .define(REST_ADVERTISED_HOST_NAME_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_HOST_NAME_DOC)
                 .define(REST_ADVERTISED_PORT_CONFIG, Type.INT,  null, Importance.LOW, REST_ADVERTISED_PORT_DOC)
                 .define(REST_ADVERTISED_LISTENER_CONFIG, Type.STRING,  null, Importance.LOW, REST_ADVERTISED_LISTENER_DOC)
+                .define(REST_ENABLE_WADL_CONFIG, Type.BOOLEAN, REST_ENABLE_WADL_DEFAULT, Importance.LOW, REST_ENABLE_WADL_DOC)
                 .define(ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, Type.STRING,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DEFAULT, Importance.LOW,
                         ACCESS_CONTROL_ALLOW_ORIGIN_DOC)
