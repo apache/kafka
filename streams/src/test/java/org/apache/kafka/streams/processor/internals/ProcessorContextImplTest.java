@@ -58,8 +58,6 @@ public class ProcessorContextImplTest {
     private static final long VAL = 42L;
     private static final String STORE_NAME = "underlying-store";
 
-    private boolean initExecuted;
-    private boolean closeExecuted;
     private boolean flushExecuted;
     private boolean putExecuted;
     private boolean putIfAbsentExecuted;
@@ -76,8 +74,6 @@ public class ProcessorContextImplTest {
 
     @Before
     public void setup() {
-        initExecuted = false;
-        closeExecuted = false;
         flushExecuted = false;
         putExecuted = false;
         putIfAbsentExecuted = false;
@@ -128,14 +124,15 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testGlobalKeyValueStore() {
+    public void globalKeyValueStoreShouldBeReadOnly() {
         doTest("GlobalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
-            checkGlobalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
 
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put");
-            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent");
-            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll");
-            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete");
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent()");
+            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
+            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
 
             assertEquals((Long) VAL, store.get(KEY));
             assertEquals(rangeIter, store.range("one", "two"));
@@ -145,12 +142,13 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testGlobalWindowStore() {
+    public void globalWindowStoreShouldBeReadOnly() {
         doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
-            checkGlobalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
 
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put");
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -161,12 +159,13 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testGlobalSessionStore() {
+    public void globalSessionStoreShouldBeReadOnly() {
         doTest("GlobalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
-            checkGlobalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
 
-            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove");
-            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put");
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove()");
+            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put()");
 
             assertEquals(iters.get(3), store.findSessions(KEY, 1L, 2L));
             assertEquals(iters.get(4), store.findSessions(KEY, KEY, 1L, 2L));
@@ -176,9 +175,12 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testLocalKeyValueStore() {
+    public void localKeyValueStoreShouldNotAllowInitOrClose() {
         doTest("LocalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
-            checkLocalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
 
             store.put("1", 1L);
             assertTrue(putExecuted);
@@ -200,9 +202,12 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testLocalWindowStore() {
+    public void localWindowStoreShouldNotAllowInitOrClose() {
         doTest("LocalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
-            checkLocalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
 
             store.put("1", 1L);
             assertTrue(putExecuted);
@@ -219,9 +224,12 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testLocalSessionStore() {
+    public void localSessionStoreShouldNotAllowInitOrClose() {
         doTest("LocalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
-            checkLocalStateStoreMethods(store);
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
 
             store.remove(null);
             assertTrue(removeExecuted);
@@ -339,18 +347,6 @@ public class ProcessorContextImplTest {
         expect(stateStore.persistent()).andReturn(true);
         expect(stateStore.isOpen()).andReturn(true);
 
-        stateStore.init(null, null);
-        expectLastCall().andAnswer(() -> {
-            initExecuted = true;
-            return null;
-        });
-
-        stateStore.close();
-        expectLastCall().andAnswer(() -> {
-            closeExecuted = true;
-            return null;
-        });
-
         stateStore.flush();
         expectLastCall().andAnswer(() -> {
             flushExecuted = true;
@@ -383,30 +379,13 @@ public class ProcessorContextImplTest {
         processor.init(context);
     }
 
-    private void checkGlobalStateStoreMethods(final StateStore store) {
-        checkThrowsUnsupportedOperation(store::flush, "flush");
-
+    private void verifyStoreCannotBeInitializedOrClosed(final StateStore store) {
         assertEquals(STORE_NAME, store.name());
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        store.init(null, null);
-        assertTrue(initExecuted);
-
-        store.close();
-        assertTrue(closeExecuted);
-    }
-
-    private void checkLocalStateStoreMethods(final StateStore store) {
-        store.flush();
-        assertTrue(flushExecuted);
-
-        assertEquals(STORE_NAME, store.name());
-        assertTrue(store.persistent());
-        assertTrue(store.isOpen());
-
-        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init");
-        checkThrowsUnsupportedOperation(store::close, "init");
+        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(store::close, "close()");
     }
 
     private void checkThrowsUnsupportedOperation(final Runnable check, final String name) {

@@ -210,7 +210,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends AbstractStateStore {
         static final String ERROR_MESSAGE = "Global store is read only";
 
-        StateStoreReadOnlyDecorator(final StateStore inner) {
+        StateStoreReadOnlyDecorator(final T inner) {
             super(inner);
         }
 
@@ -221,6 +221,16 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void flush() {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public void init(final ProcessorContext context, final StateStore root) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public void close() {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
     }
