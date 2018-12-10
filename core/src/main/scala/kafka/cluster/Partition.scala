@@ -817,7 +817,7 @@ class Partition(val topicPartition: TopicPartition,
       case None => localReplica.logEndOffset.messageOffset
     }
 
-    // Only actually check the HW if this is a client request (isolation level is null)
+    // Only actually check the HW if this is a client request (isolation level is non-null)
     if (isolationLevel.isDefined && leaderEpochStartOffsetOpt.isDefined) {
       // Wait until the HW has caught up with the start offset from this epoch
       if (leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {

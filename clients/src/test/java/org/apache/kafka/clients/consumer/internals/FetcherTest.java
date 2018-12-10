@@ -1146,7 +1146,7 @@ public class FetcherTest {
         // Fail with LEADER_NOT_AVAILABLE
         time.sleep(retryBackoffMs);
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
-                listOffsetResponse(Errors.OFFSET_NOT_AVAILABLE, 1L, 5L), false);
+                listOffsetResponse(Errors.LEADER_NOT_AVAILABLE, 1L, 5L), false);
         fetcher.resetOffsetsIfNeeded();
         consumerClient.pollNoWakeup();
         assertFalse(subscriptions.hasValidPosition(tp0));

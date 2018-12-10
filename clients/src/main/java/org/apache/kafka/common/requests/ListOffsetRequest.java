@@ -118,7 +118,7 @@ public class ListOffsetRequest extends AbstractRequest {
             ISOLATION_LEVEL,
             TOPICS_V4);
 
-    // V5 bump to include new possible error code
+    // V5 bump to include new possible error code (OFFSET_NOT_AVAILABLE)
     private static final Schema LIST_OFFSET_REQUEST_V5 = LIST_OFFSET_REQUEST_V4;
 
     public static Schema[] schemaVersions() {
