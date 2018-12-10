@@ -817,17 +817,17 @@ class Partition(val topicPartition: TopicPartition,
       case None => localReplica.logEndOffset.messageOffset
     }
 
-    // Only actually check the HW if this is a client request (isolation level is non-null)
-    if (isolationLevel.isDefined && leaderEpochStartOffsetOpt.isDefined) {
-      // Wait until the HW has caught up with the start offset from this epoch
-      if (leaderEpochStartOffsetOpt.get > localReplica.highWatermark.messageOffset) {
-        throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+    // Only actually check the HW if this is a "latest" offset client request
+    if (isolationLevel.isDefined && timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
+      // Throw if the HW has not caught up with the start offset from this epoch
+      leaderEpochStartOffsetOpt
+        .filter(leo => leo > localReplica.highWatermark.messageOffset)
+        .map(leo => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
           s"partition $topicPartition with leader epoch ${currentLeaderEpoch.get} as this partition's " +
-          s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind its " +
-          s"LEO (${leaderEpochStartOffsetOpt.get}).")
-      }
+          s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind the " +
+          s"LEO at the start of this epoch ($leo)."))
+        .foreach(apiError => throw apiError)
     }
-
 
     if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
       Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))

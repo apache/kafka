@@ -450,7 +450,7 @@ class PartitionTest {
 
     // Get offsets
     var offsetAndTimestamp = partition.fetchOffsetForTimestamp(
-      timestamp = -1L,
+      timestamp = ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
@@ -471,7 +471,7 @@ class PartitionTest {
     try {
       // Try to get offsets as a client
       partition.fetchOffsetForTimestamp(
-        timestamp = -1L,
+        timestamp = ListOffsetRequest.LATEST_TIMESTAMP,
         isolationLevel = Some(IsolationLevel.READ_COMMITTED),
         currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
         fetchOnlyFromLeader = true
@@ -483,13 +483,23 @@ class PartitionTest {
 
     // If request is not from a client, we skip the check
     offsetAndTimestamp = partition.fetchOffsetForTimestamp(
-      timestamp = -1L,
+      timestamp = ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = None,
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
     )
     assertTrue(offsetAndTimestamp.isDefined)
     assertEquals(offsetAndTimestamp.get.offset, 5)
+
+    // Or if we request the earliest timestamp, we skip the check
+    offsetAndTimestamp = partition.fetchOffsetForTimestamp(
+      timestamp = ListOffsetRequest.EARLIEST_TIMESTAMP,
+      isolationLevel = None,
+      currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+      fetchOnlyFromLeader = true
+    )
+    assertTrue(offsetAndTimestamp.isDefined)
+    assertEquals(offsetAndTimestamp.get.offset, 0)
 
     // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
     partition.updateReplicaLogReadResult(
@@ -499,7 +509,7 @@ class PartitionTest {
 
     // Error goes away
     offsetAndTimestamp = partition.fetchOffsetForTimestamp(
-      timestamp = -1L,
+      timestamp = ListOffsetRequest.LATEST_TIMESTAMP,
       isolationLevel = Some(IsolationLevel.READ_COMMITTED),
       currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
       fetchOnlyFromLeader = true
