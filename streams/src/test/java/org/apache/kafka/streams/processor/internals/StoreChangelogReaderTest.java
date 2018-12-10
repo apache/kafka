@@ -161,6 +161,7 @@ public class StoreChangelogReaderTest {
     public void shouldRecoverFromOffsetOutOfRangeExceptionAndRestoreFromStart() {
         final int messages = 10;
         final int startOffset = 5;
+        final long expiredCheckpoint = 1L;
         assignPartition(messages, topicPartition);
         consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, (long) startOffset));
         consumer.updateEndOffsets(Collections.singletonMap(topicPartition, (long) (messages + startOffset)));
@@ -168,7 +169,12 @@ public class StoreChangelogReaderTest {
         addRecords(messages, topicPartition, startOffset);
         consumer.assign(Collections.<TopicPartition>emptyList());
 
-        final StateRestorer stateRestorer = new StateRestorer(topicPartition, restoreListener, 1L, Long.MAX_VALUE, true,
+        final StateRestorer stateRestorer = new StateRestorer(
+                topicPartition,
+                restoreListener,
+                expiredCheckpoint,
+                Long.MAX_VALUE,
+                true,
                 "storeName");
         changelogReader.register(stateRestorer);
 
