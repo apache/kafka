@@ -57,8 +57,9 @@ class TupleForwarder<K, V> {
                 wrapped = ((WrappedStateStore) wrapped).wrappedStore();
             }
 
-            if (!(wrapped instanceof CachedStateStore))
+            if (!(wrapped instanceof CachedStateStore)) {
                 return null;
+            }
 
             return (CachedStateStore) wrapped;
         }
