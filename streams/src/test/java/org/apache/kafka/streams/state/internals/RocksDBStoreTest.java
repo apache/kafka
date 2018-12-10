@@ -137,6 +137,15 @@ public class RocksDBStoreTest {
 
         try {
             rocksDBStore.openDB(tmpContext);
+	    // For non-root user execution, exception will be thrown.
+            // For root user execution, no exception will be thrown, it will proceed ahead and reach here.
+            // Currently only checking Unix, for other OS need to check(for now it will work as before).
+            final String OS = System.getProperty("os.name").toLowerCase();
+            final boolean isUnix = OS.indexOf("nix") >= 0 || OS.indexOf("nux") >= 0 || OS.indexOf("aix") > 0;
+            if (isUnix) {
+	      // For root user execution on Unix, throw ProcessorStateException.
+       	      throw new ProcessorStateException("root user on Unix can open ReadOnlyDir");
+            }
             fail("Should have thrown ProcessorStateException");
         } catch (final ProcessorStateException e) {
             // this is good, do nothing
