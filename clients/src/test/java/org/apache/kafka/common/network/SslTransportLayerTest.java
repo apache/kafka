@@ -52,7 +52,10 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
-import static org.junit.Assert.*;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 /**
  * Tests for the SSL transport layer. These use a test harness that runs a simple socket server that echos back responses.
@@ -147,8 +150,8 @@ public class SslTransportLayerTest {
         NetworkTestUtils.checkClientConnection(selector, node, 100, 10);
     }
 
-    @Test(expected = InvalidTransportLayerException.class)
-    public void testPlaintextConnectionShouldRaiseInvalidTransportLayerException() throws Exception {
+    @Test(expected = IllegalTransportLayerStateException.class)
+    public void testPlaintextConnectionShouldThrowIllegalTransportLayerStateException() throws Exception {
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
         this.channelBuilder = new PlaintextChannelBuilder(null);
@@ -165,7 +168,7 @@ public class SslTransportLayerTest {
             while (secondsLeft-- > 0) {
                 selector.poll(1000L);
             }
-        } catch (InvalidTransportLayerException e) {
+        } catch (IllegalTransportLayerStateException e) {
             assertEquals(channel.state(), ChannelState.LOCAL_CLOSE);
             assertTrue(selector.channels().isEmpty());
             assertTrue(selector.connected().isEmpty());

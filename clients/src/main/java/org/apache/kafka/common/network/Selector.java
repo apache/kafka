@@ -591,7 +591,7 @@ public class Selector implements Selectable, AutoCloseable {
                 if (!key.isValid())
                     close(channel, CloseMode.GRACEFUL);
 
-            } catch (InvalidTransportLayerException e) {
+            } catch (IllegalTransportLayerStateException e) {
                 channel.state(ChannelState.LOCAL_CLOSE);
                 close(channel, CloseMode.DISCARD_NO_NOTIFY);
                 throw e;

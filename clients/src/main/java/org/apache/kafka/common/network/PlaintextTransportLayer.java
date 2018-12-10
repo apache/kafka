@@ -28,19 +28,12 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
 import java.security.Principal;
-import java.util.Arrays;
 
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;
     private final Principal principal = KafkaPrincipal.ANONYMOUS;
     private boolean completedRead = false;
-
-    // First byte is Record type (0x15 - ALERT)
-    // Second and third bytes represent the version (TLSv1 - 0x0301, TLSv2 - 0x0302, TLSv3 - 0x0303)
-    private static byte[] tlsAlertV11Header = new byte[] { 0x15, 0x03, 0x01 };
-    private static byte[] tlsAlertV12Header = new byte[] { 0x15, 0x03, 0x02 };
-    private static byte[] tlsAlertV13Header = new byte[] { 0x15, 0x03, 0x03 };
 
     public PlaintextTransportLayer(SelectionKey key) throws IOException {
         this.key = key;
@@ -109,19 +102,11 @@ public class PlaintextTransportLayer implements TransportLayer {
     public int read(ByteBuffer dst) throws IOException {
         int readSize = socketChannel.read(dst);
 
-        if (!completedRead && isTlsResponse(dst))
-            throw new InvalidTransportLayerException("Received a TLS response on a plaintext-configured channel");
+        if (!completedRead && ((ByteBuffer) dst.rewind()).getInt() > 1_000_000)  // first responses should negotiate API_VERSION and be small in size
+            throw new IllegalTransportLayerStateException("Received a first response larger than 1MB (Is this a plaintext response?)");
 
         completedRead = true;
         return readSize;
-    }
-
-    private boolean isTlsResponse(ByteBuffer readBuffer) {
-        byte[] receivedBytes = readBuffer.array();
-        byte[] header = new byte[] {receivedBytes[0], receivedBytes[1], receivedBytes[2]};
-        return (Arrays.equals(header, tlsAlertV11Header)
-             || Arrays.equals(header, tlsAlertV12Header)
-             || Arrays.equals(header, tlsAlertV13Header));
     }
 
     /**
