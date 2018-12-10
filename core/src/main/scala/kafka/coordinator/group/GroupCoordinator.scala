@@ -600,7 +600,7 @@ class GroupCoordinator(val brokerId: Int,
         case Empty | Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
-            group.invokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
+            group.maybeInvokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
           }
 
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
@@ -767,14 +767,12 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata, reason: String) {
-    group.remove(member.memberId)
+    // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
+    // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
+    // will retry the JoinGroup request if is still active.
+    group.maybeInvokeJoinCallback(member, joinError(NoMemberId, Errors.UNKNOWN_MEMBER_ID))
 
-    if (member.awaitingJoinCallback != null) {
-      // This can happen if a new member times out before the group can finish the rebalance.
-      // We return UNKNOWN_MEMBER_ID so that the consumer will retry the JoinGroup request if
-      // is still active.
-      member.awaitingJoinCallback(joinError(NoMemberId, Errors.UNKNOWN_MEMBER_ID))
-    }
+    group.remove(member.memberId)
 
     group.currentState match {
       case Dead | Empty =>
@@ -837,7 +835,7 @@ class GroupCoordinator(val brokerId: Int,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
-            group.invokeJoinCallback(member, joinResult)
+            group.maybeInvokeJoinCallback(member, joinResult)
             completeAndScheduleNextHeartbeatExpiration(group, member)
             member.isNew = false
           }

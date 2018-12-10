@@ -307,8 +307,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     member.awaitingJoinCallback = callback
   }
 
-  def invokeJoinCallback(member: MemberMetadata,
-                         joinGroupResult: JoinGroupResult) : Unit = {
+  def maybeInvokeJoinCallback(member: MemberMetadata,
+                              joinGroupResult: JoinGroupResult) : Unit = {
     if (member.awaitingJoinCallback != null) {
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
