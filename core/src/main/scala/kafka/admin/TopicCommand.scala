@@ -150,8 +150,6 @@ object TopicCommand extends Logging {
       JAdminClient.create(commandConfig)
     }
 
-    def apply(adminClient: JAdminClient): AdminClientTopicService =
-      new AdminClientTopicService(adminClient)
     def apply(commandConfig: Properties, bootstrapServer: Option[String]): AdminClientTopicService =
       new AdminClientTopicService(createAdminClient(commandConfig, bootstrapServer))
   }
@@ -259,7 +257,6 @@ object TopicCommand extends Logging {
   }
 
   object ZookeeperTopicService {
-    def apply(zkClient: KafkaZkClient): ZookeeperTopicService = new ZookeeperTopicService(zkClient)
     def apply(zkConnect: Option[String]): ZookeeperTopicService =
       new ZookeeperTopicService(KafkaZkClient(zkConnect.get, JaasUtils.isZkSecurityEnabled, 30000, 30000,
         Int.MaxValue, Time.SYSTEM))
