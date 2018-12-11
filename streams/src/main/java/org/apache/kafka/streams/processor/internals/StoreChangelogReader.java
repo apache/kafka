@@ -96,6 +96,9 @@ public class StoreChangelogReader implements ChangelogReader {
             for (final TopicPartition partition : partitions) {
                 final StreamTask task = active.restoringTaskFor(partition);
                 log.info("Reinitializing StreamTask {}", task);
+
+                final StateRestorer restorer = stateRestorers.get(partition);
+                restorer.setCheckpointOffset(StateRestorer.NO_CHECKPOINT);
                 task.reinitializeStateStoresForPartitions(recoverableException.partitions());
             }
             restoreConsumer.seekToBeginning(partitions);
