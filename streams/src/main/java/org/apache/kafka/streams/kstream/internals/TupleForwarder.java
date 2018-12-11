@@ -48,9 +48,18 @@ class TupleForwarder<K, V> {
     private CachedStateStore cachedStateStore(final StateStore store) {
         if (store instanceof CachedStateStore) {
             return (CachedStateStore) store;
-        } else if (store instanceof WrappedStateStore
-                && ((WrappedStateStore) store).wrappedStore() instanceof CachedStateStore) {
-            return (CachedStateStore) ((WrappedStateStore) store).wrappedStore();
+        } else if (store instanceof WrappedStateStore) {
+            StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+
+            while (wrapped instanceof WrappedStateStore && !(wrapped instanceof CachedStateStore)) {
+                wrapped = ((WrappedStateStore) wrapped).wrappedStore();
+            }
+
+            if (!(wrapped instanceof CachedStateStore)) {
+                return null;
+            }
+
+            return (CachedStateStore) wrapped;
         }
         return null;
     }
