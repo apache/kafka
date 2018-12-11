@@ -267,6 +267,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
 
     private boolean enableSchemas = JsonConverterConfig.SCHEMAS_ENABLE_DEFAULT;
+    private boolean enableInferSchemas = JsonConverterConfig.SCHEMAS_INFER_ENABLE_DEFAULT;
     private int cacheSize = JsonConverterConfig.SCHEMAS_CACHE_SIZE_DEFAULT;
     private Cache<Schema, ObjectNode> fromConnectSchemaCache;
     private Cache<JsonNode, Schema> toConnectSchemaCache;
@@ -283,6 +284,7 @@ public class JsonConverter implements Converter, HeaderConverter {
     public void configure(Map<String, ?> configs) {
         JsonConverterConfig config = new JsonConverterConfig(configs);
         enableSchemas = config.schemasEnabled();
+        enableInferSchemas = config.schemasInferEnabled();
         cacheSize = config.schemaCacheSize();
 
         boolean isKey = config.type() == ConverterType.KEY;
@@ -341,6 +343,9 @@ public class JsonConverter implements Converter, HeaderConverter {
         // The deserialized data should either be an envelope object containing the schema and the payload or the schema
         // was stripped during serialization and we need to fill in an all-encompassing schema.
         if (!enableSchemas) {
+            if (enableInferSchemas) {
+                return schemalessJsonToConnect(jsonValue);
+            }
             ObjectNode envelope = JsonNodeFactory.instance.objectNode();
             envelope.set("schema", null);
             envelope.set("payload", jsonValue);
@@ -351,14 +356,24 @@ public class JsonConverter implements Converter, HeaderConverter {
     }
 
     private SchemaAndValue jsonToConnect(JsonNode jsonValue) {
-        if (jsonValue == null)
+        if (jsonValue == null) {
             return SchemaAndValue.NULL;
+        }
 
         if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
             throw new DataException("JSON value converted to Kafka Connect must be in envelope containing schema");
 
         Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
         return new SchemaAndValue(schema, convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
+    }
+
+    private SchemaAndValue schemalessJsonToConnect(JsonNode jsonValue) {
+        if (jsonValue == null) {
+            return SchemaAndValue.NULL;
+        }
+
+        Schema schema = inferSchema(jsonValue);
+        return new SchemaAndValue(schema, convertToConnect(schema, jsonValue));
     }
 
     public ObjectNode asJsonSchema(Schema schema) {
@@ -754,5 +769,40 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private interface LogicalTypeConverter {
         Object convert(Schema schema, Object value);
+    }
+
+    private Schema inferSchema(JsonNode jsonValue) {
+        switch (jsonValue.getNodeType()) {
+            case NULL:
+                return Schema.OPTIONAL_STRING_SCHEMA;
+            case BOOLEAN:
+                return Schema.BOOLEAN_SCHEMA;
+            case NUMBER:
+                if (jsonValue.isIntegralNumber()) {
+                    return Schema.INT64_SCHEMA;
+                }
+                else {
+                    return Schema.FLOAT64_SCHEMA;
+                }
+            case ARRAY:
+                SchemaBuilder arrayBuilder = SchemaBuilder.array(jsonValue.elements().hasNext() ? inferSchema(jsonValue.elements().next()) : Schema.OPTIONAL_STRING_SCHEMA);
+                return arrayBuilder.build();
+            case OBJECT:
+                SchemaBuilder structBuilder = SchemaBuilder.struct();
+                Iterator<Map.Entry<String, JsonNode>> it = jsonValue.fields();
+                while (it.hasNext()) {
+                    Map.Entry<String, JsonNode> entry = it.next();
+                    structBuilder.field(entry.getKey(), inferSchema(entry.getValue()));
+                }
+                return structBuilder.build();
+            case STRING:
+                return Schema.STRING_SCHEMA;
+
+            case BINARY:
+            case MISSING:
+            case POJO:
+            default:
+                return null;
+        }
     }
 }
