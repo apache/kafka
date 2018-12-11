@@ -54,8 +54,9 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private V computeValue(final K key, final V value) {
         V newValue = null;
 
-        if (value != null && (filterNot ^ predicate.test(key, value)))
+        if (value != null && (filterNot ^ predicate.test(key, value))) {
             newValue = value;
+        }
 
         return newValue;
     }
@@ -79,8 +80,9 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             final V newValue = computeValue(key, change.newValue);
             final V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
-            if (sendOldValues && oldValue == null && newValue == null)
+            if (sendOldValues && oldValue == null && newValue == null) {
                 return; // unnecessary to forward here.
+            }
 
             if (queryableName != null) {
                 store.put(key, newValue);

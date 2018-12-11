@@ -189,13 +189,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return task.schedule(interval, type, callback);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
-        ApiUtils.validateMillisecondDuration(interval, msgPrefix);
-        return schedule(interval.toMillis(), type, callback);
+        return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }
 
     void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
