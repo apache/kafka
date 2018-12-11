@@ -62,7 +62,8 @@ public class ProducerPerformance {
             String transactionalId = res.getString("transactionalId");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
-            boolean transactionsEnabled =  0 < transactionDurationMs;
+            boolean synchronousSend = res.getBoolean("synchronousSend");
+            boolean transactionsEnabled = 0 < transactionDurationMs;
 
             // since default value gets printed with the help text, we are escaping \n there and replacing it with correct value here.
             String payloadDelimiter = res.getString("payloadDelimiter").equals("\\n") ? "\n" : res.getString("payloadDelimiter");
@@ -75,8 +76,8 @@ public class ProducerPerformance {
             if (payloadFilePath != null) {
                 Path path = Paths.get(payloadFilePath);
                 System.out.println("Reading payloads from: " + path.toAbsolutePath());
-                if (Files.notExists(path) || Files.size(path) == 0)  {
-                    throw new  IllegalArgumentException("File does not exist or empty file provided.");
+                if (Files.notExists(path) || Files.size(path) == 0) {
+                    throw new IllegalArgumentException("File does not exist or empty file provided.");
                 }
 
                 String[] payloadList = new String(Files.readAllBytes(path), "UTF-8").split(payloadDelimiter);
@@ -106,7 +107,6 @@ public class ProducerPerformance {
                 props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId);
 
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(props);
-
             if (transactionsEnabled)
                 producer.initTransactions();
 
@@ -131,23 +131,33 @@ public class ProducerPerformance {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
                 }
-
-
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
                 record = new ProducerRecord<>(topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
-                producer.send(record, cb);
+
+                if (synchronousSend) {
+                    int iteration = stats.updateIteration();
+                    try {
+                        RecordMetadata result = producer.send(record).get();
+                    } catch (Exception exception) {
+                        exception.printStackTrace();
+                    }
+                    long now = System.currentTimeMillis();
+                    int latency = (int) (now - sendStartMs);
+                    stats.record(iteration, latency, payload.length, now);
+                } else {
+                    Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
+                    producer.send(record, cb);
+                }
 
                 currentTransactionSize++;
                 if (transactionsEnabled && transactionDurationMs <= (sendStartMs - transactionStartTime)) {
                     producer.commitTransaction();
                     currentTransactionSize = 0;
                 }
-
                 if (throttler.shouldThrottle(i, sendStartMs)) {
                     throttler.throttle();
                 }
@@ -188,109 +198,58 @@ public class ProducerPerformance {
 
     /** Get the command-line argument parser. */
     private static ArgumentParser argParser() {
-        ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("producer-performance")
-                .defaultHelp(true)
+        ArgumentParser parser = ArgumentParsers.newArgumentParser("producer-performance").defaultHelp(true)
                 .description("This tool is used to verify the producer performance.");
 
-        MutuallyExclusiveGroup payloadOptions = parser
-                .addMutuallyExclusiveGroup()
-                .required(true)
+        MutuallyExclusiveGroup payloadOptions = parser.addMutuallyExclusiveGroup().required(true)
                 .description("either --record-size or --payload-file must be specified but not both.");
 
-        parser.addArgument("--topic")
-                .action(store())
-                .required(true)
-                .type(String.class)
-                .metavar("TOPIC")
-                .help("produce messages to this topic");
+        parser.addArgument("--topic").action(store()).required(true).type(String.class).metavar("TOPIC")
+        .help("produce messages to this topic");
 
-        parser.addArgument("--num-records")
-                .action(store())
-                .required(true)
-                .type(Long.class)
-                .metavar("NUM-RECORDS")
-                .dest("numRecords")
-                .help("number of messages to produce");
+        parser.addArgument("--num-records").action(store()).required(true).type(Long.class).metavar("NUM-RECORDS")
+        .dest("numRecords").help("number of messages to produce");
 
-        payloadOptions.addArgument("--record-size")
-                .action(store())
-                .required(false)
-                .type(Integer.class)
-                .metavar("RECORD-SIZE")
-                .dest("recordSize")
-                .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
+        payloadOptions.addArgument("--record-size").action(store()).required(false).type(Integer.class)
+        .metavar("RECORD-SIZE").dest("recordSize")
+        .help("message size in bytes. Note that you must provide exactly one of --record-size or --payload-file.");
 
-        payloadOptions.addArgument("--payload-file")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-FILE")
-                .dest("payloadFile")
-                .help("file to read the message payloads from. This works only for UTF-8 encoded text files. " +
-                        "Payloads will be read from this file and a payload will be randomly selected when sending messages. " +
-                        "Note that you must provide exactly one of --record-size or --payload-file.");
+        payloadOptions.addArgument("--payload-file").action(store()).required(false).type(String.class)
+            .metavar("PAYLOAD-FILE").dest("payloadFile")
+            .help("file to read the message payloads from. This works only for UTF-8 encoded text files. "
+                + "Payloads will be read from this file and a payload will be randomly selected when sending messages. "
+                + "Note that you must provide exactly one of --record-size or --payload-file.");
 
-        parser.addArgument("--payload-delimiter")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("PAYLOAD-DELIMITER")
-                .dest("payloadDelimiter")
-                .setDefault("\\n")
-                .help("provides delimiter to be used when --payload-file is provided. " +
-                        "Defaults to new line. " +
-                        "Note that this parameter will be ignored if --payload-file is not provided.");
+        parser.addArgument("--payload-delimiter").action(store()).required(false).type(String.class)
+            .metavar("PAYLOAD-DELIMITER").dest("payloadDelimiter").setDefault("\\n")
+            .help("provides delimiter to be used when --payload-file is provided. " + "Defaults to new line. "
+                + "Note that this parameter will be ignored if --payload-file is not provided.");
 
-        parser.addArgument("--throughput")
-                .action(store())
-                .required(true)
-                .type(Integer.class)
-                .metavar("THROUGHPUT")
-                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
+        parser.addArgument("--throughput").action(store()).required(true).type(Integer.class).metavar("THROUGHPUT")
+        .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
 
-        parser.addArgument("--producer-props")
-                 .nargs("+")
-                 .required(false)
-                 .metavar("PROP-NAME=PROP-VALUE")
-                 .type(String.class)
-                 .dest("producerConfig")
-                 .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. " +
-                         "These configs take precedence over those passed via --producer.config.");
+        parser.addArgument("--producer-props").nargs("+").required(false).metavar("PROP-NAME=PROP-VALUE")
+            .type(String.class).dest("producerConfig")
+            .help("kafka producer related configuration properties like bootstrap.servers,client.id etc. "
+                + "These configs take precedence over those passed via --producer.config.");
 
-        parser.addArgument("--producer.config")
-                .action(store())
-                .required(false)
-                .type(String.class)
-                .metavar("CONFIG-FILE")
-                .dest("producerConfigFile")
-                .help("producer config properties file.");
+        parser.addArgument("--producer.config").action(store()).required(false).type(String.class)
+        .metavar("CONFIG-FILE").dest("producerConfigFile").help("producer config properties file.");
 
-        parser.addArgument("--print-metrics")
-                .action(storeTrue())
-                .type(Boolean.class)
-                .metavar("PRINT-METRICS")
-                .dest("printMetrics")
-                .help("print out metrics at the end of the test.");
+        parser.addArgument("--print-metrics").action(storeTrue()).type(Boolean.class).metavar("PRINT-METRICS")
+        .dest("printMetrics").help("print out metrics at the end of the test.");
 
-        parser.addArgument("--transactional-id")
-               .action(store())
-               .required(false)
-               .type(String.class)
-               .metavar("TRANSACTIONAL-ID")
-               .dest("transactionalId")
-               .setDefault("performance-producer-default-transactional-id")
-               .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
+        parser.addArgument("--transactional-id").action(store()).required(false).type(String.class)
+        .metavar("TRANSACTIONAL-ID").dest("transactionalId")
+        .setDefault("performance-producer-default-transactional-id")
+        .help("The transactionalId to use if transaction-duration-ms is > 0. Useful when testing the performance of concurrent transactions.");
 
-        parser.addArgument("--transaction-duration-ms")
-               .action(store())
-               .required(false)
-               .type(Long.class)
-               .metavar("TRANSACTION-DURATION")
-               .dest("transactionDurationMs")
-               .setDefault(0L)
-               .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
+        parser.addArgument("--transaction-duration-ms").action(store()).required(false).type(Long.class)
+        .metavar("TRANSACTION-DURATION").dest("transactionDurationMs").setDefault(0L)
+        .help("The max age of each transaction. The commitTransaction will be called after this time has elapsed. Transactions are only enabled if this value is positive.");
 
+        parser.addArgument("--synchronous-send").action(storeTrue()).type(Boolean.class).metavar("SYNCHRONOUS-SEND")
+        .dest("synchronousSend").help("enable synchronous blocking send calls.");
 
         return parser;
     }
@@ -359,12 +318,10 @@ public class ProducerPerformance {
             long ellapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
-                              windowCount,
-                              recsPerSec,
-                              mbPerSec,
-                              windowTotalLatency / (double) windowCount,
-                              (double) windowMaxLatency);
+            System.out.printf(
+                    "%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
+                    windowCount, recsPerSec, mbPerSec, windowTotalLatency / (double) windowCount,
+                    (double) windowMaxLatency);
         }
 
         public void newWindow() {
@@ -380,16 +337,10 @@ public class ProducerPerformance {
             double recsPerSec = 1000.0 * count / (double) elapsed;
             double mbPerSec = 1000.0 * this.bytes / (double) elapsed / (1024.0 * 1024.0);
             int[] percs = percentiles(this.latencies, index, 0.5, 0.95, 0.99, 0.999);
-            System.out.printf("%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
-                              count,
-                              recsPerSec,
-                              mbPerSec,
-                              totalLatency / (double) count,
-                              (double) maxLatency,
-                              percs[0],
-                              percs[1],
-                              percs[2],
-                              percs[3]);
+            System.out.printf(
+                    "%d records sent, %f records/sec (%.2f MB/sec), %.2f ms avg latency, %.2f ms max latency, %d ms 50th, %d ms 95th, %d ms 99th, %d ms 99.9th.%n",
+                    count, recsPerSec, mbPerSec, totalLatency / (double) count, (double) maxLatency, percs[0], percs[1],
+                    percs[2], percs[3]);
         }
 
         private static int[] percentiles(int[] latencies, int count, double... percentiles) {
@@ -401,6 +352,13 @@ public class ProducerPerformance {
                 values[i] = latencies[index];
             }
             return values;
+        }
+
+        public int updateIteration() {
+            // get the current value of iteration, and then increment.
+            int currentIteration = this.iteration;
+            this.iteration++;
+            return currentIteration;
         }
     }
 
