@@ -36,7 +36,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.BeforeClass;
@@ -74,8 +73,9 @@ public abstract class AbstractJoinIntegrationTest {
     @Parameterized.Parameters(name = "caching enabled = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
-        for (final boolean cacheEnabled : Arrays.asList(true, false))
-            values.add(new Object[] {cacheEnabled});
+        for (final boolean cacheEnabled : Arrays.asList(true, false)) {
+            values.add(new Object[]{cacheEnabled});
+        }
         return values;
     }
 
@@ -99,29 +99,24 @@ public abstract class AbstractJoinIntegrationTest {
     AtomicBoolean finalResultReached = new AtomicBoolean(false);
 
     private final List<Input<String>> input = Arrays.asList(
-            new Input<>(INPUT_TOPIC_LEFT, (String) null),
-            new Input<>(INPUT_TOPIC_RIGHT, (String) null),
+            new Input<>(INPUT_TOPIC_LEFT, null),
+            new Input<>(INPUT_TOPIC_RIGHT, null),
             new Input<>(INPUT_TOPIC_LEFT, "A"),
             new Input<>(INPUT_TOPIC_RIGHT, "a"),
             new Input<>(INPUT_TOPIC_LEFT, "B"),
             new Input<>(INPUT_TOPIC_RIGHT, "b"),
-            new Input<>(INPUT_TOPIC_LEFT, (String) null),
-            new Input<>(INPUT_TOPIC_RIGHT, (String) null),
+            new Input<>(INPUT_TOPIC_LEFT, null),
+            new Input<>(INPUT_TOPIC_RIGHT, null),
             new Input<>(INPUT_TOPIC_LEFT, "C"),
             new Input<>(INPUT_TOPIC_RIGHT, "c"),
-            new Input<>(INPUT_TOPIC_RIGHT, (String) null),
-            new Input<>(INPUT_TOPIC_LEFT, (String) null),
-            new Input<>(INPUT_TOPIC_RIGHT, (String) null),
+            new Input<>(INPUT_TOPIC_RIGHT, null),
+            new Input<>(INPUT_TOPIC_LEFT, null),
+            new Input<>(INPUT_TOPIC_RIGHT, null),
             new Input<>(INPUT_TOPIC_RIGHT, "d"),
             new Input<>(INPUT_TOPIC_LEFT, "D")
     );
 
-    final ValueJoiner<String, String, String> valueJoiner = new ValueJoiner<String, String, String>() {
-        @Override
-        public String apply(final String value1, final String value2) {
-            return value1 + "-" + value2;
-        }
-    };
+    final ValueJoiner<String, String, String> valueJoiner = (value1, value2) -> value1 + "-" + value2;
 
     final boolean cacheEnabled;
 
@@ -154,8 +149,9 @@ public abstract class AbstractJoinIntegrationTest {
     void prepareEnvironment() throws InterruptedException {
         CLUSTER.createTopics(INPUT_TOPIC_LEFT, INPUT_TOPIC_RIGHT, OUTPUT_TOPIC);
 
-        if (!cacheEnabled)
+        if (!cacheEnabled) {
             STREAMS_CONFIG.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        }
 
         STREAMS_CONFIG.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot().getPath());
 
@@ -247,12 +243,7 @@ public abstract class AbstractJoinIntegrationTest {
                 producer.send(new ProducerRecord<>(singleInput.topic, null, ++ts, singleInput.record.key, singleInput.record.value)).get();
             }
 
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return finalResultReached.get();
-                }
-            }, "Never received expected final result.");
+            TestUtils.waitForCondition(() -> finalResultReached.get(), "Never received expected final result.");
 
             checkResult(OUTPUT_TOPIC, expectedFinalResult, numRecordsExpected);
 
@@ -268,7 +259,7 @@ public abstract class AbstractJoinIntegrationTest {
      * Checks the embedded queryable state store snapshot
      */
     private void checkQueryableStore(final String queryableName, final String expectedFinalResult) {
-        final ReadOnlyKeyValueStore<Long, String> store = streams.store(queryableName, QueryableStoreTypes.<Long, String>keyValueStore());
+        final ReadOnlyKeyValueStore<Long, String> store = streams.store(queryableName, QueryableStoreTypes.keyValueStore());
 
         final KeyValueIterator<Long, String> all = store.all();
         final KeyValue<Long, String> onlyEntry = all.next();

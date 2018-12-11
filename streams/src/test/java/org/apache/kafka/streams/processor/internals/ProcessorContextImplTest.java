@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.function.Consumer;
 
@@ -38,8 +39,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.junit.Before;
 import org.junit.Test;
 
-import static java.util.Collections.emptySet;
+import static java.util.Arrays.asList;
 import static org.easymock.EasyMock.anyLong;
+import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -56,8 +58,14 @@ public class ProcessorContextImplTest {
     private static final long VAL = 42L;
     private static final String STORE_NAME = "underlying-store";
 
-    private boolean initExecuted;
-    private boolean closeExecuted;
+    private boolean flushExecuted;
+    private boolean putExecuted;
+    private boolean putIfAbsentExecuted;
+    private boolean putAllExecuted;
+    private boolean deleteExecuted;
+    private boolean removeExecuted;
+    private boolean put3argExecuted;
+
     private KeyValueIterator<String, Long> rangeIter;
     private KeyValueIterator<String, Long> allIter;
 
@@ -66,6 +74,14 @@ public class ProcessorContextImplTest {
 
     @Before
     public void setup() {
+        flushExecuted = false;
+        putExecuted = false;
+        putIfAbsentExecuted = false;
+        putAllExecuted = false;
+        deleteExecuted = false;
+        removeExecuted = false;
+        put3argExecuted = false;
+
         rangeIter = mock(KeyValueIterator.class);
         allIter = mock(KeyValueIterator.class);
         windowStoreIter = mock(WindowStoreIterator.class);
@@ -82,9 +98,14 @@ public class ProcessorContextImplTest {
 
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
-        expect(stateManager.getGlobalStore("KeyValueStore")).andReturn(keyValueStoreMock());
-        expect(stateManager.getGlobalStore("WindowStore")).andReturn(windowStoreMock());
-        expect(stateManager.getGlobalStore("SessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
+        expect(stateManager.getGlobalStore("GlobalWindowStore")).andReturn(windowStoreMock());
+        expect(stateManager.getGlobalStore("GlobalSessionStore")).andReturn(sessionStoreMock());
+        expect(stateManager.getGlobalStore(anyString())).andReturn(null);
+
+        expect(stateManager.getStore("LocalKeyValueStore")).andReturn(keyValueStoreMock());
+        expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
+        expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
 
         replay(stateManager);
 
@@ -98,16 +119,20 @@ public class ProcessorContextImplTest {
             mock(ThreadCache.class)
         );
 
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null, emptySet()));
+        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
+            new HashSet<>(asList("LocalKeyValueStore", "LocalWindowStore", "LocalSessionStore"))));
     }
 
     @Test
-    public void testKeyValueStore() {
-        doTest("KeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put");
-            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent");
-            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll");
-            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete");
+    public void globalKeyValueStoreShouldBeReadOnly() {
+        doTest("GlobalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L), "putIfAbsent()");
+            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
+            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
 
             assertEquals((Long) VAL, store.get(KEY));
             assertEquals(rangeIter, store.range("one", "two"));
@@ -117,10 +142,13 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testWindowStore() {
-        doTest("WindowStore", (Consumer<WindowStore<String, Long>>) store -> {
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put");
-            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put");
+    public void globalWindowStoreShouldBeReadOnly() {
+        doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L), "put()");
 
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
@@ -131,10 +159,13 @@ public class ProcessorContextImplTest {
     }
 
     @Test
-    public void testSessionStore() {
-        doTest("SessionStore", (Consumer<SessionStore<String, Long>>) store -> {
-            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove");
-            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put");
+    public void globalSessionStoreShouldBeReadOnly() {
+        doTest("GlobalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.remove(null), "remove()");
+            checkThrowsUnsupportedOperation(() -> store.put(null, null), "put()");
 
             assertEquals(iters.get(3), store.findSessions(KEY, 1L, 2L));
             assertEquals(iters.get(4), store.findSessions(KEY, KEY, 1L, 2L));
@@ -143,6 +174,77 @@ public class ProcessorContextImplTest {
         });
     }
 
+    @Test
+    public void localKeyValueStoreShouldNotAllowInitOrClose() {
+        doTest("LocalKeyValueStore", (Consumer<KeyValueStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
+
+            store.put("1", 1L);
+            assertTrue(putExecuted);
+
+            store.putIfAbsent("1", 1L);
+            assertTrue(putIfAbsentExecuted);
+
+            store.putAll(Collections.emptyList());
+            assertTrue(putAllExecuted);
+
+            store.delete("1");
+            assertTrue(deleteExecuted);
+
+            assertEquals((Long) VAL, store.get(KEY));
+            assertEquals(rangeIter, store.range("one", "two"));
+            assertEquals(allIter, store.all());
+            assertEquals(VAL, store.approximateNumEntries());
+        });
+    }
+
+    @Test
+    public void localWindowStoreShouldNotAllowInitOrClose() {
+        doTest("LocalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
+
+            store.put("1", 1L);
+            assertTrue(putExecuted);
+
+            store.put("1", 1L, 1L);
+            assertTrue(put3argExecuted);
+
+            assertEquals(iters.get(0), store.fetchAll(0L, 0L));
+            assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
+            assertEquals(iters.get(1), store.fetch(KEY, KEY, 0L, 1L));
+            assertEquals((Long) VAL, store.fetch(KEY, 1L));
+            assertEquals(iters.get(2), store.all());
+        });
+    }
+
+    @Test
+    public void localSessionStoreShouldNotAllowInitOrClose() {
+        doTest("LocalSessionStore", (Consumer<SessionStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
+
+            store.remove(null);
+            assertTrue(removeExecuted);
+
+            store.put(null, null);
+            assertTrue(putExecuted);
+
+            assertEquals(iters.get(3), store.findSessions(KEY, 1L, 2L));
+            assertEquals(iters.get(4), store.findSessions(KEY, KEY, 1L, 2L));
+            assertEquals(iters.get(5), store.fetch(KEY));
+            assertEquals(iters.get(6), store.fetch(KEY, KEY));
+        });
+    }
+
+    @SuppressWarnings("unchecked")
     private KeyValueStore<String, Long> keyValueStoreMock() {
         final KeyValueStore<String, Long> keyValueStoreMock = mock(KeyValueStore.class);
 
@@ -153,6 +255,31 @@ public class ProcessorContextImplTest {
 
         expect(keyValueStoreMock.range("one", "two")).andReturn(rangeIter);
         expect(keyValueStoreMock.all()).andReturn(allIter);
+
+
+        keyValueStoreMock.put(anyString(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putExecuted = true;
+            return null;
+        });
+
+        keyValueStoreMock.putIfAbsent(anyString(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putIfAbsentExecuted = true;
+            return null;
+        });
+
+        keyValueStoreMock.putAll(anyObject(List.class));
+        expectLastCall().andAnswer(() -> {
+            putAllExecuted = true;
+            return null;
+        });
+
+        keyValueStoreMock.delete(anyString());
+        expectLastCall().andAnswer(() -> {
+            deleteExecuted = true;
+            return null;
+        });
 
         replay(keyValueStoreMock);
 
@@ -170,11 +297,24 @@ public class ProcessorContextImplTest {
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VAL);
         expect(windowStore.all()).andReturn(iters.get(2));
 
+        windowStore.put(anyString(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putExecuted = true;
+            return null;
+        });
+
+        windowStore.put(anyString(), anyLong(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            put3argExecuted = true;
+            return null;
+        });
+
         replay(windowStore);
 
         return windowStore;
     }
 
+    @SuppressWarnings("unchecked")
     private SessionStore<String, Long> sessionStoreMock() {
         final SessionStore<String, Long> sessionStore = mock(SessionStore.class);
 
@@ -185,25 +325,31 @@ public class ProcessorContextImplTest {
         expect(sessionStore.fetch(anyString())).andReturn(iters.get(5));
         expect(sessionStore.fetch(anyString(), anyString())).andReturn(iters.get(6));
 
+        sessionStore.put(anyObject(Windowed.class), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putExecuted = true;
+            return null;
+        });
+
+        sessionStore.remove(anyObject(Windowed.class));
+        expectLastCall().andAnswer(() -> {
+            removeExecuted = true;
+            return null;
+        });
+
         replay(sessionStore);
 
         return sessionStore;
     }
 
-    private void initStateStoreMock(final StateStore windowStore) {
-        expect(windowStore.name()).andReturn(STORE_NAME);
-        expect(windowStore.persistent()).andReturn(true);
-        expect(windowStore.isOpen()).andReturn(true);
+    private void initStateStoreMock(final StateStore stateStore) {
+        expect(stateStore.name()).andReturn(STORE_NAME);
+        expect(stateStore.persistent()).andReturn(true);
+        expect(stateStore.isOpen()).andReturn(true);
 
-        windowStore.init(null, null);
+        stateStore.flush();
         expectLastCall().andAnswer(() -> {
-            initExecuted = true;
-            return null;
-        });
-
-        windowStore.close();
-        expectLastCall().andAnswer(() -> {
-            closeExecuted = true;
+            flushExecuted = true;
             return null;
         });
     }
@@ -214,8 +360,6 @@ public class ProcessorContextImplTest {
             @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
                 final T store = (T) context.getStateStore(name);
-
-                checkStateStoreMethods(store);
 
                 checker.accept(store);
 
@@ -235,18 +379,13 @@ public class ProcessorContextImplTest {
         processor.init(context);
     }
 
-    private void checkStateStoreMethods(final StateStore store) {
-        checkThrowsUnsupportedOperation(store::flush, "flush");
-
+    private void verifyStoreCannotBeInitializedOrClosed(final StateStore store) {
         assertEquals(STORE_NAME, store.name());
         assertTrue(store.persistent());
         assertTrue(store.isOpen());
 
-        store.init(null, null);
-        assertTrue(initExecuted);
-
-        store.close();
-        assertTrue(closeExecuted);
+        checkThrowsUnsupportedOperation(() -> store.init(null, null), "init()");
+        checkThrowsUnsupportedOperation(store::close, "close()");
     }
 
     private void checkThrowsUnsupportedOperation(final Runnable check, final String name) {

@@ -36,8 +36,9 @@ public final class ApiUtils {
      */
     public static long validateMillisecondDuration(final Duration duration, final String messagePrefix) {
         try {
-            if (duration == null)
+            if (duration == null) {
                 throw new IllegalArgumentException(messagePrefix + "It shouldn't be null.");
+            }
 
             return duration.toMillis();
         } catch (final ArithmeticException e) {
@@ -53,8 +54,9 @@ public final class ApiUtils {
      */
     public static long validateMillisecondInstant(final Instant instant, final String messagePrefix) {
         try {
-            if (instant == null)
+            if (instant == null) {
                 throw new IllegalArgumentException(messagePrefix + "It shouldn't be null.");
+            }
 
             return instant.toEpochMilli();
         } catch (final ArithmeticException e) {

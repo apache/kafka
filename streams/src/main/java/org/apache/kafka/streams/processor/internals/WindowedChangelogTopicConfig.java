@@ -37,7 +37,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
 
     private Long retentionMs;
 
-    public WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    WindowedChangelogTopicConfig(final String name, final Map<String, String> topicConfigs) {
         super(name, topicConfigs);
     }
 
@@ -71,8 +71,12 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final WindowedChangelogTopicConfig that = (WindowedChangelogTopicConfig) o;
         return Objects.equals(name, that.name) &&
                 Objects.equals(topicConfigs, that.topicConfigs) &&
