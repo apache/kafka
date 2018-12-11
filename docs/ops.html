@@ -1703,13 +1703,36 @@ All the following metrics have a recording level of ``debug``:
         <td>The total number of of records being forwarded downstream, from source nodes only. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>suppression-emit-rate</td>
+        <td>
+          The rate at which records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-rate</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-emit-total</td>
+        <td>
+          The total number of records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-total</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
  </tbody>
  </table>
 
  <h5><a id="kafka_streams_store_monitoring" href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
  All the following metrics have a recording level of ``debug``. Note that the ``store-scope`` value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
- state stores; for built-in state stores, currently we have <code>in-memory-state</code>, <code>in-memory-lru-state</code>, <code>rocksdb-state</code> (for RocksDB backed key-value store),
-  <code>rocksdb-window-state</code> (for RocksDB backed window store) and <code>rocksdb-session-state</code> (for RocksDB backed session store).
+ state stores; for built-in state stores, currently we have:
+  <ul>
+    <li><code>in-memory-state</code></li>
+    <li><code>in-memory-lru-state</code></li>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+    <li><code>buffer</code> (for Suppression buffers) Note that buffers don't report many of the normal metrics.</li>
+  </ul>
 
   <table class="data-table">
       <tbody>
@@ -1896,6 +1919,36 @@ All the following metrics have a recording level of ``debug``:
       <tr>
         <td>restore-total</td>
         <td>The total number of restore calls for this store.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-current</td>
+        <td>The current total size, in bytes, of the buffered data.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-count-current</td>
+        <td>The current number of records buffered.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum number of records buffered over the sampling window.</td>
         <td>kafka.streams:type=stream-[store-scope]-metrics,client-id=([-.\w]+),task-id=([-.\w]+),[store-scope]-id=([-.\w]+)</td>
       </tr>
     </tbody>
