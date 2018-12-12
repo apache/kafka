@@ -32,6 +32,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.WallclockTimestampExtractor;
 import org.apache.kafka.test.IntegrationTest;
@@ -93,7 +94,7 @@ public class KTableSourceTopicRestartIntegrationTest {
 
     @Before
     public void before() {
-        final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC);
+        final KTable<String, String> kTable = streamsBuilder.table(SOURCE_TOPIC, Materialized.as("store"));
         kTable.toStream().foreach(new ForeachAction<String, String>() {
             @Override
             public void apply(final String key, final String value) {

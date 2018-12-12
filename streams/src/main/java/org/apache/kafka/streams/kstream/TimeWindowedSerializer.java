@@ -37,6 +37,7 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
     private Serializer<T> inner;
 
     // Default constructor needed by Kafka
+    @SuppressWarnings("WeakerAccess")
     public TimeWindowedSerializer() {}
 
     public TimeWindowedSerializer(final Serializer<T> inner) {
@@ -50,7 +51,7 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
             final String propertyName = isKey ? StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS : StreamsConfig.DEFAULT_WINDOWED_VALUE_SERDE_INNER_CLASS;
             final String value = (String) configs.get(propertyName);
             try {
-                inner = Serde.class.cast(Utils.newInstance(value, Serde.class)).serializer();
+                inner = Utils.newInstance(value, Serde.class).serializer();
                 inner.configure(configs, isKey);
             } catch (final ClassNotFoundException e) {
                 throw new ConfigException(propertyName, value, "Serde class " + value + " could not be found.");
@@ -60,8 +61,9 @@ public class TimeWindowedSerializer<T> implements WindowedSerializer<T> {
 
     @Override
     public byte[] serialize(final String topic, final Windowed<T> data) {
-        if (data == null)
+        if (data == null) {
             return null;
+        }
 
         return WindowKeySchema.toBinary(data, inner, topic);
     }

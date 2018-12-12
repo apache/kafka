@@ -78,7 +78,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
+    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     File dbDir;
     private RocksDB db;
@@ -516,10 +516,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             if (next == null) {
                 return allDone();
             } else {
-                if (comparator.compare(next.key.get(), rawToKey) <= 0)
+                if (comparator.compare(next.key.get(), rawToKey) <= 0) {
                     return next;
-                else
+                } else {
                     return allDone();
+                }
             }
         }
     }

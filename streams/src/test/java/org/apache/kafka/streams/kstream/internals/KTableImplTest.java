@@ -26,7 +26,6 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyDescription;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
-import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
@@ -40,7 +39,6 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -204,138 +202,6 @@ public class KTableImplTest {
     }
 
     @Test
-    public void testValueGetter() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final String topic1 = "topic1";
-        final String topic2 = "topic2";
-
-        final KTableImpl<String, String, String> table1 =
-                (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2 = (KTableImpl<String, String, Integer>) table1.mapValues(
-                new ValueMapper<String, Integer>() {
-                    @Override
-                    public Integer apply(final String value) {
-                        return new Integer(value);
-                    }
-                });
-        final KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table2.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(final String key, final Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-
-        table1.toStream().to(topic2, produced);
-        final KTableImpl<String, String, String> table4 = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
-
-        final Topology topology = builder.build();
-
-        final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
-        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
-        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
-        final KTableValueGetterSupplier<String, String> getterSupplier4 = table4.valueGetterSupplier();
-
-        final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
-        topologyBuilder.connectProcessorAndStateStores(table1.name, getterSupplier1.storeNames());
-        topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
-        topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
-        topologyBuilder.connectProcessorAndStateStores(table4.name, getterSupplier4.storeNames());
-
-        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
-
-            assertEquals(2, driver.getAllStateStores().size());
-
-            final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
-            final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-            final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
-            final KTableValueGetter<String, String> getter4 = getterSupplier4.get();
-
-            getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
-            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
-            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
-            getter4.init(driver.setCurrentNodeForProcessorContext(table4.name));
-
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
-
-            assertEquals("01", getter1.get("A"));
-            assertEquals("01", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
-
-            assertEquals(new Integer(1), getter2.get("A"));
-            assertEquals(new Integer(1), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
-
-            assertNull(getter3.get("A"));
-            assertNull(getter3.get("B"));
-            assertNull(getter3.get("C"));
-
-            assertEquals("01", getter4.get("A"));
-            assertEquals("01", getter4.get("B"));
-            assertEquals("01", getter4.get("C"));
-
-            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-
-            assertEquals("02", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
-
-            assertEquals(new Integer(2), getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
-
-            assertEquals(new Integer(2), getter3.get("A"));
-            assertEquals(new Integer(2), getter3.get("B"));
-            assertNull(getter3.get("C"));
-
-            assertEquals("02", getter4.get("A"));
-            assertEquals("02", getter4.get("B"));
-            assertEquals("01", getter4.get("C"));
-
-            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
-
-            assertEquals("03", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
-
-            assertEquals(new Integer(3), getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
-
-            assertNull(getter3.get("A"));
-            assertEquals(new Integer(2), getter3.get("B"));
-            assertNull(getter3.get("C"));
-
-            assertEquals("03", getter4.get("A"));
-            assertEquals("02", getter4.get("B"));
-            assertEquals("01", getter4.get("C"));
-
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-
-            assertNull(getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
-
-
-            assertNull(getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
-
-            assertNull(getter3.get("A"));
-            assertEquals(new Integer(2), getter3.get("B"));
-            assertNull(getter3.get("C"));
-
-            assertNull(getter4.get("A"));
-            assertEquals("02", getter4.get("B"));
-            assertEquals("01", getter4.get("C"));
-        }
-    }
-
-    @Test
     public void testStateStoreLazyEval() {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
@@ -362,7 +228,7 @@ public class KTableImplTest {
                 });
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            assertEquals(2, driver.getAllStateStores().size());
+            assertEquals(0, driver.getAllStateStores().size());
         }
     }
 

@@ -63,7 +63,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -78,7 +77,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
@@ -95,9 +94,10 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+        return fetch(
+            key,
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     /**
@@ -118,9 +118,11 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
-        ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime"));
-        ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime"));
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+        return fetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
     /**
@@ -137,8 +139,8 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from"));
-        ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to"));
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 }

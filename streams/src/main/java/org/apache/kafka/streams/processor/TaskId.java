@@ -47,7 +47,9 @@ public class TaskId implements Comparable<TaskId> {
      */
     public static TaskId parse(final String taskIdStr) {
         final int index = taskIdStr.indexOf('_');
-        if (index <= 0 || index + 1 >= taskIdStr.length()) throw new TaskIdFormatException(taskIdStr);
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
 
         try {
             final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
@@ -85,8 +87,9 @@ public class TaskId implements Comparable<TaskId> {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o)
+        if (this == o) {
             return true;
+        }
 
         if (o instanceof TaskId) {
             final TaskId other = (TaskId) o;
