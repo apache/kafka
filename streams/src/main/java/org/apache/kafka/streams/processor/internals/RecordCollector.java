@@ -24,7 +24,7 @@ import org.apache.kafka.streams.processor.StreamPartitioner;
 
 import java.util.Map;
 
-public interface RecordCollector {
+public interface RecordCollector extends AutoCloseable {
 
     <K, V> void send(final String topic,
                      final K key,
@@ -43,6 +43,12 @@ public interface RecordCollector {
                      final Serializer<K> keySerializer,
                      final Serializer<V> valueSerializer,
                      final StreamPartitioner<? super K, ? super V> partitioner);
+
+    /**
+     * Initialize the collector with a producer.
+     * @param producer the producer that should be used by this collector
+     */
+    void init(final Producer<byte[], byte[]> producer);
 
     /**
      * Flush the internal {@link Producer}.

@@ -43,9 +43,9 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     try {
       authorizer.configure(this.configs.head.originals())
       authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
-                             AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*"))
+                             AuthAcl.WildCardHost, All)), new AuthResource(Topic, "*", PatternType.LITERAL))
       authorizer.addAcls(Set(new AuthAcl(AuthAcl.WildCardPrincipal, Allow,
-                             AuthAcl.WildCardHost, All)), new AuthResource(Group, "*"))
+                             AuthAcl.WildCardHost, All)), new AuthResource(Group, "*", PatternType.LITERAL))
 
       authorizer.addAcls(Set(clusterAcl(Allow, Create),
                              clusterAcl(Allow, Delete),

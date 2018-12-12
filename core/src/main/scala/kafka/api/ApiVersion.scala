@@ -17,6 +17,8 @@
 
 package kafka.api
 
+import org.apache.kafka.common.config.ConfigDef.Validator
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.record.RecordVersion
 
 /**
@@ -75,7 +77,14 @@ object ApiVersion {
     // Several request versions were bumped due to KIP-219 (Improve quota communication)
     KAFKA_2_0_IV1,
     // Introduced new schemas for group offset (v2) and group metadata (v2) (KIP-211)
-    KAFKA_2_1_IV0
+    KAFKA_2_1_IV0,
+    // New Fetch, OffsetsForLeaderEpoch, and ListOffsets schemas (KIP-320)
+    KAFKA_2_1_IV1,
+    // Support ZStandard Compression Codec (KIP-110)
+    KAFKA_2_1_IV2,
+    // Introduced broker generation (KIP-380), and
+    // LeaderAdnIsrRequest V2, UpdateMetadataRequest V5, StopReplicaRequest V1
+    KAFKA_2_2_IV0
   )
 
   // Map keys are the union of the short and full versions
@@ -256,5 +265,37 @@ case object KAFKA_2_1_IV0 extends DefaultApiVersion {
   val shortVersion: String = "2.1"
   val subVersion = "IV0"
   val recordVersion = RecordVersion.V2
+  val id: Int = 17
+}
+
+case object KAFKA_2_1_IV1 extends DefaultApiVersion {
+  val shortVersion: String = "2.1"
+  val subVersion = "IV1"
+  val recordVersion = RecordVersion.V2
   val id: Int = 18
+}
+
+case object KAFKA_2_1_IV2 extends DefaultApiVersion {
+  val shortVersion: String = "2.1"
+  val subVersion = "IV2"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 19
+}
+
+case object KAFKA_2_2_IV0 extends DefaultApiVersion {
+  val shortVersion: String = "2.2"
+  val subVersion = "IV0"
+  val recordVersion = RecordVersion.V2
+  val id: Int = 20
+}
+
+object ApiVersionValidator extends Validator {
+
+  override def ensureValid(name: String, value: Any): Unit = {
+    try {
+      ApiVersion(value.toString)
+    } catch {
+      case e: IllegalArgumentException => throw new ConfigException(name, value.toString, e.getMessage)
+    }
+  }
 }

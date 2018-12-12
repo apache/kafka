@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.clients.admin.NewPartitions;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
@@ -72,17 +71,47 @@ public class CreatePartitionsRequest extends AbstractRequest {
     // It is an error for duplicate topics to be present in the request,
     // so track duplicates here to allow KafkaApis to report per-topic errors.
     private final Set<String> duplicates;
-    private final Map<String, NewPartitions> newPartitions;
+    private final Map<String, PartitionDetails> newPartitions;
     private final int timeout;
     private final boolean validateOnly;
 
+    public static class PartitionDetails {
+
+        private final int totalCount;
+
+        private final List<List<Integer>> newAssignments;
+
+        public PartitionDetails(int totalCount) {
+            this(totalCount, null);
+        }
+
+        public PartitionDetails(int totalCount, List<List<Integer>> newAssignments) {
+            this.totalCount = totalCount;
+            this.newAssignments = newAssignments;
+        }
+
+        public int totalCount() {
+            return totalCount;
+        }
+
+        public List<List<Integer>> newAssignments() {
+            return newAssignments;
+        }
+
+        @Override
+        public String toString() {
+            return "(totalCount=" + totalCount() + ", newAssignments=" + newAssignments() + ")";
+        }
+
+    }
+
     public static class Builder extends AbstractRequest.Builder<CreatePartitionsRequest> {
 
-        private final Map<String, NewPartitions> newPartitions;
+        private final Map<String, PartitionDetails> newPartitions;
         private final int timeout;
         private final boolean validateOnly;
 
-        public Builder(Map<String, NewPartitions> newPartitions, int timeout, boolean validateOnly) {
+        public Builder(Map<String, PartitionDetails> newPartitions, int timeout, boolean validateOnly) {
             super(ApiKeys.CREATE_PARTITIONS);
             this.newPartitions = newPartitions;
             this.timeout = timeout;
@@ -106,8 +135,8 @@ public class CreatePartitionsRequest extends AbstractRequest {
         }
     }
 
-    CreatePartitionsRequest(Map<String, NewPartitions> newPartitions, int timeout, boolean validateOnly, short apiVersion) {
-        super(apiVersion);
+    CreatePartitionsRequest(Map<String, PartitionDetails> newPartitions, int timeout, boolean validateOnly, short apiVersion) {
+        super(ApiKeys.CREATE_PARTITIONS, apiVersion);
         this.newPartitions = newPartitions;
         this.duplicates = Collections.emptySet();
         this.timeout = timeout;
@@ -115,9 +144,9 @@ public class CreatePartitionsRequest extends AbstractRequest {
     }
 
     public CreatePartitionsRequest(Struct struct, short apiVersion) {
-        super(apiVersion);
+        super(ApiKeys.CREATE_PARTITIONS, apiVersion);
         Object[] topicCountArray = struct.getArray(TOPIC_PARTITIONS_KEY_NAME);
-        Map<String, NewPartitions> counts = new HashMap<>(topicCountArray.length);
+        Map<String, PartitionDetails> counts = new HashMap<>(topicCountArray.length);
         Set<String> dupes = new HashSet<>();
         for (Object topicPartitionCountObj : topicCountArray) {
             Struct topicPartitionCountStruct = (Struct) topicPartitionCountObj;
@@ -125,7 +154,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
             Struct partitionCountStruct = topicPartitionCountStruct.getStruct(NEW_PARTITIONS_KEY_NAME);
             int count = partitionCountStruct.getInt(COUNT_KEY_NAME);
             Object[] assignmentsArray = partitionCountStruct.getArray(ASSIGNMENT_KEY_NAME);
-            NewPartitions newPartition;
+            PartitionDetails newPartition;
             if (assignmentsArray != null) {
                 List<List<Integer>> assignments = new ArrayList<>(assignmentsArray.length);
                 for (Object replicas : assignmentsArray) {
@@ -136,11 +165,11 @@ public class CreatePartitionsRequest extends AbstractRequest {
                         replicasList.add((Integer) broker);
                     }
                 }
-                newPartition = NewPartitions.increaseTo(count, assignments);
+                newPartition = new PartitionDetails(count, assignments);
             } else {
-                newPartition = NewPartitions.increaseTo(count);
+                newPartition = new PartitionDetails(count);
             }
-            NewPartitions dupe = counts.put(topic, newPartition);
+            PartitionDetails dupe = counts.put(topic, newPartition);
             if (dupe != null) {
                 dupes.add(topic);
             }
@@ -155,7 +184,7 @@ public class CreatePartitionsRequest extends AbstractRequest {
         return duplicates;
     }
 
-    public Map<String, NewPartitions> newPartitions() {
+    public Map<String, PartitionDetails> newPartitions() {
         return newPartitions;
     }
 
@@ -171,17 +200,17 @@ public class CreatePartitionsRequest extends AbstractRequest {
     protected Struct toStruct() {
         Struct struct = new Struct(ApiKeys.CREATE_PARTITIONS.requestSchema(version()));
         List<Struct> topicPartitionsList = new ArrayList<>();
-        for (Map.Entry<String, NewPartitions> topicPartitionCount : this.newPartitions.entrySet()) {
+        for (Map.Entry<String, PartitionDetails> topicPartitionCount : this.newPartitions.entrySet()) {
             Struct topicPartitionCountStruct = struct.instance(TOPIC_PARTITIONS_KEY_NAME);
             topicPartitionCountStruct.set(TOPIC_NAME, topicPartitionCount.getKey());
-            NewPartitions count = topicPartitionCount.getValue();
+            PartitionDetails partitionDetails = topicPartitionCount.getValue();
             Struct partitionCountStruct = topicPartitionCountStruct.instance(NEW_PARTITIONS_KEY_NAME);
-            partitionCountStruct.set(COUNT_KEY_NAME, count.totalCount());
+            partitionCountStruct.set(COUNT_KEY_NAME, partitionDetails.totalCount());
             Object[][] assignments = null;
-            if (count.assignments() != null) {
-                assignments = new Object[count.assignments().size()][];
+            if (partitionDetails.newAssignments() != null) {
+                assignments = new Object[partitionDetails.newAssignments().size()][];
                 int i = 0;
-                for (List<Integer> partitionAssignment : count.assignments()) {
+                for (List<Integer> partitionAssignment : partitionDetails.newAssignments()) {
                     assignments[i] = partitionAssignment.toArray(new Object[0]);
                     i++;
                 }

@@ -97,7 +97,7 @@ public class Consumed<K, V> {
     /**
      * Create an instance of {@link Consumed} with key and value {@link Serde}s.
      *
-     * @param keySerde   the key serde. If {@code null}the default key serde from config will be used
+     * @param keySerde   the key serde. If {@code null} the default key serde from config will be used
      * @param valueSerde the value serde. If {@code null} the default value serde from config will be used
      * @param <K>        key type
      * @param <V>        value type
@@ -121,7 +121,7 @@ public class Consumed<K, V> {
     }
 
     /**
-     * Create an instance of {@link Consumed} with a {@link Topology.AutoOffsetReset}.
+     * Create an instance of {@link Consumed} with a {@link org.apache.kafka.streams.Topology.AutoOffsetReset Topology.AutoOffsetReset}.
      *
      * @param resetPolicy the offset reset policy to be used. If {@code null} the default reset policy from config will be used
      * @param <K>         key type
@@ -166,7 +166,7 @@ public class Consumed<K, V> {
     }
 
     /**
-     * Configure the instance of {@link Consumed} with a {@link Topology.AutoOffsetReset}.
+     * Configure the instance of {@link Consumed} with a {@link org.apache.kafka.streams.Topology.AutoOffsetReset Topology.AutoOffsetReset}.
      *
      * @param resetPolicy the offset reset policy to be used. If {@code null} the default reset policy from config will be used
      * @return this

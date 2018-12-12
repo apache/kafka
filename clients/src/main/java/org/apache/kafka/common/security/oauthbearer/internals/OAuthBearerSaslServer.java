@@ -31,10 +31,14 @@ import javax.security.sasl.SaslServer;
 import javax.security.sasl.SaslServerFactory;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.authenticator.SaslInternalConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerExtensionsValidatorCallback;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -46,6 +50,7 @@ import org.slf4j.LoggerFactory;
  * for example).
  */
 public class OAuthBearerSaslServer implements SaslServer {
+
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerSaslServer.class);
     private static final String NEGOTIATED_PROPERTY_KEY_TOKEN = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM + ".token";
     private static final String INTERNAL_ERROR_ON_SERVER = "Authentication could not be performed due to an internal error on the server";
@@ -55,6 +60,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     private boolean complete;
     private OAuthBearerToken tokenForNegotiatedProperty = null;
     private String errorMessage = null;
+    private SaslExtensions extensions;
 
     public OAuthBearerSaslServer(CallbackHandler callbackHandler) {
         if (!(Objects.requireNonNull(callbackHandler) instanceof AuthenticateCallbackHandler))
@@ -79,11 +85,11 @@ public class OAuthBearerSaslServer implements SaslServer {
     @Override
     public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
         if (response.length == 1 && response[0] == OAuthBearerSaslClient.BYTE_CONTROL_A && errorMessage != null) {
-            if (log.isDebugEnabled())
-                log.debug("Received %x01 response from client after it received our error");
+            log.debug("Received %x01 response from client after it received our error");
             throw new SaslAuthenticationException(errorMessage);
         }
         errorMessage = null;
+
         OAuthBearerClientInitialResponse clientResponse;
         try {
             clientResponse = new OAuthBearerClientInitialResponse(response);
@@ -91,7 +97,8 @@ public class OAuthBearerSaslServer implements SaslServer {
             log.debug(e.getMessage());
             throw e;
         }
-        return process(clientResponse.tokenValue(), clientResponse.authorizationId());
+
+        return process(clientResponse.tokenValue(), clientResponse.authorizationId(), clientResponse.extensions());
     }
 
     @Override
@@ -110,7 +117,11 @@ public class OAuthBearerSaslServer implements SaslServer {
     public Object getNegotiatedProperty(String propName) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
-        return NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName) ? tokenForNegotiatedProperty : null;
+        if (NEGOTIATED_PROPERTY_KEY_TOKEN.equals(propName))
+            return tokenForNegotiatedProperty;
+        if (SaslInternalConfigs.CREDENTIAL_LIFETIME_MS_SASL_NEGOTIATED_PROPERTY_KEY.equals(propName))
+            return tokenForNegotiatedProperty.lifetimeMs();
+        return extensions.map().get(propName);
     }
 
     @Override
@@ -119,41 +130,38 @@ public class OAuthBearerSaslServer implements SaslServer {
     }
 
     @Override
-    public byte[] unwrap(byte[] incoming, int offset, int len) throws SaslException {
+    public byte[] unwrap(byte[] incoming, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(incoming, offset, offset + len);
     }
 
     @Override
-    public byte[] wrap(byte[] outgoing, int offset, int len) throws SaslException {
+    public byte[] wrap(byte[] outgoing, int offset, int len) {
         if (!complete)
             throw new IllegalStateException("Authentication exchange has not completed");
         return Arrays.copyOfRange(outgoing, offset, offset + len);
     }
 
     @Override
-    public void dispose() throws SaslException {
+    public void dispose() {
         complete = false;
         tokenForNegotiatedProperty = null;
+        extensions = null;
     }
 
-    private byte[] process(String tokenValue, String authorizationId) throws SaslException {
+    private byte[] process(String tokenValue, String authorizationId, SaslExtensions extensions) throws SaslException {
         OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(tokenValue);
         try {
             callbackHandler.handle(new Callback[] {callback});
         } catch (IOException | UnsupportedCallbackException e) {
-            String msg = String.format("%s: %s", INTERNAL_ERROR_ON_SERVER, e.getMessage());
-            if (log.isDebugEnabled())
-                log.debug(msg, e);
-            throw new SaslException(msg);
+            handleCallbackError(e);
         }
         OAuthBearerToken token = callback.token();
         if (token == null) {
             errorMessage = jsonErrorResponse(callback.errorStatus(), callback.errorScope(),
                     callback.errorOpenIDConfiguration());
-            if (log.isDebugEnabled())
-                log.debug(errorMessage);
+            log.debug(errorMessage);
             return errorMessage.getBytes(StandardCharsets.UTF_8);
         }
         /*
@@ -164,11 +172,34 @@ public class OAuthBearerSaslServer implements SaslServer {
             throw new SaslAuthenticationException(String.format(
                     "Authentication failed: Client requested an authorization id (%s) that is different from the token's principal name (%s)",
                     authorizationId, token.principalName()));
+
+        Map<String, String> validExtensions = processExtensions(token, extensions);
+
         tokenForNegotiatedProperty = token;
+        this.extensions = new SaslExtensions(validExtensions);
         complete = true;
-        if (log.isDebugEnabled())
-            log.debug("Successfully authenticate User={}", token.principalName());
+        log.debug("Successfully authenticate User={}", token.principalName());
         return new byte[0];
+    }
+
+    private Map<String, String> processExtensions(OAuthBearerToken token, SaslExtensions extensions) throws SaslException {
+        OAuthBearerExtensionsValidatorCallback extensionsCallback = new OAuthBearerExtensionsValidatorCallback(token, extensions);
+        try {
+            callbackHandler.handle(new Callback[] {extensionsCallback});
+        } catch (UnsupportedCallbackException e) {
+            // backwards compatibility - no extensions will be added
+        } catch (IOException e) {
+            handleCallbackError(e);
+        }
+        if (!extensionsCallback.invalidExtensions().isEmpty()) {
+            String errorMessage = String.format("Authentication failed: %d extensions are invalid! They are: %s",
+                    extensionsCallback.invalidExtensions().size(),
+                    Utils.mkString(extensionsCallback.invalidExtensions(), "", "", ": ", "; "));
+            log.debug(errorMessage);
+            throw new SaslAuthenticationException(errorMessage);
+        }
+
+        return extensionsCallback.validatedExtensions();
     }
 
     private static String jsonErrorResponse(String errorStatus, String errorScope, String errorOpenIDConfiguration) {
@@ -182,6 +213,12 @@ public class OAuthBearerSaslServer implements SaslServer {
         return jsonErrorResponse;
     }
 
+    private void handleCallbackError(Exception e) throws SaslException {
+        String msg = String.format("%s: %s", INTERNAL_ERROR_ON_SERVER, e.getMessage());
+        log.debug(msg, e);
+        throw new SaslException(msg);
+    }
+
     public static String[] mechanismNamesCompatibleWithPolicy(Map<String, ?> props) {
         return props != null && "true".equals(String.valueOf(props.get(Sasl.POLICY_NOPLAINTEXT))) ? new String[] {}
                 : new String[] {OAuthBearerLoginModule.OAUTHBEARER_MECHANISM};
@@ -190,7 +227,7 @@ public class OAuthBearerSaslServer implements SaslServer {
     public static class OAuthBearerSaslServerFactory implements SaslServerFactory {
         @Override
         public SaslServer createSaslServer(String mechanism, String protocol, String serverName, Map<String, ?> props,
-                CallbackHandler callbackHandler) throws SaslException {
+                CallbackHandler callbackHandler) {
             String[] mechanismNamesCompatibleWithPolicy = getMechanismNames(props);
             for (int i = 0; i < mechanismNamesCompatibleWithPolicy.length; i++) {
                 if (mechanismNamesCompatibleWithPolicy[i].equals(mechanism)) {

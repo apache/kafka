@@ -20,12 +20,12 @@ import org.junit.Assert._
 import org.junit.Test
 import kafka.utils.Logging
 import kafka.utils.TestUtils
-import kafka.zk.{ConfigEntityChangeNotificationZNode, ZooKeeperTestHarness}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
 import kafka.server.ConfigType
 import kafka.admin.TopicCommand.TopicCommandOptions
-import kafka.utils.ZkUtils.getDeleteTopicPath
 import org.apache.kafka.common.errors.TopicExistsException
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.config.ConfigException
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -79,7 +79,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // delete the NormalTopic
     val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
-    val deletePath = getDeleteTopicPath(normalTopic)
+    val deletePath = DeleteTopicsTopicZNode.path(normalTopic)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     TopicCommand.deleteTopic(zkClient, deleteOpts)
     assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
@@ -92,7 +92,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // try to delete the Topic.GROUP_METADATA_TOPIC_NAME and make sure it doesn't
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
-    val deleteOffsetTopicPath = getDeleteTopicPath(Topic.GROUP_METADATA_TOPIC_NAME)
+    val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
       TopicCommand.deleteTopic(zkClient, deleteOffsetTopicOpts)
@@ -240,6 +240,74 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     } catch {
       case _: Exception => // topic creation should fail due to the invalid config
     }
+
+    // try to create the topic with another invalid config
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "message.format.version=boom"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: ConfigException => // topic creation should fail due to the invalid config value
+    }
   }
 
+  @Test
+  def testDescribeAndListTopicsWithoutInternalTopics() {
+    val brokers = List(0)
+    val topic = "testDescribeAndListTopicsWithoutInternalTopics"
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic)))
+    // create a internal topic
+    TopicCommand.createTopic(zkClient,
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
+
+    // test describe
+    var output = TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient,
+      new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+
+    // test list
+    output = TestUtils.grabConsoleOutput(TopicCommand.listTopics(zkClient,
+      new TopicCommandOptions(Array("--list", "--exclude-internal"))))
+    assertTrue(output.contains(topic))
+    assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+  }
+
+  @Test
+  def testTopicOperationsWithRegexSymbolInTopicName(): Unit = {
+    val topic1 = "test.topic"
+    val topic2 = "test-topic"
+    val escapedTopic = "\"test\\.topic\""
+    val unescapedTopic = "test.topic"
+    val numPartitionsOriginal = 1
+
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // create the topics
+    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1", "--topic", topic1))
+    TopicCommand.createTopic(zkClient, createOpts)
+    val createOpts2 = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
+      "--replication-factor", "1", "--topic", topic2))
+    TopicCommand.createTopic(zkClient, createOpts2)
+
+    val escapedCommandOpts = new TopicCommandOptions(Array("--topic", escapedTopic))
+    val unescapedCommandOpts = new TopicCommandOptions(Array("--topic", unescapedTopic))
+
+    // topic actions with escaped regex do not affect 'test-topic'
+    // topic actions with unescaped topic affect 'test-topic'
+
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.describeTopic(zkClient, unescapedCommandOpts)).contains(topic2))
+
+    assertFalse(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, escapedCommandOpts)).contains(topic2))
+    assertTrue(TestUtils.grabConsoleOutput(TopicCommand.deleteTopic(zkClient, unescapedCommandOpts)).contains(topic2))
+  }
 }

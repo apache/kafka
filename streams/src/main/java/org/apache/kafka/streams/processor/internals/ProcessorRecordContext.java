@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.processor.RecordContext;
 
@@ -78,10 +79,31 @@ public class ProcessorRecordContext implements RecordContext {
         return headers;
     }
 
+    public long sizeBytes() {
+        long size = 0L;
+        size += 8; // value.context.timestamp
+        size += 8; // value.context.offset
+        if (topic != null) {
+            size += topic.toCharArray().length;
+        }
+        size += 4; // partition
+        if (headers != null) {
+            for (final Header header : headers) {
+                size += header.key().toCharArray().length;
+                size += header.value().length;
+            }
+        }
+        return size;
+    }
+
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final ProcessorRecordContext that = (ProcessorRecordContext) o;
         return timestamp == that.timestamp &&
                 offset == that.offset &&

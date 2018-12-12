@@ -17,6 +17,7 @@
 
 package kafka.tools
 
+import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
@@ -24,33 +25,33 @@ import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
 import com.yammer.metrics.core.Gauge
-import joptsimple.OptionParser
 import kafka.consumer.BaseConsumerRecord
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{CommandLineUtils, CoreUtils, Logging, Whitelist}
-import org.apache.kafka.clients.consumer.{CommitFailedException, Consumer, ConsumerConfig, ConsumerRebalanceListener, ConsumerRecord, KafkaConsumer, OffsetAndMetadata}
+import kafka.utils._
+import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.serialization.ByteArrayDeserializer
-import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.errors.{TimeoutException, WakeupException}
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
+import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.util.control.ControlThrowable
+import scala.util.{Failure, Success, Try}
 
 /**
  * The mirror maker has the following architecture:
- * - There are N mirror maker thread shares one ZookeeperConsumerConnector and each owns a Kafka stream.
+ * - There are N mirror maker thread, each of which is equipped with a separate KafkaConsumer instance.
  * - All the mirror maker threads share one producer.
  * - Each mirror maker thread periodically flushes the producer and then commits all offsets.
  *
  * @note For mirror maker, the following settings are set by default to make sure there is no data loss:
  *       1. use producer with following settings
  *            acks=all
- *            retries=max integer
+ *            delivery.timeout.ms=max integer
  *            max.block.ms=max long
  *            max.in.flight.requests.per.connection=1
  *       2. Consumer Settings
@@ -69,6 +70,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
   @volatile private var exitingOnSendFailure: Boolean = false
+  private var lastSuccessfulCommitTime = -1L
+  private val time = Time.SYSTEM
 
   // If a message send failed after retries are exhausted. The offset of the messages will also be removed from
   // the unacked offset list to avoid offset commit being stuck on that offset. In this case, the offset of that
@@ -82,165 +85,12 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     info("Starting mirror maker")
     try {
-      val parser = new OptionParser(false)
-
-      val consumerConfigOpt = parser.accepts("consumer.config",
-        "Embedded consumer config for consuming from the source cluster.")
-        .withRequiredArg()
-        .describedAs("config file")
-        .ofType(classOf[String])
-
-      parser.accepts("new.consumer",
-        "DEPRECATED Use new consumer in mirror maker (this is the default so this option will be removed in " +
-          "a future version).")
-
-      val producerConfigOpt = parser.accepts("producer.config",
-        "Embedded producer config.")
-        .withRequiredArg()
-        .describedAs("config file")
-        .ofType(classOf[String])
-
-      val numStreamsOpt = parser.accepts("num.streams",
-        "Number of consumption streams.")
-        .withRequiredArg()
-        .describedAs("Number of threads")
-        .ofType(classOf[java.lang.Integer])
-        .defaultsTo(1)
-
-      val whitelistOpt = parser.accepts("whitelist",
-        "Whitelist of topics to mirror.")
-        .withRequiredArg()
-        .describedAs("Java regex (String)")
-        .ofType(classOf[String])
-
-      val offsetCommitIntervalMsOpt = parser.accepts("offset.commit.interval.ms",
-        "Offset commit interval in ms.")
-        .withRequiredArg()
-        .describedAs("offset commit interval in millisecond")
-        .ofType(classOf[java.lang.Integer])
-        .defaultsTo(60000)
-
-      val consumerRebalanceListenerOpt = parser.accepts("consumer.rebalance.listener",
-        "The consumer rebalance listener to use for mirror maker consumer.")
-        .withRequiredArg()
-        .describedAs("A custom rebalance listener of type ConsumerRebalanceListener")
-        .ofType(classOf[String])
-
-      val rebalanceListenerArgsOpt = parser.accepts("rebalance.listener.args",
-        "Arguments used by custom rebalance listener for mirror maker consumer.")
-        .withRequiredArg()
-        .describedAs("Arguments passed to custom rebalance listener constructor as a string.")
-        .ofType(classOf[String])
-
-      val messageHandlerOpt = parser.accepts("message.handler",
-        "Message handler which will process every record in-between consumer and producer.")
-        .withRequiredArg()
-        .describedAs("A custom message handler of type MirrorMakerMessageHandler")
-        .ofType(classOf[String])
-
-      val messageHandlerArgsOpt = parser.accepts("message.handler.args",
-        "Arguments used by custom message handler for mirror maker.")
-        .withRequiredArg()
-        .describedAs("Arguments passed to message handler constructor.")
-        .ofType(classOf[String])
-
-      val abortOnSendFailureOpt = parser.accepts("abort.on.send.failure",
-        "Configure the mirror maker to exit on a failed send.")
-        .withRequiredArg()
-        .describedAs("Stop the entire mirror maker when a send failure occurs")
-        .ofType(classOf[String])
-        .defaultsTo("true")
-
-      val helpOpt = parser.accepts("help", "Print this message.")
-
-      if (args.length == 0)
-        CommandLineUtils.printUsageAndDie(parser, "Continuously copy data between two Kafka clusters.")
-
-
-      val options = parser.parse(args: _*)
-
-      if (options.has(helpOpt)) {
-        parser.printHelpOn(System.out)
-        sys.exit(0)
-      }
-
-      CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
-      val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
-
-      if (!options.has(whitelistOpt)) {
-        error("whitelist must be specified")
-        sys.exit(1)
-      }
-
-      if (!consumerProps.containsKey(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
-        System.err.println("WARNING: The default partition assignment strategy of the mirror maker will " +
-          "change from 'range' to 'roundrobin' in an upcoming release (so that better load balancing can be achieved). If " +
-          "you prefer to make this switch in advance of that release add the following to the corresponding " +
-          "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
-
-      abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
-      offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
-      val numStreams = options.valueOf(numStreamsOpt).intValue()
-
-      Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
-        override def run() {
-          cleanShutdown()
-        }
-      })
-
-      // create producer
-      val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
-      val sync = producerProps.getProperty("producer.type", "async").equals("sync")
-      producerProps.remove("producer.type")
-      // Defaults to no data loss settings.
-      maybeSetDefaultProperty(producerProps, ProducerConfig.RETRIES_CONFIG, Int.MaxValue.toString)
-      maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
-      maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
-      maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
-      // Always set producer key and value serializer to ByteArraySerializer.
-      producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-      producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
-      producer = new MirrorMakerProducer(sync, producerProps)
-
-      // Create consumers
-      val customRebalanceListener: Option[ConsumerRebalanceListener] = {
-        val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
-        if (customRebalanceListenerClass != null) {
-          val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
-          if (rebalanceListenerArgs != null)
-            Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
-          else
-            Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
-        } else {
-          None
-        }
-      }
-      val mirrorMakerConsumers = createConsumers(
-        numStreams,
-        consumerProps,
-        customRebalanceListener,
-        Option(options.valueOf(whitelistOpt)))
-
-      // Create mirror maker threads.
-      mirrorMakerThreads = (0 until numStreams) map (i =>
-        new MirrorMakerThread(mirrorMakerConsumers(i), i))
-
-      // Create and initialize message handler
-      val customMessageHandlerClass = options.valueOf(messageHandlerOpt)
-      val messageHandlerArgs = options.valueOf(messageHandlerArgsOpt)
-      messageHandler = {
-        if (customMessageHandlerClass != null) {
-          if (messageHandlerArgs != null)
-            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
-          else
-            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass)
-        } else {
-          defaultMirrorMakerMessageHandler
-        }
-      }
+      val opts = new MirrorMakerOptions(args)
+      CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to continuously copy data between two Kafka clusters.")
+      opts.checkArgs()
     } catch {
-      case ct : ControlThrowable => throw ct
-      case t : Throwable =>
+      case ct: ControlThrowable => throw ct
+      case t: Throwable =>
         error("Exception when starting mirror maker.", t)
     }
 
@@ -267,24 +117,45 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     consumers.map(consumer => new ConsumerWrapper(consumer, customRebalanceListener, whitelist))
   }
 
-  def commitOffsets(consumerWrapper: ConsumerWrapper) {
+  def commitOffsets(consumerWrapper: ConsumerWrapper): Unit = {
     if (!exitingOnSendFailure) {
-      trace("Committing offsets.")
-      try {
-        consumerWrapper.commit()
-      } catch {
-        case e: WakeupException =>
-          // we only call wakeup() once to close the consumer,
-          // so if we catch it in commit we can safely retry
-          // and re-throw to break the loop
+      var retry = 0
+      var retryNeeded = true
+      while (retryNeeded) {
+        trace("Committing offsets.")
+        try {
           consumerWrapper.commit()
-          throw e
+          lastSuccessfulCommitTime = time.milliseconds
+          retryNeeded = false
+        } catch {
+          case e: WakeupException =>
+            // we only call wakeup() once to close the consumer,
+            // so if we catch it in commit we can safely retry
+            // and re-throw to break the loop
+            commitOffsets(consumerWrapper)
+            throw e
 
-        case _: CommitFailedException =>
-          warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
-            "another instance. If you see this regularly, it could indicate that you need to either increase " +
-            s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
-            s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+          case _: TimeoutException =>
+            Try(consumerWrapper.consumer.listTopics) match {
+              case Success(visibleTopics) =>
+                consumerWrapper.offsets.retain((tp, _) => visibleTopics.containsKey(tp.topic))
+              case Failure(e) =>
+                warn("Failed to list all authorized topics after committing offsets timed out: ", e)
+            }
+
+            retry += 1
+            warn("Failed to commit offsets because the offset commit request processing can not be completed in time. " +
+              s"If you see this regularly, it could indicate that you need to increase the consumer's ${ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG} " +
+              s"Last successful offset commit timestamp=$lastSuccessfulCommitTime, retry count=$retry")
+            Thread.sleep(100)
+
+          case _: CommitFailedException =>
+            retryNeeded = false
+            warn("Failed to commit offsets because the consumer group has rebalanced and assigned partitions to " +
+              "another instance. If you see this regularly, it could indicate that you need to either increase " +
+              s"the consumer's ${ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG} or reduce the number of records " +
+              s"handled on each iteration with ${ConsumerConfig.MAX_POLL_RECORDS_CONFIG}")
+        }
       }
     } else {
       info("Exiting on send failure, skip committing offsets.")
@@ -334,7 +205,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         record.headers)
 
     override def run() {
-      info("Starting mirror maker thread " + threadName)
+      info(s"Starting mirror maker thread $threadName")
       try {
         consumerWrapper.init()
 
@@ -400,7 +271,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
 
     def shutdown() {
       try {
-        info(threadName + " shutting down")
+        info(s"$threadName shutting down")
         shuttingDown = true
         consumerWrapper.wakeup()
       }
@@ -422,14 +293,15 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   }
 
   // Visible for testing
-  private[tools] class ConsumerWrapper(consumer: Consumer[Array[Byte], Array[Byte]],
+  private[tools] class ConsumerWrapper(private[tools] val consumer: Consumer[Array[Byte], Array[Byte]],
                                        customRebalanceListener: Option[ConsumerRebalanceListener],
                                        whitelistOpt: Option[String]) {
     val regex = whitelistOpt.getOrElse(throw new IllegalArgumentException("New consumer only supports whitelist."))
     var recordIter: java.util.Iterator[ConsumerRecord[Array[Byte], Array[Byte]]] = null
 
     // We manually maintain the consumed offsets for historical reasons and it could be simplified
-    private val offsets = new HashMap[TopicPartition, Long]()
+    // Visible for testing
+    private[tools] val offsets = new HashMap[TopicPartition, Long]()
 
     def init() {
       debug("Initiating consumer")
@@ -452,7 +324,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // uncommitted record since last poll. Using one second as poll's timeout ensures that
         // offsetCommitIntervalMs, of value greater than 1 second, does not see delays in offset
         // commit.
-        recordIter = consumer.poll(1000).iterator
+        recordIter = consumer.poll(Duration.ofSeconds(1)).iterator
         if (!recordIter.hasNext)
           throw new NoRecordsException
       }
@@ -473,7 +345,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def commit() {
-      consumer.commitSync(offsets.map { case (tp, offset) =>  (tp, new OffsetAndMetadata(offset, ""))}.asJava)
+      consumer.commitSync(offsets.map { case (tp, offset) => (tp, new OffsetAndMetadata(offset)) }.asJava)
       offsets.clear()
     }
   }
@@ -552,6 +424,155 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class NoRecordsException extends RuntimeException
+  // package-private for tests
+  private[tools] class NoRecordsException extends RuntimeException
 
+  class MirrorMakerOptions(args: Array[String]) extends CommandDefaultOptions(args) {
+
+    val consumerConfigOpt = parser.accepts("consumer.config",
+      "Embedded consumer config for consuming from the source cluster.")
+      .withRequiredArg()
+      .describedAs("config file")
+      .ofType(classOf[String])
+
+    parser.accepts("new.consumer",
+      "DEPRECATED Use new consumer in mirror maker (this is the default so this option will be removed in " +
+        "a future version).")
+
+    val producerConfigOpt = parser.accepts("producer.config",
+      "Embedded producer config.")
+      .withRequiredArg()
+      .describedAs("config file")
+      .ofType(classOf[String])
+
+    val numStreamsOpt = parser.accepts("num.streams",
+      "Number of consumption streams.")
+      .withRequiredArg()
+      .describedAs("Number of threads")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(1)
+
+    val whitelistOpt = parser.accepts("whitelist",
+      "Whitelist of topics to mirror.")
+      .withRequiredArg()
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+
+    val offsetCommitIntervalMsOpt = parser.accepts("offset.commit.interval.ms",
+      "Offset commit interval in ms.")
+      .withRequiredArg()
+      .describedAs("offset commit interval in millisecond")
+      .ofType(classOf[java.lang.Integer])
+      .defaultsTo(60000)
+
+    val consumerRebalanceListenerOpt = parser.accepts("consumer.rebalance.listener",
+      "The consumer rebalance listener to use for mirror maker consumer.")
+      .withRequiredArg()
+      .describedAs("A custom rebalance listener of type ConsumerRebalanceListener")
+      .ofType(classOf[String])
+
+    val rebalanceListenerArgsOpt = parser.accepts("rebalance.listener.args",
+      "Arguments used by custom rebalance listener for mirror maker consumer.")
+      .withRequiredArg()
+      .describedAs("Arguments passed to custom rebalance listener constructor as a string.")
+      .ofType(classOf[String])
+
+    val messageHandlerOpt = parser.accepts("message.handler",
+      "Message handler which will process every record in-between consumer and producer.")
+      .withRequiredArg()
+      .describedAs("A custom message handler of type MirrorMakerMessageHandler")
+      .ofType(classOf[String])
+
+    val messageHandlerArgsOpt = parser.accepts("message.handler.args",
+      "Arguments used by custom message handler for mirror maker.")
+      .withRequiredArg()
+      .describedAs("Arguments passed to message handler constructor.")
+      .ofType(classOf[String])
+
+    val abortOnSendFailureOpt = parser.accepts("abort.on.send.failure",
+      "Configure the mirror maker to exit on a failed send.")
+      .withRequiredArg()
+      .describedAs("Stop the entire mirror maker when a send failure occurs")
+      .ofType(classOf[String])
+      .defaultsTo("true")
+
+    options = parser.parse(args: _*)
+
+    def checkArgs() = {
+      CommandLineUtils.checkRequiredArgs(parser, options, consumerConfigOpt, producerConfigOpt)
+      val consumerProps = Utils.loadProps(options.valueOf(consumerConfigOpt))
+
+      if (!options.has(whitelistOpt)) {
+        error("whitelist must be specified")
+        sys.exit(1)
+      }
+
+      if (!consumerProps.containsKey(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG))
+        System.err.println("WARNING: The default partition assignment strategy of the mirror maker will " +
+          "change from 'range' to 'roundrobin' in an upcoming release (so that better load balancing can be achieved). If " +
+          "you prefer to make this switch in advance of that release add the following to the corresponding " +
+          "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
+
+      abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
+      offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
+      val numStreams = options.valueOf(numStreamsOpt).intValue()
+
+      Runtime.getRuntime.addShutdownHook(new Thread("MirrorMakerShutdownHook") {
+        override def run() {
+          cleanShutdown()
+        }
+      })
+
+      // create producer
+      val producerProps = Utils.loadProps(options.valueOf(producerConfigOpt))
+      val sync = producerProps.getProperty("producer.type", "async").equals("sync")
+      producerProps.remove("producer.type")
+      // Defaults to no data loss settings.
+      maybeSetDefaultProperty(producerProps, ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Int.MaxValue.toString)
+      maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_BLOCK_MS_CONFIG, Long.MaxValue.toString)
+      maybeSetDefaultProperty(producerProps, ProducerConfig.ACKS_CONFIG, "all")
+      maybeSetDefaultProperty(producerProps, ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1")
+      // Always set producer key and value serializer to ByteArraySerializer.
+      producerProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+      producerProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, classOf[ByteArraySerializer].getName)
+      producer = new MirrorMakerProducer(sync, producerProps)
+
+      // Create consumers
+      val customRebalanceListener: Option[ConsumerRebalanceListener] = {
+        val customRebalanceListenerClass = options.valueOf(consumerRebalanceListenerOpt)
+        if (customRebalanceListenerClass != null) {
+          val rebalanceListenerArgs = options.valueOf(rebalanceListenerArgsOpt)
+          if (rebalanceListenerArgs != null)
+            Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass, rebalanceListenerArgs))
+          else
+            Some(CoreUtils.createObject[ConsumerRebalanceListener](customRebalanceListenerClass))
+        } else {
+          None
+        }
+      }
+      val mirrorMakerConsumers = createConsumers(
+        numStreams,
+        consumerProps,
+        customRebalanceListener,
+        Option(options.valueOf(whitelistOpt)))
+
+      // Create mirror maker threads.
+      mirrorMakerThreads = (0 until numStreams) map (i =>
+        new MirrorMakerThread(mirrorMakerConsumers(i), i))
+
+      // Create and initialize message handler
+      val customMessageHandlerClass = options.valueOf(messageHandlerOpt)
+      val messageHandlerArgs = options.valueOf(messageHandlerArgsOpt)
+      messageHandler = {
+        if (customMessageHandlerClass != null) {
+          if (messageHandlerArgs != null)
+            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass, messageHandlerArgs)
+          else
+            CoreUtils.createObject[MirrorMakerMessageHandler](customMessageHandlerClass)
+        } else {
+          defaultMirrorMakerMessageHandler
+        }
+      }
+    }
+  }
 }

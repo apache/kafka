@@ -36,6 +36,7 @@ import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
+import org.apache.kafka.trogdor.workload.TransactionGenerator.TransactionAction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,13 +44,16 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 public class ProduceBenchWorker implements TaskWorker {
     private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
@@ -179,18 +183,33 @@ public class ProduceBenchWorker implements TaskWorker {
 
         private final PayloadIterator values;
 
+        private final Optional<TransactionGenerator> transactionGenerator;
+
         private final Throttle throttle;
+
+        private Iterator<TopicPartition> partitionsIterator;
+        private Future<RecordMetadata> sendFuture;
+        private AtomicLong transactionsCommitted;
+        private boolean enableTransactions;
 
         SendRecords(HashSet<TopicPartition> activePartitions) {
             this.activePartitions = activePartitions;
+            this.partitionsIterator = activePartitions.iterator();
             this.histogram = new Histogram(5000);
+
+            this.transactionGenerator = spec.transactionGenerator();
+            this.enableTransactions = this.transactionGenerator.isPresent();
+            this.transactionsCommitted = new AtomicLong();
+
             int perPeriod = WorkerUtils.perSecToPerPeriod(spec.targetMessagesPerSec(), THROTTLE_PERIOD_MS);
             this.statusUpdaterFuture = executor.scheduleWithFixedDelay(
-                new StatusUpdater(histogram), 30, 30, TimeUnit.SECONDS);
+                new StatusUpdater(histogram, transactionsCommitted), 30, 30, TimeUnit.SECONDS);
+
             Properties props = new Properties();
             props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, spec.bootstrapServers());
-            // add common client configs to producer properties, and then user-specified producer
-            // configs
+            if (enableTransactions)
+                props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "produce-bench-transaction-id-" + UUID.randomUUID());
+            // add common client configs to producer properties, and then user-specified producer configs
             WorkerUtils.addConfigsToProperties(props, spec.commonClientConf(), spec.producerConf());
             this.producer = new KafkaProducer<>(props, new ByteArraySerializer(), new ByteArraySerializer());
             this.keys = new PayloadIterator(spec.keyGenerator());
@@ -202,23 +221,29 @@ public class ProduceBenchWorker implements TaskWorker {
         public Void call() throws Exception {
             long startTimeMs = Time.SYSTEM.milliseconds();
             try {
-                Future<RecordMetadata> future = null;
                 try {
-                    Iterator<TopicPartition> iter = activePartitions.iterator();
-                    for (int m = 0; m < spec.maxMessages(); m++) {
-                        if (!iter.hasNext()) {
-                            iter = activePartitions.iterator();
+                    if (enableTransactions)
+                        producer.initTransactions();
+
+                    long sentMessages = 0;
+                    while (sentMessages < spec.maxMessages()) {
+                        if (enableTransactions) {
+                            boolean tookAction = takeTransactionAction();
+                            if (tookAction)
+                                continue;
                         }
-                        TopicPartition partition = iter.next();
-                        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
-                            partition.topic(), partition.partition(), keys.next(), values.next());
-                        future = producer.send(record,
-                            new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
-                        throttle.increment();
+                        sendMessage();
+                        sentMessages++;
                     }
+                    if (enableTransactions)
+                        takeTransactionAction(); // give the transactionGenerator a chance to commit if configured evenly
+                } catch (Exception e) {
+                    if (enableTransactions)
+                        producer.abortTransaction();
+                    throw e;
                 } finally {
-                    if (future != null) {
-                        future.get();
+                    if (sendFuture != null) {
+                        sendFuture.get();
                     }
                     producer.close();
                 }
@@ -226,13 +251,49 @@ public class ProduceBenchWorker implements TaskWorker {
                 WorkerUtils.abort(log, "SendRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
-                StatusData statusData = new StatusUpdater(histogram).update();
+                StatusData statusData = new StatusUpdater(histogram, transactionsCommitted).update();
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("Sent {} total record(s) in {} ms.  status: {}",
                     histogram.summarize().numSamples(), curTimeMs - startTimeMs, statusData);
             }
             doneFuture.complete("");
             return null;
+        }
+
+        private boolean takeTransactionAction() {
+            boolean tookAction = true;
+            TransactionAction nextAction = transactionGenerator.get().nextAction();
+            switch (nextAction) {
+                case BEGIN_TRANSACTION:
+                    log.debug("Beginning transaction.");
+                    producer.beginTransaction();
+                    break;
+                case COMMIT_TRANSACTION:
+                    log.debug("Committing transaction.");
+                    producer.commitTransaction();
+                    transactionsCommitted.getAndIncrement();
+                    break;
+                case ABORT_TRANSACTION:
+                    log.debug("Aborting transaction.");
+                    producer.abortTransaction();
+                    break;
+                case NO_OP:
+                    tookAction = false;
+                    break;
+            }
+            return tookAction;
+        }
+
+        private void sendMessage() throws InterruptedException {
+            if (!partitionsIterator.hasNext())
+                partitionsIterator = activePartitions.iterator();
+
+            TopicPartition partition = partitionsIterator.next();
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(
+                partition.topic(), partition.partition(), keys.next(), values.next());
+            sendFuture = producer.send(record,
+                new SendRecordsCallback(this, Time.SYSTEM.milliseconds()));
+            throttle.increment();
         }
 
         void recordDuration(long durationMs) {
@@ -242,9 +303,11 @@ public class ProduceBenchWorker implements TaskWorker {
 
     public class StatusUpdater implements Runnable {
         private final Histogram histogram;
+        private final AtomicLong transactionsCommitted;
 
-        StatusUpdater(Histogram histogram) {
+        StatusUpdater(Histogram histogram, AtomicLong transactionsCommitted) {
             this.histogram = histogram;
+            this.transactionsCommitted = transactionsCommitted;
         }
 
         @Override
@@ -261,7 +324,8 @@ public class ProduceBenchWorker implements TaskWorker {
             StatusData statusData = new StatusData(summary.numSamples(), summary.average(),
                 summary.percentiles().get(0).value(),
                 summary.percentiles().get(1).value(),
-                summary.percentiles().get(2).value());
+                summary.percentiles().get(2).value(),
+                transactionsCommitted.get());
             status.update(JsonUtil.JSON_SERDE.valueToTree(statusData));
             return statusData;
         }
@@ -273,6 +337,7 @@ public class ProduceBenchWorker implements TaskWorker {
         private final int p50LatencyMs;
         private final int p95LatencyMs;
         private final int p99LatencyMs;
+        private final long transactionsCommitted;
 
         /**
          * The percentiles to use when calculating the histogram data.
@@ -285,17 +350,24 @@ public class ProduceBenchWorker implements TaskWorker {
                    @JsonProperty("averageLatencyMs") float averageLatencyMs,
                    @JsonProperty("p50LatencyMs") int p50latencyMs,
                    @JsonProperty("p95LatencyMs") int p95latencyMs,
-                   @JsonProperty("p99LatencyMs") int p99latencyMs) {
+                   @JsonProperty("p99LatencyMs") int p99latencyMs,
+                   @JsonProperty("transactionsCommitted") long transactionsCommitted) {
             this.totalSent = totalSent;
             this.averageLatencyMs = averageLatencyMs;
             this.p50LatencyMs = p50latencyMs;
             this.p95LatencyMs = p95latencyMs;
             this.p99LatencyMs = p99latencyMs;
+            this.transactionsCommitted = transactionsCommitted;
         }
 
         @JsonProperty
         public long totalSent() {
             return totalSent;
+        }
+
+        @JsonProperty
+        public long transactionsCommitted() {
+            return transactionsCommitted;
         }
 
         @JsonProperty

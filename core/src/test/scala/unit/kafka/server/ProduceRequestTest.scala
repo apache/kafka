@@ -17,10 +17,14 @@
 
 package kafka.server
 
+import java.util.Properties
+
+import kafka.log.LogConfig
+import kafka.message.ZStdCompressionCodec
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, DefaultRecordBatch, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
@@ -109,6 +113,39 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals(Errors.CORRUPT_MESSAGE, partitionResponse.error)
     assertEquals(-1, partitionResponse.baseOffset)
     assertEquals(-1, partitionResponse.logAppendTime)
+  }
+
+  @Test
+  def testZSTDProduceRequest(): Unit = {
+    val topic = "topic"
+    val partition = 0
+
+    // Create a single-partition topic compressed with ZSTD
+    val topicConfig = new Properties
+    topicConfig.setProperty(LogConfig.CompressionTypeProp, ZStdCompressionCodec.name)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, 1, 1, servers, topicConfig)
+    val leader = partitionToLeader(partition)
+    val memoryRecords = MemoryRecords.withRecords(CompressionType.ZSTD,
+      new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
+    val topicPartition = new TopicPartition("topic", partition)
+    val partitionRecords = Map(topicPartition -> memoryRecords)
+
+    // produce request with v7: works fine!
+    val res1 = sendProduceRequest(leader,
+      new ProduceRequest.Builder(7, 7, -1, 3000, partitionRecords.asJava, null).build())
+    val (tp1, partitionResponse1) = res1.responses.asScala.head
+    assertEquals(topicPartition, tp1)
+    assertEquals(Errors.NONE, partitionResponse1.error)
+    assertEquals(0, partitionResponse1.baseOffset)
+    assertEquals(-1, partitionResponse1.logAppendTime)
+
+    // produce request with v3: returns Errors.UNSUPPORTED_COMPRESSION_TYPE.
+    val res2 = sendProduceRequest(leader,
+      new ProduceRequest.Builder(3, 3, -1, 3000, partitionRecords.asJava, null)
+        .buildUnsafe(3))
+    val (tp2, partitionResponse2) = res2.responses.asScala.head
+    assertEquals(topicPartition, tp2)
+    assertEquals(Errors.UNSUPPORTED_COMPRESSION_TYPE, partitionResponse2.error)
   }
 
   private def sendProduceRequest(leaderId: Int, request: ProduceRequest): ProduceResponse = {

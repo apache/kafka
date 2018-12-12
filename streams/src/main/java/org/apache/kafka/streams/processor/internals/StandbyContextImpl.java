@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
+import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
@@ -59,6 +61,9 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
                                 final StreamPartitioner<? super K, ? super V> partitioner) {}
 
         @Override
+        public void init(final Producer<byte[], byte[]> producer) {}
+
+        @Override
         public void flush() {}
 
         @Override
@@ -70,7 +75,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         }
     };
 
-    private long streamTime = RecordQueue.NOT_KNOWN;
+    private long streamTime = RecordQueue.UNKNOWN;
 
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
@@ -185,7 +190,16 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public Cancellable schedule(long interval, PunctuationType type, Punctuator callback) {
+    @SuppressWarnings("deprecation")
+    public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    public Cancellable schedule(final Duration interval, final PunctuationType type, final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in standby tasks.");
     }
 

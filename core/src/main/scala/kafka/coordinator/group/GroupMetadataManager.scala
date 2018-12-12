@@ -20,12 +20,13 @@ package kafka.coordinator.group
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
+import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0, KAFKA_2_1_IV1}
 import kafka.common.{MessageFormatter, OffsetAndMetadata}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.ReplicaManager
@@ -39,7 +40,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.Type._
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{IsolationLevel, OffsetFetchResponse}
+import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 
@@ -139,7 +140,7 @@ class GroupMetadataManager(brokerId: Int,
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = cleanupGroupMetadata,
+        fun = () => cleanupGroupMetadata,
         period = config.offsetsRetentionCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
@@ -440,13 +441,17 @@ class GroupMetadataManager(brokerId: Int,
     val group = groupMetadataCache.get(groupId)
     if (group == null) {
       topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-        (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
+        val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+          Optional.empty(), "", Errors.NONE)
+        topicPartition -> partitionData
       }.toMap
     } else {
       group.inLock {
         if (group.is(Dead)) {
           topicPartitionsOpt.getOrElse(Seq.empty[TopicPartition]).map { topicPartition =>
-            (topicPartition, new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE))
+            val partitionData = new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+              Optional.empty(), "", Errors.NONE)
+            topicPartition -> partitionData
           }.toMap
         } else {
           topicPartitionsOpt match {
@@ -454,16 +459,19 @@ class GroupMetadataManager(brokerId: Int,
               // Return offsets for all partitions owned by this consumer group. (this only applies to consumers
               // that commit offsets to Kafka.)
               group.allOffsets.map { case (topicPartition, offsetAndMetadata) =>
-                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                topicPartition -> new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
+                  offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
               }
 
             case Some(topicPartitions) =>
               topicPartitions.map { topicPartition =>
                 val partitionData = group.offset(topicPartition) match {
                   case None =>
-                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET, "", Errors.NONE)
+                    new OffsetFetchResponse.PartitionData(OffsetFetchResponse.INVALID_OFFSET,
+                      Optional.empty(), "", Errors.NONE)
                   case Some(offsetAndMetadata) =>
-                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset, offsetAndMetadata.metadata, Errors.NONE)
+                    new OffsetFetchResponse.PartitionData(offsetAndMetadata.offset,
+                      offsetAndMetadata.leaderEpoch, offsetAndMetadata.metadata, Errors.NONE)
                 }
                 topicPartition -> partitionData
               }.toMap
@@ -502,7 +510,7 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   private def doLoadGroupsAndOffsets(topicPartition: TopicPartition, onGroupLoaded: GroupMetadata => Unit) {
-    def highWaterMark = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
+    def logEndOffset: Long = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
     replicaManager.getLog(topicPartition) match {
       case None =>
@@ -510,7 +518,9 @@ class GroupMetadataManager(brokerId: Int,
 
       case Some(log) =>
         var currOffset = log.logStartOffset
-        lazy val buffer = ByteBuffer.allocate(config.loadBufferSize)
+
+        // buffer may not be needed if records are read from memory
+        var buffer = ByteBuffer.allocate(0)
 
         // loop breaks if leader changes at any time during the load, since getHighWatermark is -1
         val loadedOffsets = mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]()
@@ -518,13 +528,26 @@ class GroupMetadataManager(brokerId: Int,
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
 
-        while (currOffset < highWaterMark && !shuttingDown.get()) {
+        while (currOffset < logEndOffset && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None,
-            minOneMessage = true, isolationLevel = IsolationLevel.READ_UNCOMMITTED)
+            minOneMessage = true, includeAbortedTxns = false)
           val memRecords = fetchDataInfo.records match {
             case records: MemoryRecords => records
             case fileRecords: FileRecords =>
-              buffer.clear()
+              val sizeInBytes = fileRecords.sizeInBytes
+              val bytesNeeded = Math.max(config.loadBufferSize, sizeInBytes)
+
+              // minOneMessage = true in the above log.read means that the buffer may need to be grown to ensure progress can be made
+              if (buffer.capacity < bytesNeeded) {
+                if (config.loadBufferSize < bytesNeeded)
+                  warn(s"Loaded offsets and group metadata from $topicPartition with buffer larger ($bytesNeeded bytes) than " +
+                    s"configured offsets.load.buffer.size (${config.loadBufferSize} bytes)")
+
+                buffer = ByteBuffer.allocate(bytesNeeded)
+              } else {
+                buffer.clear()
+              }
+
               fileRecords.readInto(buffer, 0)
               MemoryRecords.readableRecords(buffer)
           }
@@ -532,17 +555,20 @@ class GroupMetadataManager(brokerId: Int,
           memRecords.batches.asScala.foreach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
-              val record = batch.iterator.next()
-              val controlRecord = ControlRecordType.parse(record.key)
-              if (controlRecord == ControlRecordType.COMMIT) {
-                pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
-                  .foreach {
-                    case (groupTopicPartition, commitRecordMetadataAndOffset) =>
-                      if (!loadedOffsets.contains(groupTopicPartition) || loadedOffsets(groupTopicPartition).olderThan(commitRecordMetadataAndOffset))
-                        loadedOffsets.put(groupTopicPartition, commitRecordMetadataAndOffset)
-                  }
+              val recordIterator = batch.iterator
+              if (recordIterator.hasNext) {
+                val record = recordIterator.next()
+                val controlRecord = ControlRecordType.parse(record.key)
+                if (controlRecord == ControlRecordType.COMMIT) {
+                  pendingOffsets.getOrElse(batch.producerId, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]())
+                    .foreach {
+                      case (groupTopicPartition, commitRecordMetadataAndOffset) =>
+                        if (!loadedOffsets.contains(groupTopicPartition) || loadedOffsets(groupTopicPartition).olderThan(commitRecordMetadataAndOffset))
+                          loadedOffsets.put(groupTopicPartition, commitRecordMetadataAndOffset)
+                    }
+                }
+                pendingOffsets.remove(batch.producerId)
               }
-              pendingOffsets.remove(batch.producerId)
             } else {
               var batchBaseOffset: Option[Long] = None
               for (record <- batch.asScala) {
@@ -665,7 +691,7 @@ class GroupMetadataManager(brokerId: Int,
                                onGroupUnloaded: GroupMetadata => Unit) {
     val topicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, offsetsPartition)
     info(s"Scheduling unloading of offsets and group metadata from $topicPartition")
-    scheduler.schedule(topicPartition.toString, removeGroupsAndOffsets)
+    scheduler.schedule(topicPartition.toString, () => removeGroupsAndOffsets)
 
     def removeGroupsAndOffsets() {
       var numOffsetsRemoved = 0
@@ -937,6 +963,16 @@ object GroupMetadataManager {
   private val OFFSET_VALUE_METADATA_FIELD_V2 = OFFSET_COMMIT_VALUE_SCHEMA_V2.get("metadata")
   private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2 = OFFSET_COMMIT_VALUE_SCHEMA_V2.get("commit_timestamp")
 
+  private val OFFSET_COMMIT_VALUE_SCHEMA_V3 = new Schema(
+    new Field("offset", INT64),
+    new Field("leader_epoch", INT32),
+    new Field("metadata", STRING, "Associated metadata.", ""),
+    new Field("commit_timestamp", INT64))
+  private val OFFSET_VALUE_OFFSET_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("offset")
+  private val OFFSET_VALUE_LEADER_EPOCH_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("leader_epoch")
+  private val OFFSET_VALUE_METADATA_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("metadata")
+  private val OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V3 = OFFSET_COMMIT_VALUE_SCHEMA_V3.get("commit_timestamp")
+
   private val GROUP_METADATA_KEY_SCHEMA = new Schema(new Field("group", STRING))
   private val GROUP_KEY_GROUP_FIELD = GROUP_METADATA_KEY_SCHEMA.get("group")
 
@@ -996,7 +1032,6 @@ object GroupMetadataManager {
     new Field(CURRENT_STATE_TIMESTAMP_KEY, INT64),
     new Field(MEMBERS_KEY, new ArrayOf(MEMBER_METADATA_V2)))
 
-
   // map of versions to key schemas as data types
   private val MESSAGE_TYPE_SCHEMAS = Map(
     0 -> OFFSET_COMMIT_KEY_SCHEMA,
@@ -1007,20 +1042,17 @@ object GroupMetadataManager {
   private val OFFSET_VALUE_SCHEMAS = Map(
     0 -> OFFSET_COMMIT_VALUE_SCHEMA_V0,
     1 -> OFFSET_COMMIT_VALUE_SCHEMA_V1,
-    2 -> OFFSET_COMMIT_VALUE_SCHEMA_V2)
+    2 -> OFFSET_COMMIT_VALUE_SCHEMA_V2,
+    3 -> OFFSET_COMMIT_VALUE_SCHEMA_V3)
 
   // map of version of group metadata value schemas
   private val GROUP_VALUE_SCHEMAS = Map(
     0 -> GROUP_METADATA_VALUE_SCHEMA_V0,
     1 -> GROUP_METADATA_VALUE_SCHEMA_V1,
     2 -> GROUP_METADATA_VALUE_SCHEMA_V2)
-  private val CURRENT_GROUP_VALUE_SCHEMA_VERSION = 2.toShort
 
   private val CURRENT_OFFSET_KEY_SCHEMA = schemaForKey(CURRENT_OFFSET_KEY_SCHEMA_VERSION)
   private val CURRENT_GROUP_KEY_SCHEMA = schemaForKey(CURRENT_GROUP_KEY_SCHEMA_VERSION)
-
-  private val CURRENT_OFFSET_VALUE_SCHEMA = schemaForOffset(2)
-  private val CURRENT_GROUP_VALUE_SCHEMA = schemaForGroup(CURRENT_GROUP_VALUE_SCHEMA_VERSION)
 
   private def schemaForKey(version: Int) = {
     val schemaOpt = MESSAGE_TYPE_SCHEMAS.get(version)
@@ -1030,7 +1062,7 @@ object GroupMetadataManager {
     }
   }
 
-  private def schemaForOffset(version: Int) = {
+  private def schemaForOffsetValue(version: Int) = {
     val schemaOpt = OFFSET_VALUE_SCHEMAS.get(version)
     schemaOpt match {
       case Some(schema) => schema
@@ -1038,7 +1070,7 @@ object GroupMetadataManager {
     }
   }
 
-  private def schemaForGroup(version: Int) = {
+  private def schemaForGroupValue(version: Int) = {
     val schemaOpt = GROUP_VALUE_SCHEMAS.get(version)
     schemaOpt match {
       case Some(schema) => schema
@@ -1051,8 +1083,8 @@ object GroupMetadataManager {
    *
    * @return key for offset commit message
    */
-  private[group] def offsetCommitKey(group: String, topicPartition: TopicPartition,
-                                           versionId: Short = 0): Array[Byte] = {
+  private[group] def offsetCommitKey(group: String,
+                                     topicPartition: TopicPartition): Array[Byte] = {
     val key = new Struct(CURRENT_OFFSET_KEY_SCHEMA)
     key.set(OFFSET_KEY_GROUP_FIELD, group)
     key.set(OFFSET_KEY_TOPIC_FIELD, topicPartition.topic)
@@ -1090,27 +1122,34 @@ object GroupMetadataManager {
                                        apiVersion: ApiVersion): Array[Byte] = {
     // generate commit value according to schema version
     val (version, value) = {
-      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty)
-        // if an older version of the API is used, or if an explicit expiration is provided, use the older schema
-        (1.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1))
-      else
-        (2.toShort, new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2))
-    }
-
-    if (version == 2) {
-      value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
-      value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
-      value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
-    } else {
-      value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
-      value.set(OFFSET_VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
-      value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
-      // version 1 has a non empty expireTimestamp field
-      value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1, offsetAndMetadata.expireTimestamp.get)
+      if (apiVersion < KAFKA_2_1_IV0 || offsetAndMetadata.expireTimestamp.nonEmpty) {
+        val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V1)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V1, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_METADATA_FIELD_V1, offsetAndMetadata.metadata)
+        value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1, offsetAndMetadata.commitTimestamp)
+        // version 1 has a non empty expireTimestamp field
+        value.set(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1,
+          offsetAndMetadata.expireTimestamp.getOrElse(OffsetCommitRequest.DEFAULT_TIMESTAMP))
+        (1, value)
+      } else if (apiVersion < KAFKA_2_1_IV1) {
+        val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V2)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V2, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_METADATA_FIELD_V2, offsetAndMetadata.metadata)
+        value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2, offsetAndMetadata.commitTimestamp)
+        (2, value)
+      } else {
+        val value = new Struct(OFFSET_COMMIT_VALUE_SCHEMA_V3)
+        value.set(OFFSET_VALUE_OFFSET_FIELD_V3, offsetAndMetadata.offset)
+        value.set(OFFSET_VALUE_LEADER_EPOCH_FIELD_V3,
+          offsetAndMetadata.leaderEpoch.orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+        value.set(OFFSET_VALUE_METADATA_FIELD_V3, offsetAndMetadata.metadata)
+        value.set(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V3, offsetAndMetadata.commitTimestamp)
+        (3, value)
+      }
     }
 
     val byteBuffer = ByteBuffer.allocate(2 /* version */ + value.sizeOf)
-    byteBuffer.putShort(version)
+    byteBuffer.putShort(version.toShort)
     value.writeTo(byteBuffer)
     byteBuffer.array()
   }
@@ -1134,7 +1173,7 @@ object GroupMetadataManager {
       else if (apiVersion < KAFKA_2_1_IV0)
         (1.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V1))
       else
-        (2.toShort, new Struct(CURRENT_GROUP_VALUE_SCHEMA))
+        (2.toShort, new Struct(GROUP_METADATA_VALUE_SCHEMA_V2))
     }
 
     value.set(PROTOCOL_TYPE_KEY, groupMetadata.protocolType.getOrElse(""))
@@ -1219,7 +1258,7 @@ object GroupMetadataManager {
       null
     } else {
       val version = buffer.getShort
-      val valueSchema = schemaForOffset(version)
+      val valueSchema = schemaForOffsetValue(version)
       val value = valueSchema.read(buffer)
 
       if (version == 0) {
@@ -1241,6 +1280,14 @@ object GroupMetadataManager {
         val commitTimestamp = value.get(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V2).asInstanceOf[Long]
 
         OffsetAndMetadata(offset, metadata, commitTimestamp)
+      } else if (version == 3) {
+        val offset = value.get(OFFSET_VALUE_OFFSET_FIELD_V3).asInstanceOf[Long]
+        val leaderEpoch = value.get(OFFSET_VALUE_LEADER_EPOCH_FIELD_V3).asInstanceOf[Int]
+        val metadata = value.get(OFFSET_VALUE_METADATA_FIELD_V3).asInstanceOf[String]
+        val commitTimestamp = value.get(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V3).asInstanceOf[Long]
+
+        val leaderEpochOpt: Optional[Integer] = if (leaderEpoch < 0) Optional.empty() else Optional.of(leaderEpoch)
+        OffsetAndMetadata(offset, leaderEpochOpt, metadata, commitTimestamp)
       } else {
         throw new IllegalStateException(s"Unknown offset message version: $version")
       }
@@ -1259,7 +1306,7 @@ object GroupMetadataManager {
       null
     } else {
       val version = buffer.getShort
-      val valueSchema = schemaForGroup(version)
+      val valueSchema = schemaForGroupValue(version)
       val value = valueSchema.read(buffer)
 
       if (version >= 0 && version <= 2) {

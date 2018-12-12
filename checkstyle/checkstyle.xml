@@ -25,7 +25,7 @@
 
   <!-- header -->
   <module name="Header">
-    <property name="headerFile" value="checkstyle/java.header" />
+    <property name="headerFile" value="${headerFile}" />
   </module>
 
   <module name="TreeWalker">
@@ -70,6 +70,12 @@
     <module name="StaticVariableName"/>
     <module name="TypeName"/>
     <module name="AvoidStarImport"/>
+
+    <!-- variables that can be final should be final (suppressed except for Streams) -->
+    <module name="FinalLocalVariable">
+      <property name="tokens" value="VARIABLE_DEF,PARAMETER_DEF"/>
+      <property name="validateEnhancedForLoopVariable" value="true"/>
+    </module>
 
     <!-- dependencies -->
     <module name="ImportControl">
@@ -131,6 +137,6 @@
   </module>
 
   <module name="SuppressionFilter">
-    <property name="file" value="checkstyle/suppressions.xml"/>
+    <property name="file" value="${suppressionsFile}"/>
   </module>
 </module>

@@ -74,8 +74,9 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     private V1 computeValue(final K key, final V value) {
         V1 newValue = null;
 
-        if (value != null)
+        if (value != null) {
             newValue = mapper.apply(key, value);
+        }
 
         return newValue;
     }
@@ -90,12 +91,12 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context, sendOldValues), sendOldValues);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context), sendOldValues);
             }
         }
 
         @Override
-        public void process(K key, Change<V> change) {
+        public void process(final K key, final Change<V> change) {
             final V1 newValue = computeValue(key, change.newValue);
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
@@ -112,7 +113,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
 
         private final KTableValueGetter<K, V> parentGetter;
 
-        KTableMapValuesValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableMapValuesValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
@@ -132,5 +133,4 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             parentGetter.close();
         }
     }
-
 }

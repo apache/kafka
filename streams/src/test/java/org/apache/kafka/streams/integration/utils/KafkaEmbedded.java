@@ -55,7 +55,7 @@ public class KafkaEmbedded {
 
     private final Properties effectiveConfig;
     private final File logDir;
-    public final TemporaryFolder tmpFolder;
+    private final TemporaryFolder tmpFolder;
     private final KafkaServer kafka;
 
     /**
@@ -65,6 +65,7 @@ public class KafkaEmbedded {
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
      */
+    @SuppressWarnings("WeakerAccess")
     public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
         tmpFolder = new TemporaryFolder();
         tmpFolder.create();
@@ -79,16 +80,13 @@ public class KafkaEmbedded {
             brokerList(), zookeeperConnect());
     }
 
-
     /**
      * Creates the configuration for starting the Kafka broker by merging default values with
      * overwrites.
      *
      * @param initialConfig Broker configuration settings that override the default config.
-     * @return
-     * @throws IOException
      */
-    private Properties effectiveConfigFrom(final Properties initialConfig) throws IOException {
+    private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
         effectiveConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), 0);
         effectiveConfig.put(KafkaConfig$.MODULE$.HostNameProp(), "localhost");
@@ -109,8 +107,9 @@ public class KafkaEmbedded {
      * <p>
      * You can use this to tell Kafka producers and consumers how to connect to this instance.
      */
+    @SuppressWarnings("WeakerAccess")
     public String brokerList() {
-        Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
+        final Object listenerConfig = effectiveConfig.get(KafkaConfig$.MODULE$.InterBrokerListenerNameProp());
         return kafka.config().hostName() + ":" + kafka.boundPort(
             new ListenerName(listenerConfig != null ? listenerConfig.toString() : "PLAINTEXT"));
     }
@@ -119,6 +118,7 @@ public class KafkaEmbedded {
     /**
      * The ZooKeeper connection string aka `zookeeper.connect`.
      */
+    @SuppressWarnings("WeakerAccess")
     public String zookeeperConnect() {
         return effectiveConfig.getProperty("zookeeper.connect", DEFAULT_ZK_CONNECT);
     }
@@ -126,6 +126,7 @@ public class KafkaEmbedded {
     /**
      * Stop the broker.
      */
+    @SuppressWarnings("WeakerAccess")
     public void stop() {
         log.debug("Shutting down embedded Kafka broker at {} (with ZK ensemble at {}) ...",
             brokerList(), zookeeperConnect());
@@ -134,7 +135,7 @@ public class KafkaEmbedded {
         log.debug("Removing log dir at {} ...", logDir);
         try {
             Utils.delete(logDir);
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
         tmpFolder.delete();
@@ -148,7 +149,7 @@ public class KafkaEmbedded {
      * @param topic The name of the topic.
      */
     public void createTopic(final String topic) {
-        createTopic(topic, 1, 1, new Properties());
+        createTopic(topic, 1, 1, Collections.emptyMap());
     }
 
     /**
@@ -159,7 +160,7 @@ public class KafkaEmbedded {
      * @param replication The replication factor for (the partitions of) this topic.
      */
     public void createTopic(final String topic, final int partitions, final int replication) {
-        createTopic(topic, partitions, replication, new Properties());
+        createTopic(topic, partitions, replication, Collections.emptyMap());
     }
 
     /**
@@ -173,11 +174,11 @@ public class KafkaEmbedded {
     public void createTopic(final String topic,
                             final int partitions,
                             final int replication,
-                            final Properties topicConfig) {
+                            final Map<String, String> topicConfig) {
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
             topic, partitions, replication, topicConfig);
         final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
-        newTopic.configs((Map) topicConfig);
+        newTopic.configs(topicConfig);
 
         try (final AdminClient adminClient = createAdminClient()) {
             adminClient.createTopics(Collections.singletonList(newTopic)).all().get();
@@ -186,6 +187,7 @@ public class KafkaEmbedded {
         }
     }
 
+    @SuppressWarnings("WeakerAccess")
     public AdminClient createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
@@ -198,16 +200,19 @@ public class KafkaEmbedded {
         return AdminClient.create(adminClientConfig);
     }
 
+    @SuppressWarnings("WeakerAccess")
     public void deleteTopic(final String topic) {
         log.debug("Deleting topic { name: {} }", topic);
         try (final AdminClient adminClient = createAdminClient()) {
             adminClient.deleteTopics(Collections.singletonList(topic)).all().get();
         } catch (final InterruptedException | ExecutionException e) {
-            if (!(e.getCause() instanceof UnknownTopicOrPartitionException))
+            if (!(e.getCause() instanceof UnknownTopicOrPartitionException)) {
                 throw new RuntimeException(e);
+            }
         }
     }
 
+    @SuppressWarnings("WeakerAccess")
     public KafkaServer kafkaServer() {
         return kafka;
     }

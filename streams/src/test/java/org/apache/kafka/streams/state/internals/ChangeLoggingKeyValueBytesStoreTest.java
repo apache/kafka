@@ -45,7 +45,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private InternalMockProcessorContext context;
     private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
-    private final Map sent = new HashMap<>();
+    private final Map<Object, Object> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
     private final byte[] there = "there".getBytes();
@@ -56,13 +56,13 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         final NoOpRecordCollector collector = new NoOpRecordCollector() {
             @Override
             public <K, V> void send(final String topic,
-                                    K key,
-                                    V value,
-                                    Headers headers,
-                                    Integer partition,
-                                    Long timestamp,
-                                    Serializer<K> keySerializer,
-                                    Serializer<V> valueSerializer) {
+                                    final K key,
+                                    final V value,
+                                    final Headers headers,
+                                    final Integer partition,
+                                    final Long timestamp,
+                                    final Serializer<K> keySerializer,
+                                    final Serializer<V> valueSerializer) {
                 sent.put(key, value);
             }
         };

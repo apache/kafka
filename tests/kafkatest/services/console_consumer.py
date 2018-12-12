@@ -60,8 +60,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
-                 isolation_level="read_uncommitted"):
+                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
+                 isolation_level="read_uncommitted", jaas_override_variables=None,
+                 kafka_opts_override="", client_prop_file_override=""):
         """
         Args:
             context:                    standard context
@@ -82,6 +83,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                                         and the corresponding background thread to finish successfully.
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
+            jaas_override_variables     A dict of variables to be used in the jaas.conf template file
+            kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
+            client_prop_file_override   Override client.properties file used by the consumer
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -113,6 +117,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
+        self.jaas_override_variables = jaas_override_variables or {}
+        self.kafka_opts_override = kafka_opts_override
+        self.client_prop_file_override = client_prop_file_override
+
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -125,11 +133,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = self.kafka.security_config.client_config(prop_file, node)
+        self.security_config = self.kafka.security_config.client_config(prop_file, node, self.jaas_override_variables)
         self.security_config.setup_node(node)
 
         prop_file += str(self.security_config)
         return prop_file
+
 
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
@@ -144,14 +153,19 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['jmx_port'] = self.jmx_port
         args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        args['kafka_opts'] = self.security_config.kafka_opts
+
+        if self.kafka_opts_override:
+            args['kafka_opts'] = "\"%s\"" % self.kafka_opts_override
+        else:
+            args['kafka_opts'] = self.security_config.kafka_opts
 
         cmd = "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_consumer)s " \
-              "--topic %(topic)s --consumer.config %(config_file)s" % args
+              "--topic %(topic)s " \
+              "--consumer.config %(config_file)s " % args
 
         if self.new_consumer:
             assert node.version >= V_0_9_0_0, \
@@ -206,7 +220,15 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         # Create and upload config file
         self.logger.info("console_consumer.properties:")
 
-        prop_file = self.prop_file(node)
+        self.security_config = self.kafka.security_config.client_config(node=node,
+                                                                        jaas_override_variables=self.jaas_override_variables)
+        self.security_config.setup_node(node)
+
+        if self.client_prop_file_override:
+            prop_file = self.client_prop_file_override
+        else:
+            prop_file = self.prop_file(node)
+
         self.logger.info(prop_file)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 

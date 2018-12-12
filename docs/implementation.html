@@ -44,6 +44,7 @@
 				1: gzip
 				2: snappy
 				3: lz4
+				4: zstd
 			bit 3: timestampType
 			bit 4: isTransactional (0 means not transactional)
 			bit 5: isControlBatch (0 means not a control batch)
@@ -231,31 +232,29 @@
     <h3><a id="distributionimpl" href="#distributionimpl">5.5 Distribution</a></h3>
     <h4><a id="impl_offsettracking" href="#impl_offsettracking">Consumer Offset Tracking</a></h4>
     <p>
-    The high-level consumer tracks the maximum offset it has consumed in each partition and periodically commits its offset vector so that it can resume from those offsets in the event of a restart. Kafka provides the option to store all the offsets for a given consumer group in a designated broker (for that group) called the <i>offset manager</i>. i.e., any consumer instance in that consumer group should send its offset commits and fetches to that offset manager (broker). The high-level consumer handles this automatically. If you use the simple consumer you will need to manage offsets manually. This is currently unsupported in the Java simple consumer which can only commit or fetch offsets in ZooKeeper. If you use the Scala simple consumer you can discover the offset manager and explicitly commit or fetch offsets to the offset manager. A consumer can look up its offset manager by issuing a GroupCoordinatorRequest to any Kafka broker and reading the GroupCoordinatorResponse which will contain the offset manager. The consumer can then proceed to commit or fetch offsets from the offsets manager broker. In case the offset manager moves, the consumer will need to rediscover the offset manager. If you wish to manage your offsets manually, you can take a look at these <a href="https://cwiki.apache.org/confluence/display/KAFKA/Committing+and+fetching+consumer+offsets+in+Kafka">code samples that explain how to issue OffsetCommitRequest and OffsetFetchRequest</a>.
+    Kafka consumer tracks the maximum offset it has consumed in each partition and has the capability to commit offsets so
+        that it can resume from those offsets in the event of a restart. Kafka provides the option to store all the offsets for
+        a given consumer group in a designated broker (for that group) called the group coordinator.  i.e., any consumer instance
+        in that consumer group should send its offset commits and fetches to that group coordinator (broker). Consumer groups are
+        assigned to coordinators based on their group names. A consumer can look up its coordinator by issuing a FindCoordinatorRequest
+        to any Kafka broker and reading the FindCoordinatorResponse which will contain the coordinator details. The consumer
+        can then proceed to commit or fetch offsets from the coordinator broker. In case the coordinator moves, the consumer will
+        need to rediscover the coordinator. Offset commits can be done automatically or manually by consumer instance.
     </p>
 
     <p>
-    When the offset manager receives an OffsetCommitRequest, it appends the request to a special <a href="#compaction">compacted</a> Kafka topic named <i>__consumer_offsets</i>. The offset manager sends a successful offset commit response to the consumer only after all the replicas of the offsets topic receive the offsets. In case the offsets fail to replicate within a configurable timeout, the offset commit will fail and the consumer may retry the commit after backing off. (This is done automatically by the high-level consumer.) The brokers periodically compact the offsets topic since it only needs to maintain the most recent offset commit per partition. The offset manager also caches the offsets in an in-memory table in order to serve offset fetches quickly.
+    When the group coordinator receives an OffsetCommitRequest, it appends the request to a special <a href="#compaction">compacted</a> Kafka topic named <i>__consumer_offsets</i>.
+        The broker sends a successful offset commit response to the consumer only after all the replicas of the offsets topic receive the offsets.
+        In case the offsets fail to replicate within a configurable timeout, the offset commit will fail and the consumer may retry the commit after backing off.
+        The brokers periodically compact the offsets topic since it only needs to maintain the most recent offset commit per partition.
+        The coordinator also caches the offsets in an in-memory table in order to serve offset fetches quickly.
     </p>
 
     <p>
-    When the offset manager receives an offset fetch request, it simply returns the last committed offset vector from the offsets cache. In case the offset manager was just started or if it just became the offset manager for a new set of consumer groups (by becoming a leader for a partition of the offsets topic), it may need to load the offsets topic partition into the cache. In this case, the offset fetch will fail with an OffsetsLoadInProgress exception and the consumer may retry the OffsetFetchRequest after backing off. (This is done automatically by the high-level consumer.)
-    </p>
-
-    <h5><a id="offsetmigration" href="#offsetmigration">Migrating offsets from ZooKeeper to Kafka</a></h5>
-    <p>
-    Kafka consumers in earlier releases store their offsets by default in ZooKeeper. It is possible to migrate these consumers to commit offsets into Kafka by following these steps:
-    <ol>
-    <li>Set <code>offsets.storage=kafka</code> and <code>dual.commit.enabled=true</code> in your consumer config.
-    </li>
-    <li>Do a rolling bounce of your consumers and then verify that your consumers are healthy.
-    </li>
-    <li>Set <code>dual.commit.enabled=false</code> in your consumer config.
-    </li>
-    <li>Do a rolling bounce of your consumers and then verify that your consumers are healthy.
-    </li>
-    </ol>
-    A roll-back (i.e., migrating from Kafka back to ZooKeeper) can also be performed using the above steps if you set <code>offsets.storage=zookeeper</code>.
+    When the coordinator receives an offset fetch request, it simply returns the last committed offset vector from the offsets cache.
+        In case coordinator was just started or if it just became the coordinator for a new set of consumer groups (by becoming a leader for a partition of the offsets topic),
+        it may need to load the offsets topic partition into the cache. In this case, the offset fetch will fail with an
+        CoordinatorLoadInProgressException and the consumer may retry the OffsetFetchRequest after backing off.
     </p>
 
     <h4><a id="impl_zookeeper" href="#impl_zookeeper">ZooKeeper Directories</a></h4>
@@ -287,47 +286,6 @@
     Each broker registers itself under the topics it maintains and stores the number of partitions for that topic.
     </p>
 
-    <h4><a id="impl_zkconsumers" href="#impl_zkconsumers">Consumers and Consumer Groups</a></h4>
-    <p>
-    Consumers of topics also register themselves in ZooKeeper, in order to coordinate with each other and balance the consumption of data. Consumers can also store their offsets in ZooKeeper by setting <code>offsets.storage=zookeeper</code>. However, this offset storage mechanism will be deprecated in a future release. Therefore, it is recommended to <a href="#offsetmigration">migrate offsets storage to Kafka</a>.
-    </p>
-
-    <p>
-    Multiple consumers can form a group and jointly consume a single topic. Each consumer in the same group is given a shared group_id.
-    For example if one consumer is your foobar process, which is run across three machines, then you might assign this group of consumers the id "foobar". This group id is provided in the configuration of the consumer, and is your way to tell the consumer which group it belongs to.
-    </p>
-
-    <p>
-    The consumers in a group divide up the partitions as fairly as possible, each partition is consumed by exactly one consumer in a consumer group.
-    </p>
-
-    <h4><a id="impl_zkconsumerid" href="#impl_zkconsumerid">Consumer Id Registry</a></h4>
-    <p>
-    In addition to the group_id which is shared by all consumers in a group, each consumer is given a transient, unique consumer_id (of the form hostname:uuid) for identification purposes. Consumer ids are registered in the following directory.
-    <pre class="brush: json;">
-    /consumers/[group_id]/ids/[consumer_id] --> {"version":...,"subscription":{...:...},"pattern":...,"timestamp":...} (ephemeral node)
-    </pre>
-    Each of the consumers in the group registers under its group and creates a znode with its consumer_id. The value of the znode contains a map of &lt;topic, #streams&gt;. This id is simply used to identify each of the consumers which is currently active within a group. This is an ephemeral node so it will disappear if the consumer process dies.
-    </p>
-
-    <h4><a id="impl_zkconsumeroffsets" href="#impl_zkconsumeroffsets">Consumer Offsets</a></h4>
-    <p>
-    Consumers track the maximum offset they have consumed in each partition. This value is stored in a ZooKeeper directory if <code>offsets.storage=zookeeper</code>.
-    </p>
-    <pre class="brush: json;">
-    /consumers/[group_id]/offsets/[topic]/[partition_id] --> offset_counter_value (persistent node)
-    </pre>
-
-    <h4><a id="impl_zkowner" href="#impl_zkowner">Partition Owner registry</a></h4>
-
-    <p>
-    Each broker partition is consumed by a single consumer within a given consumer group. The consumer must establish its ownership of a given partition before any consumption can begin. To establish its ownership, a consumer writes its own id in an ephemeral node under the particular broker partition it is claiming.
-    </p>
-
-    <pre class="brush: json;">
-    /consumers/[group_id]/owners/[topic]/[partition_id] --> consumer_node_id (ephemeral node)
-    </pre>
-
     <h4><a id="impl_clusterid" href="#impl_clusterid">Cluster Id</a></h4>
 
     <p>
@@ -341,45 +299,6 @@
 
     <p>
     The broker nodes are basically independent, so they only publish information about what they have. When a broker joins, it registers itself under the broker node registry directory and writes information about its host name and port. The broker also register the list of existing topics and their logical partitions in the broker topic registry. New topics are registered dynamically when they are created on the broker.
-    </p>
-
-    <h4><a id="impl_consumerregistration" href="#impl_consumerregistration">Consumer registration algorithm</a></h4>
-
-    <p>
-    When a consumer starts, it does the following:
-    <ol>
-    <li> Register itself in the consumer id registry under its group.
-    </li>
-    <li> Register a watch on changes (new consumers joining or any existing consumers leaving) under the consumer id registry. (Each change triggers rebalancing among all consumers within the group to which the changed consumer belongs.)
-    </li>
-    <li> Register a watch on changes (new brokers joining or any existing brokers leaving) under the broker id registry. (Each change triggers rebalancing among all consumers in all consumer groups.) </li>
-    <li> If the consumer creates a message stream using a topic filter, it also registers a watch on changes (new topics being added) under the broker topic registry. (Each change will trigger re-evaluation of the available topics to determine which topics are allowed by the topic filter. A new allowed topic will trigger rebalancing among all consumers within the consumer group.)</li>
-    <li> Force itself to rebalance within in its consumer group.
-    </li>
-    </ol>
-    </p>
-
-    <h4><a id="impl_consumerrebalance" href="#impl_consumerrebalance">Consumer rebalancing algorithm</a></h4>
-    <p>
-    The consumer rebalancing algorithms allows all the consumers in a group to come into consensus on which consumer is consuming which partitions. Consumer rebalancing is triggered on each addition or removal of both broker nodes and other consumers within the same group. For a given topic and a given consumer group, broker partitions are divided evenly among consumers within the group. A partition is always consumed by a single consumer. This design simplifies the implementation. Had we allowed a partition to be concurrently consumed by multiple consumers, there would be contention on the partition and some kind of locking would be required. If there are more consumers than partitions, some consumers won't get any data at all. During rebalancing, we try to assign partitions to consumers in such a way that reduces the number of broker nodes each consumer has to connect to.
-    </p>
-    <p>
-    Each consumer does the following during rebalancing:
-    </p>
-    <pre class="brush: text;">
-    1. For each topic T that C<sub>i</sub> subscribes to
-    2.   let P<sub>T</sub> be all partitions producing topic T
-    3.   let C<sub>G</sub> be all consumers in the same group as C<sub>i</sub> that consume topic T
-    4.   sort P<sub>T</sub> (so partitions on the same broker are clustered together)
-    5.   sort C<sub>G</sub>
-    6.   let i be the index position of C<sub>i</sub> in C<sub>G</sub> and let N = size(P<sub>T</sub>)/size(C<sub>G</sub>)
-    7.   assign partitions from i*N to (i+1)*N - 1 to consumer C<sub>i</sub>
-    8.   remove current entries owned by C<sub>i</sub> from the partition owner registry
-    9.   add newly assigned partitions to the partition owner registry
-            (we may need to re-try this until the original partition owner releases its ownership)
-    </pre>
-    <p>
-    When rebalancing is triggered at one consumer, rebalancing should be triggered in other consumers within the same group about the same time.
     </p>
 </script>
 

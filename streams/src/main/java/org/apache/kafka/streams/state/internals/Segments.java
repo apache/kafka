@@ -72,7 +72,8 @@ class Segments {
     }
 
     Segment getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
-        final long minLiveSegment = segmentId(context.streamTime() - retentionPeriod);
+        final long minLiveTimestamp = context.streamTime() - retentionPeriod;
+        final long minLiveSegment = segmentId(minLiveTimestamp);
 
         final Segment toReturn;
         if (segmentId >= minLiveSegment) {
@@ -109,8 +110,9 @@ class Segments {
                 final String[] list = dir.list();
                 if (list != null) {
                     final long[] segmentIds = new long[list.length];
-                    for (int i = 0; i < list.length; i++)
+                    for (int i = 0; i < list.length; i++) {
                         segmentIds[i] = segmentIdFromSegmentName(list[i], dir);
+                    }
 
                     // open segments in the id order
                     Arrays.sort(segmentIds);

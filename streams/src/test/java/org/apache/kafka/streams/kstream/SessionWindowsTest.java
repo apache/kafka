@@ -18,45 +18,61 @@ package org.apache.kafka.streams.kstream;
 
 import org.junit.Test;
 
-import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.core.IsNot.not;
+import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.EqualityCheck.verifyEquality;
+import static org.apache.kafka.streams.EqualityCheck.verifyInEquality;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 public class SessionWindowsTest {
 
     @Test
     public void shouldSetWindowGap() {
         final long anyGap = 42L;
-        assertEquals(anyGap, SessionWindows.with(anyGap).inactivityGap());
+        assertEquals(anyGap, SessionWindows.with(ofMillis(anyGap)).inactivityGap());
     }
 
     @Test
-    public void shouldSetWindowRetentionTime() {
+    public void shouldSetWindowGraceTime() {
         final long anyRetentionTime = 42L;
-        assertEquals(anyRetentionTime, SessionWindows.with(1).until(anyRetentionTime).maintainMs());
+        assertEquals(anyRetentionTime, SessionWindows.with(ofMillis(1)).grace(ofMillis(anyRetentionTime)).gracePeriodMs());
+    }
+
+
+    @Test
+    public void gracePeriodShouldEnforceBoundaries() {
+        SessionWindows.with(ofMillis(3L)).grace(ofMillis(0));
+
+        try {
+            SessionWindows.with(ofMillis(3L)).grace(ofMillis(-1L));
+            fail("should not accept negatives");
+        } catch (final IllegalArgumentException e) {
+            //expected
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeNegative() {
-        SessionWindows.with(-1);
+        SessionWindows.with(ofMillis(-1));
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void windowSizeMustNotBeZero() {
-        SessionWindows.with(0);
+        SessionWindows.with(ofMillis(0));
     }
 
+    @SuppressWarnings("deprecation") // specifically testing deprecated apis
     @Test
     public void retentionTimeShouldBeGapIfGapIsLargerThanDefaultRetentionTime() {
-        final long windowGap = 2 * SessionWindows.with(1).maintainMs();
-        assertEquals(windowGap, SessionWindows.with(windowGap).maintainMs());
+        final long windowGap = 2 * SessionWindows.with(ofMillis(1)).maintainMs();
+        assertEquals(windowGap, SessionWindows.with(ofMillis(windowGap)).maintainMs());
     }
 
+    @Deprecated
     @Test
     public void retentionTimeMustNotBeNegative() {
-        final SessionWindows windowSpec = SessionWindows.with(42);
+        final SessionWindows windowSpec = SessionWindows.with(ofMillis(42));
         try {
             windowSpec.until(41);
             fail("should not accept retention time smaller than gap");
@@ -66,17 +82,26 @@ public class SessionWindowsTest {
     }
 
     @Test
-    public void shouldBeEqualWhenGapAndMaintainMsAreTheSame() {
-        assertThat(SessionWindows.with(5), equalTo(SessionWindows.with(5)));
+    public void equalsAndHashcodeShouldBeValidForPositiveCases() {
+        verifyEquality(SessionWindows.with(ofMillis(1)), SessionWindows.with(ofMillis(1)));
+
+        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+
+        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
+
+        verifyEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)).grace(ofMillis(7)));
     }
 
     @Test
-    public void shouldNotBeEqualWhenMaintainMsDifferent() {
-        assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(5).until(10))));
-    }
+    public void equalsAndHashcodeShouldBeValidForNegativeCases() {
+        verifyInEquality(SessionWindows.with(ofMillis(9)), SessionWindows.with(ofMillis(1)));
 
-    @Test
-    public void shouldNotBeEqualWhenGapIsDifferent() {
-        assertThat(SessionWindows.with(5), not(equalTo(SessionWindows.with(10))));
+        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+
+        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(9)), SessionWindows.with(ofMillis(1)).grace(ofMillis(7)));
+
+        verifyInEquality(SessionWindows.with(ofMillis(2)).grace(ofMillis(6)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
+
+        verifyInEquality(SessionWindows.with(ofMillis(1)).grace(ofMillis(0)).grace(ofMillis(7)), SessionWindows.with(ofMillis(1)).grace(ofMillis(6)));
     }
 }

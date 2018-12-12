@@ -48,7 +48,7 @@ should_include_file() {
 base_dir=$(dirname $0)/..
 
 if [ -z "$SCALA_VERSION" ]; then
-  SCALA_VERSION=2.11.12
+  SCALA_VERSION=2.12.7
 fi
 
 if [ -z "$SCALA_BINARY_VERSION" ]; then
@@ -107,7 +107,7 @@ else
   for file in "$base_dir"/streams/upgrade-system-tests-$SHORT_VERSION_NO_DOTS/build/libs/kafka-streams-upgrade-system-tests*.jar;
   do
     if should_include_file "$file"; then
-      CLASSPATH="$CLASSPATH":"$file"
+      CLASSPATH="$file":"$CLASSPATH"
     fi
   done
 fi

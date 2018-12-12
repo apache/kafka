@@ -17,9 +17,11 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.regex.Pattern;
 
@@ -31,41 +33,72 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
 
     public StreamSourceNode(final String nodeName,
-                     final Collection<String> topicNames,
-                     final ConsumedInternal<K, V> consumedInternal) {
-        super(nodeName,
-              false);
+                            final Collection<String> topicNames,
+                            final ConsumedInternal<K, V> consumedInternal) {
+        super(nodeName, false);
 
         this.topicNames = topicNames;
         this.consumedInternal = consumedInternal;
     }
 
     public StreamSourceNode(final String nodeName,
-                     final Pattern topicPattern,
-                     final ConsumedInternal<K, V> consumedInternal) {
+                            final Pattern topicPattern,
+                            final ConsumedInternal<K, V> consumedInternal) {
 
-        super(nodeName,
-              false);
+        super(nodeName, false);
 
         this.topicPattern = topicPattern;
         this.consumedInternal = consumedInternal;
     }
 
     public Collection<String> getTopicNames() {
-        return topicNames;
+        return new ArrayList<>(topicNames);
     }
 
-    public Pattern getTopicPattern() {
+    public Pattern topicPattern() {
         return topicPattern;
     }
 
-    public ConsumedInternal<K, V> getConsumedInternal() {
+    public ConsumedInternal<K, V> consumedInternal() {
         return consumedInternal;
+    }
+
+    public Serde<K> keySerde() {
+        return consumedInternal.keySerde();
+    }
+
+    public Serde<V> valueSerde() {
+        return consumedInternal.valueSerde();
+    }
+
+    @Override
+    public String toString() {
+        return "StreamSourceNode{" +
+               "topicNames=" + topicNames +
+               ", topicPattern=" + topicPattern +
+               ", consumedInternal=" + consumedInternal +
+               "} " + super.toString();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
+
+        if (topicPattern != null) {
+            topologyBuilder.addSource(consumedInternal.offsetResetPolicy(),
+                                      nodeName(),
+                                      consumedInternal.timestampExtractor(),
+                                      consumedInternal.keyDeserializer(),
+                                      consumedInternal.valueDeserializer(),
+                                      topicPattern);
+        } else {
+            topologyBuilder.addSource(consumedInternal.offsetResetPolicy(),
+                                      nodeName(),
+                                      consumedInternal.timestampExtractor(),
+                                      consumedInternal.keyDeserializer(),
+                                      consumedInternal.valueDeserializer(),
+                                      topicNames.toArray(new String[topicNames.size()]));
+
+        }
     }
 
 }

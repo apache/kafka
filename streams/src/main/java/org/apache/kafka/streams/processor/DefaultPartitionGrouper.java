@@ -47,20 +47,20 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
      * @param metadata      metadata of the consuming cluster
      * @return The map from generated task ids to the assigned partitions
      */
-    public Map<TaskId, Set<TopicPartition>> partitionGroups(Map<Integer, Set<String>> topicGroups, Cluster metadata) {
-        Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
+    public Map<TaskId, Set<TopicPartition>> partitionGroups(final Map<Integer, Set<String>> topicGroups, final Cluster metadata) {
+        final Map<TaskId, Set<TopicPartition>> groups = new HashMap<>();
 
-        for (Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
-            Integer topicGroupId = entry.getKey();
-            Set<String> topicGroup = entry.getValue();
+        for (final Map.Entry<Integer, Set<String>> entry : topicGroups.entrySet()) {
+            final Integer topicGroupId = entry.getKey();
+            final Set<String> topicGroup = entry.getValue();
 
-            int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
+            final int maxNumPartitions = maxNumPartitions(metadata, topicGroup);
 
             for (int partitionId = 0; partitionId < maxNumPartitions; partitionId++) {
-                Set<TopicPartition> group = new HashSet<>(topicGroup.size());
+                final Set<TopicPartition> group = new HashSet<>(topicGroup.size());
 
-                for (String topic : topicGroup) {
-                    List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+                for (final String topic : topicGroup) {
+                    final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
                     if (partitionId < partitions.size()) {
                         group.add(new TopicPartition(topic, partitionId));
                     }
@@ -75,16 +75,16 @@ public class DefaultPartitionGrouper implements PartitionGrouper {
     /**
      * @throws StreamsException if no metadata can be received for a topic
      */
-    protected int maxNumPartitions(Cluster metadata, Set<String> topics) {
+    protected int maxNumPartitions(final Cluster metadata, final Set<String> topics) {
         int maxNumPartitions = 0;
-        for (String topic : topics) {
-            List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
+        for (final String topic : topics) {
+            final List<PartitionInfo> partitions = metadata.partitionsForTopic(topic);
             if (partitions.isEmpty()) {
                 log.error("Empty partitions for topic {}", topic);
                 throw new RuntimeException("Empty partitions for topic " + topic);
             }
 
-            int numPartitions = partitions.size();
+            final int numPartitions = partitions.size();
             if (numPartitions > maxNumPartitions) {
                 maxNumPartitions = numPartitions;
             }

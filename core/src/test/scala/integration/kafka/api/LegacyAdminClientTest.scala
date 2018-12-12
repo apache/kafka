@@ -35,6 +35,8 @@ import scala.collection.JavaConverters._
 /**
   * Tests for the deprecated Scala AdminClient.
   */
+@deprecated("The Scala AdminClient has been deprecated in favour of org.apache.kafka.clients.admin.AdminClient",
+  since = "0.11.0")
 class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   val producerCount = 1
@@ -79,13 +81,14 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testOffsetsForTimesWhenOffsetNotFound() {
-    val consumer = consumers.head
+    val consumer = createConsumer()
     assertNull(consumer.offsetsForTimes(Map(tp -> JLong.valueOf(0L)).asJava).get(tp))
   }
 
   @Test
   def testListGroups() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
     val groups = client.listAllGroupsFlattened
     assertFalse(groups.isEmpty)
@@ -96,7 +99,8 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testListAllBrokerVersionInfo() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
     val brokerVersionInfos = client.listAllBrokerVersionInfo
     val brokers = brokerList.split(",")
@@ -111,7 +115,8 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testGetConsumerGroupSummary() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
     val group = client.describeConsumerGroup(groupId)
     assertEquals("range", group.assignmentStrategy)
@@ -126,7 +131,8 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
 
   @Test
   def testDescribeConsumerGroup() {
-    subscribeAndWaitForAssignment(topic, consumers.head)
+    val consumer = createConsumer()
+    subscribeAndWaitForAssignment(topic, consumer)
 
     val consumerGroupSummary = client.describeConsumerGroup(groupId)
     assertEquals(1, consumerGroupSummary.consumers.get.size)

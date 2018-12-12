@@ -55,9 +55,9 @@ import java.util.Map;
 public class ConnectStandalone {
     private static final Logger log = LoggerFactory.getLogger(ConnectStandalone.class);
 
-    public static void main(String[] args) throws Exception {
+    public static void main(String[] args) {
 
-        if (args.length < 2) {
+        if (args.length < 2 || Arrays.asList(args).contains("--help")) {
             log.info("Usage: ConnectStandalone worker.properties connector1.properties [connector2.properties ...]");
             Exit.exit(1);
         }

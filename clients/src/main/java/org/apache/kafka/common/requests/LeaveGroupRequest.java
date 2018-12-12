@@ -74,13 +74,13 @@ public class LeaveGroupRequest extends AbstractRequest {
     private final String memberId;
 
     private LeaveGroupRequest(String groupId, String memberId, short version) {
-        super(version);
+        super(ApiKeys.LEAVE_GROUP, version);
         this.groupId = groupId;
         this.memberId = memberId;
     }
 
     public LeaveGroupRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.LEAVE_GROUP, version);
         groupId = struct.get(GROUP_ID);
         memberId = struct.get(MEMBER_ID);
     }

@@ -17,99 +17,74 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+
+import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class StatefulProcessorNode<K, V> extends StatelessProcessorNode<K, V> {
+public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
     private final String[] storeNames;
-    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
-    private final String maybeRepartitionedSourceName;
+    private final StoreBuilder<? extends StateStore> storeBuilder;
 
 
+    /**
+     * Create a node representing a stateful processor, where the named store has already been registered.
+     */
     public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters processorParameters,
+                                 final ProcessorParameters<K, V> processorParameters,
                                  final String[] storeNames,
-                                 final String maybeRepartitionedSourceName,
-                                 final StoreBuilder<KeyValueStore<K, V>> materializedKTableStoreBuilder,
                                  final boolean repartitionRequired) {
         super(nodeName,
               processorParameters,
               repartitionRequired);
 
         this.storeNames = storeNames;
+        this.storeBuilder = null;
+    }
+
+
+    /**
+     * Create a node representing a stateful processor,
+     * where the store needs to be built and registered as part of building this node.
+     */
+    public StatefulProcessorNode(final String nodeName,
+                                 final ProcessorParameters<K, V> processorParameters,
+                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
+                                 final boolean repartitionRequired) {
+        super(nodeName,
+              processorParameters,
+              repartitionRequired);
+
+        this.storeNames = null;
         this.storeBuilder = materializedKTableStoreBuilder;
-        this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
     }
 
-
-    String[] storeNames() {
-        return Arrays.copyOf(storeNames, storeNames.length);
+    @Override
+    public String toString() {
+        return "StatefulProcessorNode{" +
+            "storeNames=" + Arrays.toString(storeNames) +
+            ", storeBuilder=" + storeBuilder +
+            "} " + super.toString();
     }
-
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        //TODO will implement in follow-up pr
-    }
 
-    public static <K, V> StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder() {
-        return new StatefulProcessorNodeBuilder<>();
-    }
+        final String processorName = processorParameters().processorName();
+        final ProcessorSupplier processorSupplier = processorParameters().processorSupplier();
 
-    public static final class StatefulProcessorNodeBuilder<K, V> {
+        topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 
-        private ProcessorParameters processorSupplier;
-        private String nodeName;
-        private boolean repartitionRequired;
-        private String maybeRepartitionedSourceName;
-        private String[] storeNames;
-        private StoreBuilder<KeyValueStore<K, V>> storeBuilder;
-
-        private StatefulProcessorNodeBuilder() {
+        if (storeNames != null && storeNames.length > 0) {
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        public StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
-            this.processorSupplier = processorParameters;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withNodeName(final String nodeName) {
-            this.nodeName = nodeName;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withStoreNames(final String[] storeNames) {
-            this.storeNames = storeNames;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withRepartitionRequired(final boolean repartitionRequired) {
-            this.repartitionRequired = repartitionRequired;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
-            this.storeBuilder = storeBuilder;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withMaybeRepartitionedSourceName(String maybeRepartitionedSourceName) {
-            this.maybeRepartitionedSourceName = maybeRepartitionedSourceName;
-            return this;
-        }
-
-        public StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(nodeName,
-                                               processorSupplier,
-                                               storeNames,
-                                               maybeRepartitionedSourceName,
-                                               storeBuilder,
-                                               repartitionRequired);
-
+        if (storeBuilder != null) {
+            topologyBuilder.addStateStore(storeBuilder, processorName);
         }
     }
 }

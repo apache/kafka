@@ -32,6 +32,7 @@ import java.nio.file.NoSuchFileException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * This class saves out a map of topic/partition=&gt;offsets to a file. The format of the file is UTF-8 text containing the following:
@@ -49,6 +50,8 @@ import java.util.Map;
  *   separated by spaces.
  */
 public class OffsetCheckpoint {
+
+    private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
 
     private static final int VERSION = 0;
 
@@ -74,7 +77,7 @@ public class OffsetCheckpoint {
             final File temp = new File(file.getAbsolutePath() + ".tmp");
 
             final FileOutputStream fileOutputStream = new FileOutputStream(temp);
-            try (BufferedWriter writer = new BufferedWriter(
+            try (final BufferedWriter writer = new BufferedWriter(
                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);
                 writeIntLine(writer, offsets.size());
@@ -121,7 +124,7 @@ public class OffsetCheckpoint {
      */
     public Map<TopicPartition, Long> read() throws IOException {
         synchronized (lock) {
-            try (BufferedReader reader = Files.newBufferedReader(file.toPath())) {
+            try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
                 final int version = readInt(reader);
                 switch (version) {
                     case 0:
@@ -129,7 +132,7 @@ public class OffsetCheckpoint {
                         final Map<TopicPartition, Long> offsets = new HashMap<>();
                         String line = reader.readLine();
                         while (line != null) {
-                            final String[] pieces = line.split("\\s+");
+                            final String[] pieces = WHITESPACE_MINIMUM_ONCE.split(line);
                             if (pieces.length != 3) {
                                 throw new IOException(
                                     String.format("Malformed line in offset checkpoint file: '%s'.", line));

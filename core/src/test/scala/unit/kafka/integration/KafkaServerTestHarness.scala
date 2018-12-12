@@ -112,7 +112,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     if (servers != null) {
       TestUtils.shutdownServers(servers)
     }
-    super.tearDown
+    super.tearDown()
   }
 
   /**

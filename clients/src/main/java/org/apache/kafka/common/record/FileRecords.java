@@ -32,7 +32,8 @@ import java.nio.channels.FileChannel;
 import java.nio.channels.GatheringByteChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.Iterator;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -321,7 +322,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
                 for (Record record : batch) {
                     long timestamp = record.timestamp();
                     if (timestamp >= targetTimestamp && record.offset() >= startingOffset)
-                        return new TimestampAndOffset(timestamp, record.offset());
+                        return new TimestampAndOffset(timestamp, record.offset(),
+                                maybeLeaderEpoch(batch.partitionLeaderEpoch()));
                 }
             }
         }
@@ -336,15 +338,23 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public TimestampAndOffset largestTimestampAfter(int startingPosition) {
         long maxTimestamp = RecordBatch.NO_TIMESTAMP;
         long offsetOfMaxTimestamp = -1L;
+        int leaderEpochOfMaxTimestamp = RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
         for (RecordBatch batch : batchesFrom(startingPosition)) {
             long timestamp = batch.maxTimestamp();
             if (timestamp > maxTimestamp) {
                 maxTimestamp = timestamp;
                 offsetOfMaxTimestamp = batch.lastOffset();
+                leaderEpochOfMaxTimestamp = batch.partitionLeaderEpoch();
             }
         }
-        return new TimestampAndOffset(maxTimestamp, offsetOfMaxTimestamp);
+        return new TimestampAndOffset(maxTimestamp, offsetOfMaxTimestamp,
+                maybeLeaderEpoch(leaderEpochOfMaxTimestamp));
+    }
+
+    private Optional<Integer> maybeLeaderEpoch(int leaderEpoch) {
+        return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ?
+                Optional.empty() : Optional.of(leaderEpoch);
     }
 
     /**
@@ -374,12 +384,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @return An iterator over batches starting from {@code start}
      */
     public Iterable<FileChannelRecordBatch> batchesFrom(final int start) {
-        return new Iterable<FileChannelRecordBatch>() {
-            @Override
-            public Iterator<FileChannelRecordBatch> iterator() {
-                return batchIterator(start);
-            }
-        };
+        return () -> batchIterator(start);
     }
 
     @Override
@@ -498,28 +503,27 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public static class TimestampAndOffset {
         public final long timestamp;
         public final long offset;
+        public final Optional<Integer> leaderEpoch;
 
-        public TimestampAndOffset(long timestamp, long offset) {
+        public TimestampAndOffset(long timestamp, long offset, Optional<Integer> leaderEpoch) {
             this.timestamp = timestamp;
             this.offset = offset;
+            this.leaderEpoch = leaderEpoch;
         }
 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-
             TimestampAndOffset that = (TimestampAndOffset) o;
-
-            if (timestamp != that.timestamp) return false;
-            return offset == that.offset;
+            return timestamp == that.timestamp &&
+                    offset == that.offset &&
+                    Objects.equals(leaderEpoch, that.leaderEpoch);
         }
 
         @Override
         public int hashCode() {
-            int result = (int) (timestamp ^ (timestamp >>> 32));
-            result = 31 * result + (int) (offset ^ (offset >>> 32));
-            return result;
+            return Objects.hash(timestamp, offset, leaderEpoch);
         }
 
         @Override
@@ -527,6 +531,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
             return "TimestampAndOffset(" +
                     "timestamp=" + timestamp +
                     ", offset=" + offset +
+                    ", leaderEpoch=" + leaderEpoch +
                     ')';
         }
     }
