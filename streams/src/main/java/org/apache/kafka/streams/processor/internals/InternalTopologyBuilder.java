@@ -27,7 +27,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
@@ -155,7 +154,6 @@ public class InternalTopologyBuilder {
             return users;
         }
 
-        /** Visible for testing */
         public boolean loggingEnabled() {
             return builder.loggingEnabled();
         }
@@ -514,12 +512,12 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addStateStore(final StoreBuilder storeBuilder,
+    public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final String... processorNames) {
         addStateStore(storeBuilder, false, processorNames);
     }
 
-    public final void addStateStore(final StoreBuilder storeBuilder,
+    public final void addStateStore(final StoreBuilder<?> storeBuilder,
                                     final boolean allowOverride,
                                     final String... processorNames) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
@@ -538,7 +536,7 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    public final void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
+    public final void addGlobalStore(final StoreBuilder storeBuilder,
                                      final String sourceName,
                                      final TimestampExtractor timestampExtractor,
                                      final Deserializer keyDeserializer,

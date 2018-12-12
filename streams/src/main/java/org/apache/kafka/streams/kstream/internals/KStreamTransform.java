@@ -28,7 +28,7 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
     private final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier;
 
-    public KStreamTransform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier) {
+    KStreamTransform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier) {
         this.transformerSupplier = transformerSupplier;
     }
 
@@ -41,7 +41,7 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
         private final Transformer<? super K1, ? super V1, ? extends KeyValue<? extends K2, ? extends V2>> transformer;
 
-        public KStreamTransformProcessor(final Transformer<? super K1, ? super V1, ? extends KeyValue<? extends K2, ? extends V2>> transformer) {
+        KStreamTransformProcessor(final Transformer<? super K1, ? super V1, ? extends KeyValue<? extends K2, ? extends V2>> transformer) {
             this.transformer = transformer;
         }
 
@@ -55,8 +55,9 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
         public void process(final K1 key, final V1 value) {
             final KeyValue<? extends K2, ? extends V2> pair = transformer.transform(key, value);
 
-            if (pair != null)
+            if (pair != null) {
                 context().forward(pair.key, pair.value);
+            }
         }
 
         @Override

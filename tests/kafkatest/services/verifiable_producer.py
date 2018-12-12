@@ -58,18 +58,21 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
                  stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
                  enable_idempotence=False, offline_nodes=[], create_time=-1, repeating_keys=None,
-                 jaas_override_variables=None):
+                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override=""):
         """
-        :param max_messages is a number of messages to be produced per producer
-        :param message_validator checks for an expected format of messages produced. There are
-        currently two:
-               * is_int is an integer format; this is default and expected to be used if
-               num_nodes = 1
-               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
-               will produce exactly same messages, and validation may miss missing messages.
-        :param compression_types: If None, all producers will not use compression; or a list of
-        compression types, one per producer (could be "none").
-        :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
+        Args:
+            :param max_messages                number of messages to be produced per producer
+            :param message_validator           checks for an expected format of messages produced. There are
+                                               currently two:
+                                               * is_int is an integer format; this is default and expected to be used if
+                                                 num_nodes = 1
+                                               * is_int_with_prefix recommended if num_nodes > 1, because otherwise each producer
+                                                 will produce exactly same messages, and validation may miss missing messages.
+            :param compression_types           If None, all producers will not use compression; or a list of compression types,
+                                               one per producer (could be "none").
+            :param jaas_override_variables     A dict of variables to be used in the jaas.conf template file
+            :param kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
+            :param client_prop_file_override   Override client.properties file used by the consumer
         """
         super(VerifiableProducer, self).__init__(context, num_nodes)
         self.log_level = log_level
@@ -97,6 +100,9 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.create_time = create_time
         self.repeating_keys = repeating_keys
         self.jaas_override_variables = jaas_override_variables or {}
+        self.kafka_opts_override = kafka_opts_override
+        self.client_prop_file_override = client_prop_file_override
+
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -125,7 +131,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.security_config.setup_node(node)
 
         # Create and upload config file
-        producer_prop_file = self.prop_file(node)
+        if self.client_prop_file_override:
+            producer_prop_file = self.client_prop_file_override
+        else:
+            producer_prop_file = self.prop_file(node)
+
         if self.acks is not None:
             self.logger.info("VerifiableProducer (index = %d) will use acks = %s", idx, self.acks)
             producer_prop_file += "\nacks=%s\n" % self.acks
@@ -189,7 +199,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def start_cmd(self, node, idx):
         cmd  = "export LOG_DIR=%s;" % VerifiableProducer.LOG_DIR
-        cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+        if self.kafka_opts_override:
+            cmd += " export KAFKA_OPTS=\"%s\";" % self.kafka_opts_override
+        else:
+            cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
+
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableProducer.LOG4J_CONFIG
         cmd += self.impl.exec_cmd(node)
         cmd += " --topic %s --broker-list %s" % (self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol, True, self.offline_nodes))
@@ -207,6 +221,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             cmd += " --repeating-keys %s " % str(self.repeating_keys)
 
         cmd += " --producer.config %s" % VerifiableProducer.CONFIG_FILE
+
         cmd += " 2>> %s | tee -a %s &" % (VerifiableProducer.STDOUT_CAPTURE, VerifiableProducer.STDOUT_CAPTURE)
         return cmd
 

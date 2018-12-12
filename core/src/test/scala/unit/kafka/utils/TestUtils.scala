@@ -26,8 +26,8 @@ import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
+
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -141,6 +141,11 @@ object TestUtils extends Logging {
 
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+
+  def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           epoch: Long = 0): (Broker, Long) = {
+    (new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol), epoch)
+  }
 
   /**
    * Create a test config for the provided parameters.
@@ -324,9 +329,9 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, partitionReplicaAssignment, topicConfig)
+    adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
     // wait until the update metadata request for new topic reaches all servers
-    partitionReplicaAssignment.keySet.map { case i =>
+    partitionReplicaAssignment.keySet.map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
       i -> TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, i)
     }.toMap
@@ -720,32 +725,51 @@ object TestUtils extends Logging {
     }
   }
 
+  def pollUntilTrue(consumer: Consumer[_, _],
+                    action: () => Boolean,
+                    msg: => String,
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    waitUntilTrue(() => {
+      consumer.poll(Duration.ofMillis(50))
+      action()
+    }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
+  def pollRecordsUntilTrue[K, V](consumer: Consumer[K, V],
+                                 action: ConsumerRecords[K, V] => Boolean,
+                                 msg: => String,
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
+    waitUntilTrue(() => {
+      val records = consumer.poll(Duration.ofMillis(50))
+      action(records)
+    }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
+  }
+
   /**
     *  Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
     * @param msg error message
-    * @param waitTime maximum time to wait and retest the condition before failing the test
+    * @param waitTimeMs maximum time to wait and retest the condition before failing the test
     * @param pause delay between condition checks
     * @param maxRetries maximum number of retries to check the given condition if a retriable exception is thrown
     */
   def waitUntilTrue(condition: () => Boolean, msg: => String,
-                    waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L, maxRetries: Int = 0): Unit = {
     val startTime = System.currentTimeMillis()
     var retry = 0
     while (true) {
       try {
         if (condition())
           return
-        if (System.currentTimeMillis() > startTime + waitTime)
+        if (System.currentTimeMillis() > startTime + waitTimeMs)
           fail(msg)
-        Thread.sleep(waitTime.min(pause))
+        Thread.sleep(waitTimeMs.min(pause))
       }
       catch {
-        case e: RetriableException if retry < maxRetries => {
+        case e: RetriableException if retry < maxRetries =>
           debug("Retrying after error", e)
           retry += 1
-        }
         case e : Throwable => throw e
       }
     }
@@ -840,7 +864,7 @@ object TestUtils extends Logging {
           }
       },
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
-      waitTime = timeout)
+      waitTimeMs = timeout)
 
     leader
   }
@@ -862,7 +886,7 @@ object TestUtils extends Logging {
     }
 
     TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
-      s"Did not observe leader change for partition $tp after $timeout ms", waitTime = timeout)
+      s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
   }
@@ -877,7 +901,7 @@ object TestUtils extends Logging {
     }
 
     TestUtils.waitUntilTrue(() => leaderIfExists.isDefined,
-      s"Partition $tp leaders not made yet after $timeout ms", waitTime = timeout)
+      s"Partition $tp leaders not made yet after $timeout ms", waitTimeMs = timeout)
 
     leaderIfExists.get
   }
@@ -932,6 +956,12 @@ object TestUtils extends Logging {
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
     assertEquals(0, threadCount)
+  }
+
+  def allThreadStackTraces(): String = {
+    Thread.getAllStackTraces.asScala.map { case (thread, stackTrace) =>
+      thread.getName + "\n\t" + stackTrace.toList.map(_.toString).mkString("\n\t")
+    }.mkString("\n")
   }
 
   /**
@@ -1086,7 +1116,7 @@ object TestUtils extends Logging {
 
     TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
-        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTime = JTestUtils.DEFAULT_MAX_WAIT_MS)
+        s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
 
   /**
@@ -1113,30 +1143,30 @@ object TestUtils extends Logging {
     }
   }
 
-  private def secureZkPaths(zkUtils: ZkUtils): Seq[String] = {
+  private def secureZkPaths(zkClient: KafkaZkClient): Seq[String] = {
     def subPaths(path: String): Seq[String] = {
-      if (zkUtils.pathExists(path))
-        path +: zkUtils.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
+      if (zkClient.pathExists(path))
+        path +: zkClient.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
       else
         Seq.empty
     }
-    val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
+    val topLevelPaths = ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths
     topLevelPaths.flatMap(subPaths)
   }
 
   /**
    * Verifies that all secure paths in ZK are created with the expected ACL.
    */
-  def verifySecureZkAcls(zkUtils: ZkUtils, usersWithAccess: Int) {
-    secureZkPaths(zkUtils).foreach(path => {
-      if (zkUtils.pathExists(path)) {
-        val sensitive = ZkUtils.sensitivePath(path)
+  def verifySecureZkAcls(zkClient: KafkaZkClient, usersWithAccess: Int) {
+    secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val sensitive = ZkData.sensitivePath(path)
         // usersWithAccess have ALL access to path. For paths that are
         // not sensitive, world has READ access.
         val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
-        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)
-        acls.asScala.foreach(acl => isAclSecure(acl, sensitive))
+        acls.foreach(acl => isAclSecure(acl, sensitive))
       }
     })
   }
@@ -1145,12 +1175,12 @@ object TestUtils extends Logging {
    * Verifies that secure paths in ZK have no access control. This is
    * the case when zookeeper.set.acl=false and no ACLs have been configured.
    */
-  def verifyUnsecureZkAcls(zkUtils: ZkUtils) {
-    secureZkPaths(zkUtils).foreach(path => {
-      if (zkUtils.pathExists(path)) {
-        val acls = zkUtils.zkConnection.getAcl(path).getKey
+  def verifyUnsecureZkAcls(zkClient: KafkaZkClient) {
+    secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", 1, acls.size)
-        acls.asScala.foreach(isAclUnsecure)
+        acls.foreach(isAclUnsecure)
       }
     })
   }
@@ -1192,7 +1222,6 @@ object TestUtils extends Logging {
       threadPool.shutdownNow()
     }
     assertTrue(s"$message failed with exception(s) $exceptions", exceptions.isEmpty)
-
   }
 
   def consumeTopicRecords[K, V](servers: Seq[KafkaServer],
@@ -1212,14 +1241,25 @@ object TestUtils extends Logging {
     } finally consumer.close()
   }
 
-  def consumeRecords[K, V](consumer: KafkaConsumer[K, V], numMessages: Int,
-                           waitTime: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+  def pollUntilAtLeastNumRecords[K, V](consumer: Consumer[K, V],
+                                       numRecords: Int,
+                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
-    waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      records.size >= numMessages
-    }, s"Consumed ${records.size} records until timeout instead of the expected $numMessages records", waitTime)
-    assertEquals("Consumed more records than expected", numMessages, records.size)
+    def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
+      records ++= polledRecords.asScala
+      records.size >= numRecords
+    }
+    pollRecordsUntilTrue(consumer, pollAction,
+      waitTimeMs = waitTimeMs,
+      msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
+    records
+  }
+
+  def consumeRecords[K, V](consumer: Consumer[K, V],
+                           numRecords: Int,
+                           waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
+    val records = pollUntilAtLeastNumRecords(consumer, numRecords, waitTimeMs)
+    assertEquals("Consumed more records than expected", numRecords, records.size)
     records
   }
 
@@ -1316,15 +1356,6 @@ object TestUtils extends Logging {
       offsetsToCommit.put(topicPartition, new OffsetAndMetadata(consumer.position(topicPartition)))
     }
     offsetsToCommit.toMap
-  }
-
-  def pollUntilAtLeastNumRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int): Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(Duration.ofMillis(50)).asScala
-      records.size >= numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
-    records
   }
 
   def resetToCommittedPositions(consumer: KafkaConsumer[Array[Byte], Array[Byte]]) = {

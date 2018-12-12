@@ -180,6 +180,7 @@ public class LoginManager {
                                                      String configName,
                                                      Class<? extends T> defaultClass) {
         String prefix  = jaasContext.type() == JaasContext.Type.SERVER ? ListenerName.saslMechanismPrefix(saslMechanism) : "";
+        @SuppressWarnings("unchecked")
         Class<? extends T> clazz = (Class<? extends T>) configs.get(prefix + configName);
         if (clazz != null && jaasContext.configurationEntries().size() != 1) {
             String errorMessage = configName + " cannot be specified with multiple login modules in the JAAS context. " +

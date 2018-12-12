@@ -18,7 +18,6 @@ package org.apache.kafka.clients;
 
 import java.util.concurrent.ThreadLocalRandom;
 
-import org.apache.kafka.common.config.ClientDnsLookup;
 import org.apache.kafka.common.errors.AuthenticationException;
 
 import java.net.InetAddress;

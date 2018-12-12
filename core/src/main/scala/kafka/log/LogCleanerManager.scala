@@ -59,8 +59,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
                                      val logs: Pool[TopicPartition, Log],
                                      val logDirFailureChannel: LogDirFailureChannel) extends Logging with KafkaMetricsGroup {
 
-  import LogCleanerManager._
-
   protected override def loggerName = classOf[LogCleaner].getName
 
   // package-private for testing
@@ -76,9 +74,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
   /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
    *   for each log directory */
   private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()
-
-  /* the set of directories marked as uncleanable and therefore offline */
-  private val uncleanableDirs = mutable.HashSet[String]()
 
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock

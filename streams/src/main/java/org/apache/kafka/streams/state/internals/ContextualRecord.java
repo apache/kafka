@@ -38,14 +38,18 @@ public class ContextualRecord {
         return value;
     }
 
-    public long sizeBytes() {
+    long sizeBytes() {
         return (value == null ? 0 : value.length) + recordContext.sizeBytes();
     }
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final ContextualRecord that = (ContextualRecord) o;
         return Arrays.equals(value, that.value) &&
             Objects.equals(recordContext, that.recordContext);

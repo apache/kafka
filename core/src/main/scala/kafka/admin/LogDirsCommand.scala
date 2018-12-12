@@ -20,14 +20,13 @@ package kafka.admin
 import java.io.PrintStream
 import java.util.Properties
 
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Json}
 import org.apache.kafka.clients.admin.{AdminClientConfig, DescribeLogDirsResult, AdminClient => JAdminClient}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.Map
-import kafka.utils.{CommandLineUtils, Json}
-import joptsimple._
-import org.apache.kafka.common.utils.Utils
 
 /**
   * A command for querying log directory usage on the specified brokers
@@ -93,8 +92,7 @@ object LogDirsCommand {
         JAdminClient.create(props)
     }
 
-    class LogDirsCommandOptions(args: Array[String]) {
-        val parser = new OptionParser(false)
+    class LogDirsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args){
         val bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping")
           .withRequiredArg
           .describedAs("The server(s) to use for bootstrapping")
@@ -116,7 +114,10 @@ object LogDirsCommand {
           .describedAs("Broker list")
           .ofType(classOf[String])
 
-        val options = parser.parse(args : _*)
+        options = parser.parse(args : _*)
+
+        CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to query log directory usage on the specified brokers.")
+
         CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, describeOpt)
     }
 }

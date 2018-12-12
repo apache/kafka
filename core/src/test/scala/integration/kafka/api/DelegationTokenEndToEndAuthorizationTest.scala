@@ -19,7 +19,8 @@ package kafka.api
 import java.util
 
 import kafka.server.KafkaConfig
-import kafka.utils.{JaasTestUtils, TestUtils, ZkUtils}
+import kafka.utils.{JaasTestUtils, TestUtils}
+import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -47,7 +48,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   override def configureSecurityBeforeServersStart() {
     super.configureSecurityBeforeServersStart()
-    zkClient.makeSurePersistentPathExists(ZkUtils.ConfigChangesPath)
+    zkClient.makeSurePersistentPathExists(ConfigEntityChangeNotificationZNode.path)
     // Create broker admin credentials before starting brokers
     createScramCredentials(zkConnect, kafkaPrincipal, kafkaPassword)
   }
@@ -83,12 +84,14 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     config.put(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
 
     val adminClient = AdminClient.create(config)
-    val token = adminClient.createDelegationToken().delegationToken().get()
-    //wait for token to reach all the brokers
-    TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
-      "Timed out waiting for token to propagate to all servers")
-    adminClient.close()
-
-    token
+    try {
+      val token = adminClient.createDelegationToken().delegationToken().get()
+      //wait for token to reach all the brokers
+      TestUtils.waitUntilTrue(() => servers.forall(server => !server.tokenCache.tokens().isEmpty),
+        "Timed out waiting for token to propagate to all servers")
+      token
+    } finally {
+      adminClient.close()
+    }
   }
 }

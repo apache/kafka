@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * server when the login is a type that has a limited lifetime/will expire. The
  * credentials for the login must implement {@link ExpiringCredential}.
  */
-public abstract class ExpiringCredentialRefreshingLogin {
+public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable {
     /**
      * Class that can be overridden for testing
      */

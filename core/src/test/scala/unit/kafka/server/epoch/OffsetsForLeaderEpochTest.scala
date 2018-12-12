@@ -21,6 +21,7 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.Replica
+import kafka.log.{Log, LogManager}
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
@@ -46,9 +47,9 @@ class OffsetsForLeaderEpochTest {
     val request = Map(tp -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), epochRequested))
 
     //Stubs
-    val mockLog = createNiceMock(classOf[kafka.log.Log])
-    val mockCache = createNiceMock(classOf[kafka.server.epoch.LeaderEpochFileCache])
-    val logManager = createNiceMock(classOf[kafka.log.LogManager])
+    val mockLog: Log = createNiceMock(classOf[Log])
+    val mockCache: LeaderEpochFileCache = createNiceMock(classOf[LeaderEpochFileCache])
+    val logManager: LogManager = createNiceMock(classOf[LogManager])
     expect(mockCache.endOffsetFor(epochRequested)).andReturn(epochAndOffset)
     expect(mockLog.leaderEpochCache).andReturn(mockCache).anyTimes()
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
@@ -72,7 +73,7 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnNoLeaderForPartitionIfThrown(): Unit = {
-    val logManager = createNiceMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = createNiceMock(classOf[LogManager])
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
@@ -95,7 +96,7 @@ class OffsetsForLeaderEpochTest {
 
   @Test
   def shouldReturnUnknownTopicOrPartitionIfThrown(): Unit = {
-    val logManager = createNiceMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = createNiceMock(classOf[LogManager])
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 

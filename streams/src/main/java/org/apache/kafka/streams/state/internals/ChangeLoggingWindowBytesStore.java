@@ -51,11 +51,13 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
         return bytesStore.fetch(key, timestamp);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
         return bytesStore.fetch(keyFrom, keyTo, from, to);
@@ -65,7 +67,8 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         return bytesStore.all();
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return bytesStore.fetchAll(timeFrom, timeTo);

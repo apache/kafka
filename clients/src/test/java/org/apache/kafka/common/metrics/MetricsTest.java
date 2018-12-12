@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.metrics;
 
+import static java.util.Collections.emptyList;
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -203,6 +205,20 @@ public class MetricsTest {
     }
 
     @Test
+    public void testRemoveChildSensor() {
+        final Metrics metrics = new Metrics();
+
+        final Sensor parent = metrics.sensor("parent");
+        final Sensor child = metrics.sensor("child", parent);
+
+        assertEquals(singletonList(child), metrics.childrenSensors().get(parent));
+
+        metrics.removeSensor("child");
+
+        assertEquals(emptyList(), metrics.childrenSensors().get(parent));
+    }
+
+    @Test
     public void testRemoveSensor() {
         int size = metrics.metrics().size();
         Sensor parent1 = metrics.sensor("test.parent1");
@@ -347,37 +363,51 @@ public class MetricsTest {
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
         max.record(config, 50, time.milliseconds());
         time.sleep(samples * windowMs);
-        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
     }
 
+    /**
+     * Some implementations of SampledStat make sense to return NaN
+     * when there are no values set rather than the initial value
+     */
     @Test
-    public void testSampledStatInitialValue() {
-        // initialValue from each SampledStat is set as the initialValue on its Sample.
-        // The only way to test the initialValue is to infer it by having a SampledStat
-        // with expired Stats, because their values are reset to the initial values.
-        // Most implementations of combine on SampledStat end up returning the default
-        // value, so we can use this. This doesn't work for Percentiles though.
-        // This test looks a lot like testOldDataHasNoEffect because it's the same
-        // flow that leads to this state.
+    public void testSampledStatReturnsNaNWhenNoValuesExist() {
+        // This is tested by having a SampledStat with expired Stats,
+        // because their values get reset to the initial values.
         Max max = new Max();
         Min min = new Min();
         Avg avg = new Avg();
-        Count count = new Count();
-        Rate.SampledTotal sampledTotal = new Rate.SampledTotal();
-
         long windowMs = 100;
         int samples = 2;
         MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
         max.record(config, 50, time.milliseconds());
         min.record(config, 50, time.milliseconds());
         avg.record(config, 50, time.milliseconds());
-        count.record(config, 50, time.milliseconds());
-        sampledTotal.record(config, 50, time.milliseconds());
+
         time.sleep(samples * windowMs);
 
-        assertEquals(Double.NEGATIVE_INFINITY, max.measure(config, time.milliseconds()), EPS);
-        assertEquals(Double.MAX_VALUE, min.measure(config, time.milliseconds()), EPS);
-        assertEquals(0.0, avg.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, max.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, min.measure(config, time.milliseconds()), EPS);
+        assertEquals(Double.NaN, avg.measure(config, time.milliseconds()), EPS);
+    }
+
+    /**
+     * Some implementations of SampledStat make sense to return the initial value
+     * when there are no values set
+     */
+    @Test
+    public void testSampledStatReturnsInitialValueWhenNoValuesExist() {
+        Count count = new Count();
+        Rate.SampledTotal sampledTotal = new Rate.SampledTotal();
+        long windowMs = 100;
+        int samples = 2;
+        MetricConfig config = new MetricConfig().timeWindow(windowMs, TimeUnit.MILLISECONDS).samples(samples);
+
+        count.record(config, 50, time.milliseconds());
+        sampledTotal.record(config, 50, time.milliseconds());
+
+        time.sleep(samples * windowMs);
+
         assertEquals(0, count.measure(config, time.milliseconds()), EPS);
         assertEquals(0.0, sampledTotal.measure(config, time.milliseconds()), EPS);
     }
@@ -839,6 +869,7 @@ public class MetricsTest {
      * This test is to verify the deprecated {@link Metric#value()} method.
      * @deprecated This will be removed in a future major release.
      */
+    @Deprecated
     @Test
     public void testDeprecatedMetricValueMethod() {
         verifyStats(KafkaMetric::value);

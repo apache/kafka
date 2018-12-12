@@ -16,8 +16,12 @@
   */
 package kafka.server.epoch.util
 
+import java.util
+import java.util.Collections
+
 import kafka.cluster.BrokerEndPoint
 import kafka.server.BlockingSend
+import org.apache.kafka.clients.MockClient.MockMetadataUpdater
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, MockClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.Records
@@ -35,7 +39,11 @@ import org.apache.kafka.common.{Node, TopicPartition}
   * setOffsetsForNextResponse
   */
 class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, EpochEndOffset], destination: BrokerEndPoint, time: Time) extends BlockingSend {
-  private val client = new MockClient(new SystemTime)
+  private val client = new MockClient(new SystemTime, new MockMetadataUpdater {
+    override def fetchNodes(): util.List[Node] = Collections.emptyList()
+    override def isUpdateNeeded: Boolean = false
+    override def update(time: Time, update: MockClient.MetadataUpdate): Unit = {}
+  })
   var fetchCount = 0
   var epochFetchCount = 0
   var lastUsedOffsetForLeaderEpochVersion = -1
@@ -85,6 +93,8 @@ class ReplicaFetcherMockBlockingSend(offsets: java.util.Map[TopicPartition, Epoc
       time.milliseconds(),
       true)
   }
+
+  override def initiateClose(): Unit = {}
 
   override def close(): Unit = {}
 }

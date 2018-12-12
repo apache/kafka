@@ -178,6 +178,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
@@ -203,6 +204,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
@@ -255,7 +257,8 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             cacheFunction
         );
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         validateStoreOpen();

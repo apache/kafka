@@ -36,7 +36,6 @@ import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQue
 
 import collection.JavaConverters._
 import scala.collection.{concurrent, immutable}
-import org.apache.kafka.common.config.ClientDnsLookup
 
 object TransactionMarkerChannelManager {
   def apply(config: KafkaConfig,
@@ -52,6 +51,7 @@ object TransactionMarkerChannelManager {
       config,
       config.interBrokerListenerName,
       config.saslMechanismInterBrokerProtocol,
+      time,
       config.saslInterBrokerHandshakeRequestEnable
     )
     val selector = new Selector(
