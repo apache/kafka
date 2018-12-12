@@ -40,7 +40,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection.{JavaConverters, Map}
+import scala.collection.Map
 
 object Partition {
   def apply(topicPartition: TopicPartition,
@@ -817,49 +817,47 @@ class Partition(val topicPartition: TopicPartition,
       case None => localReplica.logEndOffset.messageOffset
     }
 
-    val invalidEpochStartOffset: Option[Long] = leaderEpochStartOffsetOpt
-      .filter(_ => isolationLevel.isDefined)
-      .filter(leo => leo > localReplica.highWatermark.messageOffset)
+    val maxTrueHighWatermark: Option[Long] = leaderEpochStartOffsetOpt
+      .filter(leo => isolationLevel.isDefined && leo > localReplica.highWatermark.messageOffset)
 
     def getOffsetByTimestamp: Option[TimestampAndOffset] = {
       logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
     }
 
-    val epochLogString: String = Some(currentLeaderEpoch.orElse(null))
-        .map(e => s"epoch ($e)")
-        .getOrElse("unknown epoch")
+    val epochLogString = if(currentLeaderEpoch.isPresent) {
+      s"epoch ${currentLeaderEpoch.get}"
+    } else {
+      "unknown epoch"
+    }
 
     timestamp match {
       case ListOffsetRequest.LATEST_TIMESTAMP =>
         // Special case, if asking for "latest" and HW is lagging behind LEO, throw an error
-        if(invalidEpochStartOffset.isDefined) {
-          throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+        maxTrueHighWatermark match {
+          case Some(hw) => throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
             s"partition $topicPartition with leader $epochLogString as this partition's " +
             s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind the " +
-            s"LEO at the start of this epoch (${invalidEpochStartOffset.get}).")
-        } else {
-          Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))
+            s"LEO at the start of this epoch ($hw).")
+          case None =>
+            Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))
         }
       case ListOffsetRequest.EARLIEST_TIMESTAMP =>
         getOffsetByTimestamp
       case _ =>
-        getOffsetByTimestamp match {
-          case Some(timestampAndOffset) =>
-            if (timestampAndOffset.offset < lastFetchableOffset) {
-              Some(timestampAndOffset)
+        getOffsetByTimestamp.flatMap(timestampAndOffset =>
+          if (timestampAndOffset.offset < lastFetchableOffset) {
+            Some(timestampAndOffset)
+          } else {
+            // Either throw or return None depending on epochStartOffset
+            if (maxTrueHighWatermark.isDefined) {
+              throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+                s"partition $topicPartition with leader $epochLogString as the returned " +
+                s"offset (${timestampAndOffset.offset}) exceeds the maximum fetchable offset for this partition " +
+                s"($lastFetchableOffset).")
             } else {
-              // Either throw or return None depending on epochStartOffset
-              if(invalidEpochStartOffset.isDefined) {
-                throw Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
-                  s"partition $topicPartition with leader $epochLogString as the returned " +
-                  s"offset (${timestampAndOffset.offset}) exceeds the maximum fetchable offset for this partition " +
-                  s"($lastFetchableOffset).")
-              } else {
-                None
-              }
+              None
             }
-          case None => None
-        }
+          })
     }
   }
 
