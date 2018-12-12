@@ -59,9 +59,9 @@ public abstract class SourceTask implements Task {
     public abstract List<SourceRecord> poll() throws InterruptedException;
 
     /**
-     * See {@link #offsetsFlushedAndAcknowledged(List)}
+     * See {@link #offsetsFlushedAndAcked(List)}
      *
-     * Deprecated. Use {@link #offsetsFlushedAndAcknowledged(List)} instead
+     * Deprecated. Use {@link #offsetsFlushedAndAcked(List)} instead
      */
     @Deprecated
     public void commit() throws InterruptedException {
@@ -85,7 +85,7 @@ public abstract class SourceTask implements Task {
      *                       records recently returned by {@link #poll()}
      * @throws InterruptedException
      */
-    public void offsetsFlushedAndAcknowledged(List<SourceRecord> offsetsFlushed) throws InterruptedException {
+    public void offsetsFlushedAndAcked(List<SourceRecord> offsetsFlushed) throws InterruptedException {
         commit();
     }
 
@@ -93,7 +93,7 @@ public abstract class SourceTask implements Task {
      * Signal this SourceTask to stop. In SourceTasks, this method only needs to signal to the task that it should stop
      * trying to poll for new data and interrupt any outstanding poll() requests. It is not required that the task has
      * fully stopped. Note that this method necessarily may be invoked from a different thread than {@link #poll()} and
-     * {@link #offsetsFlushedAndAcknowledged(List)}.
+     * {@link #offsetsFlushedAndAcked(List)}.
      *
      * For example, if a task uses a {@link java.nio.channels.Selector} to receive data over the network, this method
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
@@ -103,9 +103,9 @@ public abstract class SourceTask implements Task {
     public abstract void stop();
 
     /**
-     * See {@link #recordSentAndAcknowledged(SourceRecord)}
+     * See {@link #recordSentAndAcked(SourceRecord)}
      *
-     * Deprecated. Use {@link #recordSentAndAcknowledged(SourceRecord)} instead
+     * Deprecated. Use {@link #recordSentAndAcked(SourceRecord)} instead
      */
     @Deprecated
     public void commitRecord(SourceRecord record) throws InterruptedException {
@@ -128,7 +128,7 @@ public abstract class SourceTask implements Task {
      * @param record {@link SourceRecord} that was successfully sent and acknowledged via the producer.
      * @throws InterruptedException
      */
-    public void recordSentAndAcknowledged(SourceRecord record) throws InterruptedException {
+    public void recordSentAndAcked(SourceRecord record) throws InterruptedException {
         commitRecord(record);
     }
 }

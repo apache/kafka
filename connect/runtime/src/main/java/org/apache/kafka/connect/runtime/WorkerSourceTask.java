@@ -377,9 +377,9 @@ class WorkerSourceTask extends WorkerTask {
 
     private void taskAcknowledgeRecord(SourceRecord record) {
         try {
-            task.recordSentAndAcknowledged(record);
+            task.recordSentAndAcked(record);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.recordSentAndAcknowledged()", this, t);
+            log.error("{} Exception thrown while calling task.recordSentAndAcked()", this, t);
         }
     }
 
@@ -512,9 +512,9 @@ class WorkerSourceTask extends WorkerTask {
 
     private void taskAcknowledgeOffsets() {
         try {
-            this.task.offsetsFlushedAndAcknowledged(offsetsFlushing);
+            this.task.offsetsFlushedAndAcked(offsetsFlushing);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.offsetsFlushedAndAcknowledged()", this, t);
+            log.error("{} Exception thrown while calling task.offsetsFlushedAndAcked()", this, t);
         } finally {
             offsetsFlushing = null;
         }

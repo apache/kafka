@@ -259,7 +259,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     Unfortunately it is (probably) not feasible (throughput-wise) to guarantee that everything polled will be included
     in a offsets flush. Currently it is possible that recently polled records will not have their offsets included in
     a flush of offsets. But the records that have had their offsets flushed should be correctly reported to the source
-    task (offsetsFlushedAndAcknowledged).
+    task (offsetsFlushedAndAcked).
     This test thoroughly provokes a scenario where the last polled records are not included in a offsets flush, and
     verifies that only the records that actually had their offsets flushed are reported as such.
      */
@@ -299,7 +299,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         final List<List<SourceRecord>> polledRecordsAtTimeOfOffsetsFlushed = new ArrayList<>();
         final Map<Map<String, Object>, Map<String, Object>> writtenAndFlushedOffsetsAtTimeOfOffsetsFlushed = new HashMap<>();
         Capture<List<SourceRecord>> recordsReportedHavingOffsetsFlushed = EasyMock.newCapture();
-        sourceTask.offsetsFlushedAndAcknowledged(EasyMock.capture(recordsReportedHavingOffsetsFlushed));
+        sourceTask.offsetsFlushedAndAcked(EasyMock.capture(recordsReportedHavingOffsetsFlushed));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
             public Void answer() throws Throwable {
@@ -1023,7 +1023,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void expectTaskRecordAcknowledged(boolean anyTimes, boolean succeed) throws InterruptedException {
-        sourceTask.recordSentAndAcknowledged(EasyMock.anyObject(SourceRecord.class));
+        sourceTask.recordSentAndAcked(EasyMock.anyObject(SourceRecord.class));
         IExpectationSetters<Void> expect = EasyMock.expectLastCall();
         if (!succeed) {
             expect = expect.andThrow(new RuntimeException("Error acknowledging record in source task"));
@@ -1052,7 +1052,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
                 flushFuture.get(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class)));
         if (succeed) {
             Capture<List<SourceRecord>> offsetsFlushed = EasyMock.newCapture();
-            sourceTask.offsetsFlushedAndAcknowledged(EasyMock.capture(offsetsFlushed));
+            sourceTask.offsetsFlushedAndAcked(EasyMock.capture(offsetsFlushed));
             EasyMock.expectLastCall();
             futureGetExpect.andReturn(null);
             return offsetsFlushed;
