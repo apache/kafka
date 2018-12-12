@@ -488,7 +488,7 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(config);
+            Map<String, Object> producerProps = producerConfigs(config, connConfig.originalsWithPrefix("producer."));
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -501,7 +501,7 @@ public class Worker {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
 
-            Map<String, Object> consumerProps = consumerConfigs(id, config);
+            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig.originalsWithPrefix("consumer."));
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -514,6 +514,10 @@ public class Worker {
     }
 
     static Map<String, Object> producerConfigs(WorkerConfig config) {
+        return producerConfigs(config, Collections.emptyMap());
+    }
+
+    static Map<String, Object> producerConfigs(WorkerConfig config, Map<String, Object> connProducerConfigs) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -527,11 +531,17 @@ public class Worker {
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+        // task configuration overrides
+        producerProps.putAll(connProducerConfigs);
         return producerProps;
     }
 
-
     static Map<String, Object> consumerConfigs(ConnectorTaskId id, WorkerConfig config) {
+        return consumerConfigs(id, config, Collections.emptyMap());
+    }
+
+    static Map<String, Object> consumerConfigs(ConnectorTaskId id, WorkerConfig config, Map<String, Object> connConsumerConfigs) {
+
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
         Map<String, Object> consumerProps = new HashMap<>();
@@ -545,6 +555,8 @@ public class Worker {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
+        // task configuration overrides
+        consumerProps.putAll(connConsumerConfigs);
         return consumerProps;
     }
 

@@ -846,6 +846,20 @@ public class WorkerTest extends ThreadedTest {
     }
 
     @Test
+    public void testProducerConfigsWithOverridesInConnConfig() {
+        Map<String, String> props = new HashMap<>(workerProps);
+        props.put("producer.acks", "-1");
+        props.put("producer.linger.ms", "1000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(props);
+        Map<String, Object> connConfigs = Collections.singletonMap("acks", "1");
+
+        Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
+        expectedConfigs.put("acks", "1");
+        expectedConfigs.put("linger.ms", "1000");
+        assertEquals(expectedConfigs, Worker.producerConfigs(configWithOverrides, connConfigs));
+    }
+
+    @Test
     public void testConsumerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test");
@@ -864,6 +878,21 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "1000");
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides));
+    }
+
+    @Test
+    public void testConsumerConfigsWithOverridesInConnConfig() {
+        Map<String, String> props = new HashMap<>(workerProps);
+        props.put("consumer.auto.offset.reset", "latest");
+        props.put("consumer.max.poll.records", "1000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(props);
+        Map<String, Object> connConfigs = Collections.singletonMap("auto.offset.reset", "earliest");
+
+        Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
+        expectedConfigs.put("group.id", "connect-test");
+        expectedConfigs.put("auto.offset.reset", "earliest");
+        expectedConfigs.put("max.poll.records", "1000");
+        assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connConfigs));
     }
 
     private void assertStatistics(Worker worker, int connectors, int tasks) {
