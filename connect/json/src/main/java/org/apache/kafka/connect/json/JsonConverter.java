@@ -317,6 +317,10 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
+        if (schema == null && value == null) {
+            return null;
+        }
+
         JsonNode jsonValue = enableSchemas ? convertToJsonWithEnvelope(schema, value) : convertToJsonWithoutEnvelope(schema, value);
         try {
             return serializer.serialize(topic, jsonValue);
