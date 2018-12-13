@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.SerializationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.ext.ExceptionMapper;
@@ -43,7 +44,7 @@ public class RestExceptionMapper implements ExceptionMapper<Throwable> {
             return buildResponse(Response.Status.BAD_REQUEST, e);
         } else if (e instanceof InvalidTypeIdException) {
             return buildResponse(Response.Status.NOT_IMPLEMENTED, e);
-        } else if (e instanceof JsonMappingException) {
+        } else if (e instanceof JsonMappingException || e instanceof BadRequestException) {
             return buildResponse(Response.Status.BAD_REQUEST, e);
         } else if (e instanceof ClassNotFoundException) {
             return buildResponse(Response.Status.NOT_IMPLEMENTED, e);

@@ -48,6 +48,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -288,69 +289,92 @@ public final class TaskManager {
     }
 
     /**
-     * Create a task.
+     * Creates and schedules the given tasks.
      *
-     * @param id                    The ID of the task to create.
-     * @param spec                  The specification of the task to create.
+     * @throws RequestConflictException - if a task with that ID and a different spec already exists
      */
-    public void createTask(final String id, TaskSpec spec)
-            throws Throwable {
-        try {
-            executor.submit(new CreateTask(id, spec)).get();
-        } catch (ExecutionException e) {
-            log.info("createTask(id={}, spec={}) error", id, spec, e);
-            throw e.getCause();
+    public void createAndScheduleTasks(Map<String, TaskSpec> givenTasks) {
+        Map<String, TaskSpec> tasks = new HashMap<>(givenTasks);
+        Iterator<Map.Entry<String, TaskSpec>> it = tasks.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<String, TaskSpec> idAndSpec = it.next();
+            String id = idAndSpec.getKey();
+            if (id.isEmpty())
+                throw new InvalidRequestException("Invalid empty ID in createTask request.");
         }
+        if (tasks.isEmpty())
+            return;
+
+        try {
+            executor.submit(new CreateTasks(tasks)).get();
+        } catch (ExecutionException e) {
+            if (RequestConflictException.class.isInstance(e.getCause()))
+                throw (RequestConflictException) e.getCause();
+            log.info("createTasks error", e);
+        } catch (Exception e) {
+            log.info("Failed to create new tasks: {}", e.getMessage());
+        }
+
+        log.info("Created {} tasks.", tasks.size());
     }
 
     /**
-     * Handles a request to create a new task.  Processed by the state change thread.
+     * Handles a request to create new tasks.  Processed by the state change thread.
      */
-    class CreateTask implements Callable<Void> {
-        private final String id;
-        private final TaskSpec spec;
+    class CreateTasks implements Callable<Void> {
+        private final Map<String, TaskSpec> taskSpecs;
 
-        CreateTask(String id, TaskSpec spec) {
-            this.id = id;
-            this.spec = spec;
+        CreateTasks(Map<String, TaskSpec> tasks) {
+            this.taskSpecs = tasks;
         }
 
         @Override
         public Void call() throws Exception {
-            if (id.isEmpty()) {
-                throw new InvalidRequestException("Invalid empty ID in createTask request.");
-            }
-            ManagedTask task = tasks.get(id);
-            if (task != null) {
-                if (!task.spec.equals(spec)) {
-                    throw new RequestConflictException("Task ID " + id + " already " +
-                        "exists, and has a different spec " + task.spec);
+            for (Map.Entry<String, TaskSpec> idAndSpec : taskSpecs.entrySet()) {
+                String id = idAndSpec.getKey();
+                TaskSpec spec = idAndSpec.getValue();
+                ManagedTask duplicateTask = tasks.get(id);
+
+                if (duplicateTask != null) {
+                    if (!duplicateTask.spec.equals(spec))
+                        throw new RequestConflictException("Task ID " + id + " already " +
+                            "exists, and has a different spec " + duplicateTask.spec);
+                    log.info("Task {} already exists with spec {}", id, spec);
                 }
-                log.info("Task {} already exists with spec {}", id, spec);
-                return null;
             }
-            TaskController controller = null;
-            String failure = null;
-            try {
-                controller = spec.newController(id);
-            } catch (Throwable t) {
-                failure = "Failed to create TaskController: " + t.getMessage();
-            }
-            if (failure != null) {
-                log.info("Failed to create a new task {} with spec {}: {}",
-                    id, spec, failure);
-                task = new ManagedTask(id, spec, null, TaskStateType.DONE);
-                task.doneMs = time.milliseconds();
-                task.maybeSetError(failure);
+
+            boolean debugEnabled = taskSpecs.size() > 10;
+            for (Map.Entry<String, TaskSpec> idAndSpec : taskSpecs.entrySet()) {
+                String id = idAndSpec.getKey();
+                TaskSpec spec = idAndSpec.getValue();
+
+                TaskController controller = null;
+                String failure = null;
+                try {
+                    controller = spec.newController(id);
+                } catch (Throwable t) {
+                    failure = "Failed to create TaskController: " + t.getMessage();
+                }
+
+                if (failure != null) {
+                    log.info("Failed to create a new task {} with spec {}: {}",
+                        id, spec, failure);
+                    ManagedTask task = new ManagedTask(id, spec, null, TaskStateType.DONE);
+                    task.doneMs = time.milliseconds();
+                    task.maybeSetError(failure);
+                    tasks.put(id, task);
+                }
+                ManagedTask task = new ManagedTask(id, spec, controller, TaskStateType.PENDING);
                 tasks.put(id, task);
-                return null;
+                long delayMs = task.startDelayMs(time.milliseconds());
+                task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
+                if (debugEnabled)
+                    log.debug("Created a new task {} with spec {}, scheduled to start {} ms from now.",
+                        id, spec, delayMs);
+                else
+                    log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.",
+                        id, spec, delayMs);
             }
-            task = new ManagedTask(id, spec, controller, TaskStateType.PENDING);
-            tasks.put(id, task);
-            long delayMs = task.startDelayMs(time.milliseconds());
-            task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);
-            log.info("Created a new task {} with spec {}, scheduled to start {} ms from now.",
-                    id, spec, delayMs);
             return null;
         }
     }
@@ -689,4 +713,4 @@ public final class TaskManager {
             return null;
         }
     }
-};
+}

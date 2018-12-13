@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.TreeMap;
 
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+
 public class ExpectedTasks {
     private static final Logger log = LoggerFactory.getLogger(ExpectedTasks.class);
 
@@ -142,35 +144,39 @@ public class ExpectedTasks {
     }
 
     public ExpectedTasks waitFor(final CoordinatorClient client) throws InterruptedException {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                TasksResponse tasks = null;
-                try {
-                    tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0, Optional.empty()));
-                } catch (Exception e) {
-                    log.info("Unable to get coordinator tasks", e);
-                    throw new RuntimeException(e);
-                }
-                StringBuilder errors = new StringBuilder();
-                for (Map.Entry<String, ExpectedTask> entry : expected.entrySet()) {
-                    String id = entry.getKey();
-                    ExpectedTask task = entry.getValue();
-                    String differences = task.compare(tasks.tasks().get(id));
-                    if (differences != null) {
-                        errors.append(differences);
-                    }
-                }
-                String errorString = errors.toString();
-                if (!errorString.isEmpty()) {
-                    log.info("EXPECTED TASKS: {}", JsonUtil.toJsonString(expected));
-                    log.info("ACTUAL TASKS  : {}", JsonUtil.toJsonString(tasks.tasks()));
-                    log.info(errorString);
-                    return false;
-                }
-                return true;
+        waitFor(client, DEFAULT_MAX_WAIT_MS);
+        return this;
+    }
+
+    public ExpectedTasks waitFor(final CoordinatorClient client, long maxWaitMs) throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            TasksResponse tasks;
+            try {
+                tasks = client.tasks(new TasksRequest(null, 0, 0, 0, 0, Optional.empty()));
+            } catch (Exception e) {
+                log.info("Unable to get coordinator tasks", e);
+                throw new RuntimeException(e);
             }
-        }, "Timed out waiting for expected tasks " + JsonUtil.toJsonString(expected));
+            StringBuilder errors = new StringBuilder();
+
+            for (Map.Entry<String, ExpectedTask> entry : expected.entrySet()) {
+                String id = entry.getKey();
+                ExpectedTask task = entry.getValue();
+                String differences = task.compare(tasks.tasks().get(id));
+                if (differences != null) {
+                    errors.append(differences);
+                }
+            }
+
+            String errorString = errors.toString();
+            if (!errorString.isEmpty()) {
+                log.info("EXPECTED TASKS: {}", JsonUtil.toJsonString(expected));
+                log.info("ACTUAL TASKS  : {}", JsonUtil.toJsonString(tasks.tasks()));
+                log.info(errorString);
+                return false;
+            }
+            return true;
+        }, maxWaitMs, "Timed out waiting for expected tasks " + JsonUtil.toJsonString(expected));
         return this;
     }
 

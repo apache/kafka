@@ -26,6 +26,7 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
+import org.apache.kafka.trogdor.rest.CreateTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
@@ -127,6 +128,13 @@ public class CoordinatorClient {
         resp.body();
     }
 
+    public void createTasks(CreateTasksRequest request) throws Exception {
+        HttpResponse<Empty> resp =
+            JsonRestServer.httpRequest(log, url("/coordinator/task/creates"), "POST",
+                request, new TypeReference<Empty>() { }, maxTries);
+        resp.body();
+    }
+
     public void stopTask(StopTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/stop"), "PUT",
@@ -205,6 +213,12 @@ public class CoordinatorClient {
             .dest("create_task")
             .metavar("TASK_SPEC_JSON")
             .help("Create a new task from a task spec.");
+        actions.addArgument("--create-tasks")
+            .action(store())
+            .type(String.class)
+            .dest("create_tasks")
+            .metavar("TASK_SPECS_JSON")
+            .help("Create new tasks from multiple task specs.");
         actions.addArgument("--stop-task")
             .action(store())
             .type(String.class)
@@ -261,6 +275,11 @@ public class CoordinatorClient {
                 readValue(res.getString("create_task"), CreateTaskRequest.class);
             client.createTask(req);
             System.out.printf("Sent CreateTaskRequest for task %s.", req.id());
+        } else if (res.getString("create_tasks") != null) {
+            CreateTasksRequest req = JsonUtil.JSON_SERDE.
+                readValue(res.getString("create_tasks"), CreateTasksRequest.class);
+            client.createTasks(req);
+            System.out.print("Sent CreateTasksRequest for multiple tasks.");
         } else if (res.getString("stop_task") != null) {
             String taskId = res.getString("stop_task");
             client.stopTask(new StopTaskRequest(taskId));

@@ -18,6 +18,7 @@ package org.apache.kafka.trogdor.coordinator;
 
 import org.apache.kafka.trogdor.rest.CoordinatorShutdownRequest;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
+import org.apache.kafka.trogdor.rest.CreateTasksRequest;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.Empty;
@@ -29,6 +30,7 @@ import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 
 import javax.servlet.ServletContext;
+import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DELETE;
 import javax.ws.rs.DefaultValue;
@@ -79,9 +81,19 @@ public class CoordinatorRestResource {
 
     @POST
     @Path("/task/create")
-    public Empty createTask(CreateTaskRequest request) throws Throwable {
+    public Response createTask(CreateTaskRequest request) throws Throwable {
         coordinator().createTask(request);
-        return Empty.INSTANCE;
+        return Response.status(201).entity(Empty.INSTANCE).build();
+    }
+
+    @POST
+    @Path("/task/creates")
+    public Response createTasks(CreateTasksRequest request) throws Throwable {
+        if (request.tasks().size() == 0)
+            throw new BadRequestException("No tasks were given.");
+
+        coordinator().createTasks(request);
+        return Response.status(201).entity(Empty.INSTANCE).build();
     }
 
     @PUT
