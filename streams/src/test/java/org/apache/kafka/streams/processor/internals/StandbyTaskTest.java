@@ -735,7 +735,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldCloseStateMangerOnTaskCloseWhenCommitFailed() throws Exception {
+    public void shouldCloseStateManagerOnTaskCloseWhenCommitFailed() throws Exception {
         consumer.assign(Collections.singletonList(globalTopicPartition));
         final Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
         committedOffsets.put(new TopicPartition(globalTopicPartition.topic(), globalTopicPartition.partition()),

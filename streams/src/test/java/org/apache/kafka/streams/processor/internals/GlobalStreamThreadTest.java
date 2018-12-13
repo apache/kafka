@@ -234,7 +234,6 @@ public class GlobalStreamThreadTest {
             10 * 1000,
             "Thread never started.");
 
-        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1L));
         mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
 
         TestUtils.waitForCondition(
@@ -249,7 +248,7 @@ public class GlobalStreamThreadTest {
             }
         });
         // feed first record for recovery
-        mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
+        mockConsumer.seekToBeginning(Collections.singleton(new TopicPartition(GLOBAL_STORE_TOPIC_NAME, 0)));
 
         TestUtils.waitForCondition(
             () -> globalStreamThread.state() == DEAD,
@@ -262,12 +261,10 @@ public class GlobalStreamThreadTest {
             GLOBAL_STORE_TOPIC_NAME,
             Collections.singletonList(new PartitionInfo(
                 GLOBAL_STORE_TOPIC_NAME,
-                0,
-                null,
-                new Node[0],
-                new Node[0])));
-        mockConsumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, 0L));
-        mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 0L));
+            0,
+            null,
+            new Node[0],
+            new Node[0])));
         mockConsumer.assign(Collections.singleton(topicPartition));
     }
 }

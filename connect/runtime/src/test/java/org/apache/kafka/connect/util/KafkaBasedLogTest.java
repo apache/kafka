@@ -61,6 +61,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.IntStream;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -139,10 +140,6 @@ public class KafkaBasedLogTest {
                 TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
-        Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
-        beginningOffsets.put(TP0, 0L);
-        beginningOffsets.put(TP1, 0L);
-        consumer.updateBeginningOffsets(beginningOffsets);
     }
 
     @Test
@@ -152,10 +149,6 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
         store.start();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
 
@@ -173,32 +166,25 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 1L);
-        endOffsets.put(TP1, 1L);
-        consumer.updateEndOffsets(endOffsets);
+        consumer.setMaxPollRecords(1);
+        IntStream.range(0, 5)
+                .forEach(i -> consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, i, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE)));
+        IntStream.range(0, 2)
+                .forEach(i -> consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, i, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE)));
+
+
         final CountDownLatch finishedLatch = new CountDownLatch(1);
         consumer.schedulePollTask(new Runnable() { // Use first poll task to setup sequence of remaining responses to polls
             @Override
             public void run() {
                 // Should keep polling until it reaches current log end offset for all partitions. Should handle
-                // as many empty polls as needed
+                // as many empty polls as needed. In this case it should take at least 7 polls to read all offsets
                 consumer.scheduleNopPollTask();
                 consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                    }
-                });
                 consumer.scheduleNopPollTask();
                 consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
-                    }
-                });
+                consumer.scheduleNopPollTask();
+                consumer.scheduleNopPollTask();
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
@@ -213,8 +199,10 @@ public class KafkaBasedLogTest {
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(2, consumedRecords.size());
 
-        assertEquals(TP0_VALUE, consumedRecords.get(TP0).get(0).value());
-        assertEquals(TP1_VALUE, consumedRecords.get(TP1).get(0).value());
+        IntStream.range(0, 5)
+                .forEach(i -> assertEquals("Unexpected value for message " + i, TP0_VALUE, consumedRecords.get(TP0).get(i).value()));
+        IntStream.range(0, 2)
+                .forEach(i -> assertEquals("Unexpected value for message " + i, TP1_VALUE, consumedRecords.get(TP1).get(i).value()));
 
         store.stop();
 
@@ -230,12 +218,15 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 7L);
-        endOffsets.put(TP1, 7L);
-        consumer.updateEndOffsets(endOffsets);
-        // Better test with an advanced offset other than just 0L
-        consumer.updateBeginningOffsets(endOffsets);
+        IntStream.range(0, 7)
+                .forEach(i -> {
+                    consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, i, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+                    consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, i, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+                });
+
+        // Better test with an advanced beginning offset other than just 0L
+        consumer.truncatePartition(new TopicPartition(TOPIC, 0), 7);
+        consumer.truncatePartition(new TopicPartition(TOPIC, 1), 7);
 
         consumer.schedulePollTask(new Runnable() {
             @Override
@@ -280,10 +271,6 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
         store.start();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(0L, consumer.position(TP0));
@@ -315,37 +302,18 @@ public class KafkaBasedLogTest {
                 getInvoked.set(true);
             }
         });
+        consumer.setMaxPollRecords(1);
         consumer.schedulePollTask(new Runnable() {
             @Override
             public void run() {
                 // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
                 // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
                 // returning any data.
-                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                newEndOffsets.put(TP0, 2L);
-                newEndOffsets.put(TP1, 2L);
-                consumer.updateEndOffsets(newEndOffsets);
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW));
                 store.readToEnd(readEndFutureCallback);
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
-                    }
-                });
-
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE_NEW));
-                    }
-                });
 
                 // Already have FutureCallback that should be invoked/awaited, so no need for follow up finishedLatch
             }
@@ -378,10 +346,8 @@ public class KafkaBasedLogTest {
         PowerMock.replayAll();
 
         final CountDownLatch finishedLatch = new CountDownLatch(1);
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 1L);
-        endOffsets.put(TP1, 1L);
-        consumer.updateEndOffsets(endOffsets);
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
         consumer.schedulePollTask(new Runnable() {
             @Override
             public void run() {
@@ -390,17 +356,6 @@ public class KafkaBasedLogTest {
                     @Override
                     public void run() {
                         consumer.setPollException(Errors.COORDINATOR_NOT_AVAILABLE.exception());
-                    }
-                });
-
-                // Should keep polling until it reaches current log end offset for all partitions
-                consumer.scheduleNopPollTask();
-                consumer.scheduleNopPollTask();
-                consumer.schedulePollTask(new Runnable() {
-                    @Override
-                    public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
                     }
                 });
 
@@ -436,10 +391,6 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
         final CountDownLatch finishedLatch = new CountDownLatch(1);
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
         store.start();
         final AtomicBoolean getInvoked = new AtomicBoolean(false);
         final FutureCallback<Void> readEndFutureCallback = new FutureCallback<>(new Callback<Void>() {
@@ -454,10 +405,8 @@ public class KafkaBasedLogTest {
                 // Once we're synchronized in a poll, start the read to end and schedule the exact set of poll events
                 // that should follow. This readToEnd call will immediately wakeup this consumer.poll() call without
                 // returning any data.
-                Map<TopicPartition, Long> newEndOffsets = new HashMap<>();
-                newEndOffsets.put(TP0, 1L);
-                newEndOffsets.put(TP1, 1L);
-                consumer.updateEndOffsets(newEndOffsets);
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+                consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP1_KEY, TP1_VALUE));
                 // Set exception to occur when getting offsets to read log to end.  It'll be caught in the work thread,
                 // which will retry and eventually get the correct offsets and read log to end.
                 consumer.setOffsetsException(new TimeoutException("Failed to get offsets by times"));
@@ -469,8 +418,8 @@ public class KafkaBasedLogTest {
                 consumer.schedulePollTask(new Runnable() {
                     @Override
                     public void run() {
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
-                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 0, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 0, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE));
+                        consumer.addRecord(new ConsumerRecord<>(TOPIC, 1, 1, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, TP0_KEY, TP0_VALUE_NEW));
                     }
                 });
 
@@ -486,7 +435,7 @@ public class KafkaBasedLogTest {
         assertTrue(getInvoked.get());
         assertTrue(finishedLatch.await(10000, TimeUnit.MILLISECONDS));
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
-        assertEquals(1L, consumer.position(TP0));
+        assertEquals(2L, consumer.position(TP0));
 
         store.stop();
 
@@ -507,10 +456,6 @@ public class KafkaBasedLogTest {
 
         PowerMock.replayAll();
 
-        Map<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(TP0, 0L);
-        endOffsets.put(TP1, 0L);
-        consumer.updateEndOffsets(endOffsets);
         store.start();
         assertEquals(CONSUMER_ASSIGNMENT, consumer.assignment());
         assertEquals(0L, consumer.position(TP0));

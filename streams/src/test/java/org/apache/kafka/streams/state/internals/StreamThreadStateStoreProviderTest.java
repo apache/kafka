@@ -337,12 +337,5 @@ public class StreamThreadStateStoreProviderTest {
         final TopicPartition tp2 = new TopicPartition(topic, 1);
 
         clientSupplier.restoreConsumer.assign(Arrays.asList(tp1, tp2));
-
-        final Map<TopicPartition, Long> offsets = new HashMap<>();
-        offsets.put(tp1, 0L);
-        offsets.put(tp2, 0L);
-
-        clientSupplier.restoreConsumer.updateBeginningOffsets(offsets);
-        clientSupplier.restoreConsumer.updateEndOffsets(offsets);
     }
 }

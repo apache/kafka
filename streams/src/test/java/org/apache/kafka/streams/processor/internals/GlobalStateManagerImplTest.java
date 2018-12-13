@@ -516,14 +516,8 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldSkipNullKeysWhenRestoring() {
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
-        startOffsets.put(t1, 1L);
-        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(t1, 3L);
         consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
         consumer.assign(Collections.singletonList(t1));
-        consumer.updateEndOffsets(endOffsets);
-        consumer.updateBeginningOffsets(startOffsets);
         consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 1, null, "null".getBytes()));
         final byte[] expectedKey = "key".getBytes();
         final byte[] expectedValue = "value".getBytes();
@@ -675,22 +669,6 @@ public class GlobalStateManagerImplTest {
         consumer.updatePartitions(t2.topic(), Collections.singletonList(new PartitionInfo(t2.topic(), t2.partition(), null, null, null)));
         consumer.updatePartitions(t3.topic(), Collections.singletonList(new PartitionInfo(t3.topic(), t3.partition(), null, null, null)));
         consumer.updatePartitions(t4.topic(), Collections.singletonList(new PartitionInfo(t4.topic(), t4.partition(), null, null, null)));
-        consumer.updateBeginningOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(t1, 0L);
-                put(t2, 0L);
-                put(t3, 0L);
-                put(t4, 0L);
-            }
-        });
-        consumer.updateEndOffsets(new HashMap<TopicPartition, Long>() {
-            {
-                put(t1, 0L);
-                put(t2, 0L);
-                put(t3, 0L);
-                put(t4, 0L);
-            }
-        });
 
         stateManager.initialize();
         stateManager.register(store1, stateRestoreCallback);
@@ -724,14 +702,8 @@ public class GlobalStateManagerImplTest {
     }
 
     private void initializeConsumer(final long numRecords, final long startOffset, final TopicPartition topicPartition) {
-        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
-        startOffsets.put(topicPartition, startOffset);
-        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
-        endOffsets.put(topicPartition, startOffset + numRecords);
         consumer.updatePartitions(topicPartition.topic(), Collections.singletonList(new PartitionInfo(topicPartition.topic(), topicPartition.partition(), null, null, null)));
         consumer.assign(Collections.singletonList(topicPartition));
-        consumer.updateEndOffsets(endOffsets);
-        consumer.updateBeginningOffsets(startOffsets);
 
         for (int i = 0; i < numRecords; i++) {
             consumer.addRecord(new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), startOffset + i, "key".getBytes(), "value".getBytes()));
