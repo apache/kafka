@@ -18,16 +18,12 @@ package org.apache.kafka.common.errors;
 
 /**
  * Indicates that the leader is not able to guarantee monotonically increasing offsets
- * due to a recent leader election and high-water mark lag
+ * due to the high watermark lagging behind the epoch start offset after a recent leader election
  */
 public class OffsetNotAvailableException extends RetriableException {
     private static final long serialVersionUID = 1L;
 
     public OffsetNotAvailableException(String message) {
         super(message);
-    }
-
-    public OffsetNotAvailableException(String message, Throwable cause) {
-        super(message, cause);
     }
 }
