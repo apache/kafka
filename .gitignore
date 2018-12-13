@@ -34,7 +34,7 @@ Vagrantfile.local
 config/server-*
 config/zookeeper-*
 core/data/*
-gradle/wrapper/*
+gradle/wrapper/*.jar
 gradlew.bat
 
 results
