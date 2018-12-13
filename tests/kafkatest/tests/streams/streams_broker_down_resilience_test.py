@@ -27,7 +27,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     inputTopic = "streamsResilienceSource"
     outputTopic = "streamsResilienceSink"
     client_id = "streams-broker-resilience-verify-consumer"
-    num_messages = 5
+    num_messages = 10000
+    message = "processed[0-9]*messages"
 
     def __init__(self, test_context):
         super(StreamsBrokerDownResilience, self).__init__(test_context,
@@ -48,8 +49,6 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         processor = StreamsBrokerDownResilienceService(self.test_context, self.kafka, self.get_configs())
         processor.start()
 
-        # until KIP-91 is merged we'll only send 5 messages to assert Kafka Streams is running before taking the broker down
-        # After KIP-91 is merged we'll continue to send messages the duration of the test
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
                                     self.client_id,
@@ -103,14 +102,13 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                     self.outputTopic,
                                     self.client_id,
                                     "running_with_broker_down_initially",
-                                    num_messages=9,
+                                    num_messages=self.num_messages,
                                     timeout_sec=120)
 
-        message = "processed3messages"
         # need to show all 3 instances processed messages
-        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
-        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor, self.message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, self.message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, self.message, processor_3.STDOUT_FILE)
 
         self.kafka.stop()
 
@@ -136,14 +134,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                     self.outputTopic,
                                     self.client_id,
                                     "waiting for rebalance to complete",
-                                    num_messages=9,
+                                    num_messages=self.num_messages,
                                     timeout_sec=120)
 
-        message = "processed3messages"
-
-        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
-        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor, self.message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, self.message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, self.message, processor_3.STDOUT_FILE)
 
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -161,10 +157,10 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                     self.outputTopic,
                                     self.client_id,
                                     "sending_message_after_stopping_streams_instance_bouncing_broker",
-                                    num_messages=9,
+                                    num_messages=self.num_messages,
                                     timeout_sec=120)
 
-        self.wait_for_verification(processor_3, "processed9messages", processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor_3, self.message, processor_3.STDOUT_FILE)
 
         self.kafka.stop()
 
@@ -190,14 +186,12 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                     self.outputTopic,
                                     self.client_id,
                                     "waiting for rebalance to complete",
-                                    num_messages=9,
+                                    num_messages=self.num_messages,
                                     timeout_sec=120)
 
-        message = "processed3messages"
-
-        self.wait_for_verification(processor, message, processor.STDOUT_FILE)
-        self.wait_for_verification(processor_2, message, processor_2.STDOUT_FILE)
-        self.wait_for_verification(processor_3, message, processor_3.STDOUT_FILE)
+        self.wait_for_verification(processor, self.message, processor.STDOUT_FILE)
+        self.wait_for_verification(processor_2, self.message, processor_2.STDOUT_FILE)
+        self.wait_for_verification(processor_3, self.message, processor_3.STDOUT_FILE)
 
         node = self.kafka.leader(self.inputTopic)
         self.kafka.stop_node(node)
@@ -212,7 +206,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                     self.outputTopic,
                                     self.client_id,
                                     "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
-                                    num_messages=9,
+                                    num_messages=self.num_messages,
                                     timeout_sec=120)
 
         self.kafka.stop()
