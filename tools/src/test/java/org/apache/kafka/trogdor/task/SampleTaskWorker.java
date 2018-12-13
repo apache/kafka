@@ -53,12 +53,9 @@ public class SampleTaskWorker implements TaskWorker {
         if (exitMs == null) {
             exitMs = Long.MAX_VALUE;
         }
-        this.future = platform.scheduler().schedule(executor, new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-                haltFuture.complete(spec.error());
-                return null;
-            }
+        this.future = platform.scheduler().schedule(executor, () -> {
+            haltFuture.complete(spec.error());
+            return null;
         }, exitMs);
     }
 

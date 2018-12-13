@@ -124,12 +124,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return new TaskController() {
-            @Override
-            public Set<String> targetNodes(Topology topology) {
-                return Collections.singleton(clientNode);
-            }
-        };
+        return topology -> Collections.singleton(clientNode);
     }
 
     @Override

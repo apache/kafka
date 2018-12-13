@@ -170,12 +170,7 @@ public class ProduceBenchSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return new TaskController() {
-            @Override
-            public Set<String> targetNodes(Topology topology) {
-                return Collections.singleton(producerNode);
-            }
-        };
+        return topology -> Collections.singleton(producerNode);
     }
 
     @Override

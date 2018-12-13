@@ -98,12 +98,7 @@ public class ConnectionStressSpec extends TaskSpec {
     }
 
     public TaskController newController(String id) {
-        return new TaskController() {
-            @Override
-            public Set<String> targetNodes(Topology topology) {
-                return new TreeSet<>(clientNodes);
-            }
-        };
+        return topology -> new TreeSet<>(clientNodes);
     }
 
     @Override

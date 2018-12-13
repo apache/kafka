@@ -248,16 +248,13 @@ public class RoundTripWorker implements TaskWorker {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(partition.topic(),
                         partition.partition(), KEY_GENERATOR.generate(messageIndex),
                         spec.valueGenerator().generate(messageIndex));
-                    producer.send(record, new Callback() {
-                        @Override
-                        public void onCompletion(RecordMetadata metadata, Exception exception) {
-                            if (exception == null) {
-                                unackedSends.countDown();
-                            } else {
-                                log.info("{}: Got exception when sending message {}: {}",
-                                    id, messageIndex, exception.getMessage());
-                                toSendTracker.addFailed(messageIndex);
-                            }
+                    producer.send(record, (metadata, exception) -> {
+                        if (exception == null) {
+                            unackedSends.countDown();
+                        } else {
+                            log.info("{}: Got exception when sending message {}: {}",
+                                id, messageIndex, exception.getMessage());
+                            toSendTracker.addFailed(messageIndex);
                         }
                     });
                 }
