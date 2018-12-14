@@ -245,14 +245,15 @@ public class Materialized<K, V, S extends StateStore> {
      * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
      * from window-start through window-end, and for the entire grace period.
      *
+     * @param retention the retention time
      * @return itself
      * @throws IllegalArgumentException if retention is negative or can't be represented as {@code long milliseconds}
      */
     public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
-        ApiUtils.validateMillisecondDuration(retention, msgPrefix);
+        final long retenationMs = ApiUtils.validateMillisecondDuration(retention, msgPrefix);
 
-        if (retention.toMillis() < 0) {
+        if (retenationMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
         this.retention = retention;

@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Instant;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.internals.UnlimitedWindow;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -47,6 +47,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     private static final long DEFAULT_START_TIMESTAMP_MS = 0L;
 
     /** The start timestamp of the window. */
+    @SuppressWarnings("WeakerAccess")
     public final long startMs;
 
     private UnlimitedWindows(final long startMs) {
@@ -83,10 +84,10 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return a new unlimited window that starts at {@code start}
      * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
+    @SuppressWarnings("deprecation")
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
-        ApiUtils.validateMillisecondInstant(start, msgPrefix);
-        return startOn(start.toEpochMilli());
+        return startOn(ApiUtils.validateMillisecondInstant(start, msgPrefix));
     }
 
     @Override
@@ -148,8 +149,12 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
     @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final UnlimitedWindows that = (UnlimitedWindows) o;
         return startMs == that.startMs && segments == that.segments;
     }

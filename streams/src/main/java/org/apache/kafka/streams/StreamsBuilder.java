@@ -192,8 +192,9 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} using the given
      * {@code Materialized} instance.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      * <p>
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
@@ -241,8 +242,9 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
@@ -262,8 +264,9 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic     the topic name; cannot be {@code null}
      * @param consumed  the instance of {@link Consumed} used to define optional parameters; cannot be {@code null}
@@ -289,8 +292,9 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} using the {@link Materialized} instance.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param materialized  the instance of {@link Materialized} used to materialize a state store; cannot be {@code null}

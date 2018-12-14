@@ -157,6 +157,42 @@ public class StoreChangelogReaderTest {
         assertThat(callback.restored.size(), equalTo(messages));
     }
 
+    @Test
+    public void shouldRecoverFromOffsetOutOfRangeExceptionAndRestoreFromStart() {
+        final int messages = 10;
+        final int startOffset = 5;
+        final long expiredCheckpoint = 1L;
+        assignPartition(messages, topicPartition);
+        consumer.updateBeginningOffsets(Collections.singletonMap(topicPartition, (long) startOffset));
+        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, (long) (messages + startOffset)));
+
+        addRecords(messages, topicPartition, startOffset);
+        consumer.assign(Collections.<TopicPartition>emptyList());
+
+        final StateRestorer stateRestorer = new StateRestorer(
+                topicPartition,
+                restoreListener,
+                expiredCheckpoint,
+                Long.MAX_VALUE,
+                true,
+                "storeName");
+        changelogReader.register(stateRestorer);
+
+        EasyMock.expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        EasyMock.replay(active, task);
+
+        // first restore call "fails" since OffsetOutOfRangeException but we should not die with an exception
+        assertEquals(0, changelogReader.restore(active).size());
+        //the starting offset for stateRestorer is set to NO_CHECKPOINT
+        assertThat(stateRestorer.checkpoint(), equalTo(-1L));
+
+        //restore the active task again
+        changelogReader.register(stateRestorer);
+        //the restored task should return completed partition without Exception.
+        assertEquals(1, changelogReader.restore(active).size());
+        //the restored size should be equal to message length.
+        assertThat(callback.restored.size(), equalTo(messages));
+    }
 
     @Test
     public void shouldRestoreMessagesFromCheckpoint() {
