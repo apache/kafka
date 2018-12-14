@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
  * Represents the sensors aggregated per client
@@ -346,7 +347,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def getOrCreateQuotaSensors(session: Session, clientId: String): ClientSensors = {
     // Use cached sanitized principal if using default callback
     val metricTags = quotaCallback match {
-      case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
+      case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId).toMap
       case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
     }
     // Names of the sensors to access
@@ -477,7 +478,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val quotaEntity = updatedQuotaEntity.getOrElse(throw new IllegalStateException("Quota entity not specified"))
       val user = quotaEntity.sanitizedUser
       val clientId = quotaEntity.clientId
-      val metricTags = Map(DefaultTags.User -> user, DefaultTags.ClientId -> clientId)
+      val metricTags = mutable.LinkedHashMap(DefaultTags.User -> user, DefaultTags.ClientId -> clientId).toMap
 
       val quotaMetricName = clientRateMetricName(metricTags)
       // Change the underlying metric config if the sensor has been created
@@ -602,7 +603,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
-    def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
+    def quotaMetricTags(sanitizedUser: String, clientId: String) : mutable.LinkedHashMap[String, String] = {
       val (userTag, clientIdTag) = quotaTypesEnabled match {
         case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
           ("", clientId)
@@ -644,7 +645,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           }
           metricTags
       }
-      Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
+      mutable.LinkedHashMap(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
     }
 
     override def close(): Unit = {}

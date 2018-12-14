@@ -14,6 +14,7 @@
 
 package kafka.api
 
+import java.util
 import java.util.{Collections, HashMap, Properties}
 
 import kafka.api.QuotaTestClients._
@@ -248,7 +249,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean) {
-    val tags = new HashMap[String, String]
+    val tags = new util.LinkedHashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
@@ -261,7 +262,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None) {
-    val tags = new HashMap[String, String]
+    val tags = new util.LinkedHashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))

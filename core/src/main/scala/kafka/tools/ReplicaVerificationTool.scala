@@ -43,6 +43,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 /**
  * For verifying the consistency among replicas.
@@ -457,7 +458,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
+      mutable.LinkedHashMap("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,
       new LogContext

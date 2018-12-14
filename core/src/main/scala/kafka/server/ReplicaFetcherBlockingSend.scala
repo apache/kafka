@@ -30,6 +30,7 @@ import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 
 trait BlockingSend {
 
@@ -67,7 +68,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
+      mutable.LinkedHashMap("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
       false,
       channelBuilder,
       logContext

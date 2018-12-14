@@ -673,7 +673,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
 }
 
 class FetcherStats(metricId: ClientIdAndBroker) extends KafkaMetricsGroup {
-  val tags = Map("clientId" -> metricId.clientId,
+  val tags = mutable.LinkedHashMap("clientId" -> metricId.clientId,
     "brokerHost" -> metricId.brokerHost,
     "brokerPort" -> metricId.brokerPort.toString)
 

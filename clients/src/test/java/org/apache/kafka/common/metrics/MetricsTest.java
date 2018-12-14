@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Random;
@@ -625,10 +626,10 @@ public class MetricsTest {
             // this is expected
         }
         
-        Map<String, String> parentTagsWithValues = new HashMap<>();
+        Map<String, String> parentTagsWithValues = new LinkedHashMap<>();
         parentTagsWithValues.put("parent-tag", "parent-tag-value");
 
-        Map<String, String> childTagsWithValues = new HashMap<>();
+        Map<String, String> childTagsWithValues = new LinkedHashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
         try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
@@ -647,7 +648,7 @@ public class MetricsTest {
 
             try {
 
-                Map<String, String> runtimeTags = new HashMap<>();
+                Map<String, String> runtimeTags = new LinkedHashMap<>();
                 runtimeTags.put("child-tag", "child-tag-value");
                 runtimeTags.put("tag-not-in-template", "unexpected-value");
 
