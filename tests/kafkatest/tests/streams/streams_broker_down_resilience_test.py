@@ -62,6 +62,13 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         self.kafka.start_node(node)
 
+        connected = 'Discovered group coordinator'
+
+        with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
+            monitor.wait_until(connected,
+                               timeout_sec=120,
+                               err_msg=("Never saw output '%s' on " % connected) + str(processor.node.account))
+
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
                                     self.client_id,
