@@ -123,7 +123,7 @@ public class ProduceBenchWorker implements TaskWorker {
                 status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
                 executor.submit(new SendRecords(active));
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "Prepare", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "Prepare", e, doneFuture);
             }
         }
     }
@@ -248,7 +248,7 @@ public class ProduceBenchWorker implements TaskWorker {
                     producer.close();
                 }
             } catch (Exception e) {
-                WorkerUtils.abort(log, "SendRecords", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "SendRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData = new StatusUpdater(histogram, transactionsCommitted).update();
@@ -315,7 +315,7 @@ public class ProduceBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "StatusUpdater", e, doneFuture);
             }
         }
 

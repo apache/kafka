@@ -105,7 +105,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
                 executor.submit(new CloseStatusUpdater(consumeTasks));
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "Prepare", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "Prepare", e, doneFuture);
             }
         }
 
@@ -263,7 +263,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
             } catch (Exception e) {
                 consumer.close();
-                WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
@@ -312,7 +312,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumeStatusUpdater", e, doneFuture);
             }
         }
 
@@ -344,7 +344,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumeStatusUpdater", e, doneFuture);
             }
         }
 
