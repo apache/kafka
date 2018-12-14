@@ -262,6 +262,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }
             } catch (Exception e) {
+                consumer.close();
                 WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
@@ -270,8 +271,8 @@ public class ConsumeBenchWorker implements TaskWorker {
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
-                consumer.close();
             }
+            consumer.close();
             doneFuture.complete("");
             return null;
         }
