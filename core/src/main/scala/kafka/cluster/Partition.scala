@@ -830,7 +830,7 @@ class Partition(val topicPartition: TopicPartition,
       .map(epochLSO => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
         s"partition $topicPartition with leader $epochLogString as this partition's " +
         s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind the " +
-        s"LSO at the beginning of this epoch ($epochLSO)."))
+        s"start offset from the beginning of this epoch ($epochLSO)."))
 
     def getOffsetByTimestamp: Option[TimestampAndOffset] = {
       logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
