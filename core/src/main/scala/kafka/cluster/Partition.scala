@@ -826,11 +826,11 @@ class Partition(val topicPartition: TopicPartition,
     // Only consider throwing an error if we get a client request (isolationLevel is defined) and the start offset
     // is lagging behind the high watermark
     val maybeOffsetsError: Option[ApiException] = leaderEpochStartOffsetOpt
-      .filter(epochLSO => isolationLevel.isDefined && epochLSO > localReplica.highWatermark.messageOffset)
-      .map(epochLSO => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+      .filter(epochStart => isolationLevel.isDefined && epochStart > localReplica.highWatermark.messageOffset)
+      .map(epochStart => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
         s"partition $topicPartition with leader $epochLogString as this partition's " +
         s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind the " +
-        s"start offset from the beginning of this epoch ($epochLSO)."))
+        s"start offset from the beginning of this epoch ($epochStart)."))
 
     def getOffsetByTimestamp: Option[TimestampAndOffset] = {
       logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
