@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -33,12 +34,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -423,6 +426,89 @@ public class MetadataTest {
         time += metadataExpireMs * 2;
         metadata.update(emptyMetadataResponse(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
+    }
+
+    @Test
+    public void testRequestUpdate() {
+        metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, false, new ClusterResourceListeners());
+        assertFalse(metadata.updateRequested());
+
+        int[] epochs = {42, 42, 41, 41, 42, 43, 43, 42, 41, 43};
+        boolean[] updateResult = {true, true, false, false, true, true, true, false, false, true};
+        TopicPartition tp = new TopicPartition("topic", 0);
+
+        for (int i=0; i<epochs.length; i++) {
+            metadata.maybeRequestUpdate(tp, epochs[i]);
+            if(updateResult[i]) {
+                assertTrue("Expected metadata update to be requested [" + i +"]", metadata.updateRequested());
+            } else {
+                assertFalse("Did not expect metadata update to be requested [" + i +"]", metadata.updateRequested());
+            }
+            metadata.update(emptyMetadataResponse(), 0L);
+            assertFalse(metadata.updateRequested());
+        }
+    }
+
+    @Test
+    public void testRejectOldMetadata() {
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put("topic-1", 1);
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        metadata.update(emptyMetadataResponse(), 0L);
+
+        // First epoch seen, accept it
+        {
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
+                    "dummy", 1, Collections.emptyMap(), partitionCounts,
+                    (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                            new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
+            metadata.update(metadataResponse, 10L);
+            assertNotNull(metadata.fetch().partition(tp));
+            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+        }
+
+        // Fake an empty ISR, but with an older epoch, should reject it
+        {
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
+                    "dummy", 1, Collections.emptyMap(), partitionCounts,
+                    (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                            new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, Collections.emptyList(), offlineReplicas));
+            metadata.update(metadataResponse, 20L);
+            assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
+            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+        }
+
+        // Fake an empty ISR, with same epoch, accept it
+        {
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
+                    "dummy", 1, Collections.emptyMap(), partitionCounts,
+                    (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                            new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, Collections.emptyList(), offlineReplicas));
+            metadata.update(metadataResponse, 20L);
+            assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
+            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+        }
+
+        // Empty metadata response, should not keep old partition but should keep the last-seen epoch
+        {
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
+                    "dummy", 1, Collections.emptyMap(), Collections.emptyMap(), MetadataResponse.PartitionMetadata::new);
+            metadata.update(metadataResponse, 20L);
+            assertNull(metadata.fetch().partition(tp));
+            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+        }
+
+        // Back in the metadata, with old epoch, should not get added
+        {
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
+                    "dummy", 1, Collections.emptyMap(), partitionCounts,
+                    (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                            new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, isr, offlineReplicas));
+            metadata.update(metadataResponse, 10L);
+            assertNotNull(metadata.fetch().partition(tp));
+            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+        }
     }
 
     private void clearBackgroundError() {

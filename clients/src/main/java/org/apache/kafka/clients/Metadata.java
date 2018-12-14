@@ -18,6 +18,8 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -36,6 +38,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -74,6 +77,7 @@ public class Metadata implements Closeable {
     private final boolean allowAutoTopicCreation;
     private final boolean topicExpiryEnabled;
     private boolean isClosed;
+    private final Map<TopicPartition, Integer> lastSeenEpochs;
 
     public Metadata(long refreshBackoffMs,
                     long metadataExpireMs,
@@ -110,6 +114,7 @@ public class Metadata implements Closeable {
         this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
         this.isClosed = false;
+        this.lastSeenEpochs = new HashMap<>();
     }
 
     /**
@@ -159,6 +164,39 @@ public class Metadata implements Closeable {
     public synchronized int requestUpdate() {
         this.needUpdate = true;
         return this.version;
+    }
+
+    /**
+     * Request an update for the current metadata info of a partition and ensure it is as recent as the given epoch,
+     * return the current version before the update
+     */
+    public synchronized int maybeRequestUpdate(TopicPartition topicPartition, int epoch) {
+        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
+        if(maybeUpdateLastSeenEpoch(topicPartition, epoch)) {
+            this.needUpdate = true;
+        }
+        return this.version;
+    }
+
+    /**
+     * Return the last seen epoch for the given partition, if any
+     */
+    public Optional<Integer> getLastEpochSeen(TopicPartition topicPartition) {
+        return Optional.ofNullable(lastSeenEpochs.get(topicPartition));
+    }
+
+    /**
+     * Update the last seen epoch for a topic partition but only if the epoch is greater than or equal to the last
+     * seen epoch
+     */
+    private boolean maybeUpdateLastSeenEpoch(TopicPartition topicPartition, int epoch) {
+        Integer oldEpoch = lastSeenEpochs.get(topicPartition);
+        if(oldEpoch == null || epoch >= oldEpoch) {
+            lastSeenEpochs.put(topicPartition, epoch);
+            return true;
+        } else {
+            return false;
+        }
     }
 
     /**
@@ -278,7 +316,7 @@ public class Metadata implements Closeable {
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
-        this.cluster = metadataResponse.cluster();
+        this.cluster = metadataResponse.cluster(topic -> true, this::getPartitionInfoFromMeta);
         this.unavailableTopics = metadataResponse.unavailableTopics();
 
         fireListeners(cluster, unavailableTopics);
@@ -287,7 +325,7 @@ public class Metadata implements Closeable {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = metadataResponse.cluster(topics.keySet());
+            this.cluster = metadataResponse.cluster(topics.keySet()::contains, this::getPartitionInfoFromMeta);
         }
 
         String newClusterId = cluster.clusterResource().clusterId();
@@ -297,6 +335,32 @@ public class Metadata implements Closeable {
 
         notifyAll();
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
+    }
+
+    /**
+     * Convert a {@link org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata} into a
+     * {@link PartitionInfo}. If the epoch in the partition metadata is not newer than the last one we saw, use the
+     * previous partition info instance.
+     */
+    private PartitionInfo getPartitionInfoFromMeta(String topic, MetadataResponse.PartitionMetadata partitionMetadata) {
+        TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
+        if(partitionMetadata.leaderEpoch().isPresent()) {
+            Integer newEpoch = partitionMetadata.leaderEpoch().get();
+            if(maybeUpdateLastSeenEpoch(tp, newEpoch)) {
+                return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+            } else {
+                PartitionInfo previousInfo = cluster.partition(tp);
+                if(previousInfo != null) {
+                    return previousInfo;
+                } else {
+                    log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
+                             "info to use so defaulting to the possible stale data from latest response{}", tp);
+                    return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+                }
+            }
+        } else {
+            return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+        }
     }
 
     private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {

@@ -36,6 +36,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.LEADER_EPOCH;
@@ -368,33 +370,39 @@ public class MetadataResponse extends AbstractResponse {
      * @return the cluster snapshot
      */
     public Cluster cluster() {
-        return cluster(null);
+        return cluster(topic -> true, MetadataResponse::partitionMetaToInfo);
     }
 
-    public Cluster cluster(Set<String> topicsToRetain) {
+    public Cluster cluster(
+            Predicate<String> topicsToRetain,
+            BiFunction<String, PartitionMetadata, PartitionInfo> computePartitionInfo) {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
-            if (topicsToRetain != null && !topicsToRetain.contains(metadata.topic))
+            if (!topicsToRetain.test(metadata.topic))
                 continue;
 
             if (metadata.error == Errors.NONE) {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    partitions.add(new PartitionInfo(
-                            metadata.topic,
-                            partitionMetadata.partition,
-                            partitionMetadata.leader,
-                            partitionMetadata.replicas.toArray(new Node[0]),
-                            partitionMetadata.isr.toArray(new Node[0]),
-                            partitionMetadata.offlineReplicas.toArray(new Node[0])));
+                    partitions.add(computePartitionInfo.apply(metadata.topic, partitionMetadata));
                 }
             }
         }
 
         return new Cluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, this.controller);
+    }
+
+    public static PartitionInfo partitionMetaToInfo(String topic, PartitionMetadata partitionMetadata) {
+        return new PartitionInfo(
+                topic,
+                partitionMetadata.partition(),
+                partitionMetadata.leader(),
+                partitionMetadata.replicas().toArray(new Node[0]),
+                partitionMetadata.isr().toArray(new Node[0]),
+                partitionMetadata.offlineReplicas().toArray(new Node[0]));
     }
 
     /**

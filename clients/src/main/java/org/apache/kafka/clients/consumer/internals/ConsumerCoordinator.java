@@ -621,7 +621,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onSuccess(Void value) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-
+                offsets.forEach((tp, offsetMeta) ->
+                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.maybeRequestUpdate(tp, epoch)));
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
             }
 
@@ -669,6 +670,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.succeeded()) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
+                offsets.forEach((tp, offsetMeta) ->
+                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.maybeRequestUpdate(tp, epoch)));
                 return true;
             }
 

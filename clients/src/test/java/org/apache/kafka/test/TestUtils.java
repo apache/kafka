@@ -117,13 +117,21 @@ public class TestUtils {
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts);
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts, MetadataResponse.PartitionMetadata::new);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, MetadataResponse.PartitionMetadata::new);
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final PartitionMetadataSupplier partitionSupplier) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
             nodes.add(new Node(i, "localhost", 1969 + i));
@@ -137,7 +145,7 @@ public class TestUtils {
             for (int i = 0; i < numPartitions; i++) {
                 Node leader = nodes.get(i % nodes.size());
                 List<Node> replicas = Collections.singletonList(leader);
-                partitionMetadata.add(new MetadataResponse.PartitionMetadata(
+                partitionMetadata.add(partitionSupplier.supply(
                         Errors.NONE, i, leader, Optional.empty(), replicas, replicas, replicas));
             }
 
@@ -152,6 +160,17 @@ public class TestUtils {
         }
 
         return new MetadataResponse(nodes, clusterId, 0, topicMetadata);
+    }
+
+    @FunctionalInterface
+    public interface PartitionMetadataSupplier {
+        MetadataResponse.PartitionMetadata supply(Errors error,
+                              int partition,
+                              Node leader,
+                              Optional<Integer> leaderEpoch,
+                              List<Node> replicas,
+                              List<Node> isr,
+                              List<Node> offlineReplicas);
     }
 
     public static Cluster clusterWith(final int nodes, final String topic, final int partitions) {
