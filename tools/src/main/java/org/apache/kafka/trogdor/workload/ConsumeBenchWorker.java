@@ -270,9 +270,9 @@ public class ConsumeBenchWorker implements TaskWorker {
                 long curTimeMs = Time.SYSTEM.milliseconds();
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
-                doneFuture.complete("");
                 consumer.close();
             }
+            doneFuture.complete("");
             return null;
         }
     }
