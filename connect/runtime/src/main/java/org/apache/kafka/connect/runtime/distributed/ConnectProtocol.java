@@ -233,7 +233,7 @@ public class ConnectProtocol {
                     '}';
         }
 
-        private Map<String, List<Integer>> asMap() {
+        protected Map<String, List<Integer>> asMap() {
             // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
             Map<String, List<Integer>> taskMap = new LinkedHashMap<>();
             for (String connectorId : new HashSet<>(connectorIds)) {
