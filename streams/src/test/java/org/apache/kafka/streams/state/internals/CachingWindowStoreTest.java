@@ -77,11 +77,11 @@ public class CachingWindowStoreTest {
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
     private String topic;
-    private WindowKeySchema keySchema;
+    private WindowKeySchema<KeyValueSegment> keySchema;
 
     @Before
     public void setUp() {
-        keySchema = new WindowKeySchema();
+        keySchema = new WindowKeySchema<>();
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
         final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(
             underlying,

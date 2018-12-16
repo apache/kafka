@@ -30,15 +30,13 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import java.util.List;
-
 class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, V> {
 
     private final WindowStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final long windowSize;
-    private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
+    private final SegmentedBytesStore.KeySchema<KeyValueSegment> keySchema = new WindowKeySchema<>();
 
 
     private String name;
@@ -84,18 +82,15 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         name = context.taskId() + "-" + underlying.name();
         cache = this.context.getCache();
 
-        cache.addDirtyEntryFlushListener(name, new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (final ThreadCache.DirtyEntry entry : entries) {
-                    final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
-                    final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
+        cache.addDirtyEntryFlushListener(name, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
+                final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
 
-                    final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes.keyDeserializer(), serdes.topic());
-                    final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
-                    maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
-                    underlying.put(key, entry.newValue(), timestamp);
-                }
+                final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes.keyDeserializer(), serdes.topic());
+                final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
+                maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
+                underlying.put(key, entry.newValue(), timestamp);
             }
         });
     }

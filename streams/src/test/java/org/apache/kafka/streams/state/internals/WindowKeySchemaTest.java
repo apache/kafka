@@ -30,15 +30,15 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.Test;
 
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 
 public class WindowKeySchemaTest {
 
@@ -50,7 +50,7 @@ public class WindowKeySchemaTest {
 
     final private Window window = new TimeWindow(startTime, endTime);
     final private Windowed<String> windowedKey = new Windowed<>(key, window);
-    final private WindowKeySchema windowKeySchema = new WindowKeySchema();
+    final private WindowKeySchema<KeyValueSegment> windowKeySchema = new WindowKeySchema<>();
     final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
 

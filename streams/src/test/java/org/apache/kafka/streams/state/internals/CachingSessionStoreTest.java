@@ -65,7 +65,7 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() {
-        final SessionKeySchema schema = new SessionKeySchema();
+        final SessionKeySchema<KeyValueSegment> schema = new SessionKeySchema<>();
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);

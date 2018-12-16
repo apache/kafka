@@ -38,25 +38,25 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class SegmentIteratorTest {
+public class KeyValueSegmentIteratorTest {
 
-    private final Segment segmentOne = new Segment("one", "one", 0);
-    private final Segment segmentTwo = new Segment("two", "window", 1);
+    private final KeyValueSegment segmentOne = new KeyValueSegment("one", "one", 0);
+    private final KeyValueSegment segmentTwo = new KeyValueSegment("two", "window", 1);
     private final HasNextCondition hasNextCondition = Iterator::hasNext;
 
-    private SegmentIterator iterator = null;
+    private SegmentIterator<KeyValueSegment> iterator = null;
 
     @Before
     public void before() {
         final InternalMockProcessorContext context = new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            Serdes.String(),
-            Serdes.String(),
-            new NoOpRecordCollector(),
-            new ThreadCache(
-                new LogContext("testCache "),
-                0,
-                new MockStreamsMetrics(new Metrics())));
+                TestUtils.tempDirectory(),
+                Serdes.String(),
+                Serdes.String(),
+                new NoOpRecordCollector(),
+                new ThreadCache(
+                    new LogContext("testCache "),
+                    0,
+                    new MockStreamsMetrics(new Metrics())));
         segmentOne.openDB(context);
         segmentTwo.openDB(context);
         segmentOne.put(Bytes.wrap("a".getBytes()), "1".getBytes());
@@ -77,7 +77,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldIterateOverAllSegments() {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
@@ -104,7 +104,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldNotThrowExceptionOnHasNextWhenStoreClosed() {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator<>(
             Collections.singletonList(segmentOne).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
@@ -117,7 +117,7 @@ public class SegmentIteratorTest {
 
     @Test
     public void shouldOnlyIterateOverSegmentsInRange() {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("a".getBytes()),
@@ -136,7 +136,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnPeekNextKeyIfNoNext() {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
@@ -147,7 +147,7 @@ public class SegmentIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void shouldThrowNoSuchElementOnNextIfNoNext() {
-        iterator = new SegmentIterator(
+        iterator = new SegmentIterator<>(
             Arrays.asList(segmentOne, segmentTwo).iterator(),
             hasNextCondition,
             Bytes.wrap("f".getBytes()),
