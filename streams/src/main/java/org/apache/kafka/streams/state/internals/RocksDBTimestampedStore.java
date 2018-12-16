@@ -54,6 +54,11 @@ public class RocksDBTimestampedStore extends RocksDBStore {
         super(name);
     }
 
+    RocksDBTimestampedStore(final String name,
+                            final String parentDir) {
+        super(name, parentDir);
+    }
+
     @Override
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {

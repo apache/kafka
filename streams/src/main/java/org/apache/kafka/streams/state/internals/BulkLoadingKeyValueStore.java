@@ -17,15 +17,11 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 
-import java.io.IOException;
-
-public interface Segment extends BulkLoadingKeyValueStore {
-
-    void destroy() throws IOException;
-
-    KeyValueIterator<Bytes, byte[]> all();
-
-    KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to);
+public interface BulkLoadingKeyValueStore extends KeyValueStore<Bytes, byte[]> {
+    void toggleDbForBulkLoading(final boolean prepareForBulkload);
+    void write(final WriteBatch batch) throws RocksDBException;
 }

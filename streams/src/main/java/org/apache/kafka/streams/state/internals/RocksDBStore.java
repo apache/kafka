@@ -28,7 +28,6 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
@@ -65,7 +64,7 @@ import java.util.regex.Pattern;
 /**
  * A persistent key-value store based on RocksDB.
  */
-public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
+public class RocksDBStore implements BulkLoadingKeyValueStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
@@ -344,7 +343,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+    @Override
+    public void toggleDbForBulkLoading(final boolean prepareForBulkload) {
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
             final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
@@ -359,7 +359,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         openDB(internalProcessorContext);
     }
 
-    void write(final WriteBatch batch) throws RocksDBException {
+    @Override
+    public void write(final WriteBatch batch) throws RocksDBException {
         db.write(wOptions, batch);
     }
 

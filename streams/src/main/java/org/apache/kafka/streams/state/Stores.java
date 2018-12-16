@@ -265,7 +265,13 @@ public class Stores {
                                                    + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
+        return new RocksDbWindowBytesStoreSupplier(
+            name,
+            retentionPeriod,
+            segmentInterval,
+            windowSize,
+            retainDuplicates,
+            false);
     }
 
     /**

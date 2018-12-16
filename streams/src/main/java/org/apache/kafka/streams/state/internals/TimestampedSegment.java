@@ -22,12 +22,12 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import java.io.IOException;
 import java.util.Objects;
 
-class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment>, Segment {
+class TimestampedSegment extends RocksDBTimestampedStore implements Comparable<TimestampedSegment>, Segment {
     public final long id;
 
-    KeyValueSegment(final String segmentName,
-                    final String windowName,
-                    final long id) {
+    TimestampedSegment(final String segmentName,
+                       final String windowName,
+                       final long id) {
         super(segmentName, windowName);
         this.id = id;
     }
@@ -38,7 +38,7 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     }
 
     @Override
-    public int compareTo(final KeyValueSegment segment) {
+    public int compareTo(final TimestampedSegment segment) {
         return Long.compare(id, segment.id);
     }
 
@@ -51,7 +51,7 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
 
     @Override
     public String toString() {
-        return "KeyValueSegment(id=" + id + ", name=" + name() + ")";
+        return "TimestampedSegment(id=" + id + ", name=" + name() + ")";
     }
 
     @Override
@@ -59,7 +59,7 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
         if (obj == null || getClass() != obj.getClass()) {
             return false;
         }
-        final KeyValueSegment segment = (KeyValueSegment) obj;
+        final TimestampedSegment segment = (TimestampedSegment) obj;
         return id == segment.id;
     }
 

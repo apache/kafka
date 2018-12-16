@@ -16,16 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueIterator;
+public class RocksDBTimestampedSegmentedBytesStore extends AbstractSegmentedBytesStore<TimestampedSegment> {
 
-import java.io.IOException;
-
-public interface Segment extends BulkLoadingKeyValueStore {
-
-    void destroy() throws IOException;
-
-    KeyValueIterator<Bytes, byte[]> all();
-
-    KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to);
+    RocksDBTimestampedSegmentedBytesStore(final String name,
+                                          final String metricScope,
+                                          final long retention,
+                                          final long segmentInterval,
+                                          final KeySchema keySchema) {
+        super(name, metricScope, keySchema, new TimestampedSegments(name, retention, segmentInterval));
+    }
 }
