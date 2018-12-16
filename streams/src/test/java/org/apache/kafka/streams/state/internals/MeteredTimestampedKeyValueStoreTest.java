@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -45,19 +46,13 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.easymock.EasyMock.anyObject;
-import static org.easymock.EasyMock.eq;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
-public class MeteredKeyValueStoreTest {
+public class MeteredTimestampedKeyValueStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
     private final Map<String, String> tags = mkMap(
@@ -70,22 +65,24 @@ public class MeteredKeyValueStoreTest {
     @Mock(type = MockType.NICE)
     private ProcessorContext context;
 
-    private MeteredKeyValueStore<String, String> metered;
+    private MeteredTimestampedKeyValueStore<String, String> metered;
     private final String key = "key";
     private final Bytes keyBytes = Bytes.wrap(key.getBytes());
     private final String value = "value";
-    private final byte[] valueBytes = value.getBytes();
-    private final KeyValue<Bytes, byte[]> byteKeyValuePair = KeyValue.pair(keyBytes, valueBytes);
+    private final ValueAndTimestamp<String> valueAndTimestamp = ValueAndTimestamp.make("value", 97L);
+    // timestamp is 97 what is ASCII of 'a'
+    private final byte[] valueAndTimestampBytes = "\0\0\0\0\0\0\0avalue".getBytes();
+    private final KeyValue<Bytes, byte[]> byteKeyValueTimestampPair = KeyValue.pair(keyBytes, valueAndTimestampBytes);
     private final Metrics metrics = new Metrics();
 
     @Before
     public void before() {
-        metered = new MeteredKeyValueStore<>(
+        metered = new MeteredTimestampedKeyValueStore<>(
             inner,
             "scope",
             new MockTime(),
             Serdes.String(),
-            Serdes.String()
+            new ValueAndTimestampSerde<>(Serdes.String())
         );
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         EasyMock.expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
@@ -108,14 +105,13 @@ public class MeteredKeyValueStoreTest {
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
                 "scope", "test", taskId.toString(), "scope", "all")));
     }
-
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
-        inner.put(eq(keyBytes), EasyMock.aryEq(valueBytes));
+        inner.put(EasyMock.eq(keyBytes), EasyMock.aryEq(valueAndTimestampBytes));
         EasyMock.expectLastCall();
         init();
 
-        metered.put(key, value);
+        metered.put(key, valueAndTimestamp);
 
         final KafkaMetric metric = metric("put-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -124,10 +120,10 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetBytesFromInnerStoreAndReturnGetMetric() {
-        EasyMock.expect(inner.get(keyBytes)).andReturn(valueBytes);
+        EasyMock.expect(inner.get(keyBytes)).andReturn(valueAndTimestampBytes);
         init();
 
-        assertThat(metered.get(key), equalTo(value));
+        assertThat(metered.get(key), equalTo(valueAndTimestamp));
 
         final KafkaMetric metric = metric("get-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -136,12 +132,10 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPutIfAbsentAndRecordPutIfAbsentMetric() {
-        EasyMock
-            .expect(inner.putIfAbsent(eq(keyBytes), aryEq(valueBytes)))
-            .andReturn(null);
+        EasyMock.expect(inner.putIfAbsent(EasyMock.eq(keyBytes), EasyMock.aryEq(valueAndTimestampBytes))).andReturn(null);
         init();
 
-        metered.putIfAbsent(key, value);
+        metered.putIfAbsent(key, valueAndTimestamp);
 
         final KafkaMetric metric = metric("put-if-absent-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -159,7 +153,7 @@ public class MeteredKeyValueStoreTest {
         EasyMock.expectLastCall();
         init();
 
-        metered.putAll(Collections.singletonList(KeyValue.pair(key, value)));
+        metered.putAll(Collections.singletonList(KeyValue.pair(key, valueAndTimestamp)));
 
         final KafkaMetric metric = metric("put-all-rate");
         assertTrue((Double) metric.metricValue() > 0);
@@ -168,7 +162,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldDeleteFromInnerStoreAndRecordDeleteMetric() {
-        EasyMock.expect(inner.delete(keyBytes)).andReturn(valueBytes);
+        EasyMock.expect(inner.delete(keyBytes)).andReturn(valueAndTimestampBytes);
         init();
 
         metered.delete(key);
@@ -180,13 +174,12 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
-        EasyMock
-            .expect(inner.range(keyBytes, keyBytes))
-            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValuePair).iterator()));
+        EasyMock.expect(inner.range(keyBytes, keyBytes)).andReturn(
+            new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
 
-        final KeyValueIterator<String, String> iterator = metered.range(key, key);
-        assertThat(iterator.next().value, equalTo(value));
+        final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.range(key, key);
+        assertThat(iterator.next().value, equalTo(valueAndTimestamp));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -197,13 +190,12 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldGetAllFromInnerStoreAndRecordAllMetric() {
-        EasyMock
-            .expect(inner.all())
-            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValuePair).iterator()));
+        EasyMock.expect(inner.all()).andReturn(
+            new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValueTimestampPair).iterator()));
         init();
 
-        final KeyValueIterator<String, String> iterator = metered.all();
-        assertThat(iterator.next().value, equalTo(value));
+        final KeyValueIterator<String, ValueAndTimestamp<String>> iterator = metered.all();
+        assertThat(iterator.next().value, equalTo(valueAndTimestamp));
         assertFalse(iterator.hasNext());
         iterator.close();
 
@@ -223,33 +215,6 @@ public class MeteredKeyValueStoreTest {
         final KafkaMetric metric = metric("flush-rate");
         assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
-    }
-
-    private interface CachedKeyValueStore<K, V> extends KeyValueStore<K, V>, CachedStateStore<K, V> { }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldSetFlushListenerOnWrappedCachingStore() {
-        final CachedKeyValueStore<Bytes, byte[]> cachedKeyValueStore = mock(CachedKeyValueStore.class);
-
-        expect(cachedKeyValueStore.setFlushListener(anyObject(CacheFlushListener.class), eq(false))).andReturn(true);
-        replay(cachedKeyValueStore);
-
-        metered = new MeteredKeyValueStore<>(
-            cachedKeyValueStore,
-            "scope",
-            new MockTime(),
-            Serdes.String(),
-            Serdes.String()
-        );
-        assertTrue(metered.setFlushListener(null, false));
-
-        verify(cachedKeyValueStore);
-    }
-
-    @Test
-    public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
-        assertFalse(metered.setFlushListener(null, false));
     }
 
     private KafkaMetric metric(final MetricName metricName) {

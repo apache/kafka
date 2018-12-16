@@ -74,9 +74,10 @@ public class CachingSessionStoreTest {
     @Before
     public void setUp() {
         final SessionKeySchema schema = new SessionKeySchema();
-        final RocksDBSegmentedBytesStore underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
+        final RocksDBSegmentedBytesStore root =
+            new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore sessionStore = new RocksDBSessionStore(underlying);
-        cachingStore = new CachingSessionStore(sessionStore, SEGMENT_INTERVAL);
+        cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic", null));
@@ -104,7 +105,6 @@ public class CachingSessionStoreTest {
         assertFalse(a.hasNext());
         assertFalse(b.hasNext());
     }
-
 
     @Test
     public void shouldPutFetchAllKeysFromCache() {

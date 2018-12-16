@@ -82,16 +82,27 @@ class CachingWindowStore
         final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
-        final Bytes key = windowedKeyBytes.key();
+        final Bytes binaryKey = windowedKeyBytes.key();
         if (flushListener != null) {
-            final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrapped().fetch(key, windowStartTimestamp) : null;
+            final byte[] rawNewValue = entry.newValue();
+            final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
+                wrapped().fetch(binaryKey, windowStartTimestamp) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
-            if (newValueBytes != null || oldValueBytes != null) {
+            if (rawNewValue != null || rawOldValue != null) {
+                final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(
+                    windowedKeyBytes,
+                    serdes.keyDeserializer(),
+                    serdes.topic());
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(key, entry.newValue(), windowStartTimestamp);
+                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
+
+                final FlushEntry<K, V> flushEntry = flushEntry(
+                    serdes,
+                    rawNewValue,
+                    sendOldValues ? rawOldValue : null,
+                    entry.entry().context().timestamp());
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
@@ -101,12 +112,16 @@ class CachingWindowStore
                         newValueBytes,
                         sendOldValues ? oldValueBytes : null,
                         entry.entry().context().timestamp());
+                        /*windowedKey,
+                        flushEntry.value,
+                        flushEntry.oldValue,
+                        flushEntry.timestamp);*/
                 } finally {
                     context.setRecordContext(current);
                 }
             }
         } else {
-            wrapped().put(key, entry.newValue(), windowStartTimestamp);
+            wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
         }
     }
 
@@ -117,6 +132,16 @@ class CachingWindowStore
         this.sendOldValues = sendOldValues;
 
         return true;
+    }
+
+    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
+                                                      final byte[] rawValue,
+                                                      final byte[] oldRawValue,
+                                                      final long timestamp) {
+        return new FlushEntry<>(
+            rawValue != null ? serdes.valueFrom(rawValue) : null,
+            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
+            timestamp);
     }
 
     @Override

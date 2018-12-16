@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.streams.state.StateSerdes;
+
 public interface CachedStateStore<K, V> {
     /**
      * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
@@ -25,4 +27,23 @@ public interface CachedStateStore<K, V> {
      */
     boolean setFlushListener(final CacheFlushListener<K, V> listener,
                              final boolean sendOldValues);
+
+    <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
+                                           final byte[] rawValue,
+                                           final byte[] oldRawValue,
+                                           final long timestamp);
+
+    class FlushEntry<FK, FV> {
+        final FV value;
+        final FV oldValue;
+        final long timestamp;
+
+        FlushEntry(final FV value,
+                   final FV oldValue,
+                   final long timestamp) {
+            this.value = value;
+            this.oldValue = oldValue;
+            this.timestamp = timestamp;
+        }
+    }
 }
