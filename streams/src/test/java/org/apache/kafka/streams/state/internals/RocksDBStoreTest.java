@@ -58,23 +58,30 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class RocksDBStoreTest {
+    private static boolean enableBloomFilters = false;
+    final static String DB_NAME = "db-name";
+
+    private File dir;
     private final Serializer<String> stringSerializer = new StringSerializer();
     private final Deserializer<String> stringDeserializer = new StringDeserializer();
-    private RocksDBStore rocksDBStore;
-    private InternalMockProcessorContext context;
-    private File dir;
-    private static boolean enableBloomFilters = false;
+
+    InternalMockProcessorContext context;
+    RocksDBStore rocksDBStore;
 
     @Before
     public void setUp() {
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, MockRocksDbConfigSetter.class);
-        rocksDBStore = new RocksDBStore("test");
+        rocksDBStore = getRocksDBStore();
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
+    }
+
+    RocksDBStore getRocksDBStore() {
+        return new RocksDBStore(DB_NAME);
     }
 
     @After
@@ -98,7 +105,8 @@ public class RocksDBStoreTest {
 
         assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(10));
         assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(20));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));    }
+        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));
+    }
 
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
@@ -117,7 +125,7 @@ public class RocksDBStoreTest {
         final byte[] restoredValue = "restoredValue".getBytes(UTF_8);
         restoreBytes.add(KeyValue.pair(restoredKey, restoredValue));
 
-        context.restore("test", restoreBytes);
+        context.restore(DB_NAME, restoreBytes);
 
         assertThat(
             stringDeserializer.deserialize(
@@ -352,8 +360,6 @@ public class RocksDBStoreTest {
         assertThat(keys, equalTo(Utils.mkSet("2", "3")));
     }
 
-
-
     @Test
     public void shouldThrowNullPointerExceptionOnNullPut() {
         rocksDBStore.init(context, rocksDBStore);
@@ -424,13 +430,14 @@ public class RocksDBStoreTest {
 
         final Properties props = StreamsTestUtils.getStreamsConfig();
         props.put(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG, TestingBloomFilterRocksDBConfigSetter.class);
-        rocksDBStore = new RocksDBStore("test");
+        rocksDBStore = getRocksDBStore();
         dir = TestUtils.tempDirectory();
         context = new InternalMockProcessorContext(dir,
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
 
+        enableBloomFilters = false;
         rocksDBStore.init(context, rocksDBStore);
 
         final List<String> expectedValues = new ArrayList<>();
@@ -451,11 +458,11 @@ public class RocksDBStoreTest {
         assertFalse(TestingBloomFilterRocksDBConfigSetter.bloomFiltersSet);
 
         rocksDBStore.close();
-        enableBloomFilters = true;
         expectedIndex = 0;
 
         // reopen with Bloom Filters enabled
         // should open fine without errors
+        enableBloomFilters = true;
         rocksDBStore.init(context, rocksDBStore);
 
         for (final KeyValue<byte[], byte[]> keyValue : keyValues) {
@@ -479,7 +486,7 @@ public class RocksDBStoreTest {
 
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
-        static boolean bloomFiltersSet = false;
+        static boolean bloomFiltersSet;
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
@@ -493,10 +500,10 @@ public class RocksDBStoreTest {
                 bloomFiltersSet = true;
             } else {
                 options.setOptimizeFiltersForHits(false);
+                bloomFiltersSet = false;
             }
 
             options.setTableFormatConfig(tableConfig);
-
         }
     }
 
