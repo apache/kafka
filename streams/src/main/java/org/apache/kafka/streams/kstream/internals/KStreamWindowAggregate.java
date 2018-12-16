@@ -28,7 +28,10 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -152,21 +155,21 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
 
-        private WindowStore<K, Agg> windowStore;
+        private ReadOnlyWindowStore<K, Agg> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
+            windowStore = (ReadOnlyWindowStore<K, Agg>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
         @Override
-        public Agg get(final Windowed<K> windowedKey) {
+        public ValueAndTimestamp<Agg> get(final Windowed<K> windowedKey) {
             final K key = windowedKey.key();
             final W window = (W) windowedKey.window();
 
-            return windowStore.fetch(key, window.start());
+            return new ValueAndTimestampImpl<>(windowStore.fetch(key, window.start()), -1); // TODO
         }
 
         @Override

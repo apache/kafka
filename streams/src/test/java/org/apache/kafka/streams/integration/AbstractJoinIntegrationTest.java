@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -259,14 +260,14 @@ public abstract class AbstractJoinIntegrationTest {
      * Checks the embedded queryable state store snapshot
      */
     private void checkQueryableStore(final String queryableName, final String expectedFinalResult) {
-        final ReadOnlyKeyValueStore<Long, String> store = streams.store(queryableName, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store = streams.store(queryableName, QueryableStoreTypes.<Long, String>keyValueWithTimestampStore());
 
-        final KeyValueIterator<Long, String> all = store.all();
-        final KeyValue<Long, String> onlyEntry = all.next();
+        final KeyValueIterator<Long, ValueAndTimestamp<String>> all = store.all();
+        final KeyValue<Long, ValueAndTimestamp<String>> onlyEntry = all.next();
 
         try {
             assertThat(onlyEntry.key, is(anyUniqueKey));
-            assertThat(onlyEntry.value, is(expectedFinalResult));
+            assertThat(onlyEntry.value.value(), is(expectedFinalResult));
             assertThat(all.hasNext(), is(false));
         } finally {
             all.close();

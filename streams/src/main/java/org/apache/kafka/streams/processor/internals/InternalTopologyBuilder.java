@@ -50,7 +50,6 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
-
 public class InternalTopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
@@ -1205,11 +1204,11 @@ public class InternalTopologyBuilder {
         return applicationId + "-" + topic;
     }
 
-    public SubscriptionUpdates subscriptionUpdates() {
+    SubscriptionUpdates subscriptionUpdates() {
         return subscriptionUpdates;
     }
 
-    public synchronized Pattern sourceTopicPattern() {
+    synchronized Pattern sourceTopicPattern() {
         if (topicPattern == null) {
             final List<String> allSourceTopics = new ArrayList<>();
             if (!nodeToSourceTopics.isEmpty()) {
@@ -1678,8 +1677,8 @@ public class InternalTopologyBuilder {
     }
 
     public static class TopicsInfo {
-        public final Set<String> sinkTopics;
-        public final Set<String> sourceTopics;
+        final Set<String> sinkTopics;
+        final Set<String> sourceTopics;
         public final Map<String, InternalTopicConfig> stateChangelogTopics;
         public final Map<String, InternalTopicConfig> repartitionSourceTopics;
 
@@ -1868,7 +1867,7 @@ public class InternalTopologyBuilder {
         }
     }
 
-    public void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
+    void updateSubscribedTopics(final Set<String> topics, final String logPrefix) {
         final SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
         log.debug("{}found {} topics possibly matching regex", logPrefix, topics);
         // update the topic groups with the returned subscription set for regex pattern subscriptions

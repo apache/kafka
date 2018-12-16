@@ -23,7 +23,9 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -133,12 +135,21 @@ public class ProcessorStateManager extends AbstractStateManager {
             restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
             log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
-            final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             new CompositeRestoreListener(stateRestoreCallback),
-                                                             checkpointableOffsets.get(storePartition),
-                                                             offsetLimit(storePartition),
-                                                             store.persistent(),
-                                                             storeName);
+
+            final StateStore stateStore =
+                store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
+            final RecordConverter recordConverter =
+                stateStore instanceof RecordConverter ? (RecordConverter) stateStore : new DefaultRecordConverter();
+
+            final StateRestorer restorer = new StateRestorer(
+                storePartition,
+                new CompositeRestoreListener(stateRestoreCallback),
+                checkpointableOffsets.get(storePartition),
+                offsetLimit(storePartition),
+                store.persistent(),
+                storeName,
+                recordConverter
+            );
 
             changelogReader.register(restorer);
         }

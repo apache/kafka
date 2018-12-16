@@ -18,13 +18,15 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 
 import java.util.HashMap;
 import java.util.Map;
 
 public class KTableValueGetterStub<K, V> implements KTableValueGetter<K, V> {
 
-    private final Map<K, V> data = new HashMap<>();
+    private final Map<K, ValueAndTimestamp<V>> data = new HashMap<>();
 
     @Override
     public void init(final ProcessorContext context) {
@@ -32,12 +34,12 @@ public class KTableValueGetterStub<K, V> implements KTableValueGetter<K, V> {
     }
 
     @Override
-    public V get(final K key) {
+    public ValueAndTimestamp<V> get(final K key) {
         return data.get(key);
     }
 
-    public void put(final K key, final V value) {
-        data.put(key, value);
+    public void put(final K key, final V value, final long timestamp) {
+        data.put(key, new ValueAndTimestampImpl<>(value, timestamp));
     }
 
     public void remove(final K key) {

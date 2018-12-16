@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -27,10 +27,13 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.time.Duration;
 import java.util.List;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
 
+    private final static To SEND_TO_ALL = To.all();
+    private final ToInternal toInternal = new ToInternal();
 
     public GlobalProcessorContextImpl(final StreamsConfig config,
                                       final StateManager stateMgr,
@@ -47,23 +50,48 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
+        forward(key, value, SEND_TO_ALL);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public <K, V> void forward(final K key, final V value, final To to) {
+        toInternal.update(to);
+        if (toInternal.hasTimestamp()) {
+            recordContext.setTimestamp(toInternal.timestamp());
+        }
         final ProcessorNode previousNode = currentNode();
         try {
-            for (final ProcessorNode child : (List<ProcessorNode<K, V>>) currentNode().children()) {
-                setCurrentNode(child);
-                child.process(key, value);
+            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+            final String sendTo = toInternal.child();
+            if (sendTo != null) {
+                final ProcessorNode child = currentNode().getChild(sendTo);
+                if (child == null) {
+                    throw new StreamsException("Unknown downstream node: " + sendTo + " either does not exist or is not" +
+                        " connected to this processor.");
+                }
+                forward(child, key, value);
+            } else {
+                if (children.size() == 1) {
+                    final ProcessorNode child = children.get(0);
+                    forward(child, key, value);
+                } else {
+                    for (final ProcessorNode child : children) {
+                        forward(child, key, value);
+                    }
+                }
             }
         } finally {
             setCurrentNode(previousNode);
         }
     }
 
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
+    @SuppressWarnings("unchecked")
+    private <K, V> void forward(final ProcessorNode child,
+                                final K key,
+                                final V value) {
+        setCurrentNode(child);
+        child.process(key, value);
     }
 
     /**

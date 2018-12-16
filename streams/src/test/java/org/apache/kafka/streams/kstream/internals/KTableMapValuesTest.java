@@ -82,7 +82,10 @@ public class KTableMapValuesTest {
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
-        final KTable<String, Integer> table2 = table1.mapValues(value -> value.charAt(0) - 48, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName").withValueSerde(Serdes.Integer()));
+        final KTable<String, Integer> table2 = table1.mapValues(
+            value -> value.charAt(0) - 48,
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName")
+                .withValueSerde(Serdes.Integer()));
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
@@ -115,44 +118,44 @@ public class KTableMapValuesTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
             driver.pipeInput(recordFactory.create(topic1, "C", "01"));
 
-            assertEquals(new Integer(1), getter2.get("A"));
-            assertEquals(new Integer(1), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(1), getter2.get("A").value());
+            assertEquals(new Integer(1), getter2.get("B").value());
+            assertEquals(new Integer(1), getter2.get("C").value());
 
-            assertEquals(new Integer(-1), getter3.get("A"));
-            assertEquals(new Integer(-1), getter3.get("B"));
-            assertEquals(new Integer(-1), getter3.get("C"));
+            assertEquals(new Integer(-1), getter3.get("A").value());
+            assertEquals(new Integer(-1), getter3.get("B").value());
+            assertEquals(new Integer(-1), getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02"));
             driver.pipeInput(recordFactory.create(topic1, "B", "02"));
 
-            assertEquals(new Integer(2), getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(2), getter2.get("A").value());
+            assertEquals(new Integer(2), getter2.get("B").value());
+            assertEquals(new Integer(1), getter2.get("C").value());
 
-            assertEquals(new Integer(-2), getter3.get("A"));
-            assertEquals(new Integer(-2), getter3.get("B"));
-            assertEquals(new Integer(-1), getter3.get("C"));
+            assertEquals(new Integer(-2), getter3.get("A").value());
+            assertEquals(new Integer(-2), getter3.get("B").value());
+            assertEquals(new Integer(-1), getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03"));
 
-            assertEquals(new Integer(3), getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(3), getter2.get("A").value());
+            assertEquals(new Integer(2), getter2.get("B").value());
+            assertEquals(new Integer(1), getter2.get("C").value());
 
-            assertEquals(new Integer(-3), getter3.get("A"));
-            assertEquals(new Integer(-2), getter3.get("B"));
-            assertEquals(new Integer(-1), getter3.get("C"));
+            assertEquals(new Integer(-3), getter3.get("A").value());
+            assertEquals(new Integer(-2), getter3.get("B").value());
+            assertEquals(new Integer(-1), getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
 
             assertNull(getter2.get("A"));
-            assertEquals(new Integer(2), getter2.get("B"));
-            assertEquals(new Integer(1), getter2.get("C"));
+            assertEquals(new Integer(2), getter2.get("B").value());
+            assertEquals(new Integer(1), getter2.get("C").value());
 
             assertNull(getter3.get("A"));
-            assertEquals(new Integer(-2), getter3.get("B"));
-            assertEquals(new Integer(-1), getter3.get("C"));
+            assertEquals(new Integer(-2), getter3.get("B").value());
+            assertEquals(new Integer(-1), getter3.get("C").value());
         }
     }
 

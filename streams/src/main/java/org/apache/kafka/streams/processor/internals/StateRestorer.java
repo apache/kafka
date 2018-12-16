@@ -19,7 +19,9 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.state.RecordConverter;
 
+import java.util.ArrayList;
 import java.util.Collection;
 
 public class StateRestorer {
@@ -31,6 +33,7 @@ public class StateRestorer {
     private final String storeName;
     private final TopicPartition partition;
     private final CompositeRestoreListener compositeRestoreListener;
+    private final RecordConverter recordConverter;
 
     private long checkpointOffset;
     private long restoredOffset;
@@ -42,13 +45,15 @@ public class StateRestorer {
                   final Long checkpoint,
                   final long offsetLimit,
                   final boolean persistent,
-                  final String storeName) {
+                  final String storeName,
+                  final RecordConverter recordConverter) {
         this.partition = partition;
         this.compositeRestoreListener = compositeRestoreListener;
         this.checkpointOffset = checkpoint == null ? NO_CHECKPOINT : checkpoint;
         this.offsetLimit = offsetLimit;
         this.persistent = persistent;
         this.storeName = storeName;
+        this.recordConverter = recordConverter;
     }
 
     public TopicPartition partition() {
@@ -80,7 +85,11 @@ public class StateRestorer {
     }
 
     void restore(final Collection<ConsumerRecord<byte[], byte[]>> records) {
-        compositeRestoreListener.restoreBatch(records);
+        final Collection<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(records.size());
+        for (final ConsumerRecord<byte[], byte[]> record : records) {
+            convertedRecords.add(recordConverter.convert(record));
+        }
+        compositeRestoreListener.restoreBatch(convertedRecords);
     }
 
     boolean isPersistent() {

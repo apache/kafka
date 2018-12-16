@@ -20,7 +20,10 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -85,19 +88,22 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
             final R newValue;
             R oldValue = null;
+            long resultTimestamp = context().timestamp();
 
-            final V2 value2 = valueGetter.get(key);
-            if (value2 == null) {
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.get(key);
+            if (valueAndTimestamp2 == null) {
                 return;
             }
 
+            final V2 value2 = valueAndTimestamp2.value();
             newValue = joiner.apply(change.newValue, value2);
+            resultTimestamp = Math.max(resultTimestamp, valueAndTimestamp2.timestamp());
 
             if (sendOldValues) {
                 oldValue = joiner.apply(change.oldValue, value2);
             }
 
-            context().forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(resultTimestamp));
         }
 
         @Override
@@ -124,12 +130,22 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
 
         @Override
-        public R get(final K key) {
-            final V2 value2 = valueGetter2.get(key);
+        public ValueAndTimestamp<R> get(final K key) {
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
 
-            if (value2 != null) {
-                final V1 value1 = valueGetter1.get(key);
-                return joiner.apply(value1, value2);
+            if (valueAndTimestamp2 != null) {
+                long resultTimestamp = valueAndTimestamp2.timestamp();
+                final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
+                final V1 value1;
+                if (valueAndTimestamp1 != null) {
+                    value1 = valueAndTimestamp1.value();
+                    resultTimestamp = Math.max(resultTimestamp, valueAndTimestamp1.timestamp());
+                } else {
+                    value1 = null;
+                }
+
+                final R joinResult = joiner.apply(value1, valueAndTimestamp2.value());
+                return joinResult == null ? null : new ValueAndTimestampImpl<>(joinResult, resultTimestamp);
             } else {
                 return null;
             }

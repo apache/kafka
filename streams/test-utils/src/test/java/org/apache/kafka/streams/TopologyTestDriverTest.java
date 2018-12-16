@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.io.File;
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -46,6 +44,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -57,6 +56,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -118,8 +119,6 @@ public class TopologyTestDriverTest {
         new StringSerializer(),
         new LongSerializer());
 
-    private final boolean eosEnabled;
-
     @Parameterized.Parameters(name = "Eos enabled = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
@@ -130,7 +129,6 @@ public class TopologyTestDriverTest {
     }
 
     public TopologyTestDriverTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
         if (eosEnabled) {
             config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }
@@ -977,13 +975,13 @@ public class TopologyTestDriverTest {
             Consumed.with(Serdes.String(), Serdes.String()),
             Materialized.as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
-            final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
+            final KeyValueWithTimestampStore<String, String> globalStore = testDriver.getKeyValueWithTimestampStore("globalStore");
             Assert.assertNotNull(globalStore);
             Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
             final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
-            Assert.assertEquals("value1", globalStore.get("k1"));
+            Assert.assertEquals("value1", globalStore.get("k1").value());
         }
     }
 

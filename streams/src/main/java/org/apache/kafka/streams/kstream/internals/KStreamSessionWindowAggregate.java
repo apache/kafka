@@ -32,6 +32,8 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -184,7 +186,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         @Override
-        public Agg get(final Windowed<K> key) {
+        public ValueAndTimestamp<Agg> get(final Windowed<K> key) {
             try (final KeyValueIterator<Windowed<K>, Agg> iter = store.findSessions(key.key(), key.window().end(), key.window().end())) {
                 if (!iter.hasNext()) {
                     return null;
@@ -193,7 +195,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 if (iter.hasNext()) {
                     throw new ProcessorStateException(String.format("Iterator for key [%s] on session store has more than one value", key));
                 }
-                return value;
+                return new ValueAndTimestampImpl<>(value, 0); // TODO: return correct timestamp
             }
         }
 

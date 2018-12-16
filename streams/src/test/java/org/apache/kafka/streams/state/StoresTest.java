@@ -17,19 +17,22 @@
 package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.KeyValueKeyValueWithTimestampProxyStore;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
+import org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStore;
 import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
+import org.apache.kafka.streams.state.internals.RocksDBWithTimestampStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
-import static org.hamcrest.core.IsNot.not;
 
 public class StoresTest {
 
@@ -117,6 +120,13 @@ public class StoresTest {
     }
 
     @Test
+    public void shouldCreateRocksDbWithTimestampStore() {
+        final KeyValueStore<Bytes, byte[]> store = Stores.persistentKeyValueWithTimestampStore("store").get();
+        assertThat(store, instanceOf(RocksDBWithTimestampStore.class));
+        assertThat(store, instanceOf(RecordConverter.class));
+    }
+
+    @Test
     public void shouldCreateRocksDbWindowStore() {
         assertThat(Stores.persistentWindowStore("store", ofMillis(1L), ofMillis(1L), false).get(), instanceOf(RocksDBWindowStore.class));
     }
@@ -127,23 +137,43 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldBuildWindowStore() {
-        final WindowStore<String, String> store = Stores.windowStoreBuilder(
-            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
-            Serdes.String(),
-            Serdes.String()
-        ).build();
-        assertThat(store, not(nullValue()));
-    }
-
-    @Test
     public void shouldBuildKeyValueStore() {
         final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
             Stores.persistentKeyValueStore("name"),
             Serdes.String(),
             Serdes.String()
         ).build();
-        assertThat(store, not(nullValue()));
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(RocksDBStore.class));
+    }
+
+    @Test
+    public void shouldBuildKeyValueWithTimestampStore() {
+        final KeyValueWithTimestampStore<String, String> store = Stores.keyValueWithTimestampStoreBuilder(
+            Stores.persistentKeyValueWithTimestampStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(RocksDBWithTimestampStore.class));
+    }
+
+    @Test
+    public void shouldWrapKeyValueStoreWithKeyValueKeyValueWithTimestampProxyStore() {
+        final KeyValueWithTimestampStore<String, String> store = Stores.keyValueWithTimestampStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(KeyValueKeyValueWithTimestampProxyStore.class));
+    }
+
+    @Test
+    public void shouldBuildWindowStore() {
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(RocksDBSegmentedBytesStore.class));
     }
 
     @Test
@@ -153,6 +183,6 @@ public class StoresTest {
             Serdes.String(),
             Serdes.String()
         ).build();
-        assertThat(store, not(nullValue()));
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(RocksDBSegmentedBytesStore.class));
     }
 }

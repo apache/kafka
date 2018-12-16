@@ -132,9 +132,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public V get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.get(Bytes.wrap(serdes.rawKey(key)))), getTime);
+                return measureLatency(() -> outerValue(inner.get(keyBytes(key))), getTime);
             } else {
-                return outerValue(inner.get(Bytes.wrap(serdes.rawKey(key))));
+                return outerValue(inner.get(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -148,11 +148,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         try {
             if (putTime.shouldRecord()) {
                 measureLatency(() -> {
-                    inner.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
+                    inner.put(keyBytes(key), serdes.rawValue(value));
                     return null;
                 }, putTime);
             } else {
-                inner.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
+                inner.put(keyBytes(key), serdes.rawValue(value));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -165,10 +165,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
                          final V value) {
         if (putIfAbsentTime.shouldRecord()) {
             return measureLatency(
-                () -> outerValue(inner.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value))),
+                () -> outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value))),
                 putIfAbsentTime);
         } else {
-            return outerValue(inner.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value)));
+            return outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value)));
         }
     }
 
@@ -190,9 +190,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public V delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.delete(Bytes.wrap(serdes.rawKey(key)))), deleteTime);
+                return measureLatency(() -> outerValue(inner.delete(keyBytes(key))), deleteTime);
             } else {
-                return outerValue(inner.delete(Bytes.wrap(serdes.rawKey(key))));
+                return outerValue(inner.delete(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -239,6 +239,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         } finally {
             metrics.recordLatency(sensor, startNs, time.nanoseconds());
         }
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
     }
 
     private V outerValue(final byte[] value) {

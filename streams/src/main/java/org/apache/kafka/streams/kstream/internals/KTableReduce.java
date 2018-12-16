@@ -21,7 +21,8 @@ import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -49,14 +50,14 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
 
-        private KeyValueStore<K, V> store;
+        private KeyValueWithTimestampStore<K, V> store;
         private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            store = (KeyValueWithTimestampStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
@@ -70,15 +71,25 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                 throw new StreamsException("Record key for KTable reduce operator with state " + storeName + " should not be null.");
             }
 
-            final V oldAgg = store.get(key);
+            final ValueAndTimestamp<V> oldAggWithTimestamp = store.get(key);
+            final V oldAgg;
+            long resultTimestamp;
+            if (oldAggWithTimestamp != null) {
+                oldAgg = oldAggWithTimestamp.value();
+                resultTimestamp = oldAggWithTimestamp.timestamp();
+            } else {
+                oldAgg = null;
+                resultTimestamp = context().timestamp();
+            }
             V newAgg = oldAgg;
 
             // first try to add the new value
             if (value.newValue != null) {
-                if (newAgg == null) {
+                if (oldAgg == null) {
                     newAgg = value.newValue;
                 } else {
-                    newAgg = addReducer.apply(newAgg, value.newValue);
+                    newAgg = addReducer.apply(oldAgg, value.newValue);
+                    resultTimestamp = Math.max(resultTimestamp, context().timestamp());
                 }
             }
 
@@ -88,8 +99,8 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             // update the store with the new value
-            store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
+            store.put(key, newAgg, resultTimestamp);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, resultTimestamp);
         }
     }
 

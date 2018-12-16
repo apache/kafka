@@ -20,10 +20,11 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
@@ -86,8 +87,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                                        joinThisStoreNames);
 
         if (materializedInternal != null) {
-            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
-                = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
+            final StoreBuilder<KeyValueWithTimestampStore<K, VR>> storeBuilder
+                = new KeyValueWithTimestampStoreMaterializer<>(materializedInternal).materialize();
             topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
         }
     }

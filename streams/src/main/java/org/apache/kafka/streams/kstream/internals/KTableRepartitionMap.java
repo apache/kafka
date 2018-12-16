@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 
 /**
  * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
@@ -112,8 +114,11 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         }
 
         @Override
-        public KeyValue<K1, V1> get(final K key) {
-            return mapper.apply(key, parentGetter.get(key));
+        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
+            final ValueAndTimestamp<V> parentValueAndTimestamp = parentGetter.get(key);
+            final V parentValue = parentValueAndTimestamp == null ? null : parentValueAndTimestamp.value();
+            final KeyValue<K1, V1> result = mapper.apply(key, parentValue);
+            return result == null ? null : new ValueAndTimestampImpl<>(result, parentValueAndTimestamp.timestamp()); // this is a potential NPE -- if `parentValueAndTimestamp == null` we could also directly return `null`, but this would be a semantic change
         }
 
         @Override

@@ -42,7 +42,7 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
-class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
+public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
     private final String name;
     private final Segments segments;

@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -61,6 +57,10 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -644,7 +644,7 @@ public class KafkaStreamsTest {
                                          final boolean isPersistentStore) throws Exception {
         CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
         final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(isPersistentStore ?
-                Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName), 
+                Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName),
                 Serdes.String(), Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)

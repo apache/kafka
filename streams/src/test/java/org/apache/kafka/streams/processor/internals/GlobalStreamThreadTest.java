@@ -31,16 +31,16 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -88,7 +88,7 @@ public class GlobalStreamThreadTest {
             );
 
         builder.addGlobalStore(
-            new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new KeyValueWithTimestampStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
             null,
             null,
@@ -210,12 +210,7 @@ public class GlobalStreamThreadTest {
     public void shouldTransitionToRunningOnStart() throws InterruptedException {
         initializeConsumer();
         globalStreamThread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+        TestUtils.waitForCondition(() -> globalStreamThread.state() == RUNNING, 10 * 1000, "Thread never started.");
         globalStreamThread.shutdown();
     }
 
@@ -223,22 +218,12 @@ public class GlobalStreamThreadTest {
     public void shouldDieOnInvalidOffsetException() throws Exception {
         initializeConsumer();
         globalStreamThread.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == RUNNING;
-            }
-        }, 10 * 1000, "Thread never started.");
+        TestUtils.waitForCondition(() -> globalStreamThread.state() == RUNNING, 10 * 1000, "Thread never started.");
 
         mockConsumer.updateEndOffsets(Collections.singletonMap(topicPartition, 1L));
         mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return mockConsumer.position(topicPartition) == 1L;
-            }
-        }, 10 * 1000, "Input record never consumed");
+        TestUtils.waitForCondition(() -> mockConsumer.position(topicPartition) == 1L, 10 * 1000, "Input record never consumed");
 
         mockConsumer.setException(new InvalidOffsetException("Try Again!") {
             @Override
@@ -247,14 +232,10 @@ public class GlobalStreamThreadTest {
             }
         });
         // feed first record for recovery
-        mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), "V1".getBytes()));
+        final byte[] valueAndTimestamp = ByteBuffer.allocate(10).putLong(0L).put("V1".getBytes()).array();
+        mockConsumer.addRecord(new ConsumerRecord<>(GLOBAL_STORE_TOPIC_NAME, 0, 0L, "K1".getBytes(), valueAndTimestamp));
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return globalStreamThread.state() == DEAD;
-            }
-        }, 10 * 1000, "GlobalStreamThread should have died.");
+        TestUtils.waitForCondition(() -> globalStreamThread.state() == DEAD, 10 * 1000, "GlobalStreamThread should have died.");
     }
 
     private void initializeConsumer() {

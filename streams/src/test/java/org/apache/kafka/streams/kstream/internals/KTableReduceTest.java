@@ -19,7 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueWithTimestampStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Test;
 
@@ -45,19 +45,19 @@ public class KTableReduceTest {
             ).get();
 
 
-        final InMemoryKeyValueStore<String, Set<String>> myStore =
-            new InMemoryKeyValueStore<>("myStore", null, null);
+        final InMemoryKeyValueWithTimestampStore<String, Set<String>> myStore =
+            new InMemoryKeyValueWithTimestampStore<>("myStore", null, null);
 
         context.register(myStore, null);
         reduceProcessor.init(context);
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));
 
         reduceProcessor.process("A", new Change<>(singleton("a"), null));
-        assertEquals(singleton("a"), myStore.get("A"));
+        assertEquals(singleton("a"), myStore.get("A").value());
         reduceProcessor.process("A", new Change<>(singleton("b"), singleton("a")));
-        assertEquals(singleton("b"), myStore.get("A"));
+        assertEquals(singleton("b"), myStore.get("A").value());
         reduceProcessor.process("A", new Change<>(null, singleton("b")));
-        assertEquals(emptySet(), myStore.get("A"));
+        assertEquals(emptySet(), myStore.get("A").value());
     }
 
     private Set<String> differenceNotNullArgs(final Set<String> left, final Set<String> right) {

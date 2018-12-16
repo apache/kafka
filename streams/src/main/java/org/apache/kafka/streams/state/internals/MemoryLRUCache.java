@@ -43,11 +43,10 @@ import java.util.Objects;
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
-
         void apply(K key, V value);
     }
-    private final Serde<K> keySerde;
 
+    private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final String name;
     protected final Map<K, V> map;
@@ -82,14 +81,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
-    }
-
-    MemoryLRUCache<K, V> whenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
+    void whenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
-
-        return this;
     }
 
     @Override

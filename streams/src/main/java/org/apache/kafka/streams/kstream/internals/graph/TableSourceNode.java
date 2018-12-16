@@ -20,10 +20,11 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Collections;
@@ -39,13 +40,13 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     private final String sourceName;
     private final boolean isGlobalKTable;
 
-    TableSourceNode(final String nodeName,
-                    final String sourceName,
-                    final String topic,
-                    final ConsumedInternal<K, V> consumedInternal,
-                    final MaterializedInternal<K, V, ?> materializedInternal,
-                    final ProcessorParameters<K, V> processorParameters,
-                    final boolean isGlobalKTable) {
+    private TableSourceNode(final String nodeName,
+                            final String sourceName,
+                            final String topic,
+                            final ConsumedInternal<K, V> consumedInternal,
+                            final MaterializedInternal<K, V, ?> materializedInternal,
+                            final ProcessorParameters<K, V> processorParameters,
+                            final boolean isGlobalKTable) {
 
         super(nodeName,
               Collections.singletonList(topic),
@@ -78,8 +79,8 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
         // TODO: we assume source KTables can only be key-value stores for now.
         // should be expanded for other types of stores as well.
-        final StoreBuilder<KeyValueStore<K, V>> storeBuilder =
-            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreBuilder<KeyValueWithTimestampStore<K, V>> storeBuilder =
+            new KeyValueWithTimestampStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
 
         if (isGlobalKTable) {
             topologyBuilder.addGlobalStore(storeBuilder,

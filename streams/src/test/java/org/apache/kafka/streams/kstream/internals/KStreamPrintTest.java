@@ -25,7 +25,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.ByteArrayOutputStream;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 
@@ -34,23 +34,14 @@ import static org.junit.Assert.assertEquals;
 public class KStreamPrintTest {
 
     private ByteArrayOutputStream byteOutStream;
-
-    private KeyValueMapper<Integer, String, String> mapper;
-    private KStreamPrint kStreamPrint;
     private Processor printProcessor;
 
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         byteOutStream = new ByteArrayOutputStream();
 
-        mapper = new KeyValueMapper<Integer, String, String>() {
-            @Override
-            public String apply(final Integer key, final String value) {
-                return String.format("%d, %s", key, value);
-            }
-        };
-
-        kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(byteOutStream, mapper, "test-stream"));
+        final KeyValueMapper<Integer, String, String> mapper = (key, value) -> String.format("%d, %s", key, value);
+        final KStreamPrint kStreamPrint = new KStreamPrint<>(new PrintForeachAction<>(byteOutStream, mapper, "test-stream"));
 
         printProcessor = kStreamPrint.get();
         final ProcessorContext processorContext = EasyMock.createNiceMock(ProcessorContext.class);
@@ -76,7 +67,7 @@ public class KStreamPrintTest {
 
     private void assertFlushData(final String[] expectedResult, final ByteArrayOutputStream byteOutStream) {
 
-        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), Charset.forName("UTF-8")).split("\\r*\\n");
+        final String[] flushOutDatas = new String(byteOutStream.toByteArray(), StandardCharsets.UTF_8).split("\\r*\\n");
         for (int i = 0; i < flushOutDatas.length; i++) {
             assertEquals(expectedResult[i], flushOutDatas[i]);
         }

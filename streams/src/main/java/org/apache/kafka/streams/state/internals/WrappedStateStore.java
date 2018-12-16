@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.RecordConverter;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
@@ -38,7 +40,7 @@ public interface WrappedStateStore extends StateStore {
      */
     StateStore wrappedStore();
 
-    abstract class AbstractStateStore implements WrappedStateStore {
+    abstract class AbstractStateStore implements WrappedStateStore, RecordConverter {
         final StateStore innerState;
 
         protected AbstractStateStore(final StateStore inner) {
@@ -94,5 +96,11 @@ public interface WrappedStateStore extends StateStore {
         public StateStore wrappedStore() {
             return innerState;
         }
+
+        @Override
+        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
+            return ((RecordConverter) innerState).convert(record);
+        }
+
     }
 }

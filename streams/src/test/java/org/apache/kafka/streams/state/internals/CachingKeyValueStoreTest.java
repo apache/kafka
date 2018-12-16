@@ -340,7 +340,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final Map<K, Change<V>> forwarded = new HashMap<>();
 
         @Override
-        public void apply(final K key, final V newValue, final V oldValue) {
+        public void apply(final K key, final V newValue, final V oldValue, final long timestamp) {
             forwarded.put(key, new Change<>(newValue, oldValue));
         }
     }

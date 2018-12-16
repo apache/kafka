@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -66,7 +66,8 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
         final boolean shouldMaterialize = materializedInternal != null && materializedInternal.queryableStoreName() != null;
         if (shouldMaterialize) {
             // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
+            topologyBuilder.addStateStore(new KeyValueWithTimestampStoreMaterializer<>(
+                (MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
         }
     }
 }

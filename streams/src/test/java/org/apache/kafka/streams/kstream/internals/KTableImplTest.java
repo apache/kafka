@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -96,21 +95,11 @@ public class KTableImplTest {
         final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table1.toStream().process(supplier);
 
-        final KTable<String, Integer> table2 = table1.mapValues(new ValueMapper<String, Integer>() {
-            @Override
-            public Integer apply(final String value) {
-                return new Integer(value);
-            }
-        });
+        final KTable<String, Integer> table2 = table1.mapValues(Integer::new);
 
         table2.toStream().process(supplier);
 
-        final KTable<String, Integer> table3 = table2.filter(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(final String key, final Integer value) {
-                return (value % 2) == 0;
-            }
-        });
+        final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);
 
         table3.toStream().process(supplier);
 
@@ -180,23 +169,23 @@ public class KTableImplTest {
         assertEquals(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
         assertEquals(((AbstractStream) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
 
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).keySerde(), null);
-        assertEquals(((AbstractStream) table1.groupBy(KeyValue::new)).valueSerde(), null);
+        assertNull(((AbstractStream) table1.groupBy(KeyValue::new)).keySerde());
+        assertNull(((AbstractStream) table1.groupBy(KeyValue::new)).valueSerde());
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).keySerde(), mySerde);
         assertEquals(((AbstractStream) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) table1.join(table1, joiner)).keySerde(), consumedInternal.keySerde());
-        assertEquals(((AbstractStream) table1.join(table1, joiner)).valueSerde(), null);
+        assertNull(((AbstractStream) table1.join(table1, joiner)).valueSerde());
         assertEquals(((AbstractStream) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
         assertEquals(((AbstractStream) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) table1.leftJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
-        assertEquals(((AbstractStream) table1.leftJoin(table1, joiner)).valueSerde(), null);
+        assertNull(((AbstractStream) table1.leftJoin(table1, joiner)).valueSerde());
         assertEquals(((AbstractStream) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
         assertEquals(((AbstractStream) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
 
         assertEquals(((AbstractStream) table1.outerJoin(table1, joiner)).keySerde(), consumedInternal.keySerde());
-        assertEquals(((AbstractStream) table1.outerJoin(table1, joiner)).valueSerde(), null);
+        assertNull(((AbstractStream) table1.outerJoin(table1, joiner)).valueSerde());
         assertEquals(((AbstractStream) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(), mySerde);
         assertEquals(((AbstractStream) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(), mySerde);
     }
@@ -212,20 +201,8 @@ public class KTableImplTest {
                 (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
-                new ValueMapper<String, Integer>() {
-                    @Override
-                    public Integer apply(final String value) {
-                        return new Integer(value);
-                    }
-                });
-        table1Mapped.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(final String key, final Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
+        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertEquals(0, driver.getAllStateStores().size());
@@ -244,27 +221,10 @@ public class KTableImplTest {
         final KTableImpl<String, String, String> table2 =
                 (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(
-                new ValueMapper<String, Integer>() {
-                    @Override
-                    public Integer apply(final String value) {
-                        return new Integer(value);
-                    }
-                });
+        final KTableImpl<String, String, Integer> table1Mapped = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
         final KTableImpl<String, Integer, Integer> table1MappedFiltered = (KTableImpl<String, Integer, Integer>) table1Mapped.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(final String key, final Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-        table2.join(table1MappedFiltered,
-                new ValueJoiner<String, Integer, String>() {
-                    @Override
-                    public String apply(final String v1, final Integer v2) {
-                        return v1 + v2;
-                    }
-                });
+            (key, value) -> (value % 2) == 0);
+        table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertEquals(2, driver.getAllStateStores().size());
@@ -298,12 +258,11 @@ public class KTableImplTest {
                                                                            .withValueSerde(Serdes.String())
                 );
 
-        table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result1"));
+        table1.groupBy(MockMapper.noOpKeyValueMapper())
+            .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.as("mock-result1"));
 
-
-        table1.groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("mock-result2"));
+        table1.groupBy(MockMapper.noOpKeyValueMapper())
+            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.as("mock-result2"));
 
         final Topology topology = builder.build();
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
@@ -394,22 +353,12 @@ public class KTableImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnFilterWhenMaterializedIsNull() {
-        table.filter(new Predicate<String, String>() {
-            @Override
-            public boolean test(final String key, final String value) {
-                return false;
-            }
-        }, (Materialized) null);
+        table.filter((key, value) -> false, (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnFilterNotWhenMaterializedIsNull() {
-        table.filterNot(new Predicate<String, String>() {
-            @Override
-            public boolean test(final String key, final String value) {
-                return false;
-            }
-        }, (Materialized) null);
+        table.filterNot((key, value) -> false, (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)

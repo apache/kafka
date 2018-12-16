@@ -22,7 +22,9 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +55,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, T> store;
+        private KeyValueWithTimestampStore<K, T> store;
         private StreamsMetricsImpl metrics;
         private TupleForwarder<K, T> tupleForwarder;
 
@@ -62,10 +64,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            store = (KeyValueWithTimestampStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
-
 
         @Override
         public void process(final K key, final V value) {
@@ -79,22 +80,27 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 return;
             }
 
-            T oldAgg = store.get(key);
+            final ValueAndTimestamp<T> oldAggWithTimestamp = store.get(key);
+            final T oldAgg;
+            final long oldTimestamp;
 
-            if (oldAgg == null) {
+            if (oldAggWithTimestamp == null) {
                 oldAgg = initializer.apply();
+                oldTimestamp = -1;
+            } else {
+                oldAgg = oldAggWithTimestamp.value();
+                oldTimestamp = oldAggWithTimestamp.timestamp();
             }
 
-            T newAgg = oldAgg;
-
-            // try to add the new value
-            newAgg = aggregator.apply(key, value, newAgg);
+            final T newAgg = aggregator.apply(key, value, oldAgg);
+            final long newTimestamp = Math.max(oldTimestamp, context().timestamp());
 
             // update the store with the new value
-            store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
+            store.put(key, newAgg, newTimestamp);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
+
 
     @Override
     public KTableValueGetterSupplier<K, T> view() {
@@ -114,16 +120,16 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
     private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
 
-        private KeyValueStore<K, T> store;
+        private ReadOnlyKeyValueStore<K, ValueAndTimestamp<T>> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            store = (ReadOnlyKeyValueStore<K, ValueAndTimestamp<T>>) context.getStateStore(storeName);
         }
 
         @Override
-        public T get(final K key) {
+        public ValueAndTimestamp<T> get(final K key) {
             return store.get(key);
         }
 

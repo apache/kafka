@@ -20,7 +20,9 @@ import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,7 +58,11 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
                             " because the store is not open. The state store may have migrated to another instances.");
                 }
-                stores.add((T) store);
+                if (store instanceof KeyValueWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                    stores.add((T) new ReadOnlyKeyValueStoreFacade((KeyValueWithTimestampStore<Object, Object>) store));
+                } else {
+                    stores.add((T) store);
+                }
             }
         }
         return stores;

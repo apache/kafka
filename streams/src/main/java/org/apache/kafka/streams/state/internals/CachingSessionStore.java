@@ -177,7 +177,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                 final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
                 if (!(newValue == null && oldValue == null)) {
-                    flushListener.apply(key, newValue, oldValue);
+                    flushListener.apply(key, newValue, oldValue, current.timestamp());
                 }
             }
             bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());

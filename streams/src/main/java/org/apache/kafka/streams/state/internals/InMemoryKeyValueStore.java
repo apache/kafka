@@ -47,13 +47,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
 
-        // TODO: when we have serde associated with class types, we can
-        // improve this situation by passing the comparator here.
         this.map = new TreeMap<>();
-    }
-
-    public KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
     }
 
     @Override
@@ -163,10 +157,10 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.open = false;
     }
 
-    private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+    static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<Map.Entry<K, V>> iter;
 
-        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
+        InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
             this.iter = iter;
         }
 

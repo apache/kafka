@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
@@ -222,12 +223,7 @@ public class StreamsBuilderTest {
     public void shouldUseSerdesDefinedInMaterializedToConsumeTable() {
         final Map<Long, String> results = new HashMap<>();
         final String topic = "topic";
-        final ForeachAction<Long, String> action = new ForeachAction<Long, String>() {
-            @Override
-            public void apply(final Long key, final String value) {
-                results.put(key, value);
-            }
-        };
+        final ForeachAction<Long, String> action = results::put;
         builder.table(topic, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("store")
                 .withKeySerde(Serdes.Long())
                 .withValueSerde(Serdes.String()))
@@ -238,9 +234,9 @@ public class StreamsBuilderTest {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
             driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
 
-            final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
+            final KeyValueWithTimestampStore<Long, String> store = driver.getKeyValueWithTimestampStore("store");
+            assertThat(store.get(1L).value(), equalTo("value1"));
+            assertThat(store.get(2L).value(), equalTo("value2"));
             assertThat(results.get(1L), equalTo("value1"));
             assertThat(results.get(2L), equalTo("value2"));
         }
@@ -257,10 +253,10 @@ public class StreamsBuilderTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
             driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
-            final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
+            final KeyValueWithTimestampStore<Long, String> store = driver.getKeyValueWithTimestampStore("store");
 
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
+            assertThat(store.get(1L).value(), equalTo("value1"));
+            assertThat(store.get(2L).value(), equalTo("value2"));
         }
     }
 
@@ -313,13 +309,13 @@ public class StreamsBuilderTest {
     
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() {
-        builder.stream(Collections.<String>emptyList());
+        builder.stream(Collections.emptyList());
         builder.build();
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
-        builder.stream(Arrays.<String>asList(null, null));
+        builder.stream(Arrays.asList(null, null));
         builder.build();
     }
 }

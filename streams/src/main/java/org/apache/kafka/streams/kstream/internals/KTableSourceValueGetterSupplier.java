@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
@@ -38,14 +39,14 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
     private class KTableSourceValueGetter implements KTableValueGetter<K, V> {
 
-        ReadOnlyKeyValueStore<K, V> store = null;
+        ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store = null;
 
         @SuppressWarnings("unchecked")
         public void init(final ProcessorContext context) {
-            store = (ReadOnlyKeyValueStore<K, V>) context.getStateStore(storeName);
+            store = (ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>) context.getStateStore(storeName);
         }
 
-        public V get(final K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
 

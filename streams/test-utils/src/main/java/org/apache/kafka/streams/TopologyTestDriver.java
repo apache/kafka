@@ -61,6 +61,7 @@ import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -183,8 +184,6 @@ public class TopologyTestDriver implements Closeable {
     final StreamTask task;
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
-
-    private final InternalProcessorContext context;
 
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
@@ -353,11 +352,9 @@ public class TopologyTestDriver implements Closeable {
                 metrics.sensor("dummy"));
             task.initializeStateStores();
             task.initializeTopology();
-            context = (InternalProcessorContext) task.context();
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             task = null;
-            context = null;
         }
         eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
     }
@@ -563,6 +560,7 @@ public class TopologyTestDriver implements Closeable {
      * @return all stores my name
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
@@ -586,6 +584,7 @@ public class TopologyTestDriver implements Closeable {
      * @return the state store, or {@code null} if no store has been registered with the given name
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
@@ -620,6 +619,7 @@ public class TopologyTestDriver implements Closeable {
      * @return the key value store, or {@code null} if no {@link KeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
@@ -627,6 +627,27 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link KeyValueWithTimestampStore} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link KeyValueWithTimestampStore} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    public <K, V> KeyValueWithTimestampStore<K, V> getKeyValueWithTimestampStore(final String name) {
+        final StateStore store = getStateStore(name);
+        return store instanceof KeyValueWithTimestampStore ? (KeyValueWithTimestampStore<K, V>) store : null;
     }
 
     /**
@@ -641,7 +662,8 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
-     * @see #getSessionStore(String) (String)
+     * @see #getKeyValueWithTimestampStore(String)
+     * @see #getSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
@@ -661,6 +683,7 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
@@ -689,10 +712,6 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
-    }
-
-    private Producer<byte[], byte[]> get() {
-        return producer;
     }
 
     static class MockTime implements Time {

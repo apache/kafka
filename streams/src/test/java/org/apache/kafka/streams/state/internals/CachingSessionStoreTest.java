@@ -226,7 +226,7 @@ public class CachingSessionStoreTest {
         final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
         final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
         cachingStore.setFlushListener(
-            (key, newValue, oldValue) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
+            (key, newValue, oldValue, timestamp) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
             true
         );
 
@@ -255,7 +255,7 @@ public class CachingSessionStoreTest {
         final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
         final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
         cachingStore.setFlushListener(
-            (key, newValue, oldValue) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
+            (key, newValue, oldValue, timestamp) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
             false
         );
 
@@ -284,7 +284,7 @@ public class CachingSessionStoreTest {
         final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
         final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
         cachingStore.setFlushListener(
-            (key, newValue, oldValue) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
+            (key, newValue, oldValue, timestamp) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
             false
         );
 

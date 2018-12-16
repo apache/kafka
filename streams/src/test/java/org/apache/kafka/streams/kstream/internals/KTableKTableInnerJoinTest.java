@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -347,11 +348,11 @@ public class KTableKTableInnerJoinTest {
     @SafeVarargs
     private final void checkJoinedValues(final KTableValueGetter<Integer, String> getter, final KeyValue<Integer, String>... expected) {
         for (final KeyValue<Integer, String> kv : expected) {
-            final String value = getter.get(kv.key);
+            final ValueAndTimestamp<String> value = getter.get(kv.key);
             if (kv.value == null) {
                 assertNull(value);
             } else {
-                assertEquals(kv.value, value);
+                assertEquals(kv.value, value.value());
             }
         }
     }

@@ -39,8 +39,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -48,7 +48,6 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -67,18 +66,8 @@ public class GlobalKTableIntegrationTest {
 
     private static volatile int testNo = 0;
     private final MockTime mockTime = CLUSTER.time;
-    private final KeyValueMapper<String, Long, Long> keyMapper = new KeyValueMapper<String, Long, Long>() {
-        @Override
-        public Long apply(final String key, final Long value) {
-            return value;
-        }
-    };
-    private final ValueJoiner<Long, String, String> joiner = new ValueJoiner<Long, String, String>() {
-        @Override
-        public String apply(final Long value1, final String value2) {
-            return value1 + "+" + value2;
-        }
-    };
+    private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
+    private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
     private final String globalStore = "globalStore";
     private final Map<String, String> results = new HashMap<>();
     private StreamsBuilder builder;
@@ -91,7 +80,7 @@ public class GlobalKTableIntegrationTest {
     private ForeachAction<String, String> foreachAction;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() throws Exception {
         testNo++;
         builder = new StreamsBuilder();
         createTopics();
@@ -111,16 +100,11 @@ public class GlobalKTableIntegrationTest {
                                                   .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
-        foreachAction = new ForeachAction<String, String>() {
-            @Override
-            public void apply(final String key, final String value) {
-                results.put(key, value);
-            }
-        };
+        foreachAction = results::put;
     }
 
     @After
-    public void whenShuttingDown() throws IOException {
+    public void whenShuttingDown() throws Exception {
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
@@ -142,24 +126,13 @@ public class GlobalKTableIntegrationTest {
         expected.put("d", "4+D");
         expected.put("e", "5+null");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for initial values");
-
+        TestUtils.waitForCondition(() -> results.equals(expected), 30000L, "waiting for initial values");
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return "J".equals(replicatedStore.get(5L));
-            }
-        }, 30000, "waiting for data in replicated store");
+        TestUtils.waitForCondition(() -> "J".equals(replicatedStore.get(5L).value()), 30000, "waiting for data in replicated store");
         produceTopicValues(streamTopic);
 
         expected.put("a", "1+F");
@@ -168,12 +141,7 @@ public class GlobalKTableIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for final values");
+        TestUtils.waitForCondition(() -> results.equals(expected), 30000L, "waiting for final values");
     }
 
     @Test
@@ -190,24 +158,13 @@ public class GlobalKTableIntegrationTest {
         expected.put("c", "3+C");
         expected.put("d", "4+D");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for initial values");
-
+        TestUtils.waitForCondition(() -> results.equals(expected), 30000L, "waiting for initial values");
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.<Long, String>keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return "J".equals(replicatedStore.get(5L));
-            }
-        }, 30000, "waiting for data in replicated store");
+        TestUtils.waitForCondition(() -> "J".equals(replicatedStore.get(5L).value()), 30000, "waiting for data in replicated store");
 
         produceTopicValues(streamTopic);
 
@@ -217,12 +174,7 @@ public class GlobalKTableIntegrationTest {
         expected.put("d", "4+I");
         expected.put("e", "5+J");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return results.equals(expected);
-            }
-        }, 30000L, "waiting for final values");
+        TestUtils.waitForCondition(() -> results.equals(expected), 30000L, "waiting for final values");
     }
 
     @Test
@@ -236,16 +188,16 @@ public class GlobalKTableIntegrationTest {
         produceInitialGlobalTableValues();
 
         startStreams();
-        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
         assertThat(store.approximateNumEntries(), equalTo(4L));
         kafkaStreams.close();
 
         startStreams();
-        store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
         assertThat(store.approximateNumEntries(), equalTo(4L));
     }
 
-    private void createTopics() throws InterruptedException {
+    private void createTopics() throws Exception {
         streamTopic = "stream-" + testNo;
         globalTableTopic = "globalTable-" + testNo;
         CLUSTER.createTopics(streamTopic);

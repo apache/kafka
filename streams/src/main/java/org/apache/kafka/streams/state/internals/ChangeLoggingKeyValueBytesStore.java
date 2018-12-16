@@ -29,8 +29,8 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.List;
 
 public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]> {
-    private final KeyValueStore<Bytes, byte[]> inner;
-    private StoreChangeLogger<Bytes, byte[]> changeLogger;
+    final KeyValueStore<Bytes, byte[]> inner;
+    StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
@@ -45,12 +45,9 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {
-            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {
-                @Override
-                public void apply(final Bytes key, final byte[] value) {
-                    // pass null to indicate removal
-                    changeLogger.logChange(key, null);
-                }
+            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved((key, value) -> {
+                // pass null to indicate removal
+                changeLogger.logChange(key, null);
             });
         }
     }
