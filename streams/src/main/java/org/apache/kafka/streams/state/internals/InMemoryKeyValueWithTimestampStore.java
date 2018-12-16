@@ -22,8 +22,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Iterator;
 import java.util.List;
@@ -31,21 +32,21 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class InMemoryKeyValueWithTimestampStore<K, V> implements KeyValueWithTimestampStore<K, V> {
     private final String name;
     private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final NavigableMap<K, V> map;
+    private final ValueAndTimestampSerde<V> valueAndTimestampSerde;
+    private final NavigableMap<K, ValueAndTimestamp<V>> map;
     private volatile boolean open = false;
 
-    private StateSerdes<K, V> serdes;
+    private StateSerdes<K, ValueAndTimestamp<V>> serdes;
 
-    public InMemoryKeyValueStore(final String name,
-                                 final Serde<K> keySerde,
-                                 final Serde<V> valueSerde) {
+    public InMemoryKeyValueWithTimestampStore(final String name,
+                                              final Serde<K> keySerde,
+                                              final ValueAndTimestampSerde<V> valueAndTimestampSerde) {
         this.name = name;
         this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
+        this.valueAndTimestampSerde = valueAndTimestampSerde;
 
         this.map = new TreeMap<>();
     }
@@ -63,7 +64,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+            valueAndTimestampSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.valueSerde()) : valueAndTimestampSerde);
 
         if (root != null) {
             // register the store
@@ -91,53 +92,71 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(final K key) {
+    public synchronized ValueAndTimestamp<V> get(final K key) {
         return this.map.get(key);
     }
 
     @Override
     public synchronized void put(final K key,
-                                 final V value) {
+                                 final ValueAndTimestamp<V> valueAndTimestamp) {
+        if (valueAndTimestamp == null || valueAndTimestamp.value() == null) {
+            this.map.remove(key);
+        } else {
+            this.map.put(key, valueAndTimestamp);
+        }
+    }
+
+    @Override
+    public synchronized void put(final K key,
+                                 final V value,
+                                 final long timestamp) {
         if (value == null) {
             this.map.remove(key);
         } else {
-            this.map.put(key, value);
+            this.map.put(key, new ValueAndTimestampImpl<>(value, timestamp));
         }
     }
 
     @Override
-    public synchronized V putIfAbsent(final K key,
-                                      final V value) {
-        final V originalValue = get(key);
-        if (originalValue == null) {
-            put(key, value);
+    public synchronized ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                         final ValueAndTimestamp<V> valueAndTimestamp) {
+        final ValueAndTimestamp<V> originalValueAndTimestamp = get(key);
+        if (originalValueAndTimestamp == null) {
+            put(key, valueAndTimestamp);
         }
-        return originalValue;
+        return originalValueAndTimestamp;
     }
 
     @Override
-    public synchronized void putAll(final List<KeyValue<K, V>> entries) {
-        for (final KeyValue<K, V> entry : entries) {
+    public synchronized ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                         final V value,
+                                                         final long timestamp) {
+        return putIfAbsent(key, new ValueAndTimestampImpl<>(value, timestamp));
+    }
+
+    @Override
+    public synchronized void putAll(final List<KeyValue<K, ValueAndTimestamp<V>>> entries) {
+        for (final KeyValue<K, ValueAndTimestamp<V>> entry : entries) {
             put(entry.key, entry.value);
         }
     }
 
     @Override
-    public synchronized V delete(final K key) {
+    public synchronized ValueAndTimestamp<V> delete(final K key) {
         return this.map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(final K from,
-                                                     final K to) {
+    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
+                                                                        final K to) {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> all() {
-        final TreeMap<K, V> copy = new TreeMap<>(this.map);
+    public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> all() {
+        final TreeMap<K, ValueAndTimestamp<V>> copy = new TreeMap<>(this.map);
         return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 

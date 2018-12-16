@@ -31,7 +31,9 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -83,7 +85,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueStore) {
+            if (global instanceof KeyValueWithTimestampStore) {
+                return new KeyValueWithTimestampStoreReadOnlyDecorator((KeyValueWithTimestampStore) global);
+            } else if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
             } else if (global instanceof WindowStore) {
                 return new WindowStoreReadOnlyDecorator((WindowStore) global);
@@ -105,7 +109,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         final StateStore store = stateManager.getStore(name);
-        if (store instanceof KeyValueStore) {
+        if (store instanceof KeyValueWithTimestampStore) {
+            return new KeyValueWithTimestampStoreReadWriteDecorator((KeyValueWithTimestampStore) store);
+        } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator((WindowStore) store);
@@ -295,6 +301,72 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    private static class KeyValueWithTimestampStoreReadOnlyDecorator<K, V>
+        extends StateStoreReadOnlyDecorator<KeyValueWithTimestampStore<K, V>>
+        implements KeyValueWithTimestampStore<K, V> {
+
+        private KeyValueWithTimestampStoreReadOnlyDecorator(final KeyValueWithTimestampStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key) {
+            return getInner().get(key);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
+                                                               final K to) {
+            return getInner().range(from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> all() {
+            return getInner().all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return getInner().approximateNumEntries();
+        }
+
+        @Override
+        public void put(final K key,
+                        final ValueAndTimestamp<V> valueAndTimestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public void put(final K key,
+                        final V value,
+                        final long windowStartTimestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                final ValueAndTimestamp<V> valueAndTimestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                final V value,
+                                                final long timestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public void putAll(final List entries) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> delete(final K key) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+    }
+
     private static class WindowStoreReadOnlyDecorator<K, V>
         extends StateStoreReadOnlyDecorator<WindowStore<K, V>>
         implements WindowStore<K, V> {
@@ -474,6 +546,72 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    private static class KeyValueWithTimestampStoreReadWriteDecorator<K, V>
+        extends StateStoreReadWriteDecorator<KeyValueWithTimestampStore<K, V>>
+        implements KeyValueWithTimestampStore<K, V> {
+
+        private KeyValueWithTimestampStoreReadWriteDecorator(final KeyValueWithTimestampStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(final K key) {
+            return wrapped().get(key);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> range(final K from,
+                                                               final K to) {
+            return wrapped().range(from, to);
+        }
+
+        @Override
+        public KeyValueIterator<K, ValueAndTimestamp<V>> all() {
+            return wrapped().all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return wrapped().approximateNumEntries();
+        }
+
+        @Override
+        public void put(final K key,
+                        final ValueAndTimestamp<V> valueAndTimestamp) {
+            wrapped().put(key, valueAndTimestamp);
+        }
+
+        @Override
+        public void put(final K key,
+                        final V value,
+                        final long timestamp) {
+            wrapped().put(key, value, timestamp);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                final ValueAndTimestamp<V> valueAndTimestamp) {
+            return wrapped().putIfAbsent(key, valueAndTimestamp);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(final K key,
+                                                final V value,
+                                                final long timestamp) {
+            return wrapped().putIfAbsent(key, value, timestamp);
+        }
+
+        @Override
+        public void putAll(final List<KeyValue<K, ValueAndTimestamp<V>>> entries) {
+            wrapped().putAll(entries);
+        }
+
+        @Override
+        public ValueAndTimestamp<V> delete(final K key) {
+            return wrapped().delete(key);
+        }
+    }
+
     private static class WindowStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<WindowStore<K, V>>
         implements WindowStore<K, V> {
@@ -560,7 +698,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void put(final Windowed<K> sessionKey, final AGG aggregate) {
+        public void put(final Windowed<K> sessionKey,
+                        final AGG aggregate) {
             wrapped().put(sessionKey, aggregate);
         }
 
@@ -575,4 +714,5 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(from, to);
         }
     }
+
 }
