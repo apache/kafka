@@ -20,7 +20,10 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
@@ -82,7 +85,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     }
 
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V1> store;
+        private KeyValueStore<K, ValueAndTimestamp<V1>> store;
         private TupleForwarder<K, V1> tupleForwarder;
 
         @SuppressWarnings("unchecked")
@@ -90,7 +93,11 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
+                StateStore store = context.getStateStore(queryableName);
+                if (store instanceof WrappedStateStore) {
+                    store = ((WrappedStateStore) store).wrappedStore();
+                }
+                this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
                 tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context), sendOldValues);
             }
         }
@@ -101,7 +108,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (queryableName != null) {
-                store.put(key, newValue);
+                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
@@ -123,8 +130,11 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
 
         @Override
-        public V1 get(final K key) {
-            return computeValue(key, parentGetter.get(key));
+        public ValueAndTimestamp<V1> get(final K key) {
+            final ValueAndTimestamp<V> parentValueAndTimestamp = parentGetter.get(key);
+            final V parentValue = parentValueAndTimestamp == null ? null : parentValueAndTimestamp.value();
+            final V1 resultValue = computeValue(key, parentValue);
+            return resultValue == null ? null : ValueAndTimestamp.make(resultValue, parentValueAndTimestamp.timestamp());  // this is a potential NPE -- if `parentValueAndTimestamp == null` we could also directly return `null`, but this would be a semantic change
         }
 
 

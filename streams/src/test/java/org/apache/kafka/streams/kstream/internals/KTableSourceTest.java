@@ -115,31 +115,30 @@ public class KTableSourceTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
             driver.pipeInput(recordFactory.create(topic1, "C", "01"));
 
-            assertEquals("01", getter1.get("A"));
-            assertEquals("01", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals("01", getter1.get("A").value());
+            assertEquals("01", getter1.get("B").value());
+            assertEquals("01", getter1.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02"));
             driver.pipeInput(recordFactory.create(topic1, "B", "02"));
 
-            assertEquals("02", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals("02", getter1.get("A").value());
+            assertEquals("02", getter1.get("B").value());
+            assertEquals("01", getter1.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03"));
 
-            assertEquals("03", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals("03", getter1.get("A").value());
+            assertEquals("02", getter1.get("B").value());
+            assertEquals("01", getter1.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
             driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
 
             assertNull(getter1.get("A"));
             assertNull(getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals("01", getter1.get("C").value());
         }
-
     }
 
     @Test

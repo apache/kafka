@@ -20,8 +20,11 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -34,7 +37,8 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private String queryableName;
     private boolean sendOldValues;
 
-    public KTableSource(final String storeName, final String queryableName) {
+    public KTableSource(final String storeName,
+                        final String queryableName) {
         Objects.requireNonNull(storeName, "storeName can't be null");
 
         this.storeName = storeName;
@@ -66,7 +70,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
 
     private class KTableSourceProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, V> store;
+        private KeyValueStore<K, ValueAndTimestamp<V>> store;
         private TupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
 
@@ -76,13 +80,18 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
             if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
+                StateStore store = context.getStateStore(storeName);
+                if (store instanceof WrappedStateStore) {
+                    store = ((WrappedStateStore) store).wrappedStore();
+                }
+                this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
                 tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
             }
         }
 
         @Override
-        public void process(final K key, final V value) {
+        public void process(final K key,
+                            final V value) {
             // if the key is null, then ignore the record
             if (key == null) {
                 LOG.warn(
@@ -94,9 +103,9 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final V oldValue = sendOldValues ? store.get(key) : null;
-                store.put(key, value);
-                tupleForwarder.maybeForward(key, value, oldValue);
+                final ValueAndTimestamp<V> oldValue = sendOldValues ? store.get(key) : null;
+                store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
+                tupleForwarder.maybeForward(key, value, oldValue == null ? null : oldValue.value());
             } else {
                 context().forward(key, new Change<>(value, null));
             }

@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -45,9 +46,9 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 
 public class KGroupedTableImplTest {
 
@@ -220,9 +221,9 @@ public class KGroupedTableImplTest {
         final Map<String, Integer> results = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             assertReduced(results, topic, driver);
-            final KeyValueStore<String, Integer> reduce = driver.getKeyValueStore("reduce");
-            assertThat(reduce.get("A"), equalTo(5));
-            assertThat(reduce.get("B"), equalTo(6));
+            final KeyValueStore<String, ValueAndTimestamp<Integer>> reduce = driver.getKeyValueWithTimestampStore("reduce");
+            assertThat(reduce.get("A").value(), equalTo(5));
+            assertThat(reduce.get("B").value(), equalTo(6));
         }
     }
 
@@ -243,9 +244,9 @@ public class KGroupedTableImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
-            final KeyValueStore<String, Long> counts = driver.getKeyValueStore("count");
-            assertThat(counts.get("1"), equalTo(3L));
-            assertThat(counts.get("2"), equalTo(2L));
+            final KeyValueStore<String, ValueAndTimestamp<Long>> counts = driver.getKeyValueWithTimestampStore("count");
+            assertThat(counts.get("1").value(), equalTo(3L));
+            assertThat(counts.get("2").value(), equalTo(2L));
         }
     }
 
@@ -269,9 +270,9 @@ public class KGroupedTableImplTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
-            final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
-            assertThat(aggregate.get("1"), equalTo("0+1+1+1"));
-            assertThat(aggregate.get("2"), equalTo("0+2+2"));
+            final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getKeyValueWithTimestampStore("aggregate");
+            assertThat(aggregate.get("1").value(), equalTo("0+1+1+1"));
+            assertThat(aggregate.get("2").value(), equalTo("0+2+2"));
         }
     }
 

@@ -21,7 +21,9 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -88,21 +90,23 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
             R newValue = null;
             R oldValue = null;
+            long resultTimestamp = context().timestamp();
 
-            final V2 value2 = valueGetter.get(key);
-            if (value2 == null) {
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.get(key);
+            if (valueAndTimestamp2 == null || valueAndTimestamp2.value() == null) {
                 return;
             }
 
             if (change.newValue != null) {
-                newValue = joiner.apply(change.newValue, value2);
+                newValue = joiner.apply(change.newValue, valueAndTimestamp2.value());
+                resultTimestamp = Math.max(resultTimestamp, valueAndTimestamp2.timestamp());
             }
 
             if (sendOldValues && change.oldValue != null) {
-                oldValue = joiner.apply(change.oldValue, value2);
+                oldValue = joiner.apply(change.oldValue, valueAndTimestamp2.value());
             }
 
-            context().forward(key, new Change<>(newValue, oldValue));
+            context().forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(resultTimestamp));
         }
 
         @Override
@@ -129,14 +133,17 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
 
         @Override
-        public R get(final K key) {
-            final V1 value1 = valueGetter1.get(key);
+        public ValueAndTimestamp<R> get(final K key) {
+            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
 
-            if (value1 != null) {
-                final V2 value2 = valueGetter2.get(keyValueMapper.apply(key, value1));
+            if (valueAndTimestamp1 != null) {
+                final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(keyValueMapper.apply(key, valueAndTimestamp1.value()));
 
-                if (value2 != null) {
-                    return joiner.apply(value1, value2);
+                if (valueAndTimestamp2 != null) {
+                    final R joinResult = joiner.apply(valueAndTimestamp1.value(), valueAndTimestamp2.value());
+                    return ValueAndTimestamp.make(
+                        joinResult,
+                        Math.max(valueAndTimestamp1.timestamp(), valueAndTimestamp2.timestamp()));
                 } else {
                     return null;
                 }

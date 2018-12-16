@@ -36,15 +36,15 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]>, CachedStateStore<K, V> {
 
-    private final KeyValueStore<Bytes, byte[]> underlying;
+    final KeyValueStore<Bytes, byte[]> underlying;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private CacheFlushListener<K, V> flushListener;
-    private boolean sendOldValues;
+    CacheFlushListener<K, V> flushListener;
+    boolean sendOldValues;
     private String cacheName;
     private ThreadCache cache;
     private InternalProcessorContext context;
-    private StateSerdes<K, V> serdes;
+    StateSerdes<K, V> serdes;
     private Thread streamThread;
     private final ReadWriteLock lock = new ReentrantReadWriteLock();
 
@@ -83,8 +83,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
-                                    final InternalProcessorContext context) {
+    void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
+                            final InternalProcessorContext context) {
         final ProcessorRecordContext current = context.recordContext();
         try {
             context.setRecordContext(entry.entry().context());

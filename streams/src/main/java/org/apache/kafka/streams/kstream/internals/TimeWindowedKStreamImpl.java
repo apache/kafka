@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -31,10 +32,13 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
 import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -163,13 +167,13 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
                 if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                           + name + " must be no smaller than its window size plus the grace period."
-                                                           + " Got size=[" + windows.size() + "],"
-                                                           + " grace=[" + windows.gracePeriodMs() + "],"
-                                                           + " retention=[" + retentionPeriod + "]");
+                        + name + " must be no smaller than its window size plus the grace period."
+                        + " Got size=[" + windows.size() + "],"
+                        + " grace=[" + windows.gracePeriodMs() + "],"
+                        + " retention=[" + retentionPeriod + "]");
                 }
 
-                supplier = Stores.persistentWindowStore(
+                supplier = Stores.persistentWindowWithTimestampStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
                     Duration.ofMillis(windows.size()),
@@ -184,10 +188,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
                 if ((windows.size() + windows.gracePeriodMs()) > windows.maintainMs()) {
                     throw new IllegalArgumentException("The retention period of the window store "
-                                                           + name + " must be no smaller than its window size plus the grace period."
-                                                           + " Got size=[" + windows.size() + "],"
-                                                           + " grace=[" + windows.gracePeriodMs() + "],"
-                                                           + " retention=[" + windows.maintainMs() + "]");
+                        + name + " must be no smaller than its window size plus the grace period."
+                        + " Got size=[" + windows.size() + "],"
+                        + " grace=[" + windows.gracePeriodMs() + "],"
+                        + " retention=[" + windows.maintainMs() + "]");
                 }
 
                 supplier = Stores.persistentWindowStore(
@@ -199,11 +203,59 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 );
             }
         }
-        final StoreBuilder<WindowStore<K, VR>> builder = Stores.windowStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
+
+        final WindowBytesStoreSupplier innerSupplier = supplier;
+        final WindowStoreBuilder<K, VR> builder = new WindowStoreBuilder<K, VR>(supplier, null, null, Time.SYSTEM) {
+            StoreBuilder<WindowStore<K, ValueAndTimestamp<VR>>> inner = Stores.windowWithTimestampStoreBuilder(
+                innerSupplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+
+            @Override
+            public WindowStoreBuilder<K, VR> withCachingEnabled() {
+                inner.withCachingEnabled();
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, VR> withCachingDisabled() {
+                inner.withCachingDisabled();
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, VR> withLoggingEnabled(final Map<String, String> config) {
+                inner.withLoggingEnabled(config);
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, VR> withLoggingDisabled() {
+                inner.withLoggingDisabled();
+                return this;
+            }
+
+            @Override
+            public Map<String, String> logConfig() {
+                return inner.logConfig();
+            }
+
+            @Override
+            public boolean loggingEnabled() {
+                return inner.loggingEnabled();
+            }
+
+            @Override
+            public String name() {
+                return inner.name();
+            }
+
+            @Override
+            public WindowStore<K, VR> build() {
+                return new KStreamImpl.WindowStoreFacade<>(inner.build());
+            }
+        };
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

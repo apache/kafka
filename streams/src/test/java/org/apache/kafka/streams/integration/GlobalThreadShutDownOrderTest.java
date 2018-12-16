@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
@@ -34,7 +33,8 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueWithTimestampStoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -93,11 +93,12 @@ public class GlobalThreadShutDownOrderTest {
 
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
 
-        final KeyValueStoreBuilder<String, Long> storeBuilder = new KeyValueStoreBuilder<>(
-            Stores.persistentKeyValueStore(globalStore),
-            Serdes.String(),
-            Serdes.Long(),
-            mockTime);
+        final KeyValueWithTimestampStoreBuilder<String, Long> storeBuilder =
+            new KeyValueWithTimestampStoreBuilder<>(
+                Stores.persistentKeyValueWithTimestampStore(globalStore),
+                Serdes.String(),
+                Serdes.Long(),
+                mockTime);
 
         builder.addGlobalStore(
             storeBuilder,
@@ -167,7 +168,7 @@ public class GlobalThreadShutDownOrderTest {
 
     private class GlobalStoreProcessor extends AbstractProcessor<String, Long> {
 
-        private KeyValueStore<String, Long> store;
+        private KeyValueStore<String, ValueAndTimestamp<Long>> store;
         private final String storeName;
 
         GlobalStoreProcessor(final String storeName) {
@@ -178,7 +179,7 @@ public class GlobalThreadShutDownOrderTest {
         @SuppressWarnings("unchecked")
         public void init(final ProcessorContext context) {
             super.init(context);
-            store = (KeyValueStore<String, Long>) context.getStateStore(storeName);
+            store = (KeyValueStore<String, ValueAndTimestamp<Long>>) context.getStateStore(storeName);
         }
 
         @Override
@@ -193,7 +194,7 @@ public class GlobalThreadShutDownOrderTest {
             for (final String key : keys) {
                 // need to simulate thread slow in closing
                 Utils.sleep(1000);
-                retrievedValuesList.add(store.get(key));
+                retrievedValuesList.add(store.get(key).value());
             }
         }
     }

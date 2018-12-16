@@ -41,15 +41,16 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
     private final WindowStore<Bytes, byte[]> inner;
     private final String metricScope;
     private final Time time;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
     private StreamsMetricsImpl metrics;
     private Sensor putTime;
     private Sensor fetchTime;
     private Sensor flushTime;
-    private StateSerdes<K, V> serdes;
     private ProcessorContext context;
     private String taskName;
+
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
                        final String metricScope,
@@ -64,15 +65,11 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
         this.context = context;
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        initStateStoreSerdes(context);
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
@@ -96,6 +93,14 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore.AbstractStateSto
                 time.nanoseconds()
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStateStoreSerdes(final ProcessorContext context) {
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @Override

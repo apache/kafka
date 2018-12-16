@@ -21,6 +21,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -68,7 +69,13 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
             metrics.skippedRecordsSensor().record();
         } else {
             final K2 mappedKey = keyMapper.apply(key, value);
-            final V2 value2 = mappedKey == null ? null : valueGetter.get(mappedKey);
+            final V2 value2;
+            if (mappedKey != null) {
+                final ValueAndTimestamp<V2> tableValueAndTimestamp = valueGetter.get(mappedKey);
+                value2 = tableValueAndTimestamp == null ? null : tableValueAndTimestamp.value();
+            } else {
+                value2 = null;
+            }
             if (leftJoin || value2 != null) {
                 context().forward(key, joiner.apply(value, value2));
             }

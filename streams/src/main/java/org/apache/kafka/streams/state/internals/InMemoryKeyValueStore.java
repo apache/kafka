@@ -32,13 +32,14 @@ import java.util.NavigableMap;
 import java.util.TreeMap;
 
 public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
-    private final String name;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
     private final NavigableMap<K, V> map;
     private volatile boolean open = false;
 
-    private StateSerdes<K, V> serdes;
+    final String name;
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
+
 
     public InMemoryKeyValueStore(final String name,
                                  final Serde<K> keySerde,
@@ -47,8 +48,6 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
 
-        // TODO: when we have serde associated with class types, we can
-        // improve this situation by passing the comparator here.
         this.map = new TreeMap<>();
     }
 
@@ -58,15 +57,9 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        // construct the serde
-        this.serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-
+        initStateSerdes(context);
         if (root != null) {
             // register the store
             context.register(root, (key, value) -> {
@@ -80,6 +73,14 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
 
         this.open = true;
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStateSerdes(final ProcessorContext context) {
+        this.serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @Override
@@ -159,10 +160,10 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.open = false;
     }
 
-    private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
+    static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
         private final Iterator<Map.Entry<K, V>> iter;
 
-        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
+        InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
             this.iter = iter;
         }
 

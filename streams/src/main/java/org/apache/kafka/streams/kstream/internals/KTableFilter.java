@@ -20,7 +20,10 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
@@ -62,7 +65,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V> store;
+        private KeyValueStore<K, ValueAndTimestamp<V>> store;
         private TupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
@@ -70,7 +73,11 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
+                StateStore store = context.getStateStore(queryableName);
+                if (store instanceof WrappedStateStore) {
+                    store = ((WrappedStateStore) store).wrappedStore();
+                }
+                this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
                 tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
             }
         }
@@ -85,7 +92,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             if (queryableName != null) {
-                store.put(key, newValue);
+                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
@@ -130,8 +137,19 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
 
         @Override
-        public V get(final K key) {
-            return computeValue(key, parentGetter.get(key));
+        public ValueAndTimestamp<V> get(final K key) {
+            final ValueAndTimestamp<V> parentValueAndTimestamp = parentGetter.get(key);
+            final V parentValue;
+            final long parentTimestamp;
+            if (parentValueAndTimestamp != null) {
+                parentValue = parentValueAndTimestamp.value();
+                parentTimestamp = parentValueAndTimestamp.timestamp();
+            } else {
+                parentValue = null;
+                parentTimestamp = -1L;
+            }
+            final V resultValue = computeValue(key, parentValue);
+            return ValueAndTimestamp.make(resultValue, parentTimestamp);
         }
 
         @Override

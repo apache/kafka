@@ -136,30 +136,30 @@ public class KTableFilterTest {
             assertNull(getter2.get("B"));
             assertNull(getter2.get("C"));
 
-            assertEquals(1, (int) getter3.get("A"));
-            assertEquals(1, (int) getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(1, (int) getter3.get("A").value());
+            assertEquals(1, (int) getter3.get("B").value());
+            assertEquals(1, (int) getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", 2));
             driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-            assertEquals(2, (int) getter2.get("A"));
-            assertEquals(2, (int) getter2.get("B"));
+            assertEquals(2, (int) getter2.get("A").value());
+            assertEquals(2, (int) getter2.get("B").value());
             assertNull(getter2.get("C"));
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(1, (int) getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", 3));
 
             assertNull(getter2.get("A"));
-            assertEquals(2, (int) getter2.get("B"));
+            assertEquals(2, (int) getter2.get("B").value());
             assertNull(getter2.get("C"));
 
-            assertEquals(3, (int) getter3.get("A"));
+            assertEquals(3, (int) getter3.get("A").value());
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(1, (int) getter3.get("C").value());
 
             driver.pipeInput(recordFactory.create(topic1, "A", null));
             driver.pipeInput(recordFactory.create(topic1, "B", null));
@@ -170,7 +170,7 @@ public class KTableFilterTest {
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(1, (int) getter3.get("C").value());
         }
     }
 

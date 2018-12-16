@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
@@ -306,9 +307,9 @@ public class StreamsBuilderTest {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
             driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
 
-            final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
+            final KeyValueStore<Long, ValueAndTimestamp<String>> store = driver.getKeyValueWithTimestampStore("store");
+            assertThat(store.get(1L).value(), equalTo("value1"));
+            assertThat(store.get(2L).value(), equalTo("value2"));
             assertThat(results.get(1L), equalTo("value1"));
             assertThat(results.get(2L), equalTo("value2"));
         }
@@ -327,10 +328,10 @@ public class StreamsBuilderTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
             driver.pipeInput(recordFactory.create(topic, 2L, "value2"));
-            final KeyValueStore<Long, String> store = driver.getKeyValueStore("store");
+            final KeyValueStore<Long, ValueAndTimestamp<String>> store = driver.getKeyValueWithTimestampStore("store");
 
-            assertThat(store.get(1L), equalTo("value1"));
-            assertThat(store.get(2L), equalTo("value2"));
+            assertThat(store.get(1L).value(), equalTo("value1"));
+            assertThat(store.get(2L).value(), equalTo("value2"));
         }
     }
 

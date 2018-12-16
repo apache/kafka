@@ -48,9 +48,9 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
 public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
 
     private final KeyValueStore<Bytes, byte[]> inner;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private StateSerdes<K, V> serdes;
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
 
     private final String metricScope;
     protected final Time time;
@@ -78,7 +78,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
@@ -89,10 +88,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
         final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
 
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        initStateSerdes(context);
 
         putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         putIfAbsentTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-if-absent", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
@@ -115,6 +111,14 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         } else {
             inner.init(context, root);
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStateSerdes(final ProcessorContext context) {
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @Override

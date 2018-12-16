@@ -17,10 +17,17 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.SessionWindowedKStreamImpl;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.Task;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -56,7 +63,30 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
                             " because the store is not open. The state store may have migrated to another instances.");
                 }
-                stores.add((T) store);
+                if (store instanceof KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) {
+                    final KeyValueStore innerStore = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+                    if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                        stores.add((T) new ReadOnlyKeyValueStoreFacade(innerStore));
+                    } else {
+                        stores.add((T) innerStore);
+                    }
+                } else if (store instanceof KStreamImpl.WindowStoreFacade) {
+                    final WindowStore innerStore = ((KStreamImpl.WindowStoreFacade) store).inner;
+                    if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                        stores.add((T) new ReadOnlyWindowStoreFacade(innerStore));
+                    } else {
+                        stores.add((T) innerStore);
+                    }
+                } else if (store instanceof SessionWindowedKStreamImpl.SessionStoreFacade) {
+                    final SessionStore innerStore = ((SessionWindowedKStreamImpl.SessionStoreFacade) store).inner;
+                    if (queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+                        stores.add((T) new ReadOnlySessionStoreFacade(innerStore));
+                    } else {
+                        stores.add((T) innerStore);
+                    }
+                } else {
+                    stores.add((T) store);
+                }
             }
         }
         return stores;

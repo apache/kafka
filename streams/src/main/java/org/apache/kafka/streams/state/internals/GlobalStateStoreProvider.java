@@ -17,8 +17,15 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.SessionWindowedKStreamImpl;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
+import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.util.Collections;
 import java.util.List;
@@ -40,6 +47,28 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         }
         if (!store.isOpen()) {
             throw new InvalidStateStoreException("the state store, " + storeName + ", is not open.");
+        }
+
+        if (store instanceof KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) {
+            final KeyValueStore innerStore = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+            if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
+                return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade(innerStore));
+            }
+            return (List<T>) Collections.singletonList(innerStore);
+        }
+        if (store instanceof KStreamImpl.WindowStoreFacade) {
+            final WindowStore innerStore = ((KStreamImpl.WindowStoreFacade) store).inner;
+            if (queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade(innerStore));
+            }
+            return (List<T>) Collections.singletonList(innerStore);
+        }
+        if (store instanceof SessionWindowedKStreamImpl.SessionStoreFacade) {
+            final SessionStore innerStore = ((SessionWindowedKStreamImpl.SessionStoreFacade) store).inner;
+            if (queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+                return (List<T>) Collections.singletonList(new ReadOnlySessionStoreFacade(innerStore));
+            }
+            return (List<T>) Collections.singletonList(innerStore);
         }
         return (List<T>) Collections.singletonList(store);
     }

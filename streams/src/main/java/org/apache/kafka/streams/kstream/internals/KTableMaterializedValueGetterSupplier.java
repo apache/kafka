@@ -18,7 +18,10 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueGetterSupplier<K, V> {
 
@@ -38,16 +41,20 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
     }
 
     private class KTableMaterializedValueGetter implements KTableValueGetter<K, V> {
-        private KeyValueStore<K, V> store;
+        private ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<K, V>) context.getStateStore(storeName);
+            StateStore store = context.getStateStore(storeName);
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore) store).wrappedStore();
+            }
+            this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
         }
 
         @Override
-        public V get(final K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return store.get(key);
         }
 

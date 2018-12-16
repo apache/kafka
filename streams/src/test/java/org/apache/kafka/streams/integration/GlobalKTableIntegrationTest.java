@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -131,11 +132,11 @@ public class GlobalKTableIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> "J".equals(replicatedStore.get(5L).value()),
             30000,
             "waiting for data in replicated store");
 
@@ -175,11 +176,11 @@ public class GlobalKTableIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> "J".equals(replicatedStore.get(5L).value()),
             30000,
             "waiting for data in replicated store");
 
@@ -208,7 +209,7 @@ public class GlobalKTableIntegrationTest {
         produceInitialGlobalTableValues();
 
         startStreams();
-        ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
         assertThat(store.approximateNumEntries(), equalTo(4L));
         kafkaStreams.close();
 

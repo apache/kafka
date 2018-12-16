@@ -83,7 +83,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueStore) {
+            if (global instanceof StateStoreReadOnlyDecorator) {
+                return global;
+            } else if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
             } else if (global instanceof WindowStore) {
                 return new WindowStoreReadOnlyDecorator((WindowStore) global);
@@ -105,7 +107,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         final StateStore store = stateManager.getStore(name);
-        if (store instanceof KeyValueStore) {
+        if (store instanceof StateStoreReadWriteDecorator) {
+            return global;
+        } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator((WindowStore) store);
@@ -273,24 +277,24 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void put(final K key,
-                        final V value) {
+        public final void put(final K key,
+                              final V value) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public V putIfAbsent(final K key,
-                             final V value) {
+        public final V putIfAbsent(final K key,
+                                   final V value) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public void putAll(final List entries) {
+        public final void putAll(final List entries) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public V delete(final K key) {
+        public final V delete(final K key) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
     }
@@ -304,15 +308,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void put(final K key,
-                        final V value) {
+        public final void put(final K key,
+                              final V value) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public void put(final K key,
-                        final V value,
-                        final long windowStartTimestamp) {
+        public final void put(final K key,
+                              final V value,
+                              final long windowStartTimestamp) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
@@ -376,13 +380,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void remove(final Windowed sessionKey) {
+        public final void remove(final Windowed sessionKey) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public void put(final Windowed<K> sessionKey,
-                        final AGG aggregate) {
+        public final void put(final Windowed<K> sessionKey,
+                              final AGG aggregate) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
@@ -398,35 +402,35 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends AbstractStateStore {
+    public abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends AbstractStateStore {
         static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
-        private StateStoreReadWriteDecorator(final T inner) {
+        protected StateStoreReadWriteDecorator(final T inner) {
             super(inner);
         }
 
         @SuppressWarnings("unchecked")
-        T wrapped() {
+        protected T wrapped() {
             return (T) super.wrappedStore();
         }
 
         @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
+        public final void init(final ProcessorContext context,
+                               final StateStore root) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
-        public void close() {
+        public final void close() {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
     }
 
-    private static class KeyValueStoreReadWriteDecorator<K, V>
+    public static class KeyValueStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<KeyValueStore<K, V>>
         implements KeyValueStore<K, V> {
 
-        private KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
+        public KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
             super(inner);
         }
 
@@ -474,11 +478,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class WindowStoreReadWriteDecorator<K, V>
+    public static class WindowStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<WindowStore<K, V>>
         implements WindowStore<K, V> {
 
-        private WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
+        public WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
             super(inner);
         }
 
@@ -531,11 +535,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class SessionStoreReadWriteDecorator<K, AGG>
+    public static class SessionStoreReadWriteDecorator<K, AGG>
         extends StateStoreReadWriteDecorator<SessionStore<K, AGG>>
         implements SessionStore<K, AGG> {
 
-        private SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
+        public SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
             super(inner);
         }
 
@@ -560,7 +564,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void put(final Windowed<K> sessionKey, final AGG aggregate) {
+        public void put(final Windowed<K> sessionKey,
+                        final AGG aggregate) {
             wrapped().put(sessionKey, aggregate);
         }
 
@@ -575,4 +580,5 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(from, to);
         }
     }
+
 }
