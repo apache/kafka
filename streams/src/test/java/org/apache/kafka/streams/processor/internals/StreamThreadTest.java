@@ -58,6 +58,7 @@ import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.StateStoreType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockProcessor;
@@ -957,7 +958,7 @@ public class StreamThreadTest {
             .count(Materialized.as(storeName1));
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized
             = new MaterializedInternal<>(Materialized.as(storeName2), internalStreamsBuilder, "");
-        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized);
+        internalStreamsBuilder.table(topic2, new ConsumedInternal<>(), materialized, StateStoreType.KEY_VALUE_STORE);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
         final StreamThread thread = createStreamThread(clientId, config, false);

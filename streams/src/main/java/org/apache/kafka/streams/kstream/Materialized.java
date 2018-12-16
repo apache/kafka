@@ -65,6 +65,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    protected Duration windowSize;
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -87,6 +88,7 @@ public class Materialized<K, V, S extends StateStore> {
         this.cachingEnabled = materialized.cachingEnabled;
         this.topicConfig = materialized.topicConfig;
         this.retention = materialized.retention;
+        this.windowSize = materialized.windowSize;
     }
 
     /**

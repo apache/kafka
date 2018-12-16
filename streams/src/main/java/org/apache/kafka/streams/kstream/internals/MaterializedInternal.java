@@ -83,4 +83,8 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
     Duration retention() {
         return retention;
     }
+
+    public Duration windowSize() {
+        return windowSize;
+    }
 }
