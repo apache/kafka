@@ -244,11 +244,11 @@ public class CachingWindowStoreTest {
         verifyWindowedKeyValue(
             iterator.next(),
             new Windowed<>(bytesKey("a"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-            "a");
+            "a".getBytes());
         verifyWindowedKeyValue(
             iterator.next(),
             new Windowed<>(bytesKey("b"), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-            "b");
+            "b".getBytes());
         assertFalse(iterator.hasNext());
         assertEquals(2, cache.size());
     }
@@ -270,7 +270,7 @@ public class CachingWindowStoreTest {
             verifyWindowedKeyValue(
                 iterator.next(),
                 new Windowed<>(bytesKey(s), new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-                s);
+                s.getBytes());
         }
         assertFalse(iterator.hasNext());
     }
@@ -290,7 +290,7 @@ public class CachingWindowStoreTest {
             verifyWindowedKeyValue(
                 iterator.next(),
                 new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
-                str);
+                str.getBytes());
         }
         assertFalse(iterator.hasNext());
 
@@ -301,7 +301,7 @@ public class CachingWindowStoreTest {
             verifyWindowedKeyValue(
                 iterator1.next(),
                 new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
-                str);
+                str.getBytes());
         }
         assertFalse(iterator1.hasNext());
 
@@ -312,7 +312,7 @@ public class CachingWindowStoreTest {
             verifyWindowedKeyValue(
                 iterator2.next(),
                 new Windowed<>(bytesKey(str), new TimeWindow(i, i + WINDOW_SIZE)),
-                str);
+                str.getBytes());
         }
         assertFalse(iterator2.hasNext());
     }
@@ -455,11 +455,11 @@ public class CachingWindowStoreTest {
         verifyWindowedKeyValue(
             fetchRange.next(),
             new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE)),
-            "a");
+            "a".getBytes());
         verifyWindowedKeyValue(
             fetchRange.next(),
             new Windowed<>(key, new TimeWindow(DEFAULT_TIMESTAMP + WINDOW_SIZE, DEFAULT_TIMESTAMP + WINDOW_SIZE + WINDOW_SIZE)),
-            "b");
+            "b".getBytes());
         assertFalse(fetchRange.hasNext());
     }
 
