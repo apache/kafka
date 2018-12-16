@@ -29,7 +29,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
     client_id = "streams-broker-resilience-verify-consumer"
     num_messages = 10000
     message = "processed[0-9]*messages"
-    connected = "Discovered group coordinator"
+    connected_message = "Discovered group coordinator"
 
     def __init__(self, test_context):
         super(StreamsBrokerDownResilience, self).__init__(test_context,
@@ -63,9 +63,9 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
         with processor.node.account.monitor_log(processor.LOG_FILE) as monitor:
             self.kafka.start_node(node)
-            monitor.wait_until(self.connected,
+            monitor.wait_until(self.connected_message,
                                timeout_sec=120,
-                               err_msg=("Never saw output '%s' on " % self.connected) + str(processor.node.account))
+                               err_msg=("Never saw output '%s' on " % self.connected_message) + str(processor.node.account))
 
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
@@ -104,22 +104,22 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                 with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor_3:
                     self.kafka.start_node(node)
 
-                    monitor_1.wait_until(self.connected,
+                    monitor_1.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor.node.account))
-                    monitor_2.wait_until(self.connected,
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor.node.account))
+                    monitor_2.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor_2.node.account))
-                    monitor_3.wait_until(self.connected,
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_2.node.account))
+                    monitor_3.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor_3.node.account))
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_3.node.account))
 
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor_1:
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
                     self.assert_produce(self.inputTopic,
-                                        "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
+                                        "sending_message_after_broker_down_initially",
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
 
@@ -134,7 +134,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                          err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
 
                     self.assert_consume(self.client_id,
-                                        "sending_message_after_stopping_streams_instance_bouncing_broker",
+                                        "consuming_message_after_broker_down_initially",
                                         self.outputTopic,
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
@@ -168,7 +168,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
                     self.assert_produce(self.inputTopic,
-                                        "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
+                                        "sending_message_normal_broker_start",
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
 
@@ -183,7 +183,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                          err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
 
                     self.assert_consume(self.client_id,
-                                        "sending_message_after_stopping_streams_instance_bouncing_broker",
+                                        "consuming_message_normal_broker_start",
                                         self.outputTopic,
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
@@ -201,9 +201,9 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
         with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor_3:
             self.kafka.start_node(node)
 
-            monitor_3.wait_until(self.connected,
+            monitor_3.wait_until(self.connected_message,
                                  timeout_sec=120,
-                                 err_msg=("Never saw '%s' on " % self.connected) + str(processor_3.node.account))
+                                 err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_3.node.account))
 
         self.assert_produce_consume(self.inputTopic,
                                     self.outputTopic,
@@ -241,7 +241,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                 with processor_3.node.account.monitor_log(processor_3.STDOUT_FILE) as monitor_3:
 
                     self.assert_produce(self.inputTopic,
-                                        "sending_message_after_hard_bouncing_streams_instance_bouncing_broker",
+                                        "sending_message_after_normal_broker_start",
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
 
@@ -256,7 +256,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                          err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
 
                     self.assert_consume(self.client_id,
-                                        "sending_message_after_stopping_streams_instance_bouncing_broker",
+                                        "consuming_message_after_normal_broker_start",
                                         self.outputTopic,
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
@@ -273,15 +273,15 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                 with processor_3.node.account.monitor_log(processor_3.LOG_FILE) as monitor_3:
                     self.kafka.start_node(node)
 
-                    monitor_1.wait_until(self.connected,
+                    monitor_1.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor.node.account))
-                    monitor_2.wait_until(self.connected,
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor.node.account))
+                    monitor_2.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor_2.node.account))
-                    monitor_3.wait_until(self.connected,
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_2.node.account))
+                    monitor_3.wait_until(self.connected_message,
                                          timeout_sec=120,
-                                         err_msg=("Never saw '%s' on " % self.connected) + str(processor_3.node.account))
+                                         err_msg=("Never saw '%s' on " % self.connected_message) + str(processor_3.node.account))
 
         with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor_1:
             with processor_2.node.account.monitor_log(processor_2.STDOUT_FILE) as monitor_2:
@@ -303,7 +303,7 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                          err_msg=("Never saw '%s' on " % self.message) + str(processor_3.node.account))
 
                     self.assert_consume(self.client_id,
-                                        "sending_message_after_stopping_streams_instance_bouncing_broker",
+                                        "consuming_message_after_stopping_streams_instance_bouncing_broker",
                                         self.outputTopic,
                                         num_messages=self.num_messages,
                                         timeout_sec=120)
