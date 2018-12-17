@@ -238,9 +238,11 @@ public class KafkaStreams implements AutoCloseable {
      * @param newState New state
      */
     private boolean setState(final State newState) {
-        final State oldState = state;
+        State oldState;
 
         synchronized (stateLock) {
+            oldState = state;
+
             if (state == State.PENDING_SHUTDOWN && newState != State.NOT_RUNNING) {
                 // when the state is already in PENDING_SHUTDOWN, all other transitions than NOT_RUNNING (due to thread dying) will be
                 // refused but we do not throw exception here, to allow appropriate error handling
@@ -267,7 +269,7 @@ public class KafkaStreams implements AutoCloseable {
 
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
         if (stateListener != null) {
-            stateListener.onChange(state, oldState);
+            stateListener.onChange(newState, oldState);
         }
 
         return true;
@@ -314,10 +316,12 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setStateListener(final KafkaStreams.StateListener listener) {
-        if (state == State.CREATED) {
-            stateListener = listener;
-        } else {
-            throw new IllegalStateException("Can only set StateListener in CREATED state. Current state is: " + state);
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                stateListener = listener;
+            } else {
+                throw new IllegalStateException("Can only set StateListener in CREATED state. Current state is: " + state);
+            }
         }
     }
 
@@ -329,17 +333,19 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setUncaughtExceptionHandler(final Thread.UncaughtExceptionHandler eh) {
-        if (state == State.CREATED) {
-            for (final StreamThread thread : threads) {
-                thread.setUncaughtExceptionHandler(eh);
-            }
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                for (final StreamThread thread : threads) {
+                    thread.setUncaughtExceptionHandler(eh);
+                }
 
-            if (globalStreamThread != null) {
-                globalStreamThread.setUncaughtExceptionHandler(eh);
-            }
-        } else {
-            throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
+                if (globalStreamThread != null) {
+                    globalStreamThread.setUncaughtExceptionHandler(eh);
+                }
+            } else {
+                throw new IllegalStateException("Can only set UncaughtExceptionHandler in CREATED state. " +
                     "Current state is: " + state);
+            }
         }
     }
 
@@ -351,11 +357,13 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException if this {@code KafkaStreams} instance is not in state {@link State#CREATED CREATED}.
      */
     public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
-        if (state == State.CREATED) {
-            this.globalStateRestoreListener = globalStateRestoreListener;
-        } else {
-            throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
+        synchronized (stateLock) {
+            if (state == State.CREATED) {
+                this.globalStateRestoreListener = globalStateRestoreListener;
+            } else {
+                throw new IllegalStateException("Can only set GlobalStateRestoreListener in CREATED state. " +
                     "Current state is: " + state);
+            }
         }
     }
 
@@ -407,7 +415,7 @@ public class KafkaStreams implements AutoCloseable {
             }
 
             if (setState(State.ERROR)) {
-                log.warn("All stream threads have died. The instance will be in error state and should be closed.");
+                log.error("All stream threads have died. The instance will be in error state and should be closed.");
             }
         }
 
@@ -456,7 +464,7 @@ public class KafkaStreams implements AutoCloseable {
 
                     // special case when global thread is dead
                     if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
-                        log.warn("Global thread has died. The instance will be in error state and should be closed.");
+                        log.error("Global thread has died. The instance will be in error state and should be closed.");
                     }
                 }
             }
