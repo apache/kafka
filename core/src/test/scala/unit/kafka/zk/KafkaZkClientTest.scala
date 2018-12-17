@@ -1115,26 +1115,40 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     Random.nextBytes(bytes)
     val token = new org.apache.kafka.common.security.token.delegation.DelegationToken(tokenInfo, bytes)
 
+    val tokenId2 = "encryptedToken1"
+    val tokenInfo2 = new TokenInformation(tokenId2, owner, renewers.asJava,
+      System.currentTimeMillis(), System.currentTimeMillis(), System.currentTimeMillis())
+    val token2 = new org.apache.kafka.common.security.token.delegation.DelegationToken(tokenInfo2, bytes)
+
     // test non-existent token
     assertTrue(zkClient.getDelegationTokenInfo(tokenId).isEmpty)
     assertFalse(zkClient.deleteDelegationToken(tokenId))
 
+    assertTrue(zkClient.getEncryptedDelegationTokenInfo(tokenId2, "test_secret_key".toCharArray).isEmpty)
+    assertFalse(zkClient.deleteDelegationToken(tokenId2))
+
     // create a token
     zkClient.setOrCreateDelegationToken(token)
+    zkClient.setOrCreateEncryptedDelegationToken(token2, "test_secret_key".toCharArray)
 
     //get created token
     assertEquals(tokenInfo, zkClient.getDelegationTokenInfo(tokenId).get)
+    assertEquals(tokenInfo2, zkClient.getEncryptedDelegationTokenInfo(tokenId2, "test_secret_key".toCharArray).get)
 
     //update expiryTime
     tokenInfo.setExpiryTimestamp(System.currentTimeMillis())
     zkClient.setOrCreateDelegationToken(token)
+    zkClient.setOrCreateEncryptedDelegationToken(token2, "test_secret_key".toCharArray)
 
     //test updated token
     assertEquals(tokenInfo, zkClient.getDelegationTokenInfo(tokenId).get)
+    assertEquals(tokenInfo2, zkClient.getEncryptedDelegationTokenInfo(tokenId2, "test_secret_key".toCharArray).get)
 
     //test deleting token
     assertTrue(zkClient.deleteDelegationToken(tokenId))
     assertEquals(None, zkClient.getDelegationTokenInfo(tokenId))
+    assertTrue(zkClient.deleteDelegationToken(tokenId2))
+    assertEquals(None, zkClient.getEncryptedDelegationTokenInfo(tokenId2, "test_secret_key".toCharArray))
   }
 
   @Test

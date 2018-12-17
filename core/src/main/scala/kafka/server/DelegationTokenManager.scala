@@ -216,7 +216,7 @@ class DelegationTokenManager(val config: KafkaConfig,
   }
 
   private def getTokenFromZk(tokenId: String): Option[DelegationToken] = {
-    zkClient.getDelegationTokenInfo(tokenId) match {
+    zkClient.getEncryptedDelegationTokenInfo(tokenId, config.delegationTokenMasterKey.value().toCharArray) match {
       case Some(tokenInformation) => {
         val hmac = createHmac(tokenId, secretKey)
         Some(new DelegationToken(tokenInformation, hmac))
@@ -331,7 +331,12 @@ class DelegationTokenManager(val config: KafkaConfig,
    * @param token
    */
   private def updateToken(token: DelegationToken): Unit = {
-    zkClient.setOrCreateDelegationToken(token)
+    if (config.delegationTokenMetadataEncryptionEnable) {
+      zkClient.setOrCreateEncryptedDelegationToken(token, config.delegationTokenMasterKey.value().toCharArray)
+    }
+    else {
+      zkClient.setOrCreateDelegationToken(token)
+    }
     updateCache(token)
     zkClient.createTokenChangeNotification(token.tokenInfo.tokenId())
   }

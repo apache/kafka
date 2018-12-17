@@ -725,6 +725,7 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+        case KafkaConfig.DelegationTokenMetadataEncryptionEnableProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
 
         //Kafka Yammer metrics reporter configs
         case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
@@ -778,6 +779,7 @@ class KafkaConfigTest {
     assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
     assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
     assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
+    assertEquals(true, config.delegationTokenMetadataEncryptionEnable)
 
     defaults.put(KafkaConfig.DelegationTokenMasterKeyProp, "1234567890")
     val config1 = KafkaConfig.fromProps(defaults)
