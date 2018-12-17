@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import java.time.Instant;
 
 /**
- * A window store that only supports read operations
+ * A window store that only supports read operations.
  * Implementations should be thread-safe as concurrent reads and writes are expected.
  *
  * @param <K> Type of keys
