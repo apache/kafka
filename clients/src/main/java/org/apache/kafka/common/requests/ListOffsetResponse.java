@@ -52,6 +52,8 @@ import static org.apache.kafka.common.protocol.types.Type.INT64;
  * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} If the broker does not have metadata for a topic or partition
  * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
  * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
+ * - {@link Errors#LEADER_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v4 protocol)
+ * - {@link Errors#OFFSET_NOT_AVAILABLE} The leader's HW has not caught up after recent election (v5+ protocol)
  */
 public class ListOffsetResponse extends AbstractResponse {
     public static final long UNKNOWN_TIMESTAMP = -1L;
@@ -125,9 +127,11 @@ public class ListOffsetResponse extends AbstractResponse {
             THROTTLE_TIME_MS,
             TOPICS_V4);
 
+    private static final Schema LIST_OFFSET_RESPONSE_V5 = LIST_OFFSET_RESPONSE_V4;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {LIST_OFFSET_RESPONSE_V0, LIST_OFFSET_RESPONSE_V1, LIST_OFFSET_RESPONSE_V2,
-            LIST_OFFSET_RESPONSE_V3, LIST_OFFSET_RESPONSE_V4};
+            LIST_OFFSET_RESPONSE_V3, LIST_OFFSET_RESPONSE_V4, LIST_OFFSET_RESPONSE_V5};
     }
 
     public static final class PartitionData {
