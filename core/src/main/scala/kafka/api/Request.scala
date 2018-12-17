@@ -30,7 +30,7 @@ object Request {
       case OrdinaryConsumerId => "consumer"
       case DebuggingConsumerId => "debug consumer"
       case FutureLocalReplicaId => "future local replica"
-      case id if isValidBrokerId(id) => s"replica [$replicaId]"
+      case id if isValidBrokerId(id) => s"replica [$id]"
       case id => s"invalid replica [$id]"
     }
   }
