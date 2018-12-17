@@ -549,8 +549,8 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
-                // requires a concrete member id to be allowed to join the group. Update the generation
-                // and issue another join group request in next cycle.
+                // Broker requires a concrete member id to be allowed to join the group. Update the generation
+                // and send another join group request in next cycle.
                 AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
                         joinResponse.memberId(), joinResponse.groupProtocol());
                 requestRejoin();

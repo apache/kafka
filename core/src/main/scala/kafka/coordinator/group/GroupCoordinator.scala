@@ -186,7 +186,7 @@ class GroupCoordinator(val brokerId: Int,
       // If member id required, register the member with unknown metadata,
       // and send back a response to call for another join group request with allocated member id.
       if (requireKnownMemberId) {
-        group.addUnknownMember(newMemberId)
+        group.addUnknownMember(newMemberId, group.groupId, protocolType, protocols)
         responseCallback(JoinGroupResult(
           members = Map.empty,
           memberId = newMemberId,
@@ -207,8 +207,8 @@ class GroupCoordinator(val brokerId: Int,
         // members in the rebalance. To prevent this going on indefinitely, we timeout JoinGroup requests
         // for new members. If the new member is still there, we expect it to retry.
         completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
-        maybePrepareRebalance(group, s"Adding new member $newMemberId")
       }
+      maybePrepareRebalance(group, s"Adding new member $newMemberId")
     }
   }
 
@@ -238,7 +238,7 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           case PreparingRebalance =>
             val member = group.get(memberId)
-            updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
+            updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, responseCallback)
           case CompletingRebalance =>
             val member = group.get(memberId)
             if (member.matches(protocols)) {
@@ -258,7 +258,7 @@ class GroupCoordinator(val brokerId: Int,
                 error = Errors.NONE))
             } else {
               // member has changed metadata, so force a rebalance
-              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
+              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, responseCallback)
             }
           case Empty | Stable =>
             val member = group.get(memberId)
@@ -266,7 +266,7 @@ class GroupCoordinator(val brokerId: Int,
               // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
               // The latter allows the leader to trigger rebalances for changes affecting assignment
               // which do not affect the member metadata (such as topic metadata changes for the consumer)
-              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, responseCallback, protocols)
+              updateMemberAndRebalance(group, member, memberId, rebalanceTimeoutMs, sessionTimeoutMs, clientId, clientHost, protocolType, protocols, responseCallback)
             } else {
               // for followers with no actual change to their metadata, just return group information
               // for the current generation which will allow them to issue SyncGroup
@@ -758,16 +758,17 @@ class GroupCoordinator(val brokerId: Int,
                                        clientId: String,
                                        clientHost: String,
                                        protocolType: String,
-                                       callback: JoinCallback,
-                                       protocols: List[(String, Array[Byte])]) {
-    var updatedMember = member
+                                       protocols: List[(String, Array[Byte])],
+                                       callback: JoinCallback) {
     // When the current member is unknown member, we are officially accepting this registered member.
     if (GroupMetadata.isUnknownMember(member)) {
-      updatedMember = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+      val updatedMember = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
         sessionTimeoutMs, protocolType, protocols)
+      group.add(updatedMember, callback)
+    } else {
+      group.updateMember(member, protocols, callback)
     }
-    group.updateMember(updatedMember, protocols, callback)
-    maybePrepareRebalance(group, s"Updating metadata for member ${updatedMember.memberId}")
+    maybePrepareRebalance(group, s"Updating metadata for member $memberId")
   }
 
   private def maybePrepareRebalance(group: GroupMetadata, reason: String) {
@@ -831,9 +832,9 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     group.inLock {
       // remove any members who haven't joined the group yet
-      group.notYetRejoinedMembers.foreach { failedMember =>
-        removeHeartbeatForLeavingMember(group, failedMember)
-        group.remove(failedMember.memberId)
+      group.notYetRejoinedMembers.foreach { (failedMember) =>
+        removeHeartbeatForLeavingMember(group, failedMember._2)
+        group.remove(failedMember._1)
         // TODO: cut the socket connection to the client
       }
 

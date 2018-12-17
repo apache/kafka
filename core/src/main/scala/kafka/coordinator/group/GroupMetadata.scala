@@ -212,24 +212,40 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
 
   def add(member: MemberMetadata, callback: JoinCallback = null) {
-    if (members.isEmpty)
-      this.protocolType = Some(member.protocolType)
-
-    assert(groupId == member.groupId)
-    assert(this.protocolType.orNull == member.protocolType)
-    assert(supportsProtocols(member.protocols))
+    memberPrecheck(member.memberId, member.groupId, member.protocolType, member.protocols)
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
     members.put(member.memberId, member)
-    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.awaitingJoinCallback = callback
     if (member.awaitingJoinCallback != null)
       numMembersAwaitingJoin += 1
   }
 
-  def addUnknownMember(memberId: String) {
+  def addUnknownMember(memberId: String,
+                       groupId: String,
+                       protocolType: String,
+                       protocols: List[(String, Array[Byte])]) {
+    memberPrecheck(memberId, groupId, protocolType, protocols.map(_._1).toSet)
+
     members.put(memberId, GroupMetadata.unknownMemberMetadata)
+  }
+
+  private def memberPrecheck(memberId: String,
+                             groupId: String,
+                             protocolType: String,
+                             protocols: Set[String]): Unit = {
+    if (members.isEmpty)
+      this.protocolType = Some(protocolType)
+
+    assert(groupId == groupId)
+    assert(this.protocolType.orNull == protocolType)
+    assert(supportsProtocols(protocols))
+    // If the member id is not in member map, this means it's the first
+    // time this member joins group, and we should increment number of supportedProtocols.
+    if (!has(memberId)) {
+      protocols.foreach{ case (protocol) => supportedProtocols(protocol) += 1 }
+    }
   }
 
   def remove(memberId: String) {
@@ -251,9 +267,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def currentState = state
 
   // TODO: deprecate the kick out logic for normal member's rejoin failure within rebalance timeout.
-  // Only remove unknown members because they are not real members to work with assignment.
-  def notYetRejoinedMembers = members.values.filter((member) => GroupMetadata.isUnknownMember(member)
-    || member.awaitingJoinCallback == null).toList
+//   Only remove unknown members because they are not real members to work with assignment.
+//  def notYetRejoinedMembers = members.values.filter((member) => member.awaitingJoinCallback == null).toList
+
+  def notYetRejoinedMembers = members.filter( memberKV => GroupMetadata.isUnknownMember(memberKV._2)
+    || memberKV._2.awaitingJoinCallback == null)
 
   def hasAllMembersJoined = members.size <= numMembersAwaitingJoin
 
@@ -326,7 +344,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def initNextGeneration() = {
-    assert(notYetRejoinedMembers == List.empty[MemberMetadata])
+    assert(notYetRejoinedMembers == Map.empty[String, MemberMetadata])
     if (members.nonEmpty) {
       generationId += 1
       protocol = Some(selectProtocol)
