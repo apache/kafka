@@ -146,7 +146,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateOneThreadDeadButRebalanceFinish() {
+    public void testStateOneThreadDeadButRebalanceFinish() throws InterruptedException {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
@@ -155,7 +155,10 @@ public class KafkaStreamsTest {
 
         globalStreams.start();
 
-        Assert.assertEquals(1, stateListener.numChanges);
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 2,
+            10 * 1000,
+            "Streams never started.");
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
         for (final StreamThread thread: globalStreams.threads) {
@@ -165,7 +168,7 @@ public class KafkaStreamsTest {
                 StreamThread.State.RUNNING);
         }
 
-        Assert.assertEquals(2, stateListener.numChanges);
+        Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
         for (final StreamThread thread: globalStreams.threads) {
@@ -175,7 +178,7 @@ public class KafkaStreamsTest {
                 StreamThread.State.PARTITIONS_REVOKED);
         }
 
-        Assert.assertEquals(2, stateListener.numChanges);
+        Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
         globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
@@ -188,7 +191,7 @@ public class KafkaStreamsTest {
             StreamThread.State.DEAD,
             StreamThread.State.PENDING_SHUTDOWN);
 
-        Assert.assertEquals(2, stateListener.numChanges);
+        Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
         for (final StreamThread thread: globalStreams.threads) {
@@ -200,12 +203,12 @@ public class KafkaStreamsTest {
             }
         }
 
-        Assert.assertEquals(3, stateListener.numChanges);
+        Assert.assertEquals(4, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
         globalStreams.close();
 
-        Assert.assertEquals(5, stateListener.numChanges);
+        Assert.assertEquals(6, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
