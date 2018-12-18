@@ -135,7 +135,7 @@ class SocketServerTest extends JUnitSuite {
   }
 
   def connect(s: SocketServer = server, listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), localAddr: InetAddress = null, port: Int = 0) = {
-    val socket = new Socket("localhost", s.boundPort(/*ListenerName.forSecurityProtocol(protocol)*/listenerName), localAddr, port)
+    val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
     sockets += socket
     socket
   }
@@ -193,7 +193,7 @@ class SocketServerTest extends JUnitSuite {
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     val config = KafkaConfig.fromProps(testProps)
-    withTestableControlPlaneServer (config, { testableServer =>
+    withTestableServer(config, { testableServer =>
       val socket = connect(testableServer, config.controlPlaneListenerName.get, localAddr = InetAddress.getLocalHost, port = 5000)
       sendAndReceiveControllerRequest(socket, testableServer)
     })
@@ -860,7 +860,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def configureNewConnectionException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
 
       testableSelector.updateMinWakeup(2)
@@ -870,7 +870,7 @@ class SocketServerTest extends JUnitSuite {
       TestUtils.waitUntilTrue(() => testableServer.connectionCount(localAddress) == 1, "Failed channel not removed")
 
       assertProcessorHealthy(testableServer, testableSelector.notFailed(sockets))
-    }
+    })
   }
 
   /**
@@ -885,7 +885,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def processNewResponseException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
@@ -898,7 +898,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.waitForChannelClose(testableSelector.allFailedChannels.head, locallyClosed = true)
 
       assertProcessorHealthy(testableServer, testableSelector.notFailed(sockets))
-    }
+    })
   }
 
   /**
@@ -908,7 +908,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def sendCancelledKeyException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
@@ -926,7 +926,7 @@ class SocketServerTest extends JUnitSuite {
 
       val successfulSocket = if (isSocketConnectionId(failedConnectionId, sockets(0))) sockets(1) else sockets(0)
       assertProcessorHealthy(testableServer, Seq(successfulSocket))
-    }
+    })
   }
 
   /**
@@ -936,7 +936,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def closingChannelException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
       testableSelector.updateMinWakeup(2)
 
@@ -953,7 +953,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.waitForChannelClose(request.context.connectionId, locallyClosed = true)
 
       assertProcessorHealthy(testableServer, Seq(sockets(1)))
-    }
+    })
   }
 
   /**
@@ -968,7 +968,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def processCompletedReceiveException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val sockets = (1 to 2).map(_ => connect(testableServer))
       val testableSelector = testableServer.testableSelector
       val requestChannel = testableServer.dataPlaneRequestChannel
@@ -982,7 +982,7 @@ class SocketServerTest extends JUnitSuite {
       requests.foreach(processRequest(requestChannel, _))
 
       assertProcessorHealthy(testableServer, testableSelector.notFailed(sockets))
-    }
+    })
   }
 
   /**
@@ -997,7 +997,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def processCompletedSendException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val testableSelector = testableServer.testableSelector
       val sockets = (1 to 2).map(_ => connect(testableServer))
       val requests = sockets.map(sendAndReceiveRequest(_, testableServer))
@@ -1008,7 +1008,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.waitForChannelClose(testableSelector.allFailedChannels.head, locallyClosed = true)
 
       assertProcessorHealthy(testableServer, testableSelector.notFailed(sockets))
-    }
+    })
   }
 
   /**
@@ -1021,7 +1021,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def processDisconnectedException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val (socket, connectionId) = connectAndProcessRequest(testableServer)
       val testableSelector = testableServer.testableSelector
 
@@ -1035,7 +1035,7 @@ class SocketServerTest extends JUnitSuite {
       testableServer.waitForChannelClose(connectionId, locallyClosed = false)
 
       assertProcessorHealthy(testableServer)
-    }
+    })
   }
 
   /**
@@ -1043,7 +1043,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def pollException(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       val (socket, _) = connectAndProcessRequest(testableServer)
       val testableSelector = testableServer.testableSelector
 
@@ -1052,7 +1052,7 @@ class SocketServerTest extends JUnitSuite {
       testableSelector.waitForOperations(SelectorOperation.Poll, 2)
 
       assertProcessorHealthy(testableServer, Seq(socket))
-    }
+    })
   }
 
   /**
@@ -1060,7 +1060,7 @@ class SocketServerTest extends JUnitSuite {
    */
   @Test
   def controlThrowable(): Unit = {
-    withTestableServer { testableServer =>
+    withTestableServer (testWithServer = { testableServer =>
       connectAndProcessRequest(testableServer)
       val testableSelector = testableServer.testableSelector
 
@@ -1070,25 +1070,15 @@ class SocketServerTest extends JUnitSuite {
       testableSelector.waitForOperations(SelectorOperation.Poll, 1)
 
       testableSelector.waitForOperations(SelectorOperation.CloseSelector, 1)
-    }
+    })
   }
 
-  private def withTestableServer(testWithServer: TestableSocketServer => Unit): Unit = {
+  private def withTestableServer(config : KafkaConfig = config, testWithServer: TestableSocketServer => Unit): Unit = {
     props.put("listeners", "PLAINTEXT://localhost:0")
-    val testableServer = new TestableSocketServer
-    testableServer.startup()
-    try {
-        testWithServer(testableServer)
-    } finally {
-      shutdownServerAndMetrics(testableServer)
-    }
-  }
-
-  private def withTestableControlPlaneServer(config : KafkaConfig, testWithServer: TestableSocketServer => Unit) = {
     val testableServer = new TestableSocketServer(config)
     testableServer.startup()
     try {
-      testWithServer(testableServer)
+        testWithServer(testableServer)
     } finally {
       shutdownServerAndMetrics(testableServer)
     }

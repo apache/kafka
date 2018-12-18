@@ -100,10 +100,14 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
       }
     }
-    assertTrue(controlPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 1.0 && dataPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 0.0)
-    assertTrue(controlPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 1.0 && dataPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 0.0)
-    assertTrue(controlPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] > 1.0 && dataPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] == 0.0)
-    assertTrue(controlPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 2.0 && dataPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertTrue(controlPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 1.0)
+    assertTrue(dataPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertTrue(controlPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 1.0)
+    assertTrue(dataPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertTrue(controlPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] > 1.0)
+    assertTrue(dataPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertTrue(controlPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 2.0)
+    assertTrue(dataPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 0.0)
   }
 
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full

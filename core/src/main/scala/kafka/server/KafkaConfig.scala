@@ -504,7 +504,7 @@ object KafkaConfig {
   val NumIoThreadsDoc = "The number of threads that the server uses for processing requests, which may include disk I/O"
   val NumReplicaAlterLogDirsThreadsDoc = "The number of threads that can move replicas between log directories, which may include disk I/O"
   val BackgroundThreadsDoc = "The number of threads to use for various background processing tasks"
-  val QueuedMaxRequestsDoc = "The number of queued requests allowed before blocking the network threads"
+  val QueuedMaxRequestsDoc = "The number of queued requests allowed for data-plane, before blocking the network threads"
   val QueuedMaxRequestBytesDoc = "The number of queued bytes allowed before no more requests are read"
   val RequestTimeoutMsDoc = CommonClientConfigs.REQUEST_TIMEOUT_MS_DOC
   /************* Authorizer Configuration ***********/
@@ -1283,8 +1283,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def interBrokerListenerName = getInterBrokerListenerNameAndSecurityProtocol._1
   def interBrokerSecurityProtocol = getInterBrokerListenerNameAndSecurityProtocol._2
-  def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map(_._1)
-  def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map(_._2)
+  def controlPlaneListenerName = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, securityProtocol) => listenerName }
+  def controlPlaneSecurityProtocol = getControlPlaneListenerNameAndSecurityProtocol.map { case (listenerName, securityProtocol) => securityProtocol }
   def saslMechanismInterBrokerProtocol = getString(KafkaConfig.SaslMechanismInterBrokerProtocolProp)
   val saslInterBrokerHandshakeRequestEnable = interBrokerProtocolVersion >= KAFKA_0_10_0_IV1
 

@@ -56,7 +56,8 @@ import scala.util.control.ControlThrowable
  *  - data-plane :
  *    - Handles requests from clients and other brokers in the cluster.
  *    - The threading model is
- *      1 Acceptor thread that handles new connections
+ *      1 Acceptor thread per listener, that handles new connections.
+ *      It is possible to configure multiple data-planes by specifying multiple "," separated endpoints for "listeners" in KafkaConfig.
  *      Acceptor has N Processor threads that each have their own selector and read requests from sockets
  *      M Handler threads that handle requests and produce responses back to the processor threads for writing.
  *  - control-plane :
@@ -67,7 +68,6 @@ import scala.util.control.ControlThrowable
  *      Acceptor has 1 Processor thread that has its own selector and read requests from the socket.
  *      1 Handler thread that handles requests and produce responses back to the processor thread for writing.
  */
-
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
 
   val DataPlanePrefix = "data-plane"
@@ -119,7 +119,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
     }
 
-    newGauge("DataPlaneNetworkProcessorAvgIdlePercent",
+    newGauge("NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
@@ -223,17 +223,17 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private def createControlPlaneAcceptorAndProcessor(endpointOpt: Option[EndPoint]): Unit = synchronized {
     endpointOpt.foreach { endpoint =>
-      controlPlaneAcceptorOpt = Some(createAcceptor(endpoint))
-      controlPlaneProcessorOpt = Some(newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool))
+      val controlPlaneAcceptor = createAcceptor(endpoint)
+      val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool)
+      controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
+      controlPlaneProcessorOpt = Some(controlPlaneProcessor)
       val listenerProcessors = new ArrayBuffer[Processor]()
-      controlPlaneProcessorOpt.foreach { processor =>
-        listenerProcessors += processor
-        controlPlaneRequestChannelOpt.foreach(_.addProcessor(processor))
-        val controlPlaneAcceptor = controlPlaneAcceptorOpt.get
-        controlPlaneAcceptor.addProcessors(listenerProcessors, ControlPlanePrefix)
-        KafkaThread.nonDaemon(s"control-plane-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", controlPlaneAcceptor).start()
-        controlPlaneAcceptor.awaitStartup()
-      }
+      listenerProcessors += controlPlaneProcessor
+      controlPlaneRequestChannelOpt.foreach(_.addProcessor(controlPlaneProcessor))
+      nextProcessorId += 1
+      controlPlaneAcceptor.addProcessors(listenerProcessors, ControlPlanePrefix)
+      KafkaThread.nonDaemon(s"control-plane-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", controlPlaneAcceptor).start()
+      controlPlaneAcceptor.awaitStartup()
       info(s"Created control-plane acceptor and processor for endpoint : $endpoint")
     }
   }
@@ -306,7 +306,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       if (dataPlaneAcceptors.containsKey(endpoints(listenerName))) {
         dataPlaneAcceptors.get(endpoints(listenerName)).serverChannel.socket.getLocalPort
       } else {
-        controlPlaneAcceptorOpt.map (_.serverChannel.socket().getLocalPort).getOrElse(throw new KafkaException())
+        controlPlaneAcceptorOpt.map (_.serverChannel.socket().getLocalPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
       }
     } catch {
       case e: Exception =>
