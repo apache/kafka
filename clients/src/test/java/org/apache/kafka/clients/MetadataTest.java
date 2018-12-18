@@ -550,7 +550,7 @@ public class MetadataTest {
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
 
-        // Simulate a leader epoch from another response, like a fetch response
+        // Simulate a leader epoch from another response, like a fetch response (future)
         assertTrue(metadata.maybeRequestUpdate(tp, 101));
 
         // Cache of partition goes away
