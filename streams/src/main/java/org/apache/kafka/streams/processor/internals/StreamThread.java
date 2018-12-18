@@ -523,33 +523,32 @@ public class StreamThread extends Thread {
 
         StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
             super(metrics, threadName);
-            final String group = "stream-metrics";
 
             commitTimeSensor = threadLevelSensor("commit-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(commitTimeSensor, group, tagMap(), "commit");
-            addInvocationRateAndCount(commitTimeSensor, group, tagMap(), "commit");
+            addAvgMaxLatency(commitTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "commit");
+            addInvocationRateAndCount(commitTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "commit");
 
             pollTimeSensor = threadLevelSensor("poll-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
+            addAvgMaxLatency(pollTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "poll");
             // can't use addInvocationRateAndCount due to non-standard description string
-            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new CumulativeCount());
+            pollTimeSensor.add(metrics.metricName("poll-rate", CLIENT_METRICS_GROUP, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            pollTimeSensor.add(metrics.metricName("poll-total", CLIENT_METRICS_GROUP, "The total number of record-poll calls", tagMap()), new CumulativeCount());
 
             processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
-            addInvocationRateAndCount(processTimeSensor, group, tagMap(), "process");
+            addAvgMaxLatency(processTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "process");
+            addInvocationRateAndCount(processTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "process");
 
             punctuateTimeSensor = threadLevelSensor("punctuate-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(punctuateTimeSensor, group, tagMap(), "punctuate");
-            addInvocationRateAndCount(punctuateTimeSensor, group, tagMap(), "punctuate");
+            addAvgMaxLatency(punctuateTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "punctuate");
+            addInvocationRateAndCount(punctuateTimeSensor, CLIENT_METRICS_GROUP, tagMap(), "punctuate");
 
             taskCreatedSensor = threadLevelSensor("task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tagMap()), new Total());
+            taskCreatedSensor.add(metrics.metricName("task-created-rate", CLIENT_METRICS_GROUP, "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskCreatedSensor.add(metrics.metricName("task-created-total", CLIENT_METRICS_GROUP, "The total number of newly created tasks", tagMap()), new Total());
 
             taskClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-            taskClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
+            taskClosedSensor.add(metrics.metricName("task-closed-rate", CLIENT_METRICS_GROUP, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
+            taskClosedSensor.add(metrics.metricName("task-closed-total", CLIENT_METRICS_GROUP, "The total number of closed tasks", tagMap()), new Total());
         }
     }
 

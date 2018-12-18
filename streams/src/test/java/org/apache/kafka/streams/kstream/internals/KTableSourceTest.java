@@ -38,6 +38,7 @@ import org.junit.Test;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.junit.Assert.assertEquals;
@@ -86,7 +87,7 @@ public class KTableSourceTest {
             driver.pipeInput(recordFactory.create(topic, null, "value"));
             LogCaptureAppender.unregister(appender);
 
-            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic] partition=[0] offset=[0]"));
         }
     }

@@ -25,12 +25,16 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -53,6 +57,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -82,6 +87,8 @@ import java.util.concurrent.TimeUnit;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_THREAD_ID_TAG;
 
 /**
  * A Kafka client that allows for performing continuous computation on input coming from one or more input topics and
@@ -209,7 +216,9 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private final Object stateLock = new Object();
+    private final Sensor rebalanceSensor;
     protected volatile State state = State.CREATED;
+    private long lastTimeRebalancing;
 
     private boolean waitOnState(final State targetState, final long waitMs) {
         final long begin = time.milliseconds();
@@ -256,6 +265,14 @@ public class KafkaStreams implements AutoCloseable {
             }
             state = newState;
             stateLock.notifyAll();
+        }
+
+        if (state == State.RUNNING) {
+            final long lastTimeRunning = System.currentTimeMillis();
+            rebalanceSensor.record(lastTimeRunning - lastTimeRebalancing);
+        }
+        if (state == State.REBALANCING) {
+            lastTimeRebalancing = System.currentTimeMillis();
         }
 
         // we need to call the user customized state listener outside the state lock to avoid potential deadlocks
@@ -737,6 +754,61 @@ public class KafkaStreams implements AutoCloseable {
             thread.setDaemon(true);
             return thread;
         });
+
+        // register instance-level metrics
+        final Map<String, String> clientTag = Collections.singletonMap(CLIENT_THREAD_ID_TAG, clientId);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
+        metrics.addMetric(
+            new MetricName(
+                "application-id",
+                CLIENT_METRICS_GROUP,
+                "The application id of this streams client.",
+                clientTag),
+            new Gauge<String>() {
+                @Override
+                public String value(MetricConfig config, long now) {
+                    return applicationId;
+                }
+            }
+        );
+        metrics.addMetric(
+            new MetricName(
+                "state",
+                CLIENT_METRICS_GROUP,
+                "The state of this streams client.",
+                clientTag),
+            new Gauge<State>() {
+                @Override
+                public State value(MetricConfig config, long now) {
+                    return state;
+                }
+            }
+        );
+        rebalanceSensor = metrics.sensor("streams.rebalance-sensor", Sensor.RecordingLevel.INFO);
+        rebalanceSensor.add(
+            new MetricName(
+                "rebalance-total",
+                CLIENT_METRICS_GROUP,
+                "The total number of rebalance triggered on this streams client.",
+                clientTag),
+            new CumulativeCount()
+        );
+        rebalanceSensor.add(
+            new MetricName(
+                "rebalance-latency-avg",
+                CLIENT_METRICS_GROUP,
+                "The average latency of rebalance events on this streams client.",
+                clientTag),
+            new Avg()
+        );
+        rebalanceSensor.add(
+            new MetricName(
+                "rebalance-latency-max",
+                CLIENT_METRICS_GROUP,
+                "The max latency of rebalance events on this streams client.",
+                clientTag),
+            new Max()
+        );
     }
 
     private static HostInfo parseHostInfo(final String endPoint) {

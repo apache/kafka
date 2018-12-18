@@ -41,6 +41,7 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -198,7 +199,7 @@ public class KStreamKTableJoinTest {
         driver.pipeInput(recordFactory.create(streamTopic, null, "A"));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] offset=[0]"));
     }
 
@@ -208,7 +209,7 @@ public class KStreamKTableJoinTest {
         driver.pipeInput(recordFactory.create(streamTopic, 1, (String) null));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] offset=[0]"));
     }
 }

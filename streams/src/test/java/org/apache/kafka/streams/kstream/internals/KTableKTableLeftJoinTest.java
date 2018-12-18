@@ -46,6 +46,7 @@ import java.util.Locale;
 import java.util.Random;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -418,7 +419,7 @@ public class KTableKTableLeftJoinTest {
         join.process(null, new Change<>("new", "old"));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 

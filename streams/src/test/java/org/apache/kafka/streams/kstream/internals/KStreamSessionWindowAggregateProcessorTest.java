@@ -52,6 +52,7 @@ import java.util.List;
 import static java.time.Duration.ofMillis;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -315,7 +316,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(null, "1");
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]"));
     }
 

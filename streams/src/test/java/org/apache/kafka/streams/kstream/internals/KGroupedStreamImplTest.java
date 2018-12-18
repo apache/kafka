@@ -60,6 +60,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -432,8 +433,8 @@ public class KGroupedStreamImplTest {
             LogCaptureAppender.unregister(appender);
 
             final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
+            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", CLIENT_METRICS_GROUP).metricValue());
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
         }
     }
@@ -474,8 +475,8 @@ public class KGroupedStreamImplTest {
             LogCaptureAppender.unregister(appender);
 
             final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", CLIENT_METRICS_GROUP).metricValue());
+            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", CLIENT_METRICS_GROUP).metricValue());
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
         }
     }

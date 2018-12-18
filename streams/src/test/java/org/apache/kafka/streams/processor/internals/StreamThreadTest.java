@@ -92,6 +92,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CLIENT_METRICS_GROUP;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -256,31 +257,30 @@ public class StreamThreadTest {
     @Test
     public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(clientId, config, false);
-        final String defaultGroupName = "stream-metrics";
         final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
 
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", defaultGroupName, "The total number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", defaultGroupName, "The total number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", defaultGroupName, "The total number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", defaultGroupName, "The total number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", defaultGroupName, "The total number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", CLIENT_METRICS_GROUP, "The average commit time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", CLIENT_METRICS_GROUP, "The maximum commit time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", CLIENT_METRICS_GROUP, "The average per-second number of commit calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", CLIENT_METRICS_GROUP, "The total number of commit calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", CLIENT_METRICS_GROUP, "The average poll time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", CLIENT_METRICS_GROUP, "The maximum poll time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", CLIENT_METRICS_GROUP, "The average per-second number of record-poll calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", CLIENT_METRICS_GROUP, "The total number of record-poll calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", CLIENT_METRICS_GROUP, "The average process time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", CLIENT_METRICS_GROUP, "The maximum process time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", CLIENT_METRICS_GROUP, "The average per-second number of process calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", CLIENT_METRICS_GROUP, "The total number of process calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", CLIENT_METRICS_GROUP, "The average punctuate time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", CLIENT_METRICS_GROUP, "The maximum punctuate time in ms", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", CLIENT_METRICS_GROUP, "The average per-second number of punctuate calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", CLIENT_METRICS_GROUP, "The total number of punctuate calls", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", CLIENT_METRICS_GROUP, "The average per-second number of newly created tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", CLIENT_METRICS_GROUP, "The total number of newly created tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", CLIENT_METRICS_GROUP, "The average per-second number of closed tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", CLIENT_METRICS_GROUP, "The total number of closed tasks", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", CLIENT_METRICS_GROUP, "The average per-second number of skipped records.", defaultTags)));
+        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", CLIENT_METRICS_GROUP, "The total number of skipped records.", defaultTags)));
     }
 
 
@@ -1297,8 +1297,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
+        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", CLIENT_METRICS_GROUP, Collections.singletonMap("client-id", thread.getName()));
+        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", CLIENT_METRICS_GROUP, Collections.singletonMap("client-id", thread.getName()));
         assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
         assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
@@ -1341,8 +1341,8 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", "stream-metrics", Collections.singletonMap("client-id", thread.getName()));
+        final MetricName skippedTotalMetric = metrics.metricName("skipped-records-total", CLIENT_METRICS_GROUP, Collections.singletonMap("client-id", thread.getName()));
+        final MetricName skippedRateMetric = metrics.metricName("skipped-records-rate", CLIENT_METRICS_GROUP, Collections.singletonMap("client-id", thread.getName()));
         assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
         assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
 
