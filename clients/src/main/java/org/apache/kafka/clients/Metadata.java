@@ -171,7 +171,7 @@ public class Metadata implements Closeable {
      */
     public synchronized boolean maybeRequestUpdate(TopicPartition topicPartition, int epoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
-        if(maybeUpdateLastSeenEpoch(topicPartition, epoch)) {
+        if (maybeUpdateLastSeenEpoch(topicPartition, epoch)) {
             this.needUpdate = true;
             return true;
         } else {
@@ -190,7 +190,7 @@ public class Metadata implements Closeable {
      */
     private boolean maybeUpdateLastSeenEpoch(TopicPartition topicPartition, int epoch) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
-        if(oldEpoch == null || epoch >= oldEpoch) {
+        if (oldEpoch == null || epoch >= oldEpoch) {
             lastSeenLeaderEpochs.put(topicPartition, epoch);
             return true;
         } else {
@@ -343,13 +343,13 @@ public class Metadata implements Closeable {
      */
     private PartitionInfo getPartitionInfoFromMeta(String topic, MetadataResponse.PartitionMetadata partitionMetadata) {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
-        if(partitionMetadata.leaderEpoch().isPresent()) {
+        if (partitionMetadata.leaderEpoch().isPresent()) {
             Integer newEpoch = partitionMetadata.leaderEpoch().get();
-            if(maybeUpdateLastSeenEpoch(tp, newEpoch)) {
+            if (maybeUpdateLastSeenEpoch(tp, newEpoch)) {
                 return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
             } else {
                 PartitionInfo previousInfo = cluster.partition(tp);
-                if(previousInfo != null) {
+                if (previousInfo != null) {
                     return previousInfo;
                 } else {
                     log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
