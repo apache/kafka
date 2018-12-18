@@ -61,12 +61,6 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    def verify_process_records(self):
-        with self.processor1.node.account.monitor_log(self.processor1.STDOUT_FILE) as monitor:
-            monitor.wait_until(self.processed_msg,
-                               timeout_sec=60,
-                               err_msg="Never saw output '%s' on" % self.processed_msg + str(self.processor1.node))
-
     @cluster(num_nodes=6)
     @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
     def test_upgrade_downgrade_brokers(self, from_version, to_version):
@@ -119,36 +113,37 @@ class StreamsUpgradeTest(Test):
                    err_msg="Broker did not create all topics in 60 seconds ")
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.driver.disable_auto_terminate()
 
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
+        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
         
         self.driver.start()
-        self.processor1.start()
-
-        self.verify_process_records()
+        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+            processor.start()
+            monitor.wait_until(self.processed_msg,
+                               timeout_sec=60,
+                               err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node))
 
         connected_message = "Discovered group coordinator"
-        with self.processor1.node.account.monitor_log(self.processor1.LOG_FILE) as log_monitor:
-            with self.processor1.node.account.monitor_log(self.processor1.STDOUT_FILE) as stdout_monitor:
+        with processor.node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+            with processor.node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
 
                 self.perform_broker_upgrade(to_version)
 
                 log_monitor.wait_until(connected_message,
                                        timeout_sec=120,
-                                       err_msg=("Never saw output '%s' on " % connected_message) + str(self.processor1.node.account))
+                                       err_msg=("Never saw output '%s' on " % connected_message) + str(processor.node.account))
 
                 stdout_monitor.wait_until(self.processed_msg,
                                           timeout_sec=60,
-                                          err_msg="Never saw output '%s' on" % self.processed_msg + str(self.processor1.node.account))
-
+                                          err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
+        self.driver.wait()
         self.driver.stop()
 
-        self.processor1.stop()
+        processor.stop()
 
         node = self.driver.node
         node.account.ssh("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
-        self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+        processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
