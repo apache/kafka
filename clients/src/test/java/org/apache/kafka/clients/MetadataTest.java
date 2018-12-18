@@ -465,7 +465,7 @@ public class MetadataTest {
                             new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
             metadata.update(metadataResponse, 10L);
             assertNotNull(metadata.fetch().partition(tp));
-            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+            assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
 
         // Fake an empty ISR, but with an older epoch, should reject it
@@ -476,7 +476,7 @@ public class MetadataTest {
                             new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
-            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+            assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
 
         // Fake an empty ISR, with same epoch, accept it
@@ -487,7 +487,7 @@ public class MetadataTest {
                             new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
-            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+            assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
 
         // Empty metadata response, should not keep old partition but should keep the last-seen epoch
@@ -496,7 +496,7 @@ public class MetadataTest {
                     "dummy", 1, Collections.emptyMap(), Collections.emptyMap(), MetadataResponse.PartitionMetadata::new);
             metadata.update(metadataResponse, 20L);
             assertNull(metadata.fetch().partition(tp));
-            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+            assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
 
         // Back in the metadata, with old epoch, should not get added
@@ -507,7 +507,7 @@ public class MetadataTest {
                             new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, isr, offlineReplicas));
             metadata.update(metadataResponse, 10L);
             assertNotNull(metadata.fetch().partition(tp));
-            assertEquals(metadata.getLastEpochSeen(tp).get().longValue(), 100);
+            assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
     }
 

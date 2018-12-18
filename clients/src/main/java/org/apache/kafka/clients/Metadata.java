@@ -77,7 +77,7 @@ public class Metadata implements Closeable {
     private final boolean allowAutoTopicCreation;
     private final boolean topicExpiryEnabled;
     private boolean isClosed;
-    private final Map<TopicPartition, Integer> lastSeenEpochs;
+    private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
 
     public Metadata(long refreshBackoffMs,
                     long metadataExpireMs,
@@ -114,7 +114,7 @@ public class Metadata implements Closeable {
         this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
         this.isClosed = false;
-        this.lastSeenEpochs = new HashMap<>();
+        this.lastSeenLeaderEpochs = new HashMap<>();
     }
 
     /**
@@ -168,21 +168,20 @@ public class Metadata implements Closeable {
 
     /**
      * Request an update for the current metadata info of a partition and ensure it is as recent as the given epoch,
-     * return the current version before the update
      */
-    public synchronized int maybeRequestUpdate(TopicPartition topicPartition, int epoch) {
+    public synchronized boolean maybeRequestUpdate(TopicPartition topicPartition, int epoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
         if(maybeUpdateLastSeenEpoch(topicPartition, epoch)) {
             this.needUpdate = true;
+            return true;
+        } else {
+            return false;
         }
-        return this.version;
     }
 
-    /**
-     * Return the last seen epoch for the given partition, if any
-     */
-    public Optional<Integer> getLastEpochSeen(TopicPartition topicPartition) {
-        return Optional.ofNullable(lastSeenEpochs.get(topicPartition));
+    // Visible for testing
+    Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
+        return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition));
     }
 
     /**
@@ -190,9 +189,9 @@ public class Metadata implements Closeable {
      * seen epoch
      */
     private boolean maybeUpdateLastSeenEpoch(TopicPartition topicPartition, int epoch) {
-        Integer oldEpoch = lastSeenEpochs.get(topicPartition);
+        Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
         if(oldEpoch == null || epoch >= oldEpoch) {
-            lastSeenEpochs.put(topicPartition, epoch);
+            lastSeenLeaderEpochs.put(topicPartition, epoch);
             return true;
         } else {
             return false;
