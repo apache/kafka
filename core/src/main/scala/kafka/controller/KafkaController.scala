@@ -530,32 +530,30 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
     val currentReplicas = getCurrentReplicas(topicPartition)
     // 1. Wait until all current replicas are in ISR
-    if (areReplicasInIsr(topicPartition, currentReplicas)) {
+    if (atLeastOneReplicaInIsr(topicPartition, currentReplicas)) {
       // 2. Calculate the next reassigment step
       val reassignedReplicas = reassignedPartitionContext.newReplicas
       val reassignmentStep = calculateReassignmentStep(topicPartition, reassignedReplicas)
-      val newReplicas = replicaStateMachine.replicasInState(topicPartition.topic, NewReplica).toSeq
-      val allNewReplicasInISR = areReplicasInIsr(topicPartition, reassignedReplicas)
+
       // 3. Wait until all target brokers are alive
       val deadTargetReplicas = reassignmentStep.targetReplicas.toSet -- controllerContext.liveBrokerIds
       if (deadTargetReplicas.isEmpty) {
-        // 4. All new replicas -> OnlineReplica when they are in ISR
-        if (areReplicasInIsr(topicPartition, newReplicas.map(_.replica))) {
-          replicaStateMachine.handleStateChanges(newReplicas, OnlineReplica)
-        }
         info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
-          "caught up with the leader")
-        // 5. Update AR in ZK with TR: added and removed replicas will be reflected in Zookeeper
+        "caught up with the leader")
+        // 4. Update AR in ZK with TR: added and removed replicas will be reflected in Zookeeper
         updateAssignedReplicasForPartition(topicPartition, reassignmentStep.targetReplicas)
-        // 6. Send LeaderAndIsr request to every replica in AR + NR: add or remove will be sent out to the brokers
+        // 5. Send LeaderAndIsr request to every replica in AR + NR: add or remove will be sent out to the brokers
         val currentAndAddedReplicas = currentReplicas ++ Seq(reassignmentStep.add).flatten
         updateLeaderEpochAndSendRequest(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
-        // 7. Replicas in NR -> NewReplica
+        // 6. Replicas in NR -> NewReplica
         if (reassignmentStep.add.isDefined) {
           startNewReplicasForReassignedPartition(topicPartition, Set(reassignmentStep.add).flatten)
           info(s"Starting new replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being " +
-            "reassigned to catch up with the leader")
+          "reassigned to catch up with the leader")
         }
+        val newReplicasInIsr = selectIsr(replicaStateMachine.replicasInState(topicPartition.topic, NewReplica).toSeq)
+        // 7. All new replicas -> OnlineReplica when they are in ISR
+        replicaStateMachine.handleStateChanges(newReplicasInIsr, OnlineReplica)
         if (reassignmentStep.drop.nonEmpty) {
           // 8. Set AR to TR in memory.
           // 9. Send LeaderAndIsr request with a potential new leader (if current leader not in TR) and
@@ -569,8 +567,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, reassignmentStep.drop.toSet)
           }
         }
-        //10. Update AR in ZK with RAR.
-        //        updateAssignedReplicasForPartition(topicPartition, reassignedReplicas)
+        val allNewReplicasInISR = areReplicasInIsr(topicPartition, reassignedReplicas)
         if (allNewReplicasInISR) {
           info("All replicas are in sync, reassign finished")
           // 12. Update the /admin/reassign_partitions path in ZK to remove this partition.
@@ -761,6 +758,22 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   private def areReplicasInIsr(partition: TopicPartition, replicas: Seq[Int]): Boolean = {
     zkClient.getTopicPartitionStates(Seq(partition)).get(partition).exists { leaderIsrAndControllerEpoch =>
       replicas.forall(leaderIsrAndControllerEpoch.leaderAndIsr.isr.contains)
+    }
+  }
+
+  private def selectIsr(replicas: Seq[PartitionAndReplica]): Seq[PartitionAndReplica] = {
+    val replicasByPartitions = replicas.groupBy(r => r.topicPartition)
+    val partitionStates = zkClient.getTopicPartitionStates(replicasByPartitions.keys.toSeq)
+    replicasByPartitions.map{ case (partition, replicasForPartition) =>
+      val isr = partitionStates(partition).leaderAndIsr.isr
+      val inIsr = replicasForPartition.filter(r => isr.contains(r.replica))
+      partition -> inIsr
+    }.values.flatten.toSeq
+  }
+
+  private def atLeastOneReplicaInIsr(partition: TopicPartition, replicas: Seq[Int]): Boolean = {
+    zkClient.getTopicPartitionState(partition).exists{ leaderIsrAndControllerEpoch =>
+      replicas.intersect(leaderIsrAndControllerEpoch.leaderAndIsr.isr).nonEmpty
     }
   }
 
