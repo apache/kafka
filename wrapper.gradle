@@ -118,7 +118,7 @@ task bootstrapWrapperProperties() {
 wrapper.finalizedBy bootstrapWrapperProperties
 
 // Remove the generated batch file since we don't test building in the Windows environment.
-task removeWindowScript(type: Delete) {
+task removeWindowsScript(type: Delete) {
     delete "$rootDir/gradlew.bat"
 }
-wrapper.finalizedBy removeWindowScript
+wrapper.finalizedBy removeWindowsScript
