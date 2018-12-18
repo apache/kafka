@@ -22,6 +22,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -583,6 +584,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } else {
             log.info("Resetting offset for partition {} to offset {}.", partition, offsetData.offset);
             subscriptions.seek(partition, offsetData.offset);
+            offsetData.leaderEpoch.ifPresent(epoch -> metadata.maybeRequestUpdate(partition, epoch));
         }
     }
 

@@ -191,6 +191,7 @@ public class Metadata implements Closeable {
     private boolean maybeUpdateLastSeenEpoch(TopicPartition topicPartition, int epoch) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
         if (oldEpoch == null || epoch >= oldEpoch) {
+            log.debug("Setting last seen epoch to {} for partition {}", epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
             return true;
         } else {

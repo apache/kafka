@@ -1516,6 +1516,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         }
     }
 
+    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        long offset = offsetAndMetadata.offset();
+        if (offset < 0) {
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+        }
+
+        acquireAndEnsureOpen();
+        try {
+            log.debug("Seeking to offset {} for partition {}", offset, partition);
+            this.subscriptions.seek(partition, offset);
+            offsetAndMetadata.leaderEpoch().ifPresent(epoch -> this.metadata.maybeRequestUpdate(partition, epoch));
+        } finally {
+            release();
+        }
+    }
+
     /**
      * Seek to the first offset for each of the given partitions. This function evaluates lazily, seeking to the
      * first offset in all partitions only when {@link #poll(Duration)} or {@link #position(TopicPartition)} are called.

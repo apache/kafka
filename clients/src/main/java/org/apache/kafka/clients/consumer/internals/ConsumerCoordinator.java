@@ -501,6 +501,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final long offset = entry.getValue().offset();
             log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
             this.subscriptions.seek(tp, offset);
+            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.maybeRequestUpdate(tp, epoch));
         }
         return true;
     }
