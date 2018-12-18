@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.utils.Utils;
-
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -26,7 +24,9 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
@@ -40,9 +40,6 @@ public final class Cluster {
     private final Set<String> internalTopics;
     private final Node controller;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
-    private final Map<String, List<PartitionInfo>> partitionsByTopic;
-    private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
-    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
 
@@ -106,46 +103,12 @@ public final class Cluster {
         for (Node node : nodes)
             this.nodesById.put(node.id(), node);
 
+
         // index the partitions by topic/partition for quick lookup
         this.partitionsByTopicPartition = new HashMap<>(partitions.size());
-        for (PartitionInfo p : partitions)
-            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-
-        // index the partitions by topic and node respectively, and make the lists
-        // unmodifiable so we can hand them out in user-facing apis without risk
-        // of the client modifying the contents
-        HashMap<String, List<PartitionInfo>> partsForTopic = new HashMap<>();
-        HashMap<Integer, List<PartitionInfo>> partsForNode = new HashMap<>();
-        for (Node n : this.nodes) {
-            partsForNode.put(n.id(), new ArrayList<>());
-        }
         for (PartitionInfo p : partitions) {
-            if (!partsForTopic.containsKey(p.topic()))
-                partsForTopic.put(p.topic(), new ArrayList<>());
-            List<PartitionInfo> psTopic = partsForTopic.get(p.topic());
-            psTopic.add(p);
-
-            if (p.leader() != null) {
-                List<PartitionInfo> psNode = Utils.notNull(partsForNode.get(p.leader().id()));
-                psNode.add(p);
-            }
+            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
         }
-        this.partitionsByTopic = new HashMap<>(partsForTopic.size());
-        this.availablePartitionsByTopic = new HashMap<>(partsForTopic.size());
-        for (Map.Entry<String, List<PartitionInfo>> entry : partsForTopic.entrySet()) {
-            String topic = entry.getKey();
-            List<PartitionInfo> partitionList = entry.getValue();
-            this.partitionsByTopic.put(topic, Collections.unmodifiableList(partitionList));
-            List<PartitionInfo> availablePartitions = new ArrayList<>();
-            for (PartitionInfo part : partitionList) {
-                if (part.leader() != null)
-                    availablePartitions.add(part);
-            }
-            this.availablePartitionsByTopic.put(topic, Collections.unmodifiableList(availablePartitions));
-        }
-        this.partitionsByNode = new HashMap<>(partsForNode.size());
-        for (Map.Entry<Integer, List<PartitionInfo>> entry : partsForNode.entrySet())
-            this.partitionsByNode.put(entry.getKey(), Collections.unmodifiableList(entry.getValue()));
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
@@ -218,7 +181,7 @@ public final class Cluster {
     /**
      * Get the metadata for the specified partition
      * @param topicPartition The topic and partition to fetch info for
-     * @return The metadata about the given topic and partition
+     * @return The metadata about the given topic and partition, or null if none is found
      */
     public PartitionInfo partition(TopicPartition topicPartition) {
         return partitionsByTopicPartition.get(topicPartition);
@@ -230,8 +193,9 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
-        List<PartitionInfo> parts = this.partitionsByTopic.get(topic);
-        return (parts == null) ? Collections.emptyList() : parts;
+        return partitionsByTopicPartition.values().stream()
+                .filter(info -> info.topic().equals(topic))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -240,8 +204,7 @@ public final class Cluster {
      * @return The number of partitions or null if there is no corresponding metadata
      */
     public Integer partitionCountForTopic(String topic) {
-        List<PartitionInfo> partitions = this.partitionsByTopic.get(topic);
-        return partitions == null ? null : partitions.size();
+        return partitionsForTopic(topic).size();
     }
 
     /**
@@ -250,8 +213,10 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
-        List<PartitionInfo> parts = this.availablePartitionsByTopic.get(topic);
-        return (parts == null) ? Collections.emptyList() : parts;
+        return partitionsByTopicPartition.values().stream()
+                .filter(info -> info.topic().equals(topic))
+                .filter(info -> Objects.nonNull(info.leader()))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -260,8 +225,18 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
-        List<PartitionInfo> parts = this.partitionsByNode.get(nodeId);
-        return (parts == null) ? Collections.emptyList() : parts;
+        return partitionsByTopicPartition.values().stream()
+                .filter(info -> Objects.nonNull(info.leader()) && info.leader().id() == nodeId)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * Remove a partition from this cache.
+     * @param topicPartition
+     * @return
+     */
+    public boolean removePartition(TopicPartition topicPartition) {
+        return partitionsByTopicPartition.remove(topicPartition) != null;
     }
 
     /**
@@ -269,7 +244,9 @@ public final class Cluster {
      * @return a set of all topics
      */
     public Set<String> topics() {
-        return this.partitionsByTopic.keySet();
+        return this.partitionsByTopicPartition.keySet().stream()
+                .map(TopicPartition::topic)
+                .collect(Collectors.toSet());
     }
 
     public Set<String> unauthorizedTopics() {
