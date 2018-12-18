@@ -18,7 +18,6 @@ package kafka.admin
 
 import kafka.admin.TopicCommand.{TopicCommandOptions, ZookeeperTopicService}
 import kafka.server.ConfigType
-import kafka.utils.ZkUtils.getDeleteTopicPath
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
@@ -379,7 +378,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     topicService.createTopic(createOffsetTopicOpts)
 
     val deleteOffsetTopicOpts = new TopicCommandOptions(Array("--topic", Topic.GROUP_METADATA_TOPIC_NAME))
-    val deleteOffsetTopicPath = getDeleteTopicPath(Topic.GROUP_METADATA_TOPIC_NAME)
+    val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     intercept[AdminOperationException] {
       topicService.deleteTopic(deleteOffsetTopicOpts)

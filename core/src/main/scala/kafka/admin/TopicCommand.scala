@@ -414,7 +414,7 @@ object TopicCommand extends Logging {
     println()
   }
 
-  private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
+  private def doGetTopics(allTopics: Seq[String], topicWhitelist: Option[String], excludeInternalTopics: Boolean): Seq[String] = {
     if (topicWhitelist.isDefined) {
       val topicsFilter = Whitelist(topicWhitelist.get)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
