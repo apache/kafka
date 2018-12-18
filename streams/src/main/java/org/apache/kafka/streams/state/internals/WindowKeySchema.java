@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
+public class WindowKeySchema<S extends Segment> implements RocksDBSegmentedBytesStore.KeySchema<S> {
 
     private static final int SEQNUM_SIZE = 4;
     private static final int TIMESTAMP_SIZE = 8;
@@ -93,7 +93,7 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
+    public List<S> segmentsToSearch(final AbstractSegments<S> segments, final long from, final long to) {
         return segments.segments(from, to);
     }
 

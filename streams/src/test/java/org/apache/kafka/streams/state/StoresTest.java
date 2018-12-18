@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueKeyValueWithTimestampProxyStore;
+import org.apache.kafka.streams.state.internals.KeyValueToKeyValueWithTimestampByteProxyStore;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDBSegmentedBytesStore;
 import org.apache.kafka.streams.state.internals.RocksDBSessionStore;
@@ -163,7 +163,7 @@ public class StoresTest {
             Serdes.String(),
             Serdes.String()
         ).build();
-        assertThat(((WrappedStateStore) store).inner(), instanceOf(KeyValueKeyValueWithTimestampProxyStore.class));
+        assertThat(((WrappedStateStore) store).inner(), instanceOf(KeyValueToKeyValueWithTimestampByteProxyStore.class));
     }
 
     @Test

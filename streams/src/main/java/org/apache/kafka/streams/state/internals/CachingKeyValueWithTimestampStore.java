@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -24,9 +23,8 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 class CachingKeyValueWithTimestampStore<K, V> extends CachingKeyValueStore<K, V> {
-    private final LongDeserializer longDeserializer = new LongDeserializer();
 
-    public CachingKeyValueWithTimestampStore(final KeyValueStore<Bytes, byte[]> underlying, final Serde<K> keySerde, final Serde<V> valueSerde) {
+    CachingKeyValueWithTimestampStore(final KeyValueStore<Bytes, byte[]> underlying, final Serde<K> keySerde, final Serde<V> valueSerde) {
         super(underlying, keySerde, valueSerde);
     }
 
@@ -46,19 +44,12 @@ class CachingKeyValueWithTimestampStore<K, V> extends CachingKeyValueStore<K, V>
                 }
                 // we rely on underlying store to handle null new value bytes as deletes
                 final byte[] rawValueAndTimestamp =  entry.newValue();
-                final byte[] rawTimestamp;
                 final byte[] rawValue;
-                final long timestamp;
                 if (rawValueAndTimestamp != null) {
-                    rawTimestamp = new byte[8];
                     rawValue = new byte[rawValueAndTimestamp.length - 8];
-                    System.arraycopy(rawValueAndTimestamp, 0, rawTimestamp, 0, 8);
                     System.arraycopy(rawValueAndTimestamp, 8, rawValue, 0, rawValue.length);
-                    timestamp = longDeserializer.deserialize(null, rawTimestamp);
                 } else {
-                    rawTimestamp = null;
                     rawValue = null;
-                    timestamp = entry.entry().context().timestamp();
                 }
 
                 underlying.put(entry.key(), rawValueAndTimestamp);
@@ -66,7 +57,7 @@ class CachingKeyValueWithTimestampStore<K, V> extends CachingKeyValueStore<K, V>
                     serdes.keyFrom(entry.key().get()),
                     serdes.valueFrom(rawValue),
                     oldValue,
-                    timestamp);
+                    entry.entry().context().timestamp());
             } else {
                 underlying.put(entry.key(), entry.newValue());
             }

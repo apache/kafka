@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -34,7 +33,9 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -154,7 +155,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private <VR> StoreBuilder<WindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
+    private <VR> StoreBuilder<WindowWithTimestampStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
         WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             if (materialized.retention() != null) {
@@ -169,7 +170,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                                                            + " retention=[" + retentionPeriod + "]");
                 }
 
-                supplier = Stores.persistentWindowStore(
+                supplier = Stores.persistentWindowWithTimestampStore(
                     materialized.storeName(),
                     Duration.ofMillis(retentionPeriod),
                     Duration.ofMillis(windows.size()),
@@ -199,7 +200,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
                 );
             }
         }
-        final StoreBuilder<WindowStore<K, VR>> builder = Stores.windowStoreBuilder(
+        final StoreBuilder<WindowWithTimestampStore<K, VR>> builder = Stores.windowWithTimestampStoreBuilder(
             supplier,
             materialized.keySerde(),
             materialized.valueSerde()

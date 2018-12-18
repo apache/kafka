@@ -33,10 +33,12 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionWithTimestampStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -80,7 +82,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
     private final List<KeyValue> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
-    private SessionStore<String, Long> sessionStore;
+    private SessionWithTimestampStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
     private Metrics metrics;
 
@@ -109,10 +111,12 @@ public class KStreamSessionWindowAggregateProcessorTest {
     }
 
     private void initStore(final boolean enableCaching) {
-        final StoreBuilder<SessionStore<String, Long>> storeBuilder = Stores.sessionStoreBuilder(Stores.persistentSessionStore(STORE_NAME, ofMillis(GAP_MS * 3)),
-                                                                                                 Serdes.String(),
-                                                                                                 Serdes.Long())
-                                                                            .withLoggingDisabled();
+        final StoreBuilder<SessionWithTimestampStore<String, Long>> storeBuilder
+            = Stores.sessionWithTimestampStoreBuilder(
+                    Stores.persistentSessionWithTimestampStore(STORE_NAME, ofMillis(GAP_MS * 3)),
+                    Serdes.String(),
+                    Serdes.Long())
+                .withLoggingDisabled();
 
         if (enableCaching) {
             storeBuilder.withCachingEnabled();
@@ -134,9 +138,9 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(500);
         processor.process("john", "second");
 
-        final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions("john", 0, 2000);
+        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>> values = sessionStore.findSessions("john", 0, 2000);
         assertTrue(values.hasNext());
-        assertEquals(Long.valueOf(2), values.next().value);
+        assertEquals(Long.valueOf(2), values.next().value.value());
     }
 
 
@@ -157,10 +161,10 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(GAP_MS / 2);
         processor.process(sessionId, "third");
 
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(sessionId, 0, GAP_MS + 1);
-        final KeyValue<Windowed<String>, Long> kv = iterator.next();
+        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>> iterator = sessionStore.findSessions(sessionId, 0, GAP_MS + 1);
+        final KeyValue<Windowed<String>, ValueAndTimestamp<Long>> kv = iterator.next();
 
-        assertEquals(Long.valueOf(3), kv.value);
+        assertEquals(Long.valueOf(3), kv.value.value());
         assertFalse(iterator.hasNext());
     }
 
@@ -169,8 +173,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(0);
         processor.process("mel", "first");
         processor.process("mel", "second");
-        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("mel", 0, 0);
-        assertEquals(Long.valueOf(2L), iterator.next().value);
+        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>> iterator = sessionStore.findSessions("mel", 0, 0);
+        assertEquals(Long.valueOf(2L), iterator.next().value.value());
         assertFalse(iterator.hasNext());
     }
 
@@ -206,15 +210,15 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("a", "1");
 
         // first ensure it is in the store
-        final KeyValueIterator<Windowed<String>, Long> a1 = sessionStore.findSessions("a", 0, 0);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L), a1.next());
+        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>> a1 = sessionStore.findSessions("a", 0, 0);
+        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), new ValueAndTimestampImpl<>(1L, 0L)), a1.next());
 
         context.setTime(100);
         processor.process("a", "2");
         // a1 from above should have been removed
         // should have merged session in store
-        final KeyValueIterator<Windowed<String>, Long> a2 = sessionStore.findSessions("a", 0, 100);
-        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 100)), 2L), a2.next());
+        final KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>> a2 = sessionStore.findSessions("a", 0, 100);
+        assertEquals(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 100)), new ValueAndTimestampImpl<>(2L, 100L)), a2.next());
         assertFalse(a2.hasNext());
     }
 

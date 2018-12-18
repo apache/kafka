@@ -51,7 +51,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
 import java.lang.reflect.Array;
 import java.time.Duration;
@@ -850,12 +850,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    private static <K, V> StoreBuilder<WindowStore<K, V>> joinWindowStoreBuilder(final String joinName,
-                                                                                 final JoinWindows windows,
-                                                                                 final Serde<K> keySerde,
-                                                                                 final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
+    private static <K, V> StoreBuilder<WindowWithTimestampStore<K, V>> joinWindowStoreBuilder(final String joinName,
+                                                                                              final JoinWindows windows,
+                                                                                              final Serde<K> keySerde,
+                                                                                              final Serde<V> valueSerde) {
+        return Stores.windowWithTimestampStoreBuilder(
+            Stores.persistentWindowWithTimestampStore(
                 joinName + "-store",
                 Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
                 Duration.ofMillis(windows.size()),
@@ -893,9 +893,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             final StreamsGraphNode otherStreamsGraphNode = ((AbstractStream) other).streamsGraphNode;
 
 
-            final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
+            final StoreBuilder<WindowWithTimestampStore<K1, V1>> thisWindowStore =
                 joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
-            final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
+            final StoreBuilder<WindowWithTimestampStore<K1, V2>> otherWindowStore =
                 joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
 
             final KStreamJoinWindow<K1, V1> thisWindowedStream = new KStreamJoinWindow<>(thisWindowStore.name());

@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
 /**
  * Too much information to generalize, so Stream-Stream joins are represented by a specific node.
@@ -30,21 +30,20 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     private final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters;
     private final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters;
-    private final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-    private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
+    private final StoreBuilder<WindowWithTimestampStore<K, V1>> thisWindowStoreBuilder;
+    private final StoreBuilder<WindowWithTimestampStore<K, V2>> otherWindowStoreBuilder;
     private final Joined<K, V1, V2> joined;
 
-
-    StreamStreamJoinNode(final String nodeName,
-                         final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
-                         final ProcessorParameters<K, V1> joinThisProcessorParameters,
-                         final ProcessorParameters<K, V2> joinOtherProcessParameters,
-                         final ProcessorParameters<K, VR> joinMergeProcessorParameters,
-                         final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
-                         final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
-                         final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
-                         final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
-                         final Joined<K, V1, V2> joined) {
+    private StreamStreamJoinNode(final String nodeName,
+                                 final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
+                                 final ProcessorParameters<K, V1> joinThisProcessorParameters,
+                                 final ProcessorParameters<K, V2> joinOtherProcessParameters,
+                                 final ProcessorParameters<K, VR> joinMergeProcessorParameters,
+                                 final ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters,
+                                 final ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters,
+                                 final StoreBuilder<WindowWithTimestampStore<K, V1>> thisWindowStoreBuilder,
+                                 final StoreBuilder<WindowWithTimestampStore<K, V2>> otherWindowStoreBuilder,
+                                 final Joined<K, V1, V2> joined) {
 
         super(nodeName,
               valueJoiner,
@@ -102,8 +101,8 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private ProcessorParameters<K, VR> joinMergeProcessorParameters;
         private ProcessorParameters<K, V1> thisWindowedStreamProcessorParameters;
         private ProcessorParameters<K, V2> otherWindowedStreamProcessorParameters;
-        private StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-        private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
+        private StoreBuilder<WindowWithTimestampStore<K, V1>> thisWindowStoreBuilder;
+        private StoreBuilder<WindowWithTimestampStore<K, V2>> otherWindowStoreBuilder;
         private Joined<K, V1, V2> joined;
 
 
@@ -147,12 +146,12 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowStoreBuilder(final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder) {
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowStoreBuilder(final StoreBuilder<WindowWithTimestampStore<K, V1>> thisWindowStoreBuilder) {
             this.thisWindowStoreBuilder = thisWindowStoreBuilder;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowStoreBuilder(final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder) {
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowStoreBuilder(final StoreBuilder<WindowWithTimestampStore<K, V2>> otherWindowStoreBuilder) {
             this.otherWindowStoreBuilder = otherWindowStoreBuilder;
             return this;
         }

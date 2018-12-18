@@ -139,7 +139,7 @@ public final class QueryableStoreTypes {
         }
     }
 
-    public  static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
+    public static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
 
         WindowStoreType() {
             super(ReadOnlyWindowStore.class);
@@ -165,7 +165,7 @@ public final class QueryableStoreTypes {
         }
     }
 
-    private static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+    public static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
 
         SessionStoreType() {
             super(ReadOnlySessionStore.class);

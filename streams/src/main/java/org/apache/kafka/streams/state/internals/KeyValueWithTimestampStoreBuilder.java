@@ -50,7 +50,7 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
     public KeyValueWithTimestampStore<K, V> build() {
         KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
         if (!(store instanceof RecordConverter) && store.persistent()) {
-            store = new KeyValueKeyValueWithTimestampProxyStore(store);
+            store = new KeyValueToKeyValueWithTimestampByteProxyStore(store);
         }
         return new MeteredKeyValueWithTimestampStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),
@@ -123,11 +123,11 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         }
     }
 
-    public static class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+    static class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
         public final Serializer<V> valueSerializer;
         private final Serializer<Long> timestampSerializer;
 
-        private ValueAndTimestampSerializer(final Serializer<V> valueSerializer) {
+        ValueAndTimestampSerializer(final Serializer<V> valueSerializer) {
             this.valueSerializer = valueSerializer;
             timestampSerializer = new LongSerializer();
         }
@@ -142,8 +142,20 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         @Override
         public byte[] serialize(final String topic,
                                 final ValueAndTimestamp<V> data) {
-            final byte[] rawTimestamp = timestampSerializer.serialize(topic, data.timestamp());
-            final byte[] rawValue = valueSerializer.serialize(topic, data.value());
+            if (data == null) {
+                return null;
+            }
+            return serialize(topic, data.value(), data.timestamp());
+        }
+
+        public byte[] serialize(final String topic,
+                                final V data,
+                                final long timestamp) {
+            if (data == null) {
+                return null;
+            }
+            final byte[] rawValue = valueSerializer.serialize(topic, data);
+            final byte[] rawTimestamp = timestampSerializer.serialize(topic, timestamp);
             final byte[] rawValueAndTimestamp = new byte[rawTimestamp.length + rawValue.length];
             System.arraycopy(rawTimestamp, 0, rawValueAndTimestamp, 0, rawTimestamp.length);
             System.arraycopy(rawValue, 0, rawValueAndTimestamp, rawTimestamp.length, rawValue.length);
@@ -157,11 +169,11 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         }
     }
 
-    public static class ValueAndTimestampDeserializer<V> implements Deserializer<ValueAndTimestamp<V>> {
+    static class ValueAndTimestampDeserializer<V> implements Deserializer<ValueAndTimestamp<V>> {
         public final Deserializer<V> valueDeserializer;
         private final Deserializer<Long> timestampDeserializer;
 
-        private ValueAndTimestampDeserializer(final Deserializer<V> valueDeserializer) {
+        ValueAndTimestampDeserializer(final Deserializer<V> valueDeserializer) {
             this.valueDeserializer = valueDeserializer;
             timestampDeserializer = new LongDeserializer();
         }
@@ -176,6 +188,9 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         @Override
         public ValueAndTimestamp<V> deserialize(final String topic,
                                                 final byte[] data) {
+            if (data == null) {
+                return null;
+            }
             final long timestamp = timestampDeserializer.deserialize(topic, Arrays.copyOfRange(data, 0, 8));
             final V value = valueDeserializer.deserialize(topic, Arrays.copyOfRange(data, 8, data.length));
             return new ValueAndTimestampImpl<>(value, timestamp);

@@ -43,7 +43,7 @@ public class RocksDbSessionBytesStoreSupplier implements SessionBytesStoreSuppli
             metricsScope(),
             retentionPeriod,
             segmentIntervalMs(),
-            new SessionKeySchema());
+            new SessionKeySchema<>());
         return new RocksDBSessionStore<>(segmented, Serdes.Bytes(), Serdes.ByteArray());
     }
 

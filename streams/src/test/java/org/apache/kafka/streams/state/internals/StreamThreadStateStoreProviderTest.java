@@ -75,7 +75,12 @@ public class StreamThreadStateStoreProviderTest {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
         topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
-        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv-store"), Serdes.String(), Serdes.String()), "the-processor");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("kv-store"),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
         topology.addStateStore(
             Stores.windowStoreBuilder(
                 Stores.persistentWindowStore("window-store", Duration.ofMillis(10L), Duration.ofMillis(2L), false),
@@ -153,8 +158,9 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() {
         mockThread(true);
-        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
-            .keyValueStore()));
+        assertEquals(
+            Collections.emptyList(),
+            provider.stores("not-a-store", QueryableStoreTypes.keyValueStore()));
     }
 
 

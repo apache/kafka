@@ -40,17 +40,16 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     private final Serde<V> valueSerde;
     private final long windowSize;
     private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
-
+    private final SegmentedCacheFunction cacheFunction;
 
     private String name;
     private ThreadCache cache;
-    private boolean sendOldValues;
-    private StateSerdes<K, V> serdes;
     private InternalProcessorContext context;
     private StateSerdes<Bytes, byte[]> bytesSerdes;
-    private CacheFlushListener<Windowed<K>, V> flushListener;
 
-    private final SegmentedCacheFunction cacheFunction;
+    boolean sendOldValues;
+    CacheFlushListener<Windowed<K>, V> flushListener;
+    StateSerdes<K, V> serdes;
 
     CachingWindowStore(final WindowStore<Bytes, byte[]> underlying,
                        final Serde<K> keySerde,
@@ -102,10 +101,10 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         });
     }
 
-    private void maybeForward(final ThreadCache.DirtyEntry entry,
-                              final Bytes key,
-                              final Windowed<K> windowedKey,
-                              final InternalProcessorContext context) {
+    void maybeForward(final ThreadCache.DirtyEntry entry,
+                      final Bytes key,
+                      final Windowed<K> windowedKey,
+                      final InternalProcessorContext context) {
         if (flushListener != null) {
             final ProcessorRecordContext current = context.recordContext();
             context.setRecordContext(entry.entry().context());
@@ -234,7 +233,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         );
     }
 
-    private V fetchPrevious(final Bytes key, final long timestamp) {
+    V fetchPrevious(final Bytes key, final long timestamp) {
         final byte[] value = underlying.fetch(key, timestamp);
         if (value != null) {
             return serdes.valueFrom(value);

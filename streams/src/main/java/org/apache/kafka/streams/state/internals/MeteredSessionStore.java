@@ -65,12 +65,14 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         //noinspection unchecked
-        this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-        this.metrics = (StreamsMetricsImpl) context.metrics();
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
         final String metricsGroup = "stream-" + metricScope + "-metrics";
@@ -153,7 +155,8 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
-    public void put(final Windowed<K> sessionKey, final V aggregate) {
+    public void put(final Windowed<K> sessionKey,
+                    final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         final long startNs = time.nanoseconds();
         try {
@@ -178,7 +181,8 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                  final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);

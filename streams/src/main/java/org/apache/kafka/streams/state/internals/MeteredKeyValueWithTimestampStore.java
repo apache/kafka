@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -54,12 +52,12 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
     private final KeyValueStore<Bytes, byte[]> inner;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
-    private StateSerdes<K, V> serdes;
-    private final LongSerializer longSerializer = new LongSerializer();
-    private final LongDeserializer longDeserializer = new LongDeserializer();
-
     private final String metricScope;
     protected final Time time;
+
+    private StateSerdes<K, V> serdes;
+    private KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerializer<V> valueAndTimestampSerializer;
+    private KeyValueWithTimestampStoreBuilder.ValueAndTimestampDeserializer<V> valueAndTimestampDeserializer;
     private Sensor putTime;
     private Sensor putIfAbsentTime;
     private Sensor getTime;
@@ -95,10 +93,12 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
         final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
         final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
 
-        this.serdes = new StateSerdes<>(
+        serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        valueAndTimestampSerializer = new KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerializer<>(serdes.valueSerializer());
+        valueAndTimestampDeserializer = new KeyValueWithTimestampStoreBuilder.ValueAndTimestampDeserializer<>(serdes.valueDeserializer());
 
         putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         putIfAbsentTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-if-absent", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
@@ -138,9 +138,9 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
     public ValueAndTimestamp<V> get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.get(keyBytes(key))), getTime);
+                return measureLatency(() -> valueAndTimestampDeserializer.deserialize(null, inner.get(keyBytes(key))), getTime);
             } else {
-                return outerValue(inner.get(keyBytes(key)));
+                return valueAndTimestampDeserializer.deserialize(null, inner.get(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -165,11 +165,11 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
         try {
             if (putTime.shouldRecord()) {
                 measureLatency(() -> {
-                    inner.put(keyBytes(key), innerValue(value, timestamp));
+                    inner.put(keyBytes(key), valueAndTimestampSerializer.serialize(null, value, timestamp));
                     return null;
                 }, putTime);
             } else {
-                inner.put(keyBytes(key), innerValue(value, timestamp));
+                inner.put(keyBytes(key), valueAndTimestampSerializer.serialize(null, value, timestamp));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -193,10 +193,14 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
                                             final long timestamp) {
         if (putIfAbsentTime.shouldRecord()) {
             return measureLatency(
-                () -> outerValue(inner.putIfAbsent(keyBytes(key), innerValue(value, timestamp))),
+                () -> valueAndTimestampDeserializer.deserialize(
+                    null,
+                    inner.putIfAbsent(keyBytes(key), valueAndTimestampSerializer.serialize(null, value, timestamp))),
                 putIfAbsentTime);
         } else {
-            return outerValue(inner.putIfAbsent(keyBytes(key), innerValue(value, timestamp)));
+            return valueAndTimestampDeserializer.deserialize(
+                null, inner.putIfAbsent(keyBytes(key),
+                    valueAndTimestampSerializer.serialize(null, value, timestamp)));
         }
     }
 
@@ -218,9 +222,9 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
     public ValueAndTimestamp<V> delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.delete(keyBytes(key))), deleteTime);
+                return measureLatency(() -> valueAndTimestampDeserializer.deserialize(null, inner.delete(keyBytes(key))), deleteTime);
             } else {
-                return outerValue(inner.delete(keyBytes(key)));
+                return valueAndTimestampDeserializer.deserialize(null, inner.delete(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -273,53 +277,13 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
         return Bytes.wrap(serdes.rawKey(key));
     }
 
-    private ValueAndTimestamp<V> outerValue(final byte[] rawValueAndTimestamp) {
-        if (rawValueAndTimestamp == null) {
-            return null;
-        }
-
-        final byte[] rawTimestamp = new byte[8];
-        final byte[] rawValue;
-        rawValue = new byte[rawValueAndTimestamp.length - 8];
-
-        System.arraycopy(rawValueAndTimestamp, 0, rawTimestamp, 0, 8);
-        System.arraycopy(rawValueAndTimestamp, 8, rawValue, 0, rawValueAndTimestamp.length - 8);
-
-        return new ValueAndTimestampImpl<>(
-            serdes.valueSerde().deserializer().deserialize(null, rawValue),
-            longDeserializer.deserialize(null, rawTimestamp));
-    }
-
-    private byte[] innerValue(final V value,
-                              final long timestamp) {
-        if (value == null) {
-            return null;
-        }
-
-        final byte[] rawTimestamp = longSerializer.serialize(null, timestamp);
-        final byte[] rawValue = serdes.valueSerde().serializer().serialize(null, value);
-
-        final byte[] rawValueAndTimestamp = new byte[8 + rawValue.length];
-        System.arraycopy(rawTimestamp, 0, rawValueAndTimestamp, 0, 8);
-        System.arraycopy(rawValue, 0, rawValueAndTimestamp, 8, rawValue.length);
-
-        return rawValueAndTimestamp;
-    }
-
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, ValueAndTimestamp<V>>> from) {
         final List<KeyValue<Bytes, byte[]>> byteEntries = new ArrayList<>();
         for (final KeyValue<K, ValueAndTimestamp<V>> entry : from) {
             final ValueAndTimestamp<V> valueAndTimestamp = entry.value;
-            if (valueAndTimestamp != null) {
-                byteEntries.add(KeyValue.pair(
-                    Bytes.wrap(serdes.rawKey(entry.key)),
-                    innerValue(valueAndTimestamp.value(), valueAndTimestamp.timestamp())));
-            } else {
-                byteEntries.add(KeyValue.pair(
-                    Bytes.wrap(serdes.rawKey(entry.key)),
-                    innerValue(null, -1L)));
-
-            }
+            byteEntries.add(KeyValue.pair(
+                Bytes.wrap(serdes.rawKey(entry.key)),
+                valueAndTimestampSerializer.serialize(null, valueAndTimestamp)));
         }
         return byteEntries;
     }
@@ -345,7 +309,7 @@ public class MeteredKeyValueWithTimestampStore<K, V> extends WrappedStateStore.A
         @Override
         public KeyValue<K, ValueAndTimestamp<V>> next() {
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
-            return KeyValue.pair(serdes.keyFrom(keyValue.key.get()), outerValue(keyValue.value));
+            return KeyValue.pair(serdes.keyFrom(keyValue.key.get()), valueAndTimestampDeserializer.deserialize(null, keyValue.value));
         }
 
         @Override

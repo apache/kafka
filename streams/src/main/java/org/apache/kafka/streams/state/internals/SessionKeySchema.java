@@ -24,13 +24,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.state.KeyValueIterator;
 
 import java.nio.ByteBuffer;
 import java.util.List;
 
 
-public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
+public class SessionKeySchema<S extends Segment> implements SegmentedBytesStore.KeySchema<S> {
 
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
@@ -78,29 +77,26 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     @Override
     public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
-        return new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                while (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final Windowed<Bytes> windowedKey = SessionKeySchema.from(bytes);
-                    if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
-                        && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
-                        && windowedKey.window().end() >= from
-                        && windowedKey.window().start() <= to) {
-                        return true;
-                    }
-                    iterator.next();
+        return iterator -> {
+            while (iterator.hasNext()) {
+                final Bytes bytes = iterator.peekNextKey();
+                final Windowed<Bytes> windowedKey = SessionKeySchema.from(bytes);
+                if ((binaryKeyFrom == null || windowedKey.key().compareTo(binaryKeyFrom) >= 0)
+                    && (binaryKeyTo == null || windowedKey.key().compareTo(binaryKeyTo) <= 0)
+                    && windowedKey.window().end() >= from
+                    && windowedKey.window().start() <= to) {
+                    return true;
                 }
-                return false;
+                iterator.next();
             }
+            return false;
         };
     }
 
     @Override
-    public List<Segment> segmentsToSearch(final Segments segments,
-                                          final long from,
-                                          final long to) {
+    public List<S> segmentsToSearch(final AbstractSegments<S> segments,
+                                    final long from,
+                                    final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
 

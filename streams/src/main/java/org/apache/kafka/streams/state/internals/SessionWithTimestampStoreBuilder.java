@@ -19,10 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionWithTimestampStore;
 
-public class SessionWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, SessionStore<K, V>> {
+public class SessionWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, SessionWithTimestampStore<K, V>> {
 
     private final SessionBytesStoreSupplier storeSupplier;
 
@@ -35,31 +37,35 @@ public class SessionWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder
     }
 
     @Override
-    public SessionStore<K, V> build() {
-        return null; //new MeteredSessionWithTimestampStore<>(
-//            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-//            storeSupplier.metricsScope(),
-//            keySerde,
-//            valueSerde,
-//            time);
+    public SessionWithTimestampStore<K, V> build() {
+        SessionStore<Bytes, byte[]> store = storeSupplier.get();
+        if (!(store instanceof RecordConverter) && store.persistent()) {
+            store = new SessionToSessionWithTimestampByteProxyStore(store);
+        }
+        return new MeteredSessionWithTimestampStore<>(
+            maybeWrapCaching(maybeWrapLogging(store)),
+            storeSupplier.metricsScope(),
+            keySerde,
+            valueSerde,
+            time);
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapCaching(final SessionStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return null; //new CachingSessionWithTimestampStore<>(
-//            inner,
-//            keySerde,
-//            valueSerde,
-//            storeSupplier.segmentIntervalMs());
+        return new CachingSessionWithTimestampStore<>(
+            inner,
+            keySerde,
+            valueSerde,
+            storeSupplier.segmentIntervalMs());
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {
         if (!enableLogging) {
             return inner;
         }
-        return null; //new ChangeLoggingSessionWithTimestampBytesStore(inner);
+        return new ChangeLoggingSessionWithTimestampBytesStore(inner);
     }
 
     public long retentionPeriod() {

@@ -35,18 +35,19 @@ import java.util.SimpleTimeZone;
 import java.util.TreeMap;
 
 /**
- * Manages the {@link Segment}s that are used by the {@link RocksDBSegmentedBytesStore}
+ * Manages the {@link PlainSegment}s or {@link SegmentWithTimestamp} that are used by the {@link RocksDBSegmentedBytesStore}
+ * and {@link RocksDBSegmentedWithTimestampBytesStore}.
  */
-class Segments {
-    private static final Logger log = LoggerFactory.getLogger(Segments.class);
+abstract class AbstractSegments<S extends Segment> {
+    private static final Logger log = LoggerFactory.getLogger(AbstractSegments.class);
 
-    private final TreeMap<Long, Segment> segments = new TreeMap<>();
-    private final String name;
+    final TreeMap<Long, S> segments = new TreeMap<>();
+    final String name;
     private final long retentionPeriod;
     private final long segmentInterval;
     private final SimpleDateFormat formatter;
 
-    Segments(final String name, final long retentionPeriod, final long segmentInterval) {
+    AbstractSegments(final String name, final long retentionPeriod, final long segmentInterval) {
         this.name = name;
         this.segmentInterval = segmentInterval;
         this.retentionPeriod = retentionPeriod;
@@ -67,15 +68,15 @@ class Segments {
         return name + "." + segmentId * segmentInterval;
     }
 
-    Segment getSegmentForTimestamp(final long timestamp) {
+    S getSegmentForTimestamp(final long timestamp) {
         return segments.get(segmentId(timestamp));
     }
 
-    Segment getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
+    S getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
         final long minLiveTimestamp = context.streamTime() - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 
-        final Segment toReturn;
+        final S toReturn;
         if (segmentId >= minLiveSegment) {
             // The segment is live. get it, ensure it's open, and return it.
             toReturn = getOrCreateSegment(segmentId, context);
@@ -87,21 +88,7 @@ class Segments {
         return toReturn;
     }
 
-    private Segment getOrCreateSegment(final long segmentId, final InternalProcessorContext context) {
-        if (segments.containsKey(segmentId)) {
-            return segments.get(segmentId);
-        } else {
-            final Segment newSegment = new Segment(segmentName(segmentId), name, segmentId);
-            final Segment shouldBeNull = segments.put(segmentId, newSegment);
-
-            if (shouldBeNull != null) {
-                throw new IllegalStateException("Segment already exists. Possible concurrent access.");
-            }
-
-            newSegment.openDB(context);
-            return newSegment;
-        }
-    }
+    abstract S getOrCreateSegment(final long segmentId, final InternalProcessorContext context);
 
     void openExisting(final InternalProcessorContext context) {
         try {
@@ -135,13 +122,13 @@ class Segments {
         cleanupEarlierThan(minLiveSegment);
     }
 
-    List<Segment> segments(final long timeFrom, final long timeTo) {
-        final List<Segment> result = new ArrayList<>();
-        final NavigableMap<Long, Segment> segmentsInRange = segments.subMap(
+    List<S> segments(final long timeFrom, final long timeTo) {
+        final List<S> result = new ArrayList<>();
+        final NavigableMap<Long, S> segmentsInRange = segments.subMap(
             segmentId(timeFrom), true,
             segmentId(timeTo), true
         );
-        for (final Segment segment : segmentsInRange.values()) {
+        for (final S segment : segmentsInRange.values()) {
             if (segment.isOpen()) {
                 result.add(segment);
             }
@@ -149,9 +136,9 @@ class Segments {
         return result;
     }
 
-    List<Segment> allSegments() {
-        final List<Segment> result = new ArrayList<>();
-        for (final Segment segment : segments.values()) {
+    List<S> allSegments() {
+        final List<S> result = new ArrayList<>();
+        for (final S segment : segments.values()) {
             if (segment.isOpen()) {
                 result.add(segment);
             }
@@ -160,26 +147,26 @@ class Segments {
     }
 
     void flush() {
-        for (final Segment segment : segments.values()) {
+        for (final S segment : segments.values()) {
             segment.flush();
         }
     }
 
     public void close() {
-        for (final Segment segment : segments.values()) {
+        for (final S segment : segments.values()) {
             segment.close();
         }
         segments.clear();
     }
 
     private void cleanupEarlierThan(final long minLiveSegment) {
-        final Iterator<Map.Entry<Long, Segment>> toRemove =
+        final Iterator<Map.Entry<Long, S>> toRemove =
             segments.headMap(minLiveSegment, false).entrySet().iterator();
 
         while (toRemove.hasNext()) {
-            final Map.Entry<Long, Segment> next = toRemove.next();
+            final Map.Entry<Long, S> next = toRemove.next();
             toRemove.remove();
-            final Segment segment = next.getValue();
+            final S segment = next.getValue();
             segment.close();
             try {
                 segment.destroy();

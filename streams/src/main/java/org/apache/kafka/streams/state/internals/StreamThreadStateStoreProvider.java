@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.internals.Task;
 import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionWithTimestampStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -60,6 +62,10 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                 }
                 if (store instanceof KeyValueWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                     stores.add((T) new ReadOnlyKeyValueStoreFacade((KeyValueWithTimestampStore<Object, Object>) store));
+                } else if (store instanceof WindowWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+                    stores.add((T) new ReadOnlyWindowStoreFacade((WindowWithTimestampStore<Object, Object>) store));
+                } else if (store instanceof SessionWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+                    stores.add((T) new ReadOnlySessionStoreFacade((SessionWithTimestampStore<Object, Object>) store));
                 } else {
                     stores.add((T) store);
                 }

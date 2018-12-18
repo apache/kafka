@@ -30,8 +30,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -73,7 +72,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private WindowStore<K, Agg> windowStore;
+        private WindowWithTimestampStore<K, Agg> windowStore;
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
@@ -89,7 +88,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
 
-            windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
+            windowStore = (WindowWithTimestampStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<Windowed<K>, V>(context), sendOldValues);
         }
 
@@ -115,17 +114,23 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 final Long windowStart = entry.getKey();
                 final long windowEnd = entry.getValue().end();
                 if (windowEnd > closeTime) {
-                    Agg oldAgg = windowStore.fetch(key, windowStart);
+                    final ValueAndTimestamp<Agg> oldAggWithTimestamp = windowStore.fetch(key, windowStart);
 
-                    if (oldAgg == null) {
+                    final Agg oldAgg;
+                    final long resultTimestamp;
+                    if (oldAggWithTimestamp == null) {
                         oldAgg = initializer.apply();
+                        resultTimestamp = context().timestamp();
+                    } else {
+                        oldAgg = oldAggWithTimestamp.value();
+                        resultTimestamp = Math.max(context().timestamp(), oldAggWithTimestamp.timestamp());
                     }
 
                     final Agg newAgg = aggregator.apply(key, value, oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(key, newAgg, windowStart);
-                    tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, sendOldValues ? oldAgg : null);
+                    windowStore.put(key, newAgg, resultTimestamp, windowStart);
+                    tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, sendOldValues ? oldAgg : null, resultTimestamp);
                 } else {
                     log.debug(
                         "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
@@ -155,12 +160,12 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     private class KStreamWindowAggregateValueGetter implements KTableValueGetter<Windowed<K>, Agg> {
 
-        private ReadOnlyWindowStore<K, Agg> windowStore;
+        private ReadOnlyWindowStore<K, ValueAndTimestamp<Agg>> windowStore;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            windowStore = (ReadOnlyWindowStore<K, Agg>) context.getStateStore(storeName);
+            windowStore = (ReadOnlyWindowStore<K, ValueAndTimestamp<Agg>>) context.getStateStore(storeName);
         }
 
         @SuppressWarnings("unchecked")
@@ -169,7 +174,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             final K key = windowedKey.key();
             final W window = (W) windowedKey.window();
 
-            return new ValueAndTimestampImpl<>(windowStore.fetch(key, window.start()), -1); // TODO
+            return windowStore.fetch(key, window.start());
         }
 
         @Override

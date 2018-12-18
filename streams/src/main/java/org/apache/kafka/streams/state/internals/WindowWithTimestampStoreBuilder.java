@@ -19,11 +19,12 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
-
-public class WindowWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
+public class WindowWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowWithTimestampStore<K, V>> {
 
     private final WindowBytesStoreSupplier storeSupplier;
 
@@ -36,32 +37,36 @@ public class WindowWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<
     }
 
     @Override
-    public WindowStore<K, V> build() {
-        return null; // new MeteredWindowWithTimestampStore<>(
-//            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-//            storeSupplier.metricsScope(),
-//            time,
-//            keySerde,
-//            valueSerde);
+    public WindowWithTimestampStore<K, V> build() {
+        WindowStore<Bytes, byte[]> store = storeSupplier.get();
+        if (!(store instanceof RecordConverter) && store.persistent()) {
+            store = new WindowToWindowWithTimestampByteProxyStore(store);
+        }
+        return new MeteredWindowWithTimestampStore<>(
+            maybeWrapCaching(maybeWrapLogging(store)),
+            storeSupplier.metricsScope(),
+            time,
+            keySerde,
+            valueSerde);
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return null; //new CachingWindowWithTimestampStore<>(
-//            inner,
-//            keySerde,
-//            valueSerde,
-//            storeSupplier.windowSize(),
-//            storeSupplier.segmentIntervalMs());
+        return new CachingWindowWithTimestampStore<>(
+            inner,
+            keySerde,
+            valueSerde,
+            storeSupplier.windowSize(),
+            storeSupplier.segmentIntervalMs());
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {
         if (!enableLogging) {
             return inner;
         }
-        return null; // new ChangeLoggingWindowWithTimestampBytesStore(inner, storeSupplier.retainDuplicates());
+        return new ChangeLoggingWindowWithTimestampBytesStore(inner, storeSupplier.retainDuplicates());
     }
 
     public long retentionPeriod() {

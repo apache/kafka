@@ -29,9 +29,13 @@ import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueWithTimestampBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbSessionWithTimestampBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbWindowWithTimestampBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.SessionWithTimestampStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.WindowWithTimestampStoreBuilder;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -112,6 +116,9 @@ public final class Stores {
 
     /**
      * Create an in-memory {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link KeyValueStoreBuilder} or {@link KeyValueWithTimestampStoreBuilder}.
+     *
      * @param name  name of the store (cannot be {@code null})
      * @return an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
      * build an in-memory store
@@ -138,6 +145,9 @@ public final class Stores {
 
     /**
      * Create a LRU Map {@link KeyValueBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link KeyValueStoreBuilder} or {@link KeyValueWithTimestampStoreBuilder}.
+     *
      * @param name          name of the store (cannot be {@code null})
      * @param maxCacheSize  maximum number of items in the LRU (cannot be negative)
      * @return an instance of a {@link KeyValueBytesStoreSupplier} that can be used to build
@@ -199,12 +209,18 @@ public final class Stores {
             retentionPeriod,
             windowSize,
             retainDuplicates,
-            legacySegmentInterval
+            legacySegmentInterval,
+            false
         );
     }
 
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link WindowStoreBuilder}.
+     * If you want to create a {@link WindowWithTimestampStoreBuilder WindowWithTimestampStore} you should use
+     * {@link #persistentWindowWithTimestampStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
      *                              (note that the retention period must be at least long enough to contain the
@@ -219,6 +235,38 @@ public final class Stores {
                                                                  final Duration retentionPeriod,
                                                                  final Duration windowSize,
                                                                  final boolean retainDuplicates) throws IllegalArgumentException {
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, false);
+    }
+
+    /**
+     * Create a persistent {@link WindowBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link WindowWithTimestampStoreBuilder}.
+     * If you want to create a {@link WindowStoreBuilder WindowWithTimestampStore} you should use
+     * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     *
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              (note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period)
+     * @param windowSize            size of the windows (cannot be negative)
+     * @param retainDuplicates      whether or not to retain duplicates.
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     */
+    public static WindowBytesStoreSupplier persistentWindowWithTimestampStore(final String name,
+                                                                              final Duration retentionPeriod,
+                                                                              final Duration windowSize,
+                                                                              final boolean retainDuplicates) throws IllegalArgumentException {
+        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, true);
+    }
+
+    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                  final Duration retentionPeriod,
+                                                                  final Duration windowSize,
+                                                                  final boolean retainDuplicates,
+                                                                  final boolean withTimestampStore) {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -227,14 +275,15 @@ public final class Stores {
 
         final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
-        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval);
+        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval, withTimestampStore);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                   final long retentionPeriod,
                                                                   final long windowSize,
                                                                   final boolean retainDuplicates,
-                                                                  final long segmentInterval) {
+                                                                  final long segmentInterval,
+                                                                  final boolean withTimestampStore) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
@@ -251,7 +300,11 @@ public final class Stores {
                 + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
+        if (withTimestampStore) {
+            return new RocksDbWindowWithTimestampBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
+        } else {
+            return new RocksDbWindowBytesStoreSupplier(name, retentionPeriod, segmentInterval, windowSize, retainDuplicates);
+        }
     }
 
     /**
@@ -267,15 +320,16 @@ public final class Stores {
     @Deprecated
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final long retentionPeriod) {
-        Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+        return persistentSessionStore(name, retentionPeriod, false);
     }
 
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link SessionStoreBuilder}.
+     * If you want to create a {@link SessionWithTimestampStoreBuilder SessionWithTimestampStore} you should use
+     * {@link #persistentSessionWithTimestampStore(String, Duration)} to create a store supplier instead.
+     *
      * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
      *                          Note that the retention period must be at least long enough to contain the
@@ -283,11 +337,68 @@ public final class Stores {
      *                          and for the entire grace period.
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
-    @SuppressWarnings("deprecation")
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix), false);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     * <p>
+     * This store supplier can be passed into a {@link SessionWithTimestampStoreBuilder}.
+     * If you want to create a {@link SessionStoreBuilder SessionStore} you should use
+     * {@link #persistentSessionStore(String, Duration)} to create a store supplier instead.
+     *
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     *                          Note that the retention period must be at least long enough to contain the
+     *                          windowed data's entire life cycle, from window-start through window-end,
+     *                          and for the entire grace period.
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier persistentSessionWithTimestampStore(final String name,
+                                                                                final Duration retentionPeriod) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix), true);
+    }
+
+    private static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                    final long retentionPeriod,
+                                                                    final boolean withTimestampStore) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriod < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (withTimestampStore) {
+            return new RocksDbSessionWithTimestampBytesStoreSupplier(name, retentionPeriod);
+        } else {
+            return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+        }
+    }
+
+    /**
+     * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
+     */
+    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                final Serde<K> keySerde,
+                                                                                final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+    }
+
+    public static <K, V> StoreBuilder<KeyValueWithTimestampStore<K, V>> keyValueWithTimestampStoreBuilder(final KeyValueBytesStoreSupplier supplier,
+                                                                                                          final Serde<K> keySerde,
+                                                                                                          final Serde<V> valueSerde) {
+        Objects.requireNonNull(supplier, "supplier cannot be null");
+        return new KeyValueWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
@@ -321,31 +432,7 @@ public final class Stores {
                                                                                                       final Serde<K> keySerde,
                                                                                                       final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return null; //new WindowWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
-    }
-
-    /**
-     * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
-     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
-     * @param keySerde      the key serde to use
-     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
-     *                      it is treated as delete
-     * @param <K>           key type
-     * @param <V>           value type
-     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
-     */
-    public static <K, V> StoreBuilder<KeyValueStore<K, V>> keyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
-                                                                                final Serde<K> keySerde,
-                                                                                final Serde<V> valueSerde) {
-        Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
-    }
-
-    public static <K, V> StoreBuilder<KeyValueWithTimestampStore<K, V>> keyValueWithTimestampStoreBuilder(final KeyValueBytesStoreSupplier supplier,
-                                                                                                          final Serde<K> keySerde,
-                                                                                                          final Serde<V> valueSerde) {
-        Objects.requireNonNull(supplier, "supplier cannot be null");
-        return new KeyValueWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new WindowWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
     /**
@@ -379,7 +466,7 @@ public final class Stores {
                                                                                                         final Serde<K> keySerde,
                                                                                                         final Serde<V> valueSerde) {
         Objects.requireNonNull(supplier, "supplier cannot be null");
-        return null; //new SessionWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
+        return new SessionWithTimestampStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
 }

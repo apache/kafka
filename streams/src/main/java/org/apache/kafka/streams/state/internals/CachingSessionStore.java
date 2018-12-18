@@ -36,18 +36,19 @@ import java.util.Objects;
 
 class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, AGG> {
 
-    private final SessionStore<Bytes, byte[]> bytesStore;
     private final SessionKeySchema keySchema;
     private final Serde<K> keySerde;
     private final Serde<AGG> aggSerde;
-    private final SegmentedCacheFunction cacheFunction;
     private String cacheName;
     private ThreadCache cache;
-    private StateSerdes<K, AGG> serdes;
     private InternalProcessorContext context;
-    private CacheFlushListener<Windowed<K>, AGG> flushListener;
-    private boolean sendOldValues;
-    private String topic;
+
+    final SessionStore<Bytes, byte[]> bytesStore;
+    final SegmentedCacheFunction cacheFunction;
+    CacheFlushListener<Windowed<K>, AGG> flushListener;
+    boolean sendOldValues;
+    StateSerdes<K, AGG> serdes;
+    String topic;
 
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
                         final Serde<K> keySerde,
@@ -166,7 +167,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+    void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final ProcessorRecordContext current = context.recordContext();
         context.setRecordContext(entry.entry().context());
@@ -186,7 +187,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         }
     }
 
-    private AGG fetchPrevious(final Bytes rawKey, final Window window) {
+    AGG fetchPrevious(final Bytes rawKey, final Window window) {
         try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.findSessions(rawKey, window.start(), window.end())) {
             if (!iterator.hasNext()) {
                 return null;

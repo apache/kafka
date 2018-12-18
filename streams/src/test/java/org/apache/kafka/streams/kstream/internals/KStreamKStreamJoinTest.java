@@ -53,7 +53,10 @@ public class KStreamKStreamJoinTest {
     final private String topic2 = "topic2";
 
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(
+        new IntegerSerializer(),
+        new StringSerializer(),
+        0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
@@ -62,7 +65,10 @@ public class KStreamKStreamJoinTest {
 
         final KStream<String, Integer> left = builder.stream("left", Consumed.with(Serdes.String(), Serdes.Integer()));
         final KStream<String, Integer> right = builder.stream("right", Consumed.with(Serdes.String(), Serdes.Integer()));
-        final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
+        final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(
+            new StringSerializer(),
+            new IntegerSerializer(),
+            0L);
 
         left.join(
             right,

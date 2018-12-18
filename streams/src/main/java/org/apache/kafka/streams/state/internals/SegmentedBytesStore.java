@@ -96,7 +96,7 @@ public interface SegmentedBytesStore extends StateStore {
      */
     byte[] get(Bytes key);
 
-    interface KeySchema {
+    interface KeySchema<S extends Segment> {
 
         /**
          * Initialized the schema with a topic.
@@ -161,7 +161,7 @@ public interface SegmentedBytesStore extends StateStore {
 
         /**
          * Create an implementation of {@link HasNextCondition} that knows when
-         * to stop iterating over the Segments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
+         * to stop iterating over the PlainSegments. Used during {@link SegmentedBytesStore#fetch(Bytes, Bytes, long, long)} operations
          * @param binaryKeyFrom the first key in the range
          * @param binaryKeyTo   the last key in the range
          * @param from          starting time range
@@ -178,6 +178,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to
          * @return  List of segments to search
          */
-        List<Segment> segmentsToSearch(Segments segments, long from, long to);
+        List<S> segmentsToSearch(AbstractSegments<S> segments, long from, long to);
     }
 }

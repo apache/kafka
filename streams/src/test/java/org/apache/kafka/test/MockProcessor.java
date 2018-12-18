@@ -20,7 +20,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -56,18 +55,15 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public void init(final ProcessorContext context) {
         super.init(context);
         if (scheduleInterval > 0L) {
-            scheduleCancellable = context.schedule(Duration.ofMillis(scheduleInterval), punctuationType, new Punctuator() {
-                @Override
-                public void punctuate(final long timestamp) {
-                    if (punctuationType == PunctuationType.STREAM_TIME) {
-                        assertEquals(timestamp, context().timestamp());
-                    }
-                    assertEquals(-1, context().partition());
-                    assertEquals(-1L, context().offset());
-
-                    (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
-                            .add(timestamp);
+            scheduleCancellable = context.schedule(Duration.ofMillis(scheduleInterval), punctuationType, timestamp -> {
+                if (punctuationType == PunctuationType.STREAM_TIME) {
+                    assertEquals(timestamp, context().timestamp());
                 }
+                assertEquals(-1, context().partition());
+                assertEquals(-1L, context().offset());
+
+                (punctuationType == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime)
+                        .add(timestamp);
             });
         }
     }

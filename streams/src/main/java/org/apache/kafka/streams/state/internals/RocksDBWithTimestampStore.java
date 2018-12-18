@@ -66,7 +66,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.state.internals.KeyValueKeyValueWithTimestampProxyStore.getValueWithUnknownTimestamp;
+import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueWithUnknownTimestamp;
 
 /**
  * A persistent key-value store based on RocksDB.
@@ -91,7 +91,7 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
     private final String parentDir;
     private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
 
-    private File dbDir;
+    File dbDir;
     private RocksDB db;
     private ColumnFamilyHandle noTimestampColumnFamily;
     private ColumnFamilyHandle withTimestampColumnFamily;
@@ -102,7 +102,7 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
     private FlushOptions fOptions;
 
     private volatile boolean prepareForBulkload = false;
-    private ProcessorContext internalProcessorContext;
+    ProcessorContext internalProcessorContext;
     // visible for testing
     volatile BatchingStateRestoreCallback batchingStateRestoreCallback = null;
 
@@ -276,8 +276,7 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
         }
     }
 
-    private void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-
+    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
             final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
@@ -355,7 +354,7 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
         }
     }
 
-    private void write(final WriteBatch batch) throws RocksDBException {
+    void write(final WriteBatch batch) throws RocksDBException {
         db.write(wOptions, batch);
     }
 

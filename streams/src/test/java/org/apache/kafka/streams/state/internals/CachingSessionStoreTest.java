@@ -66,7 +66,7 @@ public class CachingSessionStoreTest {
 
     @Before
     public void setUp() {
-        final SessionKeySchema schema = new SessionKeySchema();
+        final SessionKeySchema<PlainSegment> schema = new SessionKeySchema<>();
         schema.init("topic");
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
@@ -154,7 +154,8 @@ public class CachingSessionStoreTest {
         final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("topic", Serdes.Bytes(), Serdes.ByteArray());
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a", "b", "c", "d");
         assertEquals(added.size() - 1, cache.size());
-        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = WrappedSessionStoreIterator.bytesIterator(underlying.fetch(added.get(0).key.key(), 0, 0), serdes);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator
+            = WrappedSessionStoreIterator.bytesIterator(underlying.fetch(added.get(0).key.key(), 0, 0), serdes);
         final KeyValue<Windowed<Bytes>, byte[]> next = iterator.next();
         assertEquals(added.get(0).key, next.key);
         assertArrayEquals(added.get(0).value, next.value);
@@ -163,7 +164,8 @@ public class CachingSessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
-        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(Bytes.wrap("a".getBytes()), 0, added.size() * 10);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator
+            = cachingStore.findSessions(Bytes.wrap("a".getBytes()), 0, added.size() * 10);
         final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(iterator);
         verifyKeyValueList(added, actual);
     }
@@ -211,7 +213,8 @@ public class CachingSessionStoreTest {
         cachingStore.put(aa3, "3".getBytes());
         cachingStore.flush();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults = cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults
+            = cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
         final Set<Windowed<Bytes>> keys = new HashSet<>();
         while (rangeResults.hasNext()) {
             keys.add(rangeResults.next().key);

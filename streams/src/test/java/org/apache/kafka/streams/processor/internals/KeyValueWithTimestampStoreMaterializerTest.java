@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.ChangeLoggingKeyValueBytesStore;
-import org.apache.kafka.streams.state.internals.KeyValueKeyValueWithTimestampProxyStore;
+import org.apache.kafka.streams.state.internals.KeyValueToKeyValueWithTimestampByteProxyStore;
 import org.apache.kafka.streams.state.internals.MeteredKeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.easymock.EasyMock;
@@ -138,6 +138,6 @@ public class KeyValueWithTimestampStoreMaterializerTest {
         final KeyValueWithTimestampStore<String, Integer> built = builder.build();
         final StateStore inner = ((WrappedStateStore) built).inner();
 
-        assertThat(inner, instanceOf(KeyValueKeyValueWithTimestampProxyStore.class));
+        assertThat(inner, instanceOf(KeyValueToKeyValueWithTimestampByteProxyStore.class));
     }
 }

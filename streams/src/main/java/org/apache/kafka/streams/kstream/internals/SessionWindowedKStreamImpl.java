@@ -32,9 +32,11 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.SessionWithTimestampStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 
+import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -175,7 +177,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
     }
 
     @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode
-    private <VR> StoreBuilder<SessionStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
+    private <VR> StoreBuilder<SessionWithTimestampStore<K, VR>> materialize(final MaterializedInternal<K, VR, SessionStore<Bytes, byte[]>> materialized) {
         SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             // NOTE: in the future, when we remove Windows#maintainMs(), we should set the default retention
@@ -191,12 +193,12 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                                        + " grace=[" + windows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
-            supplier = Stores.persistentSessionStore(
+            supplier = Stores.persistentSessionWithTimestampStore(
                 materialized.storeName(),
-                retentionPeriod
+                Duration.ofMillis(retentionPeriod)
             );
         }
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
+        final StoreBuilder<SessionWithTimestampStore<K, VR>> builder = Stores.sessionWithTimestampStoreBuilder(
             supplier,
             materialized.keySerde(),
             materialized.valueSerde()

@@ -218,7 +218,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
             // for bulk loading

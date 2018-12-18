@@ -83,7 +83,7 @@ public class RocksDBSegmentedBytesStoreTest {
     private final Window[] windows = new Window[4];
 
     @Parameter
-    public SegmentedBytesStore.KeySchema schema;
+    public SegmentedBytesStore.KeySchema<PlainSegment> schema;
 
     @Parameters(name = "{0}")
     public static Object[] getKeySchemas() {
@@ -179,7 +179,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldRollSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, segmentInterval);
+        final PlainSegments segments = new PlainSegments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50));
@@ -207,7 +207,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldGetAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, segmentInterval);
+        final PlainSegments segments = new PlainSegments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -236,7 +236,7 @@ public class RocksDBSegmentedBytesStoreTest {
     @Test
     public void shouldFetchAllSegments() {
         // just to validate directories
-        final Segments segments = new Segments(storeName, retention, segmentInterval);
+        final PlainSegments segments = new PlainSegments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -264,7 +264,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegmentsWithOldStyleDateFormattedName() {
-        final Segments segments = new Segments(storeName, retention, segmentInterval);
+        final PlainSegments segments = new PlainSegments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -305,7 +305,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLoadSegmentsWithOldStyleColonFormattedName() {
-        final Segments segments = new Segments(storeName, retention, segmentInterval);
+        final PlainSegments segments = new PlainSegments(storeName, retention, segmentInterval);
         final String key = "a";
 
         bytesStore.put(serializeKey(new Windowed<>(key, windows[0])), serializeValue(50L));
@@ -356,7 +356,7 @@ public class RocksDBSegmentedBytesStoreTest {
         final Collection<KeyValue<byte[], byte[]>> records = new ArrayList<>();
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[0])).get(), serializeValue(50L)));
         records.add(new KeyValue<>(serializeKey(new Windowed<>(key, windows[3])).get(), serializeValue(100L)));
-        final Map<Segment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
+        final Map<PlainSegment, WriteBatch> writeBatchMap = bytesStore.getWriteBatches(records);
         assertEquals(2, writeBatchMap.size());
         for (final WriteBatch batch : writeBatchMap.values()) {
             assertEquals(1, batch.count());
@@ -377,7 +377,7 @@ public class RocksDBSegmentedBytesStoreTest {
         assertEquals(2, bytesStore.getSegments().size());
 
         // Bulk loading is enabled during recovery.
-        for (final Segment segment : bytesStore.getSegments()) {
+        for (final PlainSegment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
@@ -401,12 +401,12 @@ public class RocksDBSegmentedBytesStoreTest {
 
         restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
 
-        for (final Segment segment : bytesStore.getSegments()) {
+        for (final PlainSegment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
         restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
-        for (final Segment segment : bytesStore.getSegments()) {
+        for (final PlainSegment segment : bytesStore.getSegments()) {
             Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
         }
     }

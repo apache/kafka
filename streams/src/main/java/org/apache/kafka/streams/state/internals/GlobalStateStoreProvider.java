@@ -21,6 +21,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
+import org.apache.kafka.streams.state.SessionWithTimestampStore;
+import org.apache.kafka.streams.state.WindowWithTimestampStore;
 
 import java.util.Collections;
 import java.util.List;
@@ -45,6 +47,12 @@ public class GlobalStateStoreProvider implements StateStoreProvider {
         }
         if (store instanceof KeyValueWithTimestampStore && queryableStoreType == QueryableStoreTypes.keyValueStore()) {
             return (List<T>) Collections.singletonList(new ReadOnlyKeyValueStoreFacade((KeyValueWithTimestampStore<Object, Object>) store));
+        }
+        if (store instanceof WindowWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.WindowStoreType) {
+            return (List<T>) Collections.singletonList(new ReadOnlyWindowStoreFacade((WindowWithTimestampStore<Object, Object>) store));
+        }
+        if (store instanceof SessionWithTimestampStore && queryableStoreType instanceof QueryableStoreTypes.SessionStoreType) {
+            return (List<T>) Collections.singletonList(new ReadOnlySessionStoreFacade((SessionWithTimestampStore<Object, Object>) store));
         }
         return (List<T>) Collections.singletonList(store);
     }
