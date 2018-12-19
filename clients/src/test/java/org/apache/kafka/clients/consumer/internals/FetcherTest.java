@@ -1126,6 +1126,45 @@ public class FetcherTest {
         assertEquals(5, subscriptions.position(tp0).longValue());
     }
 
+    /**
+     * Make sure the client behaves appropriately when receiving an exception for unavailable offsets
+     */
+    @Test
+    public void testFetchOffsetErrors() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Fail with OFFSET_NOT_AVAILABLE
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.OFFSET_NOT_AVAILABLE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+
+        // Fail with LEADER_NOT_AVAILABLE
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.LEADER_NOT_AVAILABLE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+
+        // Back to normal
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertTrue(subscriptions.hasValidPosition(tp0));
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(subscriptions.position(tp0).longValue(), 5L);
+    }
+
     @Test
     public void testListOffsetsSendsIsolationLevel() {
         for (final IsolationLevel isolationLevel : IsolationLevel.values()) {
