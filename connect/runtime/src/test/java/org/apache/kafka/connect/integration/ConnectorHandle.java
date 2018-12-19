@@ -20,6 +20,7 @@ import org.apache.kafka.connect.errors.DataException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -51,6 +52,10 @@ public class ConnectorHandle {
      */
     public TaskHandle taskHandle(String taskId) {
         return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId));
+    }
+
+    public Collection<TaskHandle> tasks() {
+        return taskHandles.values();
     }
 
     /**
@@ -89,7 +94,7 @@ public class ConnectorHandle {
      * @throws InterruptedException if another threads interrupts this one while waiting for records
      */
     public void awaitRecords(int consumeMaxDurationMs) throws InterruptedException {
-        if (recordsRemainingLatch == null) {
+        if (recordsRemainingLatch == null || expectedRecords < 0) {
             throw new IllegalStateException("expectedRecords() was not set for this task?");
         }
         if (!recordsRemainingLatch.await(consumeMaxDurationMs, TimeUnit.MILLISECONDS)) {
@@ -102,4 +107,10 @@ public class ConnectorHandle {
         }
     }
 
+    @Override
+    public String toString() {
+        return "ConnectorHandle{" +
+                "connectorName='" + connectorName + '\'' +
+                '}';
+    }
 }

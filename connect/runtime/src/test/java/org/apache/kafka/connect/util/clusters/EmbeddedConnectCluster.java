@@ -18,6 +18,7 @@ package org.apache.kafka.connect.util.clusters;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -65,10 +66,12 @@ public class EmbeddedConnectCluster {
     private final EmbeddedKafkaCluster kafkaCluster;
     private final Map<String, String> workerProps;
     private final String connectClusterName;
+    private final int numBrokers;
 
     private EmbeddedConnectCluster(String name, Map<String, String> workerProps, int numWorkers, int numBrokers, Properties brokerProps) {
         this.workerProps = workerProps;
         this.connectClusterName = name;
+        this.numBrokers = numBrokers;
         this.kafkaCluster = new EmbeddedKafkaCluster(numBrokers, brokerProps);
         this.connectCluster = new Connect[numWorkers];
     }
@@ -111,13 +114,14 @@ public class EmbeddedConnectCluster {
         workerProps.put(REST_HOST_NAME_CONFIG, REST_HOST_NAME);
         workerProps.put(REST_PORT_CONFIG, "0"); // use a random available port
 
+        String internalTopicsReplFactor = String.valueOf(numBrokers);
         putIfAbsent(workerProps, GROUP_ID_CONFIG, "connect-integration-test-" + connectClusterName);
         putIfAbsent(workerProps, OFFSET_STORAGE_TOPIC_CONFIG, "connect-offset-topic-" + connectClusterName);
-        putIfAbsent(workerProps, OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, OFFSET_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, CONFIG_TOPIC_CONFIG, "connect-config-topic-" + connectClusterName);
-        putIfAbsent(workerProps, CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, CONFIG_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, STATUS_STORAGE_TOPIC_CONFIG, "connect-storage-topic-" + connectClusterName);
-        putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, "1");
+        putIfAbsent(workerProps, STATUS_STORAGE_REPLICATION_FACTOR_CONFIG, internalTopicsReplFactor);
         putIfAbsent(workerProps, KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
         putIfAbsent(workerProps, VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
 
@@ -165,14 +169,14 @@ public class EmbeddedConnectCluster {
         }
     }
 
-    public ConnectorStateInfo getConnectorStatus(String connectorName) {
+    public ConnectorStateInfo connectorStatus(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
         try {
             return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
         } catch (IOException e) {
             log.error("Could not read connector state", e);
-            return null;
+            throw new ConnectException("Could not read connector state", e);
         }
     }
 

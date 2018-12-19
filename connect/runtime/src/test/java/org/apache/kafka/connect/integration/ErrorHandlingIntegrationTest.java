@@ -37,6 +37,7 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.connect.integration.ConnectIntegrationTestUtils.waitUntil;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG;
@@ -72,6 +73,7 @@ public class ErrorHandlingIntegrationTest {
     private static final int NUM_RECORDS_PRODUCED = 20;
     private static final int EXPECTED_CORRECT_RECORDS = 19;
     private static final int EXPECTED_INCORRECT_RECORDS = 1;
+    private static final int CONNECTOR_SETUP_DURATION_MS = 5000;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
 
     private EmbeddedConnectCluster connect;
@@ -100,6 +102,7 @@ public class ErrorHandlingIntegrationTest {
         // create test topic
         connect.kafka().createTopic("test-topic");
 
+        // setup connector config
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
         props.put(TASKS_MAX_CONFIG, "1");
@@ -124,12 +127,15 @@ public class ErrorHandlingIntegrationTest {
         // retry for up to one second
         props.put(ERRORS_RETRY_TIMEOUT_CONFIG, "1000");
 
+        // set expected records to successfully reach the task
         connectorHandle.taskHandle(TASK_ID).expectedRecords(EXPECTED_CORRECT_RECORDS);
 
-        connect.configureConnector("error-conn", props);
+        connect.configureConnector(CONNECTOR_NAME, props);
 
-        // wait for partition assignment
-        connectorHandle.taskHandle(TASK_ID).awaitPartitionAssignment(CONSUME_MAX_DURATION_MS);
+        waitUntil(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 1
+                        && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1,
+                CONNECTOR_SETUP_DURATION_MS,
+                "Timed out waiting for connector task to be assigned a partition.");
 
         // produce some strings into test topic
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -148,6 +154,7 @@ public class ErrorHandlingIntegrationTest {
             i++;
         }
 
+        // wait for records to reach the task
         connectorHandle.taskHandle(TASK_ID).awaitRecords(CONSUME_MAX_DURATION_MS);
 
         // consume failed records from dead letter queue topic
@@ -162,7 +169,7 @@ public class ErrorHandlingIntegrationTest {
             assertValue("Error when value='value-7'", recs.headers(), ERROR_HEADER_EXCEPTION_MESSAGE);
         }
 
-        connect.deleteConnector("error-conn");
+        connect.deleteConnector(CONNECTOR_NAME);
     }
 
     private void assertValue(String expected, Headers headers, String headerKey) {

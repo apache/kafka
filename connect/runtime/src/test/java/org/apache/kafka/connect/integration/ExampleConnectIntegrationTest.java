@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.connect.integration.ConnectIntegrationTestUtils.waitUntil;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -47,8 +48,9 @@ import static org.junit.Assert.assertEquals;
 public class ExampleConnectIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
-    private static final int NUM_TOPIC_PARTITIONS = 2;
+    private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
+    private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
     private static final String CONNECTOR_NAME = "simple-conn";
 
     private EmbeddedConnectCluster connect;
@@ -101,7 +103,7 @@ public class ExampleConnectIntegrationTest {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
-        props.put(TASKS_MAX_CONFIG, "2");
+        props.put(TASKS_MAX_CONFIG, "3");
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -111,6 +113,11 @@ public class ExampleConnectIntegrationTest {
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
+
+        waitUntil(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 3
+                        && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1),
+                CONNECTOR_SETUP_DURATION_MS,
+                "Timed out waiting for connector tasks to be assigned a partition each.");
 
         // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
@@ -123,9 +130,6 @@ public class ExampleConnectIntegrationTest {
 
         // wait for the connector tasks to consume all records.
         connectorHandle.awaitRecords(CONSUME_MAX_DURATION_MS);
-
-        // at least one task should have initalized and executed
-        assertEquals("Incorrect task count in connector", 2, connect.getConnectorStatus(CONNECTOR_NAME).tasks().size());
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);

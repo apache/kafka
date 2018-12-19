@@ -22,6 +22,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A handle to an executing task in a worker. Use this class to record progress, for example: number of records seen
@@ -32,16 +33,16 @@ public class TaskHandle {
     private static final Logger log = LoggerFactory.getLogger(TaskHandle.class);
 
     private final String taskId;
-    private final CountDownLatch expectedPartitionsLatch;
     private final ConnectorHandle connectorHandle;
+    private final AtomicInteger partitionsAssigned = new AtomicInteger(0);
 
     private CountDownLatch recordsRemainingLatch;
     private int expectedRecords = -1;
 
     public TaskHandle(ConnectorHandle connectorHandle, String taskId) {
+        log.info("Created task {} for connector {}", taskId, connectorHandle);
         this.taskId = taskId;
         this.connectorHandle = connectorHandle;
-        this.expectedPartitionsLatch = new CountDownLatch(1);
     }
 
     /**
@@ -70,30 +71,14 @@ public class TaskHandle {
      * @param numPartitions number of partitions
      */
     public void partitionsAssigned(int numPartitions) {
-        if (numPartitions != 1) {
-            // this can happen if all tasks have not started, and more partitions are assigned
-            // to the first task. Subsequent rebalances should allocate the right number of
-            // partitions to each task.
-            log.warn("Expected only one partition. But, assigned " + numPartitions + ".");
-        } else {
-            expectedPartitionsLatch.countDown();
-        }
+        partitionsAssigned.set(numPartitions);
     }
 
     /**
-     * Wait for this task to be assigned partitions.
-     *
-     * @param consumeMaxDurationMs max duration to wait for partition assignment.
-     * @throws InterruptedException if another threads interrupts this one while waiting for partitions to be assigned
+     * @return the number of topic partitions assigned to this task.
      */
-    public void awaitPartitionAssignment(int consumeMaxDurationMs) throws InterruptedException {
-        if (!expectedPartitionsLatch.await(consumeMaxDurationMs, TimeUnit.MILLISECONDS)) {
-            String msg = String.format("No partitions were assigned to task %s in %d millis.",
-                    taskId,
-                    consumeMaxDurationMs);
-            throw new DataException(msg);
-        }
-        log.debug("Task {} was assigned partitions", taskId);
+    public int partitionsAssigned() {
+        return partitionsAssigned.get();
     }
 
     /**

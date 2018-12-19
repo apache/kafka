@@ -59,8 +59,8 @@ public class HerderProvider {
      * @param herder set a herder, and signal to all threads waiting on get().
      */
     public void setHerder(Herder herder) {
-        initialized.countDown();
         this.herder = herder;
+        initialized.countDown();
     }
 
 }
