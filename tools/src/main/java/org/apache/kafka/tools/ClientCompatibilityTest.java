@@ -486,7 +486,7 @@ public class ClientCompatibilityTest {
         resultTester.test();
     }
 
-    private class CreateTopicsResultTester {
+    private static class CreateTopicsResultTester {
         private final Collection<String> topics;
         private AdminClient client;
 
