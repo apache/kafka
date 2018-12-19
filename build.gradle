@@ -1565,6 +1565,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
     testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
