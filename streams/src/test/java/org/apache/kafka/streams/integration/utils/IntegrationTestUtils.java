@@ -75,14 +75,14 @@ public class IntegrationTestUtils {
      * Records state transition for StreamThread
      */
     public static class StateListenerStub implements StreamThread.StateListener {
-        boolean createdToRevokedSeen = false;
+        boolean startingToRevokedSeen = false;
         boolean revokedToPendingShutdownSeen = false;
         @Override
         public void onChange(final Thread thread,
                              final ThreadStateTransitionValidator newState,
                              final ThreadStateTransitionValidator oldState) {
-            if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.PARTITIONS_REVOKED) {
-                createdToRevokedSeen = true;
+            if (oldState == StreamThread.State.STARTING && newState == StreamThread.State.PARTITIONS_REVOKED) {
+                startingToRevokedSeen = true;
             } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
                 revokedToPendingShutdownSeen = true;
             }
@@ -93,7 +93,7 @@ public class IntegrationTestUtils {
         }
 
         public boolean createdToRevokedSeen() {
-            return createdToRevokedSeen;
+            return startingToRevokedSeen;
         }
     }
 

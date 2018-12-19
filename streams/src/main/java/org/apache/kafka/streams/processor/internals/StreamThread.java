@@ -83,6 +83,12 @@ public class StreamThread extends Thread {
      *          |           |
      *          |           v
      *          |     +-----+-------+
+     *          +<--- | Starting (1)|
+     *          |     +-----+-------+
+     *          |           |
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
      *          +<--- | Partitions  |
      *          |     | Revoked (2) | <----+
      *          |     +-----+-------+      |
@@ -95,18 +101,18 @@ public class StreamThread extends Thread {
      *          |           |              |
      *          |           v              |
      *          |     +-----+-------+      |
-     *          |     | Running (1) | ---->+
+     *          |     | Running (4) | ---->+
      *          |     +-----+-------+
      *          |           |
      *          |           v
      *          |     +-----+-------+
      *          +---> | Pending     |
-     *                | Shutdown (4)|
+     *                | Shutdown (5)|
      *                +-----+-------+
      *                      |
      *                      v
      *                +-----+-------+
-     *                | Dead (5)    |
+     *                | Dead (6)    |
      *                +-------------+
      * </pre>
      *
@@ -127,7 +133,7 @@ public class StreamThread extends Thread {
      * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(2, 4), RUNNING(2, 4), PARTITIONS_REVOKED(3, 4), PARTITIONS_ASSIGNED(1, 2, 4), PENDING_SHUTDOWN(5), DEAD;
+        CREATED(1, 5), STARTING(2, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 4, 5), RUNNING(2, 5), PENDING_SHUTDOWN(6), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -136,7 +142,7 @@ public class StreamThread extends Thread {
         }
 
         public boolean isRunning() {
-            return equals(RUNNING) || equals(PARTITIONS_REVOKED) || equals(PARTITIONS_ASSIGNED);
+            return equals(RUNNING) || equals(STARTING) || equals(PARTITIONS_REVOKED) || equals(PARTITIONS_ASSIGNED);
         }
 
         @Override
@@ -739,7 +745,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("Starting");
-        if (setState(State.PARTITIONS_REVOKED) == null) {
+        if (setState(State.STARTING) == null) {
             log.info("StreamThread already shutdown. Not running");
             return;
         }
@@ -817,7 +823,7 @@ public class StreamThread extends Thread {
             // try to fetch some records with normal poll time
             // in order to wait long enough to get the join response
             records = pollRequests(pollTime);
-        } else if (state == State.RUNNING) {
+        } else if (state == State.RUNNING || state == State.STARTING) {
             // try to fetch some records with normal poll time
             // in order to get long polling
             records = pollRequests(pollTime);
