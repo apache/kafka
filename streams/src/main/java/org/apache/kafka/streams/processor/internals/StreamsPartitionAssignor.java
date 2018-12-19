@@ -488,7 +488,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                 // if this topic is one of the sink topics of this topology,
                                 // use the maximum of all its source topic partitions as the number of partitions
                                 for (final String sourceTopicName : otherTopicsInfo.sourceTopics) {
-                                    final Integer numPartitionsCandidate;
+                                    final int numPartitionsCandidate;
                                     // It is possible the sourceTopic is another internal topic, i.e,
                                     // map().join().join(map())
                                     if (repartitionTopicMetadata.containsKey(sourceTopicName)) {
@@ -997,8 +997,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             for (final String topic : copartitionGroup) {
                 if (!allRepartitionTopicsNumPartitions.containsKey(topic)) {
-                    final Integer partitions = metadata.partitionCountForTopic(topic);
-                    if (partitions == null) {
+                    final int partitions = metadata.partitionCountForTopic(topic);
+                    if (partitions == 0) {
                         final String str = String.format("%sTopic not found: %s", logPrefix, topic);
                         log.error(str);
                         throw new IllegalStateException(str);

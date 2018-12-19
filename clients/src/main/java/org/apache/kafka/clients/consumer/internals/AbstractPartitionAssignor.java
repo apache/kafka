@@ -58,8 +58,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         for (String topic : allSubscribedTopics) {
-            Integer numPartitions = metadata.partitionCountForTopic(topic);
-            if (numPartitions != null && numPartitions > 0)
+            int numPartitions = metadata.partitionCountForTopic(topic);
+            if (numPartitions > 0)
                 partitionsPerTopic.put(topic, numPartitions);
             else
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);

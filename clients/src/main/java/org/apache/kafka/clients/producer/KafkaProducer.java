@@ -957,10 +957,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         metadata.add(topic);
 
-        Integer partitionsCount = cluster.partitionCountForTopic(topic);
+        int partitionsCount = cluster.partitionCountForTopic(topic);
         // Return cached metadata if we have it, and if the record's partition is either undefined
         // or within the known partition range
-        if (partitionsCount != null && (partition == null || partition < partitionsCount))
+        if (partitionsCount > 0 && (partition == null || partition < partitionsCount))
             return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
@@ -991,7 +991,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new InvalidTopicException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
             partitionsCount = cluster.partitionCountForTopic(topic);
-        } while (partitionsCount == null);
+        } while (partitionsCount == 0);
 
         if (partition != null && partition >= partitionsCount) {
             throw new KafkaException(
