@@ -19,7 +19,6 @@ package org.apache.kafka.tools;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 
-import java.util.Comparator;
 import java.util.Map;
 import java.util.TreeMap;
 

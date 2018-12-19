@@ -269,35 +269,21 @@ public class ClientCompatibilityTest {
                         throw e.getCause();
                     }
                 },
-                () -> {
-                    while (true) {
-                        try {
-                            client.describeTopics(Collections.singleton("newtopic")).all().get();
-                            break;
-                        } catch (ExecutionException e) {
-                            if (e.getCause() instanceof UnknownTopicOrPartitionException)
-                                continue;
-                            throw e;
-                        }
-                    }
-                });
+                () ->  new CreateTopicsResultTester(client, Collections.singleton("newtopic")).invoke()
+            );
+
             while (true) {
                 Collection<TopicListing> listings = client.listTopics().listings().get();
                 if (!testConfig.createTopicsSupported)
                     break;
-                boolean foundNewTopic = false;
-                for (TopicListing listing : listings) {
-                    if (listing.name().equals("newtopic")) {
-                        if (listing.isInternal())
-                            throw new KafkaException("Did not expect newtopic to be an internal topic.");
-                        foundNewTopic = true;
-                    }
-                }
-                if (foundNewTopic)
+
+                if (isFoundNewTopic(listings, "newtopic"))
                     break;
+
                 Thread.sleep(1);
                 log.info("Did not see newtopic.  Retrying listTopics...");
             }
+
             tryFeature("describeAclsSupported", testConfig.describeAclsSupported,
                 () -> {
                     try {
@@ -309,6 +295,18 @@ public class ClientCompatibilityTest {
                     }
                 });
         }
+    }
+
+    private boolean isFoundNewTopic(Collection<TopicListing> listings, String newTopicName) {
+        boolean foundNewTopic = false;
+        for (TopicListing listing : listings) {
+            if (listing.name().equals(newTopicName)) {
+                if (listing.isInternal())
+                    throw new KafkaException("Did not expect newtopic to be an internal topic.");
+                foundNewTopic = true;
+            }
+        }
+        return foundNewTopic;
     }
 
     private static class OffsetsForTime {
@@ -467,7 +465,7 @@ public class ClientCompatibilityTest {
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker) throws Throwable {
-        tryFeature(featureName, supported, invoker, () -> {});
+        tryFeature(featureName, supported, invoker, () -> { });
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker, ResultTester resultTester)
@@ -486,5 +484,28 @@ public class ClientCompatibilityTest {
             throw new RuntimeException("Did not expect " + featureName + " to be supported, but it was.");
         }
         resultTester.test();
+    }
+
+    private class CreateTopicsResultTester {
+        private final Collection<String> topics;
+        private AdminClient client;
+
+        public CreateTopicsResultTester(AdminClient client, Collection<String> topics) {
+            this.client = client;
+            this.topics = topics;
+        }
+
+        public void invoke() throws InterruptedException, ExecutionException {
+            while (true) {
+                try {
+                    client.describeTopics(topics).all().get();
+                    break;
+                } catch (ExecutionException e) {
+                    if (e.getCause() instanceof UnknownTopicOrPartitionException)
+                        continue;
+                    throw e;
+                }
+            }
+        }
     }
 }
