@@ -1511,11 +1511,21 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
             this.subscriptions.seek(partition, offset);
+            this.metadata.resetLastSeenEpoch(partition);
         } finally {
             release();
         }
     }
 
+    /**
+     * Overrides the fetch offsets that the consumer will use on the next {@link #poll(Duration) poll(timeout)}. If this API
+     * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
+     * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets. This
+     * method allows for setting the leaderEpoch along with the desired offset.
+     *
+     * @throws IllegalArgumentException if the provided offset is negative
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
+     */
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
         long offset = offsetAndMetadata.offset();
         if (offset < 0) {
@@ -1526,7 +1536,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
             this.subscriptions.seek(partition, offset);
-            offsetAndMetadata.leaderEpoch().ifPresent(epoch -> this.metadata.maybeRequestUpdate(partition, epoch));
+            offsetAndMetadata.leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpoch(partition, epoch));
         } finally {
             release();
         }
@@ -1551,6 +1561,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to beginning of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
+                metadata.resetLastSeenEpoch(tp);
             }
         } finally {
             release();
@@ -1579,6 +1590,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             for (TopicPartition tp : parts) {
                 log.debug("Seeking to end of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
+                metadata.resetLastSeenEpoch(tp);
             }
         } finally {
             release();

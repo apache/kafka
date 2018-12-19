@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Predicate;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -167,15 +168,39 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update for the current metadata info of a partition and ensure it is as recent as the given epoch
+     * Request an update for the partition metadata iff the given leader epoch is at newer than the last seen leader epoch
      */
-    public synchronized boolean maybeRequestUpdate(TopicPartition topicPartition, int epoch) {
+    public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
-        if (maybeUpdateLastSeenEpoch(topicPartition, epoch) == epoch) {
+        if (updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch) == leaderEpoch) {
             this.needUpdate = true;
             return true;
         } else {
             return false;
+        }
+    }
+
+    /**
+     * Update the last seen leader epoch for a partition. Requests a metadata update if the given leader epoch differs
+     * from what is in the cache.
+     */
+    public synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition, int leaderEpoch) {
+        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
+        if (updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch != oldEpoch) == leaderEpoch) {
+            this.needUpdate = true;
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    /**
+     * Unset the last seen leader epoch for a partition and remove its cached metadata
+     */
+    public synchronized void resetLastSeenEpoch(TopicPartition topicPartition) {
+        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
+        if (lastSeenLeaderEpochs.remove(topicPartition) != null) {
+            cluster.removePartition(topicPartition);
         }
     }
 
@@ -185,12 +210,12 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Update the last seen epoch for a topic partition iff the epoch is greater than the last seen epoch. Return
-     * the latest last seen epoch.
+     * Update the leader epoch for a partition if the given predicate passes. If updated, remove the stale metadata
+     * record from {@link Cluster}.
      */
-    private int maybeUpdateLastSeenEpoch(TopicPartition topicPartition, int epoch) {
+    private int updateLastSeenEpoch(TopicPartition topicPartition, int epoch, Predicate<Integer> epochTest) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
-        if (oldEpoch == null || epoch > oldEpoch) {
+        if (oldEpoch == null || epochTest.test(oldEpoch)) {
             log.debug("Setting last seen epoch to {} for partition {}", epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
             cluster.removePartition(topicPartition);
@@ -347,10 +372,11 @@ public class Metadata implements Closeable {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
         if (partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
-            if (maybeUpdateLastSeenEpoch(tp, newEpoch) == newEpoch) {
+            if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch) == newEpoch) {
+                // If the received leader epoch is at least the same as the previous one, use the new partition info
                 return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
             } else {
-                // If the new epoch is older than the previously last-seen one, use the existing partition info
+                // Otherwise ignore the new metadata and use the previously cached info
                 PartitionInfo previousInfo = cluster.partition(tp);
                 if (previousInfo != null) {
                     return previousInfo;

@@ -501,7 +501,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final long offset = entry.getValue().offset();
             log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
             this.subscriptions.seek(tp, offset);
-            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.maybeRequestUpdate(tp, epoch));
+            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(tp, epoch));
         }
         return true;
     }
@@ -623,7 +623,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
                 offsets.forEach((tp, offsetMeta) ->
-                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.maybeRequestUpdate(tp, epoch)));
+                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(tp, epoch)));
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
             }
 
@@ -672,7 +672,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
                 offsets.forEach((tp, offsetMeta) ->
-                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.maybeRequestUpdate(tp, epoch)));
+                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(tp, epoch)));
                 return true;
             }
 

@@ -438,7 +438,7 @@ public class MetadataTest {
         TopicPartition tp = new TopicPartition("topic", 0);
 
         for (int i=0; i<epochs.length; i++) {
-            metadata.maybeRequestUpdate(tp, epochs[i]);
+            metadata.updateLastSeenEpochIfNewer(tp, epochs[i]);
             if(updateResult[i]) {
                 assertTrue("Expected metadata update to be requested [" + i +"]", metadata.updateRequested());
             } else {
@@ -515,19 +515,19 @@ public class MetadataTest {
     public void testMaybeRequestUpdate() {
         TopicPartition tp = new TopicPartition("topic-1", 0);
         metadata.update(emptyMetadataResponse(), 0L);
-        assertTrue(metadata.maybeRequestUpdate(tp, 1));
+        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 1));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 1);
 
         metadata.update(emptyMetadataResponse(), 1L);
-        assertTrue(metadata.maybeRequestUpdate(tp, 1));
+        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 1));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 1);
 
         metadata.update(emptyMetadataResponse(), 2L);
-        assertFalse(metadata.maybeRequestUpdate(tp, 0));
+        assertFalse(metadata.updateLastSeenEpochIfNewer(tp, 0));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 1);
 
         metadata.update(emptyMetadataResponse(), 3L);
-        assertTrue(metadata.maybeRequestUpdate(tp, 2));
+        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 2));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 2);
     }
 
@@ -539,7 +539,7 @@ public class MetadataTest {
 
         metadata.update(emptyMetadataResponse(), 0L);
 
-        assertTrue(metadata.maybeRequestUpdate(tp, 99));
+        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 99));
 
         // Update epoch to 100
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
@@ -551,7 +551,7 @@ public class MetadataTest {
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
 
         // Simulate a leader epoch from another response, like a fetch response (future)
-        assertTrue(metadata.maybeRequestUpdate(tp, 101));
+        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 101));
 
         // Cache of partition goes away
         assertNull(metadata.fetch().partition(tp));
