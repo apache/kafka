@@ -42,6 +42,8 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -65,6 +67,8 @@ import java.util.regex.Pattern;
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  */
 public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
+
+    private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
 
@@ -422,8 +426,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         synchronized (openIterators) {
             iterators = new HashSet<>(openIterators);
         }
-        for (final KeyValueIterator iterator : iterators) {
-            iterator.close();
+        if (iterators.size() != 0) {
+            log.warn("Closing {} open iterators for store {}", iterators.size(), name);
+            for (final KeyValueIterator iterator : iterators) {
+                iterator.close();
+            }
         }
     }
 
@@ -444,7 +451,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
+                throw new InvalidStateStoreException(String.format("RocksDB iterator for store %s has closed", storeName));
             }
             return super.hasNext();
         }
