@@ -165,6 +165,6 @@ class ReplicationTest(ProduceConsumeValidateTest):
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
                                            throughput=self.producer_throughput, compression_types=compression_types,
                                            enable_idempotence=enable_idempotence)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=60000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, message_validator=is_int)
         self.kafka.start()
         self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self, broker_type))

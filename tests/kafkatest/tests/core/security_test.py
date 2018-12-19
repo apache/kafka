@@ -57,7 +57,6 @@ class SecurityTest(ProduceConsumeValidateTest):
                                                                     "replication-factor": 1}
                                                                 })
         self.num_partitions = 2
-        self.timeout_sec = 10000
         self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
@@ -123,5 +122,5 @@ class SecurityTest(ProduceConsumeValidateTest):
 
     def create_producer_and_consumer(self):
         self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic, throughput=self.producer_throughput)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=10000, message_validator=is_int)
+        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, message_validator=is_int)
 
