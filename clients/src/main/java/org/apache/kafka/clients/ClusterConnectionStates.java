@@ -117,7 +117,7 @@ final class ClusterConnectionStates {
             connectionState.moveToNextAddress();
         } else {
             nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                this.reconnectBackoffInitMs, ClientUtils.resolve(host, clientDnsLookup), clientDnsLookup));
+                this.reconnectBackoffInitMs, host, clientDnsLookup));
         }
     }
 
@@ -345,17 +345,19 @@ final class ClusterConnectionStates {
         long throttleUntilTimeMs;
         private List<InetAddress> addresses;
         private int index = 0;
-        private ClientDnsLookup clientDnsLookup;
+        private final String host;
+        private final ClientDnsLookup clientDnsLookup;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
-                List<InetAddress> addresses, ClientDnsLookup clientDnsLookup) {
+                String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
             this.state = state;
-            this.addresses = addresses;
+            this.addresses = ClientUtils.resolve(host, clientDnsLookup);
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
             this.throttleUntilTimeMs = 0;
+            this.host = host;
             this.clientDnsLookup = clientDnsLookup;
         }
 
@@ -369,7 +371,7 @@ final class ClusterConnectionStates {
         public void moveToNextAddress() throws UnknownHostException {
             index = (index + 1) % addresses.size();
             if (index == 0)
-                addresses = ClientUtils.resolve(addresses.get(0).getCanonicalHostName(), clientDnsLookup);
+                addresses = ClientUtils.resolve(host, clientDnsLookup);
         }
 
         public String toString() {
