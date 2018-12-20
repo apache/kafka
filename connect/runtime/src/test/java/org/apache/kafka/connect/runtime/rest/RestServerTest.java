@@ -52,8 +52,6 @@ import static org.junit.Assert.assertEquals;
 @RunWith(PowerMockRunner.class)
 public class RestServerTest {
 
-    private static final String METHODS_LIST = "HEAD, POST, GET, OPTIONS";
-
     @MockStrict
     private Herder herder;
     @MockStrict
@@ -178,7 +176,10 @@ public class RestServerTest {
             .accept(MediaType.WILDCARD)
             .options();
         Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
-        Assert.assertEquals(METHODS_LIST, response.readEntity(String.class));
+        Assert.assertArrayEquals(
+            response.getAllowedMethods().toArray(new String[0]),
+            response.readEntity(String.class).split(", ")
+        );
 
         PowerMock.verifyAll();
     }
