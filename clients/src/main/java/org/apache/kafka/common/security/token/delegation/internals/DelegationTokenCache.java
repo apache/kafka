@@ -91,7 +91,7 @@ public class DelegationTokenCache {
         TokenInformation tokenInfo = tokenCache.remove(tokenId);
         if (tokenInfo != null) {
             String hmac = tokenIdHmacCache.remove(tokenInfo.tokenId());
-            if(hmac != null) {
+            if (hmac != null) {
                 hmacTokenIdCache.remove(hmac);
             }
         }
