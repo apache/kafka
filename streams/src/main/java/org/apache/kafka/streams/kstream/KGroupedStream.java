@@ -115,7 +115,6 @@ public interface KGroupedStream<K, V> {
      */
     KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized);
 
-
     /**
      * Combine the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.

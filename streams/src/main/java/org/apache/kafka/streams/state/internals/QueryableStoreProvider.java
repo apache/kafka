@@ -47,10 +47,11 @@ public class QueryableStoreProvider {
      * @param <T>                The expected type of the returned store
      * @return A composite object that wraps the store instances.
      */
-    public <T> T getStore(final String storeName, final QueryableStoreType<T> queryableStoreType) {
+    public <T> T getStore(final String storeName,
+                          final QueryableStoreType<T> queryableStoreType) {
         final List<T> globalStore = globalStoreProvider.stores(storeName, queryableStoreType);
         if (!globalStore.isEmpty()) {
-            return queryableStoreType.create(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(globalStoreProvider)), storeName);
+            return queryableStoreType.create(new WrappingStoreProvider(Collections.singletonList(globalStoreProvider)), storeName);
         }
         final List<T> allStores = new ArrayList<>();
         for (final StateStoreProvider storeProvider : storeProviders) {
