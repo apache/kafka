@@ -158,7 +158,7 @@ public class RestServerTest {
     }
 
     @Test
-    public void testWadlOutput() {
+    public void testOptionsDoesNotIncludeWadlOutput() {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
