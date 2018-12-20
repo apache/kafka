@@ -16,19 +16,18 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
@@ -37,6 +36,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -124,7 +124,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final KeyValue keyValue;
 
         private CapturedForward(final To to, final KeyValue keyValue) {
-            if (keyValue == null) throw new IllegalArgumentException();
+            if (keyValue == null) {
+                throw new IllegalArgumentException();
+            }
 
             this.childName = to.childName;
             this.timestamp = to.timestamp;
@@ -396,12 +398,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return capturedPunctuator::cancel;
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(interval, "interval");
-        return schedule(interval.toMillis(), type, callback);
+        return schedule(ApiUtils.validateMillisecondDuration(interval, "interval"), type, callback);
     }
 
     /**
@@ -411,9 +413,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedPunctuator> scheduledPunctuators() {
-        final LinkedList<CapturedPunctuator> capturedPunctuators = new LinkedList<>();
-        capturedPunctuators.addAll(punctuators);
-        return capturedPunctuators;
+        return new LinkedList<>(punctuators);
     }
 
     @SuppressWarnings("unchecked")
@@ -458,11 +458,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedForward> forwarded() {
-        final LinkedList<CapturedForward> result = new LinkedList<>();
-        result.addAll(capturedForwards);
-        return result;
+        return new LinkedList<>(capturedForwards);
     }
 
     /**

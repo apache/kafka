@@ -1441,7 +1441,7 @@
 <pre>metrics.recording.level="info"</pre>
 
 <h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
-All the following metrics have a recording level of ``info``:
+All the following metrics have a recording level of <code>info</code>:
 <table class="data-table">
     <tbody>
       <tr>
@@ -1563,7 +1563,7 @@ All the following metrics have a recording level of ``info``:
 </table>
 
 <h5><a id="kafka_streams_task_monitoring" href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1605,7 +1605,7 @@ All the following metrics have a recording level of ``debug``:
 </table>
 
  <h5><a id="kafka_streams_node_monitoring" href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
- All the following metrics have a recording level of ``debug``:
+ All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1703,13 +1703,35 @@ All the following metrics have a recording level of ``debug``:
         <td>The total number of of records being forwarded downstream, from source nodes only. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>suppression-emit-rate</td>
+        <td>
+          The rate at which records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-rate</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-emit-total</td>
+        <td>
+          The total number of records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-total</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
  </tbody>
  </table>
 
  <h5><a id="kafka_streams_store_monitoring" href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
- All the following metrics have a recording level of ``debug``. Note that the ``store-scope`` value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
- state stores; for built-in state stores, currently we have <code>in-memory-state</code>, <code>in-memory-lru-state</code>, <code>rocksdb-state</code> (for RocksDB backed key-value store),
-  <code>rocksdb-window-state</code> (for RocksDB backed window store) and <code>rocksdb-session-state</code> (for RocksDB backed session store).
+ All the following metrics have a recording level of <code>debug</code>. Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
+ state stores; for built-in state stores, currently we have:
+  <ul>
+    <li><code>in-memory-state</code></li>
+    <li><code>in-memory-lru-state</code></li>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+  </ul>
 
   <table class="data-table">
       <tbody>
@@ -1902,7 +1924,7 @@ All the following metrics have a recording level of ``debug``:
  </table>
 
   <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
-  All the following metrics have a recording level of ``debug``:
+  All the following metrics have a recording level of <code>debug</code>:
 
   <table class="data-table">
       <tbody>
@@ -1925,6 +1947,44 @@ All the following metrics have a recording level of ``debug``:
         <td>hitRatio-max</td>
         <td>The maximum cache hit ratio. </td>
         <td>kafka.streams:type=stream-record-cache-metrics,client-id=([-.\w]+),task-id=([-.\w]+),record-cache-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+ </table>
+
+  <h5><a id="kafka_streams_buffer_monitoring" href="#kafka_streams_buffer_monitoring">Suppression Buffer Metrics</a></h5>
+  All the following metrics have a recording level of <code>debug</code>:
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <td>suppression-buffer-size-current</td>
+        <td>The current total size, in bytes, of the buffered data.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-count-current</td>
+        <td>The current number of records buffered.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
       </tr>
     </tbody>
  </table>

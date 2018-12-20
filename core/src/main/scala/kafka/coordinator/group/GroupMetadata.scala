@@ -220,7 +220,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.awaitingJoinCallback = callback
     if (member.awaitingJoinCallback != null)
-      numMembersAwaitingJoin += 1;
+      numMembersAwaitingJoin += 1
   }
 
   def remove(memberId: String) {
@@ -300,19 +300,19 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     member.supportedProtocols = protocols
 
     if (callback != null && member.awaitingJoinCallback == null) {
-      numMembersAwaitingJoin += 1;
+      numMembersAwaitingJoin += 1
     } else if (callback == null && member.awaitingJoinCallback != null) {
-      numMembersAwaitingJoin -= 1;
+      numMembersAwaitingJoin -= 1
     }
     member.awaitingJoinCallback = callback
   }
 
-  def invokeJoinCallback(member: MemberMetadata,
-                         joinGroupResult: JoinGroupResult) : Unit = {
+  def maybeInvokeJoinCallback(member: MemberMetadata,
+                              joinGroupResult: JoinGroupResult) : Unit = {
     if (member.awaitingJoinCallback != null) {
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
-      numMembersAwaitingJoin -= 1;
+      numMembersAwaitingJoin -= 1
     }
   }
 

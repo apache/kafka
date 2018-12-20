@@ -71,8 +71,12 @@ public class SuppressedInternal<K> implements Suppressed<K> {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final SuppressedInternal<?> that = (SuppressedInternal<?>) o;
         return suppressTombstones == that.suppressTombstones &&
             Objects.equals(name, that.name) &&

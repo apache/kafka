@@ -48,7 +48,7 @@ public final class SessionWindow extends Window {
      *
      * @param other another window
      * @return {@code true} if {@code other} overlaps with this window&mdash;{@code false} otherwise
-     * @throws IllegalArgumentException if the {@code other} window has a different type than {@link this} window
+     * @throws IllegalArgumentException if the {@code other} window has a different type than {@code this} window
      */
     public boolean overlap(final Window other) throws IllegalArgumentException {
         if (getClass() != other.getClass()) {

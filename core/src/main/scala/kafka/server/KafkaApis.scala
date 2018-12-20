@@ -46,7 +46,7 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{BaseRecords, ControlRecordType, EndTransactionMarker, LazyDownConversionRecords, MemoryRecords, MultiRecordsSend, RecordBatch, RecordConversionStats, Records}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
@@ -408,6 +408,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
 
     for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
@@ -416,12 +417,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
-        authorizedRequestInfo += (topicPartition -> memoryRecords)
+        try {
+          ProduceRequest.validateRecords(request.header.apiVersion(), memoryRecords)
+          authorizedRequestInfo += (topicPartition -> memoryRecords)
+        } catch {
+          case e: ApiException =>
+            invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
+        }
     }
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
-      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
+      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
 
       mergedResponseStatus.foreach { case (topicPartition, status) =>
@@ -827,9 +834,19 @@ class KafkaApis(val requestChannel: RequestChannel,
           ListOffsetResponse.UNKNOWN_OFFSET,
           Optional.empty()))
       } else {
+
+        def buildErrorResponse(e: Errors): (TopicPartition, ListOffsetResponse.PartitionData) = {
+          (topicPartition, new ListOffsetResponse.PartitionData(
+            e,
+            ListOffsetResponse.UNKNOWN_TIMESTAMP,
+            ListOffsetResponse.UNKNOWN_OFFSET,
+            Optional.empty()))
+        }
+
         try {
           val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID
-          val isolationLevelOpt = if (offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID)
+          val isClientRequest = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+          val isolationLevelOpt = if (isClientRequest)
             Some(offsetRequest.isolationLevel)
           else
             None
@@ -859,16 +876,19 @@ class KafkaApis(val requestChannel: RequestChannel,
                     _ : UnsupportedForMessageFormatException) =>
             debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                 s"partition $topicPartition failed due to ${e.getMessage}")
-            (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-              ListOffsetResponse.UNKNOWN_TIMESTAMP,
-              ListOffsetResponse.UNKNOWN_OFFSET,
-              Optional.empty()))
+            buildErrorResponse(Errors.forException(e))
+
+          // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
+          case e: OffsetNotAvailableException =>
+            if(request.header.apiVersion >= 5) {
+              buildErrorResponse(Errors.forException(e))
+            } else {
+              buildErrorResponse(Errors.LEADER_NOT_AVAILABLE)
+            }
+
           case e: Throwable =>
             error("Error while responding to offset request", e)
-            (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-              ListOffsetResponse.UNKNOWN_TIMESTAMP,
-              ListOffsetResponse.UNKNOWN_OFFSET,
-              Optional.empty()))
+            buildErrorResponse(Errors.forException(e))
         }
       }
     }

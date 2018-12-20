@@ -60,19 +60,21 @@ public final class TimeWindows extends Windows<TimeWindow> {
     private final long maintainDurationMs;
 
     /** The size of the windows in milliseconds. */
+    @SuppressWarnings("WeakerAccess")
     public final long sizeMs;
 
     /**
      * The size of the window's advance interval in milliseconds, i.e., by how much a window moves forward relative to
      * the previous one.
      */
+    @SuppressWarnings("WeakerAccess")
     public final long advanceMs;
-    private final Duration grace;
+    private final long graceMs;
 
-    private TimeWindows(final long sizeMs, final long advanceMs, final Duration grace, final long maintainDurationMs) {
+    private TimeWindows(final long sizeMs, final long advanceMs, final long graceMs, final long maintainDurationMs) {
         this.sizeMs = sizeMs;
         this.advanceMs = advanceMs;
-        this.grace = grace;
+        this.graceMs = graceMs;
         this.maintainDurationMs = maintainDurationMs;
     }
 
@@ -81,13 +83,13 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @Deprecated
     private TimeWindows(final long sizeMs,
                         final long advanceMs,
-                        final Duration grace,
+                        final long graceMs,
                         final long maintainDurationMs,
                         final int segments) {
         super(segments);
         this.sizeMs = sizeMs;
         this.advanceMs = advanceMs;
-        this.grace = grace;
+        this.graceMs = graceMs;
         this.maintainDurationMs = maintainDurationMs;
     }
 
@@ -110,7 +112,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
             throw new IllegalArgumentException("Window size (sizeMs) must be larger than zero.");
         }
         // This is a static factory method, so we initialize grace and retention to the defaults.
-        return new TimeWindows(sizeMs, sizeMs, null, DEFAULT_RETENTION_MS);
+        return new TimeWindows(sizeMs, sizeMs, -1, DEFAULT_RETENTION_MS);
     }
 
     /**
@@ -125,10 +127,10 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      */
+    @SuppressWarnings("deprecation")
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
-        ApiUtils.validateMillisecondDuration(size, msgPrefix);
-        return of(size.toMillis());
+        return of(ApiUtils.validateMillisecondDuration(size, msgPrefix));
     }
 
     /**
@@ -150,7 +152,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
             throw new IllegalArgumentException(String.format("Window advancement interval should be more than zero " +
                     "and less than window duration which is %d ms, but given advancement interval is: %d ms", sizeMs, advanceMs));
         }
-        return new TimeWindows(sizeMs, advanceMs, grace, maintainDurationMs, segments);
+        return new TimeWindows(sizeMs, advanceMs, graceMs, maintainDurationMs, segments);
     }
 
     /**
@@ -167,8 +169,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows advanceBy(final Duration advance) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
-        ApiUtils.validateMillisecondDuration(advance, msgPrefix);
-        return advanceBy(advance.toMillis());
+        return advanceBy(ApiUtils.validateMillisecondDuration(advance, msgPrefix));
     }
 
     @Override
@@ -201,12 +202,12 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
     public TimeWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
-        ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
-        if (afterWindowEnd.toMillis() < 0) {
+        final long afterWindowEndMs = ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
+        if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
-        return new TimeWindows(sizeMs, advanceMs, afterWindowEnd, maintainDurationMs, segments);
+        return new TimeWindows(sizeMs, advanceMs, afterWindowEndMs, maintainDurationMs, segments);
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
@@ -215,7 +216,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - size) if you want to be super accurate.
-        return grace != null ? grace.toMillis() : maintainMs() - size();
+        return graceMs != -1 ? graceMs : maintainMs() - size();
     }
 
     /**
@@ -233,7 +234,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
         if (durationMs < sizeMs) {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than the window size.");
         }
-        return new TimeWindows(sizeMs, advanceMs, grace, durationMs, segments);
+        return new TimeWindows(sizeMs, advanceMs, graceMs, durationMs, segments);
     }
 
     /**
@@ -254,20 +255,24 @@ public final class TimeWindows extends Windows<TimeWindow> {
     @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final TimeWindows that = (TimeWindows) o;
         return maintainDurationMs == that.maintainDurationMs &&
             segments == that.segments &&
             sizeMs == that.sizeMs &&
             advanceMs == that.advanceMs &&
-            Objects.equals(grace, that.grace);
+            graceMs == that.graceMs;
     }
 
     @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
     @Override
     public int hashCode() {
-        return Objects.hash(maintainDurationMs, segments, sizeMs, advanceMs, grace);
+        return Objects.hash(maintainDurationMs, segments, sizeMs, advanceMs, graceMs);
     }
 
     @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
@@ -277,7 +282,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
             "maintainDurationMs=" + maintainDurationMs +
             ", sizeMs=" + sizeMs +
             ", advanceMs=" + advanceMs +
-            ", grace=" + grace +
+            ", graceMs=" + graceMs +
             ", segments=" + segments +
             '}';
     }

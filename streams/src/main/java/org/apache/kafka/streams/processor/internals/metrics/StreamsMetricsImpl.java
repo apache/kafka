@@ -267,8 +267,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
             }
 
-            for (int i = 0; i < tags.length; i += 2)
+            for (int i = 0; i < tags.length; i += 2) {
                 tagMap.put(tags[i], tags[i + 1]);
+            }
         }
         tagMap.put("client-id", threadName);
         return tagMap;

@@ -74,13 +74,13 @@ public final class SessionWindows {
 
     private final long gapMs;
     private final long maintainDurationMs;
-    private final Duration grace;
+    private final long graceMs;
 
 
-    private SessionWindows(final long gapMs, final long maintainDurationMs, final Duration grace) {
+    private SessionWindows(final long gapMs, final long maintainDurationMs, final long graceMs) {
         this.gapMs = gapMs;
         this.maintainDurationMs = maintainDurationMs;
-        this.grace = grace;
+        this.graceMs = graceMs;
     }
 
     /**
@@ -97,7 +97,7 @@ public final class SessionWindows {
         if (inactivityGapMs <= 0) {
             throw new IllegalArgumentException("Gap time (inactivityGapMs) cannot be zero or negative.");
         }
-        return new SessionWindows(inactivityGapMs, DEFAULT_RETENTION_MS, null);
+        return new SessionWindows(inactivityGapMs, DEFAULT_RETENTION_MS, -1);
     }
 
     /**
@@ -108,10 +108,10 @@ public final class SessionWindows {
      *
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
+    @SuppressWarnings("deprecation")
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
-        ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix);
-        return with(inactivityGap.toMillis());
+        return with(ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix));
     }
 
     /**
@@ -131,7 +131,7 @@ public final class SessionWindows {
             throw new IllegalArgumentException("Window retention time (durationMs) cannot be smaller than window gap.");
         }
 
-        return new SessionWindows(gapMs, durationMs, grace);
+        return new SessionWindows(gapMs, durationMs, graceMs);
     }
 
     /**
@@ -148,16 +148,16 @@ public final class SessionWindows {
      */
     public SessionWindows grace(final Duration afterWindowEnd) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(afterWindowEnd, "afterWindowEnd");
-        ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
+        final long afterWindowEndMs = ApiUtils.validateMillisecondDuration(afterWindowEnd, msgPrefix);
 
-        if (afterWindowEnd.toMillis() < 0) {
+        if (afterWindowEndMs < 0) {
             throw new IllegalArgumentException("Grace period must not be negative.");
         }
 
         return new SessionWindows(
             gapMs,
             maintainDurationMs,
-            afterWindowEnd
+            afterWindowEndMs
         );
     }
 
@@ -167,7 +167,7 @@ public final class SessionWindows {
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - gapMs) if you want to be super accurate.
-        return grace != null ? grace.toMillis() : maintainMs() - inactivityGap();
+        return graceMs != -1 ? graceMs : maintainMs() - inactivityGap();
     }
 
     /**
@@ -195,17 +195,21 @@ public final class SessionWindows {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final SessionWindows that = (SessionWindows) o;
         return gapMs == that.gapMs &&
             maintainDurationMs == that.maintainDurationMs &&
-            Objects.equals(grace, that.grace);
+            graceMs == that.graceMs;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(gapMs, maintainDurationMs, grace);
+        return Objects.hash(gapMs, maintainDurationMs, graceMs);
     }
 
     @Override
@@ -213,7 +217,7 @@ public final class SessionWindows {
         return "SessionWindows{" +
             "gapMs=" + gapMs +
             ", maintainDurationMs=" + maintainDurationMs +
-            ", grace=" + grace +
+            ", graceMs=" + graceMs +
             '}';
     }
 }

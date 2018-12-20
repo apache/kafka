@@ -37,6 +37,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
@@ -540,8 +541,7 @@ public class KafkaStreamsTest {
         CLUSTER.createTopic(topic);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        builder.table(topic, consumed);
+        builder.table(topic, Materialized.as("store"));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), props);
         try {

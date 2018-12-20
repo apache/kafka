@@ -48,8 +48,12 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final FinalResultsSuppressionBuilder<?> that = (FinalResultsSuppressionBuilder<?>) o;
         return Objects.equals(name, that.name) &&
             Objects.equals(bufferConfig, that.bufferConfig);

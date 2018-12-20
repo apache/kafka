@@ -23,7 +23,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
 
     private final String storeName;
 
-    public KTableSourceValueGetterSupplier(final String storeName) {
+    KTableSourceValueGetterSupplier(final String storeName) {
         this.storeName = storeName;
     }
 
