@@ -177,8 +177,8 @@ public class RestServerTest {
         Response response = request("/connectors")
             .accept(MediaType.WILDCARD)
             .options();
-        MediaType.TEXT_PLAIN.equals(response.getMediaType());
-        METHODS_LIST.equals(response.readEntity(String.class));
+        Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
+        Assert.assertEquals(METHODS_LIST, response.readEntity(String.class));
 
         PowerMock.verifyAll();
     }
