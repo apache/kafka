@@ -62,8 +62,8 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
@@ -140,7 +140,8 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(parent, transformer, null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
@@ -150,8 +151,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldNotSendOldValuesByDefault() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
@@ -215,8 +216,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetFromStateStoreIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
         expect(stateStore.get("Key")).andReturn("something");
@@ -232,8 +233,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetStoreNamesFromParentIfNotMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
@@ -246,8 +247,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         final String[] storeNames = transformValues.view().storeNames();
 
@@ -256,8 +257,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseTransformerOnProcessorClose() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
         transformer.close();
@@ -272,8 +273,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseTransformerOnGetterClose() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
@@ -292,8 +293,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseParentGetterClose() {
-        final KTableTransformValues<String, String, String> transformValues =
-            new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues
+            = new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(mockSupplier.get()).andReturn(transformer);
@@ -329,7 +330,7 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null, 0L));
 
         assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:D->null!"));
-        assertThat("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME), is(nullValue()));
+        assertNull("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME));
     }
 
     @Test
@@ -412,21 +413,11 @@ public class KTableTransformValuesTest {
     }
 
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
-        return new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
-            @Override
-            public KeyValue<String, Integer> apply(final String key, final Integer value) {
-                return new KeyValue<>(key, value);
-            }
-        };
+        return KeyValue::new;
     }
 
     private static ValueMapper<Integer, String> mapBackToStrings() {
-        return new ValueMapper<Integer, String>() {
-            @Override
-            public String apply(final Integer value) {
-                return value.toString();
-            }
-        };
+        return Object::toString;
     }
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {
