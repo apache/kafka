@@ -1232,16 +1232,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         @Override
         public void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
-            log.info("Rebalance started");
-
             // Note that since we don't reset the assignment, we don't revoke leadership here. During a rebalance,
             // it is still important to have a leader that can write configs, offsets, etc.
 
             if (rebalanceResolved) {
-                // TODO: Technically we don't have to stop connectors at all until we know they've really been removed from
-                // this worker. Instead, we can let them continue to run but buffer any update requests (which should be
-                // rare anyway). This would avoid a steady stream of start/stop, which probably also includes lots of
-                // unnecessary repeated connections to the source/sink system.
                 List<Callable<Void>> callables = new ArrayList<>();
                 for (final String connectorName : connectors) {
                     callables.add(getConnectorStoppingCallable(connectorName));

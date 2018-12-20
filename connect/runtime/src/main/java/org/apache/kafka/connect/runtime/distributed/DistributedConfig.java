@@ -132,6 +132,10 @@ public class DistributedConfig extends WorkerConfig {
     public static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG = "status.storage.replication.factor";
     private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the status storage topic";
 
+    public static final String CONNECT_PROTOCOL_COMPATIBILITY = "connect.protocol.compatibility";
+    public static final String CONNECT_PROTOCOL_COMPATIBILITY_DOC = "Compatibility mode for Kafka Connect's Protocol";
+    public static final String CONNECT_PROTOCOL_COMPATIBILITY_DEFAULT = ConnectProtocolCompatibility.STRICT.toString();
+
     static {
         CONFIG = baseConfigDef()
                 .define(GROUP_ID_CONFIG,
@@ -265,7 +269,12 @@ public class DistributedConfig extends WorkerConfig {
                         (short) 3,
                         atLeast(1),
                         ConfigDef.Importance.LOW,
-                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
+                        STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
+                .define(CONNECT_PROTOCOL_COMPATIBILITY,
+                        ConfigDef.Type.STRING,
+                        CONNECT_PROTOCOL_COMPATIBILITY_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        CONNECT_PROTOCOL_COMPATIBILITY_DOC);
     }
 
     @Override

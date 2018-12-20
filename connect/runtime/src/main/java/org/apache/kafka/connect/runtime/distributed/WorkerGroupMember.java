@@ -45,7 +45,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -55,8 +54,6 @@ import java.util.concurrent.atomic.AtomicReference;
  * higher level operations in response to group membership events being handled by the herder.
  */
 public class WorkerGroupMember {
-
-    private static final AtomicInteger CONNECT_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.connect";
 
     private final Logger log;
@@ -74,16 +71,15 @@ public class WorkerGroupMember {
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
-                             Time time) {
+                             Time time,
+                             String clientId,
+                             LogContext logContext) {
         try {
             this.time = time;
-
-            String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-            clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
-            String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
-
-            LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + groupId + "] ");
+            this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);
+
+            String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
@@ -140,7 +136,8 @@ public class WorkerGroupMember {
                     retryBackoffMs,
                     restUrl,
                     configStorage,
-                    listener);
+                    listener,
+                    ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_COMPATIBILITY)));
 
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Connect group member created");
@@ -184,6 +181,16 @@ public class WorkerGroupMember {
      */
     public String memberId() {
         return coordinator.memberId();
+    }
+
+    /**
+     * Get the local client ID of the worker. This id is unique locally and it's primarily used for
+     * logging.
+     *
+     * @return the client ID of this worker
+     */
+    public String clientId() {
+        return clientId;
     }
 
     public void requestRejoin() {
