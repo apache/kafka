@@ -269,7 +269,7 @@ public class ClientCompatibilityTest {
                         throw e.getCause();
                     }
                 },
-                () ->  new CreateTopicsResultTester(client, Collections.singleton("newtopic")).invoke()
+                () ->  createTopicsResultTest(client, Collections.singleton("newtopic"))
             );
 
             while (true) {
@@ -277,7 +277,7 @@ public class ClientCompatibilityTest {
                 if (!testConfig.createTopicsSupported)
                     break;
 
-                if (isFoundNewTopic(listings, "newtopic"))
+                if (topicExists(listings, "newtopic"))
                     break;
 
                 Thread.sleep(1);
@@ -297,16 +297,30 @@ public class ClientCompatibilityTest {
         }
     }
 
-    private boolean isFoundNewTopic(Collection<TopicListing> listings, String newTopicName) {
-        boolean foundNewTopic = false;
-        for (TopicListing listing : listings) {
-            if (listing.name().equals(newTopicName)) {
-                if (listing.isInternal())
-                    throw new KafkaException("Did not expect newtopic to be an internal topic.");
-                foundNewTopic = true;
+    private void createTopicsResultTest(AdminClient client, Collection<String> topics)
+            throws InterruptedException, ExecutionException {
+        while (true) {
+            try {
+                client.describeTopics(topics).all().get();
+                break;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof UnknownTopicOrPartitionException)
+                    continue;
+                throw e;
             }
         }
-        return foundNewTopic;
+    }
+
+    private boolean topicExists(Collection<TopicListing> listings, String topicName) {
+        boolean foundTopic = false;
+        for (TopicListing listing : listings) {
+            if (listing.name().equals(topicName)) {
+                if (listing.isInternal())
+                    throw new KafkaException(String.format("Did not expect %s to be an internal topic.", topicName));
+                foundTopic = true;
+            }
+        }
+        return foundTopic;
     }
 
     private static class OffsetsForTime {
@@ -484,28 +498,5 @@ public class ClientCompatibilityTest {
             throw new RuntimeException("Did not expect " + featureName + " to be supported, but it was.");
         }
         resultTester.test();
-    }
-
-    private static class CreateTopicsResultTester {
-        private final Collection<String> topics;
-        private AdminClient client;
-
-        public CreateTopicsResultTester(AdminClient client, Collection<String> topics) {
-            this.client = client;
-            this.topics = topics;
-        }
-
-        public void invoke() throws InterruptedException, ExecutionException {
-            while (true) {
-                try {
-                    client.describeTopics(topics).all().get();
-                    break;
-                } catch (ExecutionException e) {
-                    if (e.getCause() instanceof UnknownTopicOrPartitionException)
-                        continue;
-                    throw e;
-                }
-            }
-        }
     }
 }
