@@ -16,16 +16,15 @@
  */
 package kafka.admin
 
+import kafka.admin.TopicCommand.TopicCommandOptions
+import kafka.server.ConfigType
+import kafka.utils.{Logging, TestUtils}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
+import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.errors.{BrokerNotAvailableException, InvalidReplicaAssignmentException, TopicExistsException}
+import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.Test
-import kafka.utils.Logging
-import kafka.utils.TestUtils
-import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
-import kafka.server.ConfigType
-import kafka.admin.TopicCommand.TopicCommandOptions
-import org.apache.kafka.common.errors.TopicExistsException
-import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.config.ConfigException
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
@@ -160,6 +159,95 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
+  def testCreateWithAllAvailableBrokersReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,1:2,2:0"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    // try to re-create the topic without --if-not-exists
+    intercept[TopicExistsException] {
+      TopicCommand.createTopic(zkClient, createOpts)
+    }
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    TopicCommand.createTopic(zkClient, createNotExistsOpts)
+  }
+
+  @Test
+  def testCreateWithSomeAvailableBrokersReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,3:2,2:3"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    TopicCommand.createTopic(zkClient, createNotExistsOpts)
+  }
+
+  @Test
+  def testCreateWithNoAvailableBrokersReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,3:2,3:4"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    intercept[BrokerNotAvailableException] {
+      TopicCommand.createTopic(zkClient, createOpts)
+    }
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    intercept[BrokerNotAvailableException] {
+      TopicCommand.createTopic(zkClient, createNotExistsOpts)
+    }
+  }
+
+  @Test
+  def testCreateWithDifferentRFReplicaAssignment() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    val topic = "test"
+    val replicaAssignment = "0:1,1:2,2:0:1"
+
+    // create the topic
+    val createOpts = new TopicCommandOptions(Array( "--topic", topic, "--replica-assignment", replicaAssignment))
+    intercept[InvalidReplicaAssignmentException] {
+      TopicCommand.createTopic(zkClient, createOpts)
+    }
+
+    // try to re-create the topic with --if-not-exists
+    val createNotExistsOpts = new TopicCommandOptions(
+      Array("--replica-assignment", replicaAssignment, "--topic", topic, "--if-not-exists"))
+    intercept[InvalidReplicaAssignmentException] {
+      TopicCommand.createTopic(zkClient, createNotExistsOpts)
+    }
+  }
+
+  @Test
   def testCreateAlterTopicWithRackAware() {
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
@@ -187,6 +275,40 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
       tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
+  }
+
+  @Test
+  def testCreateAlterTopicWithRackAwareDisabled() {
+    val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
+    TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
+
+    val numPartitions = 18
+    val replicationFactor = 3
+    val createOpts = new TopicCommandOptions(Array(
+      "--partitions", numPartitions.toString,
+      "--replication-factor", replicationFactor.toString,
+      "--topic", "foo",
+      "--disable-rack-aware"))
+    TopicCommand.createTopic(zkClient, createOpts)
+
+    var assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    checkReplicaDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor,
+      verifyRackAware = false, verifyRackUnAware = true)
+
+    val alteredNumPartitions = 36
+    // verify that adding partitions will also be rack aware
+    val alterOpts = new TopicCommandOptions(Array(
+      "--partitions", alteredNumPartitions.toString,
+      "--topic", "foo",
+      "--disable-rack-aware"))
+    TopicCommand.alterTopic(zkClient, alterOpts)
+    assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+      tp.partition -> replicas
+    }
+    checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor,
+      verifyRackAware = false, verifyRackUnAware = true)
   }
 
   @Test

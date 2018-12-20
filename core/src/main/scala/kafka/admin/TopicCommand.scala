@@ -20,7 +20,6 @@ package kafka.admin
 import java.util.Properties
 
 import joptsimple._
-import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.server.ConfigType
 import kafka.utils.Implicits._
@@ -287,12 +286,7 @@ object TopicCommand extends Logging {
     val ret = new mutable.HashMap[Int, List[Int]]()
     for (i <- 0 until partitionList.size) {
       val brokerList = partitionList(i).split(":").map(s => s.trim().toInt)
-      val duplicateBrokers = CoreUtils.duplicates(brokerList)
-      if (duplicateBrokers.nonEmpty)
-        throw new AdminCommandFailedException("Partition replica lists may not contain duplicate entries: %s".format(duplicateBrokers.mkString(",")))
       ret.put(i, brokerList.toList)
-      if (ret(i).size != ret(0).size)
-        throw new AdminOperationException("Partition " + i + " has different replication factor: " + brokerList)
     }
     ret.toMap
   }
