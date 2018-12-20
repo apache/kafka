@@ -369,6 +369,17 @@ subprojects {
     configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = '8.10'
   }
+
+  configure(checkstyleMain) {
+    group = 'Verification'
+    description = 'Run checkstyle on all main Java sources'
+  }
+
+  configure(checkstyleTest) {
+    group = 'Verification'
+    description = 'Run checkstyle on all test Java sources'
+  }
+
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   spotbugs {
