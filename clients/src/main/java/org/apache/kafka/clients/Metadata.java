@@ -254,7 +254,7 @@ public class Metadata implements Closeable {
      */
     public synchronized void update(MetadataResponse metadataResponse, long now) {
         Objects.requireNonNull(metadataResponse, "Metadata response cannot be null");
-        if(isClosed())
+        if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
         this.needUpdate = false;
