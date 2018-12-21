@@ -822,7 +822,7 @@ class SocketServerTest extends JUnitSuite {
       .allMetrics.asScala
       .filterKeys(k => k.getName.endsWith("IdlePercent") || k.getName.endsWith("NetworkProcessorAvgIdlePercent"))
       .collect { case (k, metric: Gauge[_]) => (k, metric.value().asInstanceOf[Double]) }
-      .filter { case (_, value) => value != 0.0 }
+      .filter { case (_, value) => value != 0.0 && !value.equals(Double.NaN) }
 
     assertEquals(Map.empty, nonZeroMetricNamesAndValues)
   }

@@ -83,11 +83,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", "socket-server-metrics")
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
-  // data plane
+  // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
   val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests)
-  // control plane
+  // control-plane
   private var controlPlaneProcessorOpt : Option[Processor] = None
   private[network] var controlPlaneAcceptorOpt : Option[Acceptor] = None
   val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ => new RequestChannel(20, RequestChannel.ControlPlaneMetricPrefix))
@@ -141,7 +141,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
           }
           ioWaitRatioMetricName.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
-          }.getOrElse(0.0)
+          }.getOrElse(Double.NaN)
         }
       }
     )
@@ -182,28 +182,29 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
     )
     info(s"Started ${dataPlaneAcceptors.size} acceptor threads for data-plane")
-    controlPlaneAcceptorOpt.foreach(_ => info("Started 1 acceptor thread for control-plane"))
+    if (controlPlaneAcceptorOpt.isDefined)
+      info("Started control-plane acceptor thread")
   }
 
   /**
-   * Starts processors of all the data plane acceptors of this server if they have not already been started.
-   * This method is used for delayed starting of data plane processors if [[kafka.network.SocketServer#startup]]
+   * Starts processors of all the data-plane acceptors of this server if they have not already been started.
+   * This method is used for delayed starting of data-plane processors if [[kafka.network.SocketServer#startup]]
    * was invoked with `startupProcessors=false`.
    */
   def startDataPlaneProcessors(): Unit = synchronized {
     dataPlaneAcceptors.values.asScala.foreach { _.startProcessors(DataPlanePrefix) }
-    info(s"Started data plane processors for ${dataPlaneAcceptors.size} acceptors")
+    info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
   }
 
   /**
-   * Start the processor of control plane acceptor of this server if it has not already been started.
-   * This method is used for delayed starting of control plane processor if [[kafka.network.SocketServer#startup]]
+   * Start the processor of control-plane acceptor of this server if it has not already been started.
+   * This method is used for delayed starting of control-plane processor if [[kafka.network.SocketServer#startup]]
    * was invoked with `startupProcessors=false`.
    */
   def startControlPlaneProcessor(): Unit = synchronized {
-    controlPlaneAcceptorOpt.foreach { acceptor =>
-      acceptor.startProcessors(ControlPlanePrefix)
-      info(s"Started control plane processor for ${controlPlaneAcceptorOpt.size} acceptors")
+    if (controlPlaneAcceptorOpt.isDefined) {
+      controlPlaneAcceptorOpt.get.startProcessors(ControlPlanePrefix)
+      info(s"Started control-plane processor for the control-plane acceptor")
     }
   }
 
@@ -277,7 +278,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   }
 
   def resizeThreadPool(oldNumNetworkThreads: Int, newNumNetworkThreads: Int): Unit = synchronized {
-    info(s"Resizing network thread pool size for each data plane listener from $oldNumNetworkThreads to $newNumNetworkThreads")
+    info(s"Resizing network thread pool size for each data-plane listener from $oldNumNetworkThreads to $newNumNetworkThreads")
     if (newNumNetworkThreads > oldNumNetworkThreads) {
       dataPlaneAcceptors.asScala.foreach { case (endpoint, acceptor) =>
         addDataPlaneProcessors(acceptor, endpoint, newNumNetworkThreads - oldNumNetworkThreads)
@@ -303,8 +304,9 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   def boundPort(listenerName: ListenerName): Int = {
     try {
-      if (dataPlaneAcceptors.containsKey(endpoints(listenerName))) {
-        dataPlaneAcceptors.get(endpoints(listenerName)).serverChannel.socket.getLocalPort
+      val acceptor = dataPlaneAcceptors.get(endpoints(listenerName))
+      if (acceptor != null) {
+        acceptor.serverChannel.socket.getLocalPort
       } else {
         controlPlaneAcceptorOpt.map (_.serverChannel.socket().getLocalPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
       }

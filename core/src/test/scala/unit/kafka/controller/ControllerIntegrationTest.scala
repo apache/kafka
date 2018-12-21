@@ -86,7 +86,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  def testMetadaPropogationOnControlPlane(): Unit = {
+  def testMetadataPropagationOnControlPlane(): Unit = {
     servers = makeServers(1, listeners = Some("PLAINTEXT://localhost:0,CONTROLLER://localhost:5000"), listenerSecurityProtocolMap = Some("PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"),
       controlPlaneListenerName = Some("CONTROLLER"))
     TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
@@ -100,10 +100,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
       }
     }
-    assertTrue(controlPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 1.0)
-    assertTrue(dataPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double] == 0.0)
-    assertTrue(controlPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 1.0)
-    assertTrue(dataPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertEquals(1e-0, controlPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(0e-0, dataPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(1e-0, controlPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(0e-0, dataPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double], 0)
     assertTrue(controlPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] > 1.0)
     assertTrue(dataPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] == 0.0)
     assertTrue(controlPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 2.0)

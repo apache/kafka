@@ -243,13 +243,13 @@ class KafkaConfigTest {
     assertEquals(5000, controlEndpoint.port)
     assertEquals(SecurityProtocol.SSL, controlEndpoint.securityProtocol)
 
-    //advertised listener should contain control plane listener
+    //advertised listener should contain control-plane listener
     val advertisedEndpoints = serverConfig.advertisedListeners
     assertFalse(advertisedEndpoints.filter { endpoint =>
       endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
     }.isEmpty)
 
-    // interBrokerListener name should be different from control plane listener name
+    // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName
     assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
   }
