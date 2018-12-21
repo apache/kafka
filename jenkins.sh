@@ -21,10 +21,10 @@
 # Run validation checks (compilation and static analysis)
 ./gradlew clean compileJava compileScala compileTestJava compileTestScala \
     spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-    --no-daemon --continue -PxmlSpotBugsReport=true "$@" \
+    --profile --no-daemon --continue -PxmlSpotBugsReport=true "$@" \
     || { echo 'Validation steps failed'; exit 1; }
 
 # Run tests
 ./gradlew unitTest integrationTest \
-    --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
+    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
     || { echo 'Test steps failed'; exit 1; }
