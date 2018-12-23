@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueStore;
 import org.apache.kafka.streams.state.internals.RocksDBKeyValueStoreTest;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -54,7 +55,7 @@ import java.util.Set;
  * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
  * This class simplifies testing of various {@link KeyValueStore} instances, especially those that use
- * {@link org.apache.kafka.streams.state.internals.MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
+ * {@link MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
  *
  * <h2>Basic usage</h2>
  * This component can be used to help test a {@link KeyValueStore}'s ability to read and write entries.
@@ -189,7 +190,6 @@ public class KeyValueStoreTestDriver<K, V> {
         final Producer<byte[], byte[]> producer = new MockProducer<>(true, rawSerializer, rawSerializer);
 
         final RecordCollector recordCollector = new RecordCollectorImpl(
-            producer,
             "KeyValueStoreTestDriver",
             new LogContext("KeyValueStoreTestDriver "),
             new DefaultProductionExceptionHandler(),
@@ -206,8 +206,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
-                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
+                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, headers, key));
+                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, headers, value));
 
                 recordFlushed(keyTest, valueTest);
             }
@@ -224,6 +224,7 @@ public class KeyValueStoreTestDriver<K, V> {
                 throw new UnsupportedOperationException();
             }
         };
+        recordCollector.init(producer);
 
         final File stateDir = TestUtils.tempDirectory();
         //noinspection ResultOfMethodCallIgnored

@@ -24,6 +24,7 @@ import com.yammer.metrics.core.Gauge
 import kafka.metrics.{KafkaMetricsGroup, KafkaTimer}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.ShutdownableThread
+import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
@@ -32,12 +33,14 @@ object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
 }
 class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[ControllerState, KafkaTimer],
-                             eventProcessedListener: ControllerEvent => Unit) extends KafkaMetricsGroup {
+                             eventProcessedListener: ControllerEvent => Unit,
+                             controllerMovedListener: () => Unit) extends KafkaMetricsGroup {
 
   @volatile private var _state: ControllerState = ControllerState.Idle
   private val putLock = new ReentrantLock()
   private val queue = new LinkedBlockingQueue[ControllerEvent]
-  private val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
+  // Visible for test
+  private[controller] val thread = new ControllerEventThread(ControllerEventManager.ControllerEventThreadName)
   private val time = Time.SYSTEM
 
   private val eventQueueTimeHist = newHistogram("EventQueueTimeMs")
@@ -86,6 +89,9 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
               controllerEvent.process()
             }
           } catch {
+            case e: ControllerMovedException =>
+              info(s"Controller moved to another broker when processing $controllerEvent.", e)
+              controllerMovedListener()
             case e: Throwable => error(s"Error processing event $controllerEvent", e)
           }
 

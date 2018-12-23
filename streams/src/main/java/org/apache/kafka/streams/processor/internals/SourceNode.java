@@ -18,22 +18,19 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.ExtendedDeserializer;
 import org.apache.kafka.streams.kstream.internals.ChangedDeserializer;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.List;
 
-import static org.apache.kafka.common.serialization.ExtendedDeserializer.Wrapper.ensureExtended;
-
 public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     private final List<String> topics;
 
     private ProcessorContext context;
-    private ExtendedDeserializer<K> keyDeserializer;
-    private ExtendedDeserializer<V> valDeserializer;
+    private Deserializer<K> keyDeserializer;
+    private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
 
     public SourceNode(final String name,
@@ -44,8 +41,8 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         super(name);
         this.topics = topics;
         this.timestampExtractor = timestampExtractor;
-        this.keyDeserializer = ensureExtended(keyDeserializer);
-        this.valDeserializer = ensureExtended(valDeserializer);
+        this.keyDeserializer = keyDeserializer;
+        this.valDeserializer = valDeserializer;
     }
 
     public SourceNode(final String name,
@@ -70,15 +67,18 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this.context = context;
 
         // if deserializers are null, get the default ones from the context
-        if (this.keyDeserializer == null)
-            this.keyDeserializer = ensureExtended((Deserializer<K>) context.keySerde().deserializer());
-        if (this.valDeserializer == null)
-            this.valDeserializer = ensureExtended((Deserializer<V>) context.valueSerde().deserializer());
+        if (this.keyDeserializer == null) {
+            this.keyDeserializer = (Deserializer<K>) context.keySerde().deserializer();
+        }
+        if (this.valDeserializer == null) {
+            this.valDeserializer = (Deserializer<V>) context.valueSerde().deserializer();
+        }
 
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
         if (this.valDeserializer instanceof ChangedDeserializer &&
-                ((ChangedDeserializer) this.valDeserializer).inner() == null)
+                ((ChangedDeserializer) this.valDeserializer).inner() == null) {
             ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
+        }
     }
 
 

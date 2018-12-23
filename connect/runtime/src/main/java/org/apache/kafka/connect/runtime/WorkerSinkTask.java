@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -33,7 +32,6 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.SchemaAndValue;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -49,10 +47,10 @@ import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.storage.HeaderConverter;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.util.ConnectorTaskId;
-import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -104,6 +102,7 @@ class WorkerSinkTask extends WorkerTask {
                           Converter valueConverter,
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
+                          KafkaConsumer<byte[], byte[]> consumer,
                           ClassLoader loader,
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator) {
@@ -130,13 +129,13 @@ class WorkerSinkTask extends WorkerTask {
         this.commitFailures = 0;
         this.sinkTaskMetricsGroup = new SinkTaskMetricsGroup(id, connectMetrics);
         this.sinkTaskMetricsGroup.recordOffsetSequenceNumber(commitSeqno);
+        this.consumer = consumer;
     }
 
     @Override
     public void initialize(TaskConfig taskConfig) {
         try {
             this.taskConfig = taskConfig.originalsStrings();
-            this.consumer = createConsumer();
             this.context = new WorkerSinkTaskContext(consumer, this, configState);
         } catch (Throwable t) {
             log.error("{} Task failed initialization and will not be started.", this, t);
@@ -441,7 +440,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private ConsumerRecords<byte[], byte[]> pollConsumer(long timeoutMs) {
-        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(timeoutMs);
+        ConsumerRecords<byte[], byte[]> msgs = consumer.poll(Duration.ofMillis(timeoutMs));
 
         // Exceptions raised from the task during a rebalance should be rethrown to stop the worker
         if (rebalanceException != null) {
@@ -452,31 +451,6 @@ class WorkerSinkTask extends WorkerTask {
 
         sinkTaskMetricsGroup.recordRead(msgs.count());
         return msgs;
-    }
-
-    private KafkaConsumer<byte[], byte[]> createConsumer() {
-        // Include any unknown worker configs so consumer configs can be set globally on the worker
-        // and through to the task
-        Map<String, Object> props = new HashMap<>();
-
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
-        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                Utils.join(workerConfig.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
-        props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
-
-        props.putAll(workerConfig.originalsWithPrefix("consumer."));
-
-        KafkaConsumer<byte[], byte[]> newConsumer;
-        try {
-            newConsumer = new KafkaConsumer<>(props);
-        } catch (Throwable t) {
-            throw new ConnectException("Failed to create consumer", t);
-        }
-
-        return newConsumer;
     }
 
     private void convertMessages(ConsumerRecords<byte[], byte[]> msgs) {
@@ -648,7 +622,7 @@ class WorkerSinkTask extends WorkerTask {
                 long pos = consumer.position(tp);
                 lastCommittedOffsets.put(tp, new OffsetAndMetadata(pos));
                 currentOffsets.put(tp, new OffsetAndMetadata(pos));
-                log.debug("{} Assigned topic partition {} with offset {}", this, tp, pos);
+                log.debug("{} Assigned topic partition {} with offset {}", WorkerSinkTask.this, tp, pos);
             }
             sinkTaskMetricsGroup.assignedOffsets(currentOffsets);
 

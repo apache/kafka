@@ -38,18 +38,17 @@ class ConsoleConsumerTest(Test):
         self.zk = ZookeeperService(test_context, num_nodes=1)
         self.kafka = KafkaService(self.test_context, num_nodes=1, zk=self.zk, zk_chroot="/kafka",
                                   topics={self.topic: {"partitions": 1, "replication-factor": 1}})
-        self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic, new_consumer=False)
+        self.consumer = ConsoleConsumer(self.test_context, num_nodes=1, kafka=self.kafka, topic=self.topic)
 
     def setUp(self):
         self.zk.start()
 
     @cluster(num_nodes=3)
-    @parametrize(security_protocol='PLAINTEXT', new_consumer=False)
     @matrix(security_protocol=['PLAINTEXT', 'SSL'])
     @cluster(num_nodes=4)
     @matrix(security_protocol=['SASL_SSL'], sasl_mechanism=['PLAIN', 'SCRAM-SHA-256', 'SCRAM-SHA-512'])
     @matrix(security_protocol=['SASL_PLAINTEXT', 'SASL_SSL'])
-    def test_lifecycle(self, security_protocol, new_consumer=True, sasl_mechanism='GSSAPI'):
+    def test_lifecycle(self, security_protocol, sasl_mechanism='GSSAPI'):
         """Check that console consumer starts/stops properly, and that we are capturing log output."""
 
         self.kafka.security_protocol = security_protocol
@@ -58,7 +57,6 @@ class ConsoleConsumerTest(Test):
         self.kafka.start()
 
         self.consumer.security_protocol = security_protocol
-        self.consumer.new_consumer = new_consumer
 
         t0 = time.time()
         self.consumer.start()
@@ -91,6 +89,7 @@ class ConsoleConsumerTest(Test):
         self.producer.wait()
 
         self.consumer.nodes[0].version = LATEST_0_8_2
+        self.consumer.new_consumer = False
         self.consumer.consumer_timeout_ms = 1000
         self.consumer.start()
         self.consumer.wait()

@@ -41,11 +41,11 @@ public class KStreamSelectKeyTest {
     private String topicName = "topic_key_select";
 
     private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(topicName, new StringSerializer(), new IntegerSerializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.String(), Serdes.Integer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     @Test
     public void testSelectKey() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         final Map<Number, String> keyMap = new HashMap<>();
         keyMap.put(1, "ONE");
@@ -53,9 +53,9 @@ public class KStreamSelectKeyTest {
         keyMap.put(3, "THREE");
 
 
-        KeyValueMapper<Object, Number, String> selector = new KeyValueMapper<Object, Number, String>() {
+        final KeyValueMapper<Object, Number, String> selector = new KeyValueMapper<Object, Number, String>() {
             @Override
-            public String apply(Object key, Number value) {
+            public String apply(final Object key, final Number value) {
                 return keyMap.get(value);
             }
         };
@@ -63,14 +63,14 @@ public class KStreamSelectKeyTest {
         final String[] expected = new String[]{"ONE:1", "TWO:2", "THREE:3"};
         final int[] expectedValues = new int[]{1, 2, 3};
 
-        KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
+        final KStream<String, Integer>  stream = builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
 
-        MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
         stream.selectKey(selector).process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            for (int expectedValue : expectedValues) {
+            for (final int expectedValue : expectedValues) {
                 driver.pipeInput(recordFactory.create(expectedValue));
             }
         }
@@ -85,9 +85,9 @@ public class KStreamSelectKeyTest {
 
     @Test
     public void testTypeVariance() {
-        ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
+        final ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
             @Override
-            public void apply(Number key, Object value) {}
+            public void apply(final Number key, final Object value) {}
         };
 
         new StreamsBuilder()

@@ -86,7 +86,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     }
 
     @Override
-    public boolean equals(Object other) {
+    public boolean equals(final Object other) {
         return super.equals(other);
     }
 
@@ -98,7 +98,7 @@ public class PunctuationSchedule extends Stamped<ProcessorNode> {
     private static class RepointableCancellable implements Cancellable {
         private PunctuationSchedule schedule;
 
-        synchronized void setSchedule(PunctuationSchedule schedule) {
+        synchronized void setSchedule(final PunctuationSchedule schedule) {
             this.schedule = schedule;
         }
 

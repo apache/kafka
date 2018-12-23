@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -28,44 +27,66 @@ import org.apache.kafka.common.utils.CollectionUtils;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_LEADER_EPOCH;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_METADATA;
+import static org.apache.kafka.common.protocol.CommonFields.COMMITTED_OFFSET;
 import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_EPOCH;
 import static org.apache.kafka.common.protocol.CommonFields.PRODUCER_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.TRANSACTIONAL_ID;
-import static org.apache.kafka.common.protocol.types.Type.INT64;
-import static org.apache.kafka.common.protocol.types.Type.NULLABLE_STRING;
 
 public class TxnOffsetCommitRequest extends AbstractRequest {
-    private static final String TOPICS_KEY_NAME = "topics";
-    private static final String PARTITIONS_KEY_NAME = "partitions";
-    private static final String OFFSET_KEY_NAME = "offset";
-    private static final String METADATA_KEY_NAME = "metadata";
+    // top level fields
+    private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
+            "Topics to commit offsets");
 
-    private static final Schema TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0 = new Schema(
+    // topic level fields
+    private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
+            "Partitions to commit offsets");
+
+    private static final Field PARTITIONS_V0 = PARTITIONS.withFields(
             PARTITION_ID,
-            new Field(OFFSET_KEY_NAME, INT64),
-            new Field(METADATA_KEY_NAME, NULLABLE_STRING));
+            COMMITTED_OFFSET,
+            COMMITTED_METADATA);
+
+    private static final Field TOPICS_V0 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V0);
 
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V0 = new Schema(
             TRANSACTIONAL_ID,
             GROUP_ID,
             PRODUCER_ID,
             PRODUCER_EPOCH,
-            new Field(TOPICS_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITIONS_KEY_NAME, new ArrayOf(TXN_OFFSET_COMMIT_PARTITION_OFFSET_METADATA_REQUEST_V0)))),
-                    "The partitions to write markers for."));
+            TOPICS_V0);
 
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
+    // V1 bump used to indicate that on quota violation brokers send out responses before throttling.
     private static final Schema TXN_OFFSET_COMMIT_REQUEST_V1 = TXN_OFFSET_COMMIT_REQUEST_V0;
 
+    // V2 adds the leader epoch to the partition data
+    private static final Field PARTITIONS_V2 = PARTITIONS.withFields(
+            PARTITION_ID,
+            COMMITTED_OFFSET,
+            COMMITTED_LEADER_EPOCH,
+            COMMITTED_METADATA);
+
+    private static final Field TOPICS_V2 = TOPICS.withFields(
+            TOPIC_NAME,
+            PARTITIONS_V2);
+
+    private static final Schema TXN_OFFSET_COMMIT_REQUEST_V2 = new Schema(
+            TRANSACTIONAL_ID,
+            GROUP_ID,
+            PRODUCER_ID,
+            PRODUCER_EPOCH,
+            TOPICS_V2);
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1};
+        return new Schema[]{TXN_OFFSET_COMMIT_REQUEST_V0, TXN_OFFSET_COMMIT_REQUEST_V1, TXN_OFFSET_COMMIT_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<TxnOffsetCommitRequest> {
@@ -120,7 +141,7 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
 
     public TxnOffsetCommitRequest(short version, String transactionalId, String consumerGroupId, long producerId,
                                   short producerEpoch, Map<TopicPartition, CommittedOffset> offsets) {
-        super(version);
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.transactionalId = transactionalId;
         this.consumerGroupId = consumerGroupId;
         this.producerId = producerId;
@@ -129,23 +150,24 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public TxnOffsetCommitRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.TXN_OFFSET_COMMIT, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.consumerGroupId = struct.get(GROUP_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);
 
         Map<TopicPartition, CommittedOffset> offsets = new HashMap<>();
-        Object[] topicPartitionsArray = struct.getArray(TOPICS_KEY_NAME);
+        Object[] topicPartitionsArray = struct.get(TOPICS);
         for (Object topicPartitionObj : topicPartitionsArray) {
             Struct topicPartitionStruct = (Struct) topicPartitionObj;
             String topic = topicPartitionStruct.get(TOPIC_NAME);
-            for (Object partitionObj : topicPartitionStruct.getArray(PARTITIONS_KEY_NAME)) {
+            for (Object partitionObj : topicPartitionStruct.get(PARTITIONS)) {
                 Struct partitionStruct = (Struct) partitionObj;
                 TopicPartition partition = new TopicPartition(topic, partitionStruct.get(PARTITION_ID));
-                long offset = partitionStruct.getLong(OFFSET_KEY_NAME);
-                String metadata = partitionStruct.getString(METADATA_KEY_NAME);
-                offsets.put(partition, new CommittedOffset(offset, metadata));
+                long offset = partitionStruct.get(COMMITTED_OFFSET);
+                String metadata = partitionStruct.get(COMMITTED_METADATA);
+                Optional<Integer> leaderEpoch = RequestUtils.getLeaderEpoch(partitionStruct, COMMITTED_LEADER_EPOCH);
+                offsets.put(partition, new CommittedOffset(offset, metadata, leaderEpoch));
             }
         }
         this.offsets = offsets;
@@ -179,29 +201,31 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         struct.set(PRODUCER_ID, producerId);
         struct.set(PRODUCER_EPOCH, producerEpoch);
 
-        Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupDataByTopic(offsets);
+        Map<String, Map<Integer, CommittedOffset>> mappedPartitionOffsets = CollectionUtils.groupPartitionDataByTopic(offsets);
         Object[] partitionsArray = new Object[mappedPartitionOffsets.size()];
         int i = 0;
         for (Map.Entry<String, Map<Integer, CommittedOffset>> topicAndPartitions : mappedPartitionOffsets.entrySet()) {
-            Struct topicPartitionsStruct = struct.instance(TOPICS_KEY_NAME);
+            Struct topicPartitionsStruct = struct.instance(TOPICS);
             topicPartitionsStruct.set(TOPIC_NAME, topicAndPartitions.getKey());
 
             Map<Integer, CommittedOffset> partitionOffsets = topicAndPartitions.getValue();
             Object[] partitionOffsetsArray = new Object[partitionOffsets.size()];
             int j = 0;
             for (Map.Entry<Integer, CommittedOffset> partitionOffset : partitionOffsets.entrySet()) {
-                Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS_KEY_NAME);
+                Struct partitionOffsetStruct = topicPartitionsStruct.instance(PARTITIONS);
                 partitionOffsetStruct.set(PARTITION_ID, partitionOffset.getKey());
                 CommittedOffset committedOffset = partitionOffset.getValue();
-                partitionOffsetStruct.set(OFFSET_KEY_NAME, committedOffset.offset);
-                partitionOffsetStruct.set(METADATA_KEY_NAME, committedOffset.metadata);
+                partitionOffsetStruct.set(COMMITTED_OFFSET, committedOffset.offset);
+                partitionOffsetStruct.set(COMMITTED_METADATA, committedOffset.metadata);
+                RequestUtils.setLeaderEpochIfExists(partitionOffsetStruct, COMMITTED_LEADER_EPOCH,
+                        committedOffset.leaderEpoch);
                 partitionOffsetsArray[j++] = partitionOffsetStruct;
             }
-            topicPartitionsStruct.set(PARTITIONS_KEY_NAME, partitionOffsetsArray);
+            topicPartitionsStruct.set(PARTITIONS, partitionOffsetsArray);
             partitionsArray[i++] = topicPartitionsStruct;
         }
 
-        struct.set(TOPICS_KEY_NAME, partitionsArray);
+        struct.set(TOPICS, partitionsArray);
         return struct;
     }
 
@@ -219,27 +243,22 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
     }
 
     public static class CommittedOffset {
-        private final long offset;
-        private final String metadata;
+        public final long offset;
+        public final String metadata;
+        public final Optional<Integer> leaderEpoch;
 
-        public CommittedOffset(long offset, String metadata) {
+        public CommittedOffset(long offset, String metadata, Optional<Integer> leaderEpoch) {
             this.offset = offset;
             this.metadata = metadata;
+            this.leaderEpoch = leaderEpoch;
         }
 
         @Override
         public String toString() {
             return "CommittedOffset(" +
                     "offset=" + offset +
+                    ", leaderEpoch=" + leaderEpoch +
                     ", metadata='" + metadata + "')";
-        }
-
-        public long offset() {
-            return offset;
-        }
-
-        public String metadata() {
-            return metadata;
         }
     }
 

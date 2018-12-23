@@ -21,7 +21,6 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
 
-import kafka.common.TopicAndPartition
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
 import kafka.utils._
@@ -35,8 +34,6 @@ import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import org.apache.kafka.test.TestUtils.isValidClusterId
-
-import scala.collection.mutable.ArrayBuffer
 
 /** The test cases here verify the following conditions.
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.
@@ -100,7 +97,6 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  val topicAndPartition = TopicAndPartition(topic, part)
   this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
@@ -205,17 +201,8 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
                              startingOffset: Int = 0,
                              topic: String = topic,
                              part: Int = part) {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    val maxIters = numRecords * 50
-    var iters = 0
-    while (records.size < numRecords) {
-      for (record <- consumer.poll(50).asScala) {
-        records += record
-      }
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
-    }
+    val records = TestUtils.consumeRecords(consumer, numRecords)
+
     for (i <- 0 until numRecords) {
       val record = records(i)
       val offset = startingOffset + i

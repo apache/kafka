@@ -51,13 +51,13 @@
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData).java"/>
 
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler).java"/>
+              files="(ConsumerCoordinator|Fetcher|Sender|KafkaProducer|BufferPool|ConfigDef|RecordAccumulator|KerberosLogin|AbstractRequest|AbstractResponse|Selector|SslFactory|SslTransportLayer|SaslClientAuthenticator|SaslClientCallbackHandler|SaslServerAuthenticator).java"/>
 
     <suppress checks="JavaNCSS"
               files="AbstractRequest.java|KerberosLogin.java|WorkerSinkTaskTest.java|TransactionManagerTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(BufferPool|Fetcher|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|Values|PluginUtils|MiniTrogdorCluster).java"/>
+              files="(BufferPool|Fetcher|MetricName|Node|ConfigDef|RecordBatch|SslFactory|SslTransportLayer|MetadataResponse|KerberosLogin|Selector|Sender|Serdes|TokenInformation|Agent|Values|PluginUtils|MiniTrogdorCluster|TasksRequest).java"/>
 
     <!-- clients tests -->
     <suppress checks="ClassDataAbstractionCoupling"
@@ -70,10 +70,10 @@
               files="MockAdminClient.java"/>
 
     <suppress checks="JavaNCSS"
-              files="RequestResponseTest.java"/>
+              files="RequestResponseTest.java|FetcherTest.java"/>
 
     <suppress checks="NPathComplexity"
-              files="MemoryRecordsTest.java"/>
+              files="MemoryRecordsTest|MetricsTest"/>
 
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
@@ -114,7 +114,7 @@
               files="Values.java"/>
 
     <suppress checks="NPathComplexity"
-              files="(AbstractStatus|ConnectHeaders|ConnectRecord|ConnectSchema|DistributedHerder|FileStreamSourceTask|JsonConverter|KafkaConfigBackingStore).java"/>
+              files="(DistributedHerder|JsonConverter|KafkaConfigBackingStore|FileStreamSourceTask).java"/>
 
     <suppress checks="MethodLength"
               files="Values.java"/>
@@ -150,6 +150,10 @@
 
     <suppress checks="NPathComplexity"
               files="(ProcessorStateManager|InternalTopologyBuilder|StreamsPartitionAssignor|StreamThread).java"/>
+
+    <!-- suppress FinalLocalVariable outside of the streams package. -->
+    <suppress checks="FinalLocalVariable"
+              files="^(?!.*[\\/]org[\\/]apache[\\/]kafka[\\/]streams[\\/].*$)"/>
 
     <!-- Streams tests -->
     <suppress checks="ClassFanOutComplexity"

@@ -17,9 +17,12 @@
 
 package kafka.tools
 
+import java.util
+
 import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.clients.producer.ProducerConfig
 import org.junit.{Assert, Test}
+import Assert.assertEquals
 
 class ConsoleProducerTest {
 
@@ -40,12 +43,11 @@ class ConsoleProducerTest {
   )
 
   @Test
-  def testValidConfigsNewProducer() {
+  def testValidConfigs() {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
-    // New ProducerConfig constructor is package private, so we can't call it directly
-    // Creating new Producer to validate instead
-    val producer = new KafkaProducer(ConsoleProducer.producerProps(config))
-    producer.close()
+    val producerConfig = new ProducerConfig(ConsoleProducer.producerProps(config))
+    assertEquals(util.Arrays.asList("localhost:1001", "localhost:1002"),
+      producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
   @Test
@@ -61,7 +63,7 @@ class ConsoleProducerTest {
   @Test
   def testParseKeyProp(): Unit = {
     val config = new ConsoleProducer.ProducerConfig(validArgs)
-    val reader = Class.forName(config.readerClass).newInstance().asInstanceOf[LineMessageReader]
+    val reader = Class.forName(config.readerClass).getDeclaredConstructor().newInstance().asInstanceOf[LineMessageReader]
     reader.init(System.in,ConsoleProducer.getReaderProps(config))
     assert(reader.keySeparator == "#")
     assert(reader.parseKey)

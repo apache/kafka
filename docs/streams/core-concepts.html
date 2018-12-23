@@ -131,6 +131,54 @@
 	Note, that the describe default behavior can be changed in the Processor API by assigning timestamps to output records explicitly when calling <code>#forward()</code>.
     </p>
 
+    <h3><a id="streams_concepts_aggregations" href="#streams_concepts_aggregations">Aggregations</a></h3>
+    <p>
+        An <strong>aggregation</strong> operation takes one input stream or table, and yields a new table by combining multiple input records into a single output record. Examples of aggregations are computing counts or sum.
+    </p>
+
+    <p>
+        In the <code>Kafka Streams DSL</code>, an input stream of an <code>aggregation</code> can be a KStream or a KTable, but the output stream will always be a KTable. This allows Kafka Streams to update an aggregate value upon the late arrival of further records after the value was produced and emitted. When such late arrival happens, the aggregating KStream or KTable emits a new aggregate value. Because the output is a KTable, the new value is considered to overwrite the old value with the same key in subsequent processing steps.
+    </p>
+
+    <h3> <a id="streams_concepts_windowing" href="#streams_concepts_windowing">Windowing</a></h3>
+    <p>
+        Windowing lets you control how to <em>group records that have the same key</em> for stateful operations such as <code>aggregations</code> or <code>joins</code> into so-called <em>windows</em>. Windows are tracked per record key.
+    </p>
+    <p>
+        <code>Windowing operations</code> are available in the <code>Kafka Streams DSL</code>. When working with windows, you can specify a <strong>retention period</strong> for the window. This retention period controls how long Kafka Streams will wait for <strong>out-of-order</strong> or <strong>late-arriving</strong> data records for a given window. If a record arrives after the retention period of a window has passed, the record is discarded and will not be processed in that window.
+    </p>
+    <p>
+        Late-arriving records are always possible in the real world and should be properly accounted for in your applications. It depends on the effective <code>time semantics </code> how late records are handled. In the case of processing-time, the semantics are &quot;when the record is being processed&quot;, which means that the notion of late records is not applicable as, by definition, no record can be late. Hence, late-arriving records can only be considered as such (i.e. as arriving &quot;late&quot;) for event-time or ingestion-time semantics. In both cases, Kafka Streams is able to properly handle late-arriving records.
+    </p>
+
+    <h3><a id="streams_concepts_duality" href="#streams-concepts-duality">Duality of Streams and Tables</a></h3>
+    <p>
+        When implementing stream processing use cases in practice, you typically need both <strong>streams</strong> and also <strong>databases</strong>.
+        An example use case that is very common in practice is an e-commerce application that enriches an incoming <em>stream</em> of customer
+        transactions with the latest customer information from a <em>database table</em>. In other words, streams are everywhere, but databases are everywhere, too.
+    </p>
+
+    <p>
+        Any stream processing technology must therefore provide <strong>first-class support for streams and tables</strong>.
+        Kafka's Streams API provides such functionality through its core abstractions for
+        <code class="interpreted-text" data-role="ref">streams &lt;streams_concepts_kstream&gt;</code> and
+        <code class="interpreted-text" data-role="ref">tables &lt;streams_concepts_ktable&gt;</code>, which we will talk about in a minute.
+        Now, an interesting observation is that there is actually a <strong>close relationship between streams and tables</strong>,
+        the so-called stream-table duality.
+        And Kafka exploits this duality in many ways: for example, to make your applications
+        <code class="interpreted-text" data-role="ref">elastic &lt;streams_developer-guide_execution-scaling&gt;</code>,
+        to support <code class="interpreted-text" data-role="ref">fault-tolerant stateful processing &lt;streams_developer-guide_state-store_fault-tolerance&gt;</code>,
+        or to run <code class="interpreted-text" data-role="ref">interactive queries &lt;streams_concepts_interactive-queries&gt;</code>
+        against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
+        also allows developers to exploit this duality in their own applications.
+    </p>
+
+    <p>
+        Before we discuss concepts such as <code class="interpreted-text" data-role="ref">aggregations &lt;streams_concepts_aggregations&gt;</code>
+        in Kafka Streams we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
+        Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
+    </p>
+
     <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
     <p>
@@ -171,6 +219,37 @@
         In order to achieve exactly-once semantics when running Kafka Streams applications, users can simply set the <code>processing.guarantee</code> config value to <b>exactly_once</b> (default value is <b>at_least_once</b>).
         More details can be found in the <a href="/{{version}}/documentation#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
     </p>
+
+    <h3><a id="streams_out_of_ordering" href="#streams_out_of_ordering">Out-of-Order Handling</a></h3>
+
+    <p>
+        Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
+        handle <a href="https://www.confluent.io/wp-content/uploads/streams-tables-two-sides-same-coin.pdf">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
+        result in out-of-order data arrivals with respect to their timestamps:
+    </p>
+
+    <ul>
+        <li> Within a topic-partition, a record's timestamp may not be monotonically increasing along with their offsets. Since Kafka Streams will always try to process records within a topic-partition to follow the offset order,
+            it can cause records with larger timestamps (but smaller offsets) to be processed earlier than records with smaller timestamps (but larger offsets) in the same topic-partition.
+        </li>
+        <li> Within a <a href="/{{version}}/documentation/streams/architecture#streams_architecture_tasks">stream task</a> that may be processing multiple topic-partitions, if users configure the application to not wait for all partitions to contain some buffered data and
+             pick from the partition with the smallest timestamp to process the next record, then later on when some records are fetched for other topic-partitions, their timestamps may be smaller than those processed records fetched from another topic-partition.
+        </li>
+    </ul>
+
+    <p>
+        For stateless operations, out-of-order data will not impact processing logic since only one record is considered at a time, without looking into the history of past processed records;
+        for stateful operations such as aggregations and joins, however, out-of-order data could cause the processing logic to be incorrect. If users want to handle such out-of-order data, generally they need to allow their applications
+        to wait for longer time while bookkeeping their states during the wait time, i.e. making trade-off decisions between latency, cost, and correctness.
+        In Kafka Streams specifically, users can configure their window operators for windowed aggregations to achieve such trade-offs (details can be found in <a href="/{{version}}/documentation/streams/developer-guide"><b>Developer Guide</b></a>).
+        As for Joins, users have to be aware that some of the out-of-order data cannot be handled by increasing on latency and cost in Streams yet:
+    </p>
+
+    <ul>
+        <li> For Stream-Stream joins, all three types (inner, outer, left) handle out-of-order records correctly, but the resulted stream may contain unnecessary leftRecord-null for left joins, and leftRecord-null or null-rightRecord for outer joins. </li>
+        <li> For Stream-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order), and hence it may produce unpredictable results. </li>
+        <li> For Table-Table joins, out-of-order records are not handled (i.e., Streams applications don't check for out-of-order records and just process all records in offset order). However, the join result is a changelog stream and hence will be eventually consistent. </li>
+    </ul>
 
     <div class="pagination">
         <a href="/{{version}}/documentation/streams/tutorial" class="pagination__btn pagination__btn__prev">Previous</a>

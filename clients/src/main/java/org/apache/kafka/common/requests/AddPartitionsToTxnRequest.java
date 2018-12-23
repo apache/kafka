@@ -102,7 +102,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
 
     private AddPartitionsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch,
                                       List<TopicPartition> partitions) {
-        super(version);
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -110,7 +110,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
     }
 
     public AddPartitionsToTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ADD_PARTITIONS_TO_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);
@@ -150,7 +150,7 @@ public class AddPartitionsToTxnRequest extends AbstractRequest {
         struct.set(PRODUCER_ID, producerId);
         struct.set(PRODUCER_EPOCH, producerEpoch);
 
-        Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupDataByTopic(partitions);
+        Map<String, List<Integer>> mappedPartitions = CollectionUtils.groupPartitionsByTopic(partitions);
         Object[] partitionsArray = new Object[mappedPartitions.size()];
         int i = 0;
         for (Map.Entry<String, List<Integer>> topicAndPartitions : mappedPartitions.entrySet()) {

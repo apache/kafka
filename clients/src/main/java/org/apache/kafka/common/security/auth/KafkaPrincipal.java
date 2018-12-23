@@ -23,23 +23,24 @@ import java.security.Principal;
 import static java.util.Objects.requireNonNull;
 
 /**
- * Principals in Kafka are defined by a type and a name. The principal type will always be "User"
+ * <p>Principals in Kafka are defined by a type and a name. The principal type will always be <code>"User"</code>
  * for the simple authorizer that is enabled by default, but custom authorizers can leverage different
  * principal types (such as to enable group or role-based ACLs). The {@link KafkaPrincipalBuilder} interface
  * is used when you need to derive a different principal type from the authentication context, or when
  * you need to represent relations between different principals. For example, you could extend
  * {@link KafkaPrincipal} in order to link a user principal to one or more role principals.
  *
- * For custom extensions of {@link KafkaPrincipal}, there two key points to keep in mind:
- *
- * 1. To be compatible with the ACL APIs provided by Kafka (including the command line tool), each ACL
+ * <p>For custom extensions of {@link KafkaPrincipal}, there two key points to keep in mind:
+ * <ol>
+ * <li>To be compatible with the ACL APIs provided by Kafka (including the command line tool), each ACL
  *    can only represent a permission granted to a single principal (consisting of a principal type and name).
  *    It is possible to use richer ACL semantics, but you must implement your own mechanisms for adding
  *    and removing ACLs.
- * 2. In general, {@link KafkaPrincipal} extensions are only useful when the corresponding Authorizer
+ * <li>In general, {@link KafkaPrincipal} extensions are only useful when the corresponding Authorizer
  *    is also aware of the extension. If you have a {@link KafkaPrincipalBuilder} which derives user groups
  *    from the authentication context (e.g. from an SSL client certificate), then you need a custom
  *    authorizer which is capable of using the additional group information.
+ * </ol>
  */
 public class KafkaPrincipal implements Principal {
     public static final String USER_TYPE = "User";

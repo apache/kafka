@@ -49,6 +49,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -75,7 +76,13 @@ public class StreamThreadStateStoreProviderTest {
         topology.addSource("the-source", topicName);
         topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
         topology.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv-store"), Serdes.String(), Serdes.String()), "the-processor");
-        topology.addStateStore(Stores.windowStoreBuilder(Stores.persistentWindowStore("window-store", 10, 2, 2, false), Serdes.String(), Serdes.String()), "the-processor");
+        topology.addStateStore(
+            Stores.windowStoreBuilder(
+                Stores.persistentWindowStore("window-store", Duration.ofMillis(10L), Duration.ofMillis(2L), false),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor"
+        );
 
         final Properties properties = new Properties();
         final String applicationId = "applicationId";
@@ -89,11 +96,10 @@ public class StreamThreadStateStoreProviderTest {
         configureRestoreConsumer(clientSupplier, "applicationId-kv-store-changelog");
         configureRestoreConsumer(clientSupplier, "applicationId-window-store-changelog");
 
-        topology.setApplicationId(applicationId);
-        final ProcessorTopology processorTopology = topology.getInternalBuilder().build();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder(applicationId).build();
 
         tasks = new HashMap<>();
-        stateDirectory = new StateDirectory(streamsConfig, new MockTime());
+        stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
 
         taskOne = createStreamsTask(streamsConfig, clientSupplier, processorTopology, new TaskId(0, 0));
         taskOne.initializeStateStores();
@@ -117,7 +123,7 @@ public class StreamThreadStateStoreProviderTest {
     public void shouldFindKeyValueStores() {
         mockThread(true);
         final List<ReadOnlyKeyValueStore<String, String>> kvStores =
-            provider.stores("kv-store", QueryableStoreTypes.<String, String>keyValueStore());
+            provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
@@ -177,14 +183,14 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, new MockStateRestoreListener(), new LogContext("test-stream-task ")),
+            new StoreChangelogReader(clientSupplier.restoreConsumer, Duration.ZERO, new MockStateRestoreListener(), new LogContext("test-stream-task ")),
             streamsConfig,
             new MockStreamsMetrics(metrics),
             stateDirectory,
             null,
             new MockTime(),
-            clientSupplier.getProducer(new HashMap<String, Object>())
-        ) {
+            () -> clientSupplier.getProducer(new HashMap<>()),
+            metrics.sensor("dummy")) {
             @Override
             protected void updateOffsetLimits() {}
         };

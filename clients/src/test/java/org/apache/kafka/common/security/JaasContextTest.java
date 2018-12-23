@@ -190,38 +190,38 @@ public class JaasContextTest {
     @Test
     public void testLoadForServerWithListenerNameOverride() throws IOException {
         writeConfiguration(Arrays.asList(
-                "KafkaServer { test.LoginModuleDefault required; };",
-                "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
+            "KafkaServer { test.LoginModuleDefault required; };",
+            "plaintext.KafkaServer { test.LoginModuleOverride requisite; };"
         ));
         JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
+            "SOME-MECHANISM", Collections.emptyMap());
         assertEquals("plaintext.KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
         checkEntry(context.configurationEntries().get(0), "test.LoginModuleOverride",
-                LoginModuleControlFlag.REQUISITE, Collections.<String, Object>emptyMap());
+            LoginModuleControlFlag.REQUISITE, Collections.emptyMap());
     }
 
     @Test
     public void testLoadForServerWithListenerNameAndFallback() throws IOException {
         writeConfiguration(Arrays.asList(
-                "KafkaServer { test.LoginModule required; };",
-                "other.KafkaServer { test.LoginModuleOther requisite; };"
+            "KafkaServer { test.LoginModule required; };",
+            "other.KafkaServer { test.LoginModuleOther requisite; };"
         ));
         JaasContext context = JaasContext.loadServerContext(new ListenerName("plaintext"),
-                "SOME-MECHANISM", Collections.<String, Object>emptyMap());
+            "SOME-MECHANISM", Collections.emptyMap());
         assertEquals("KafkaServer", context.name());
         assertEquals(JaasContext.Type.SERVER, context.type());
         assertEquals(1, context.configurationEntries().size());
         checkEntry(context.configurationEntries().get(0), "test.LoginModule", LoginModuleControlFlag.REQUIRED,
-                Collections.<String, Object>emptyMap());
+            Collections.emptyMap());
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void testLoadForServerWithWrongListenerName() throws IOException {
         writeConfiguration("Server", "test.LoginModule required;");
         JaasContext.loadServerContext(new ListenerName("plaintext"), "SOME-MECHANISM",
-                Collections.<String, Object>emptyMap());
+            Collections.emptyMap());
     }
 
     private AppConfigurationEntry configurationEntry(JaasContext.Type contextType, String jaasConfigProp) {

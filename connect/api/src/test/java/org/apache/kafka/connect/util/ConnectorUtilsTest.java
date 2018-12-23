@@ -55,8 +55,8 @@ public class ConnectorUtilsTest {
                 Arrays.asList(3),
                 Arrays.asList(4),
                 Arrays.asList(5),
-                Collections.EMPTY_LIST,
-                Collections.EMPTY_LIST), grouped);
+                Collections.emptyList(),
+                Collections.emptyList()), grouped);
     }
 
     @Test(expected = IllegalArgumentException.class)

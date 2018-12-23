@@ -83,7 +83,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
             @Override
             public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (ThreadCache.DirtyEntry entry : entries) {
+                for (final ThreadCache.DirtyEntry entry : entries) {
                     putAndMaybeForward(entry, context);
                 }
             }
@@ -138,7 +138,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
-    public void put(final Windowed<Bytes> key, byte[] value) {
+    public void put(final Windowed<Bytes> key, final byte[] value) {
         validateStoreOpen();
         final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
         final LRUCacheEntry entry =
@@ -147,7 +147,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                 context.headers(),
                 true,
                 context.offset(),
-                key.window().end(),
+                context.timestamp(),
                 context.partition(),
                 context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
@@ -169,7 +169,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
         final ProcessorRecordContext current = context.recordContext();
-        context.setRecordContext(entry.recordContext());
+        context.setRecordContext(entry.entry().context());
         try {
             final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));

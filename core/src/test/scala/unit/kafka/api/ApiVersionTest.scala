@@ -17,9 +17,12 @@
 
 package kafka.api
 
+import org.apache.commons.collections.CollectionUtils
 import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
+
+import scala.collection.JavaConverters
 
 class ApiVersionTest {
 
@@ -79,6 +82,26 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_0_IV1, ApiVersion("2.0"))
     assertEquals(KAFKA_2_0_IV0, ApiVersion("2.0-IV0"))
     assertEquals(KAFKA_2_0_IV1, ApiVersion("2.0-IV1"))
+
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1"))
+    assertEquals(KAFKA_2_1_IV0, ApiVersion("2.1-IV0"))
+    assertEquals(KAFKA_2_1_IV1, ApiVersion("2.1-IV1"))
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1-IV2"))
+
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2"))
+    assertEquals(KAFKA_2_2_IV0, ApiVersion("2.2-IV0"))
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2-IV1"))
+  }
+
+  @Test
+  def testApiVersionUniqueIds(): Unit = {
+    val allIds: Seq[Int] = ApiVersion.allVersions.map(apiVersion => {
+      apiVersion.id
+    })
+
+    val uniqueIds: Set[Int] = allIds.toSet
+
+    assertEquals(allIds.size, uniqueIds.size)
   }
 
   @Test

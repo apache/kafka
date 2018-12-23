@@ -17,10 +17,11 @@
 
 package kafka.utils
 
-import kafka.server.{KafkaConfig, ReplicaFetcherManager}
+import kafka.server.{KafkaConfig, ReplicaFetcherManager, ReplicaManager}
 import kafka.api.LeaderAndIsr
 import kafka.controller.LeaderIsrAndControllerEpoch
-import kafka.zk.{IsrChangeNotificationZNode, TopicZNode, ZooKeeperTestHarness}
+import kafka.log.{Log, LogManager}
+import kafka.zk._
 import org.apache.kafka.common.TopicPartition
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -42,22 +43,22 @@ class ReplicationUtilsTest extends ZooKeeperTestHarness {
     val topicPartition = new TopicPartition(topic, partition)
     val leaderAndIsr = LeaderAndIsr(leader, leaderEpoch, isr, 1)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
-    zkClient.createTopicPartitionStatesRaw(Map(topicPartition -> leaderIsrAndControllerEpoch))
+    zkClient.createTopicPartitionStatesRaw(Map(topicPartition -> leaderIsrAndControllerEpoch), ZkVersion.MatchAnyVersion)
   }
 
   @Test
   def testUpdateLeaderAndIsr() {
     val configs = TestUtils.createBrokerConfigs(1, zkConnect).map(KafkaConfig.fromProps)
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
+    val log: Log = EasyMock.createMock(classOf[Log])
     EasyMock.expect(log.logEndOffset).andReturn(20).anyTimes()
     EasyMock.expect(log)
     EasyMock.replay(log)
 
-    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.getLog(new TopicPartition(topic, partition), false)).andReturn(Some(log)).anyTimes()
     EasyMock.replay(logManager)
 
-    val replicaManager = EasyMock.createMock(classOf[kafka.server.ReplicaManager])
+    val replicaManager: ReplicaManager = EasyMock.createMock(classOf[ReplicaManager])
     EasyMock.expect(replicaManager.config).andReturn(configs.head)
     EasyMock.expect(replicaManager.logManager).andReturn(logManager)
     EasyMock.expect(replicaManager.replicaFetcherManager).andReturn(EasyMock.createMock(classOf[ReplicaFetcherManager]))

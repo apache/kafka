@@ -27,13 +27,13 @@ import java.util.Set;
 
 class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
-    private final KTableImpl<K, ?, V> parent1;
-    private final KTableImpl<K, ?, V> parent2;
+    private final KTableProcessorSupplier<K, ?, V> parent1;
+    private final KTableProcessorSupplier<K, ?, V> parent2;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableKTableJoinMerger(final KTableImpl<K, ?, V> parent1,
-                           final KTableImpl<K, ?, V> parent2,
+    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, V> parent1,
+                           final KTableProcessorSupplier<K, ?, V> parent2,
                            final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
@@ -55,13 +55,13 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
             return new KTableValueGetterSupplier<K, V>() {
 
                 public KTableValueGetter<K, V> get() {
-                    return parent1.valueGetterSupplier().get();
+                    return parent1.view().get();
                 }
 
                 @Override
                 public String[] storeNames() {
-                    final String[] storeNames1 = parent1.valueGetterSupplier().storeNames();
-                    final String[] storeNames2 = parent2.valueGetterSupplier().storeNames();
+                    final String[] storeNames1 = parent1.view().storeNames();
+                    final String[] storeNames2 = parent2.view().storeNames();
                     final Set<String> stores = new HashSet<>(storeNames1.length + storeNames2.length);
                     Collections.addAll(stores, storeNames1);
                     Collections.addAll(stores, storeNames2);
@@ -89,18 +89,22 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
                 tupleForwarder = new TupleForwarder<>(store, context,
-                    new ForwardingCacheFlushListener<K, V>(context, sendOldValues),
+                    new ForwardingCacheFlushListener<K, V>(context),
                     sendOldValues);
             }
         }
 
         @Override
-        public void process(K key, Change<V> value) {
+        public void process(final K key, final Change<V> value) {
             if (queryableName != null) {
                 store.put(key, value.newValue);
-                tupleForwarder.maybeForward(key, value.newValue, value.oldValue);
+                tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
             } else {
-                context().forward(key, value);
+                if (sendOldValues) {
+                    context().forward(key, value);
+                } else {
+                    context().forward(key, new Change<>(value.newValue, null));
+                }
             }
         }
     }

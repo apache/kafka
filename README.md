@@ -4,9 +4,11 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 4.5 or higher.
+Kafka requires Gradle 5.0 or higher.
 
-Java 8 should be used for building in order to support both Java 8 and Java 10 at runtime.
+Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
+
+Scala 2.12 is used by default, see below for how to use a different Scala version or all of the supported Scala versions.
 
 ### First bootstrap and download the wrapper ###
     cd kafka_source_dir
@@ -43,7 +45,7 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew cleanTest integrationTest
 
 ### Running a particular unit/integration test ###
-    ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
+    ./gradlew clients:test --tests RequestResponseTest
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
@@ -52,7 +54,7 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
-    ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
+    ./gradlew clients:test --tests RequestResponseTest
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:
@@ -64,26 +66,33 @@ Generate coverage for a single module, i.e.:
     ./gradlew clients:reportCoverage
     
 ### Building a binary release gzipped tar ball ###
-    ./gradlew clean
-    ./gradlew releaseTarGz
+    ./gradlew clean releaseTarGz
 
 The above command will fail if you haven't set up the signing key. To bypass signing the artifact, you can run:
 
-    ./gradlew releaseTarGz -x signArchives
+    ./gradlew clean releaseTarGz -x signArchives
 
 The release file can be found inside `./core/build/distributions/`.
 
 ### Cleaning the build ###
     ./gradlew clean
 
-### Running a task on a particular version of Scala (either 2.11.x or 2.12.x) ###
-*Note that if building the jars with a version other than 2.11.12, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
+### Running a task with a particular version of Scala (either 2.11.x or 2.12.x) ###
+*Note that if building the jars with a version other than 2.12.x, you need to set the `SCALA_VERSION` variable or change it in `bin/kafka-run-class.sh` to run the quick start.*
 
-You can pass either the major version (eg 2.11) or the full version (eg 2.11.12):
+You can pass either the major version (eg 2.12) or the full version (eg 2.12.7):
 
-    ./gradlew -PscalaVersion=2.11 jar
-    ./gradlew -PscalaVersion=2.11 test
-    ./gradlew -PscalaVersion=2.11 releaseTarGz
+    ./gradlew -PscalaVersion=2.12 jar
+    ./gradlew -PscalaVersion=2.12 test
+    ./gradlew -PscalaVersion=2.12 releaseTarGz
+
+### Running a task with all scala versions ###
+
+Append `All` to the task name:
+
+    ./gradlew testAll
+    ./gradlew jarAll
+    ./gradlew releaseTarGzAll
 
 ### Running a task for a specific project ###
 This is for `core`, `examples` and `clients`
@@ -103,15 +112,6 @@ This is for `core`, `examples` and `clients`
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
-
-### Building the jar for all scala versions and for all projects ###
-    ./gradlew jarAll
-
-### Running unit/integration tests for all scala versions and for all projects ###
-    ./gradlew testAll
-
-### Building a binary release gzipped tar ball for all scala versions ###
-    ./gradlew releaseTarGzAll
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
     ./gradlew uploadArchivesAll
@@ -168,7 +168,7 @@ Please note for this to work you should create/update user maven settings (typic
     ./gradlew dependencyUpdates
 
 ### Running code quality checks ###
-There are two code quality analysis tools that we regularly run, findbugs and checkstyle.
+There are two code quality analysis tools that we regularly run, spotbugs and checkstyle.
 
 #### Checkstyle ####
 Checkstyle enforces a consistent coding style in Kafka.
@@ -179,14 +179,14 @@ You can run checkstyle using:
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also are printed to the console. The build will fail if Checkstyle fails.
 
-#### Findbugs ####
-Findbugs uses static analysis to look for bugs in the code.
-You can run findbugs using:
+#### Spotbugs ####
+Spotbugs uses static analysis to look for bugs in the code.
+You can run spotbugs using:
 
-    ./gradlew findbugsMain findbugsTest -x test
+    ./gradlew spotbugsMain spotbugsTest -x test
 
-The findbugs warnings will be found in `reports/findbugs/main.html` and `reports/findbugs/test.html` files in the subproject build
-directories.  Use -PxmlFindBugsReport=true to generate an XML report instead of an HTML one.
+The spotbugs warnings will be found in `reports/spotbugs/main.html` and `reports/spotbugs/test.html` files in the subproject build
+directories.  Use -PxmlSpotBugsReport=true to generate an XML report instead of an HTML one.
 
 ### Common build options ###
 
@@ -198,7 +198,7 @@ The following options should be set with a `-P` switch, for example `./gradlew -
 * `showStandardStreams`: shows standard out and standard error of the test JVM(s) on the console.
 * `skipSigning`: skips signing of artifacts.
 * `testLoggingEvents`: unit test events to be logged, separated by comma. For example `./gradlew -PtestLoggingEvents=started,passed,skipped,failed test`.
-* `xmlFindBugsReport`: enable XML reports for findBugs. This also disables HTML reports as only one can be enabled at a time.
+* `xmlSpotBugsReport`: enable XML reports for spotBugs. This also disables HTML reports as only one can be enabled at a time.
 
 ### Running in Vagrant ###
 

@@ -26,8 +26,8 @@ import java.util.regex.Pattern
 
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
-import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
+import org.apache.kafka.common.KafkaException
 import org.junit.Test
 import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level

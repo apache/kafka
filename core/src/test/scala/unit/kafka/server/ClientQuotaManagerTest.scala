@@ -59,7 +59,7 @@ class ClientQuotaManagerTest {
 
     val request = builder.build()
     val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
-    val requestChannelMetrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+    val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
 
     // read the header from the buffer first so that the body can be read next from the Request constructor
     val header = RequestHeader.parse(buffer)
@@ -276,7 +276,7 @@ class ClientQuotaManagerTest {
         assertEquals(0, maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 400))
         time.sleep(1000)
       }
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // Create a spike.
       // 400*10 + 2000 + 300 = 6300/10.5 = 600 bytes per second.
@@ -287,7 +287,7 @@ class ClientQuotaManagerTest {
 
       assertEquals("Should be throttled", 2100, sleepTime)
       throttle(clientMetrics, "ANONYMOYUS", "unknown", sleepTime, callback)
-      assertEquals(1, queueSizeMetric.value().toInt)
+      assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       clientMetrics.throttledChannelReaper.doWork()
       assertEquals(0, numCallbacks)
@@ -295,7 +295,7 @@ class ClientQuotaManagerTest {
 
       // Callback can only be triggered after the delay time passes
       clientMetrics.throttledChannelReaper.doWork()
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
@@ -326,7 +326,7 @@ class ClientQuotaManagerTest {
         assertEquals(0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(4)))
         time.sleep(1000)
       }
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // Create a spike.
       // quota = 1% (10ms per second)
@@ -339,7 +339,7 @@ class ClientQuotaManagerTest {
       assertEquals("Should be throttled", 210, throttleTime)
 
       throttle(quotaManager, "ANONYMOYUS", "test-client", throttleTime, callback)
-      assertEquals(1, queueSizeMetric.value().toInt)
+      assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
       quotaManager.throttledChannelReaper.doWork()
       assertEquals(0, numCallbacks)
@@ -347,7 +347,7 @@ class ClientQuotaManagerTest {
 
       // Callback can only be triggered after the delay time passes
       quotaManager.throttledChannelReaper.doWork()
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       assertEquals(1, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears

@@ -25,11 +25,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -50,6 +48,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -247,16 +246,13 @@ public class RoundTripWorker implements TaskWorker {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(partition.topic(),
                         partition.partition(), KEY_GENERATOR.generate(messageIndex),
                         spec.valueGenerator().generate(messageIndex));
-                    producer.send(record, new Callback() {
-                        @Override
-                        public void onCompletion(RecordMetadata metadata, Exception exception) {
-                            if (exception == null) {
-                                unackedSends.countDown();
-                            } else {
-                                log.info("{}: Got exception when sending message {}: {}",
-                                    id, messageIndex, exception.getMessage());
-                                toSendTracker.addFailed(messageIndex);
-                            }
+                    producer.send(record, (metadata, exception) -> {
+                        if (exception == null) {
+                            unackedSends.countDown();
+                        } else {
+                            log.info("{}: Got exception when sending message {}: {}",
+                                id, messageIndex, exception.getMessage());
+                            toSendTracker.addFailed(messageIndex);
                         }
                     });
                 }
@@ -337,7 +333,7 @@ public class RoundTripWorker implements TaskWorker {
                 while (true) {
                     try {
                         pollInvoked++;
-                        ConsumerRecords<byte[], byte[]> records = consumer.poll(50);
+                        ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
                         for (Iterator<ConsumerRecord<byte[], byte[]>> iter = records.iterator(); iter.hasNext(); ) {
                             ConsumerRecord<byte[], byte[]> record = iter.next();
                             int messageIndex = ByteBuffer.wrap(record.key()).order(ByteOrder.LITTLE_ENDIAN).getInt();

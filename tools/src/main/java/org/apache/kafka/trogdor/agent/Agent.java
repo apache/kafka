@@ -66,7 +66,7 @@ public final class Agent {
      * @param platform      The platform object to use.
      * @param scheduler     The scheduler to use for this Agent.
      * @param restServer    The REST server to use.
-     * @param resource      The AgentRestResoure to use.
+     * @param resource      The AgentRestResource to use.
      */
     public Agent(Platform platform, Scheduler scheduler,
                  JsonRestServer restServer, AgentRestResource resource) {
@@ -147,18 +147,15 @@ public final class Agent {
         log.info("Starting agent process.");
         final Agent agent = new Agent(platform, Scheduler.SYSTEM, restServer, resource);
         restServer.start(resource);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                log.warn("Running agent shutdown hook.");
-                try {
-                    agent.beginShutdown();
-                    agent.waitForShutdown();
-                } catch (Exception e) {
-                    log.error("Got exception while running agent shutdown hook.", e);
-                }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.warn("Running agent shutdown hook.");
+            try {
+                agent.beginShutdown();
+                agent.waitForShutdown();
+            } catch (Exception e) {
+                log.error("Got exception while running agent shutdown hook.", e);
             }
-        });
+        }));
         agent.waitForShutdown();
     }
 };

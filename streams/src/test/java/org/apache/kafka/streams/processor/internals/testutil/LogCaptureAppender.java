@@ -18,19 +18,50 @@ package org.apache.kafka.streams.processor.internals.testutil;
 
 
 import org.apache.log4j.AppenderSkeleton;
+import org.apache.log4j.Level;
 import org.apache.log4j.Logger;
 import org.apache.log4j.spi.LoggingEvent;
 
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Optional;
 
 public class LogCaptureAppender extends AppenderSkeleton {
     private final LinkedList<LoggingEvent> events = new LinkedList<>();
+
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType")
+    public static class Event {
+        private String level;
+        private String message;
+        private Optional<String> throwableInfo;
+
+        Event(final String level, final String message, final Optional<String> throwableInfo) {
+            this.level = level;
+            this.message = message;
+            this.throwableInfo = throwableInfo;
+        }
+
+        public String getLevel() {
+            return level;
+        }
+
+        public String getMessage() {
+            return message;
+        }
+
+        public Optional<String> getThrowableInfo() {
+            return throwableInfo;
+        }
+    }
 
     public static LogCaptureAppender createAndRegister() {
         final LogCaptureAppender logCaptureAppender = new LogCaptureAppender();
         Logger.getRootLogger().addAppender(logCaptureAppender);
         return logCaptureAppender;
+    }
+
+    public static void setClassLoggerToDebug(final Class<?> clazz) {
+        Logger.getLogger(clazz).setLevel(Level.DEBUG);
     }
 
     public static void unregister(final LogCaptureAppender logCaptureAppender) {
@@ -49,6 +80,30 @@ public class LogCaptureAppender extends AppenderSkeleton {
         synchronized (events) {
             for (final LoggingEvent event : events) {
                 result.add(event.getRenderedMessage());
+            }
+        }
+        return result;
+    }
+
+    public List<Event> getEvents() {
+        final LinkedList<Event> result = new LinkedList<>();
+        synchronized (events) {
+            for (final LoggingEvent event : events) {
+                final String[] throwableStrRep = event.getThrowableStrRep();
+                final Optional<String> throwableString;
+                if (throwableStrRep == null) {
+                    throwableString = Optional.empty();
+                } else {
+                    final StringBuilder throwableStringBuilder = new StringBuilder();
+
+                    for (final String s : throwableStrRep) {
+                        throwableStringBuilder.append(s);
+                    }
+
+                    throwableString = Optional.of(throwableStringBuilder.toString());
+                }
+
+                result.add(new Event(event.getLevel().toString(), event.getRenderedMessage(), throwableString));
             }
         }
         return result;

@@ -20,10 +20,9 @@ package kafka.admin
 import java.io.PrintStream
 import java.util.Properties
 
-import kafka.utils.CommandLineUtils
-import org.apache.kafka.common.utils.Utils
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.clients.CommonClientConfigs
-import joptsimple._
+import org.apache.kafka.common.utils.Utils
 
 import scala.util.{Failure, Success}
 
@@ -59,11 +58,10 @@ object BrokerApiVersionsCommand {
     AdminClient.create(props)
   }
 
-  class BrokerVersionCommandOptions(args: Array[String]) {
+  class BrokerVersionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val parser = new OptionParser(false)
     val commandConfigOpt = parser.accepts("command-config", CommandConfigDoc)
                                  .withRequiredArg
                                  .describedAs("command config property file")
@@ -72,10 +70,11 @@ object BrokerApiVersionsCommand {
                                    .withRequiredArg
                                    .describedAs("server(s) to use for bootstrapping")
                                    .ofType(classOf[String])
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
     checkArgs()
 
     def checkArgs() {
+      CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to retrieve broker version information.")
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
     }

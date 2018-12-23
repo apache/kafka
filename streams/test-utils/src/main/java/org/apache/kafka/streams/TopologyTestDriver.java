@@ -28,7 +28,10 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -37,6 +40,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -65,6 +69,7 @@ import org.apache.kafka.streams.test.OutputVerifier;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -147,7 +152,7 @@ import java.util.regex.Pattern;
  * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
- * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuation} callbacks.
+ * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
  * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
  * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
@@ -170,18 +175,21 @@ import java.util.regex.Pattern;
 @InterfaceStability.Evolving
 public class TopologyTestDriver implements Closeable {
 
-    private final Time mockTime;
+    private final Time mockWallClockTime;
     private final InternalTopologyBuilder internalTopologyBuilder;
 
     private final static int PARTITION_ID = 0;
     private final static TaskId TASK_ID = new TaskId(0, PARTITION_ID);
-    private final StreamTask task;
+    final StreamTask task;
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
 
+    private final InternalProcessorContext context;
+
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
-    private final ProcessorTopology processorTopology;
+    final ProcessorTopology processorTopology;
+    final ProcessorTopology globalTopology;
 
     private final MockProducer<byte[], byte[]> producer;
 
@@ -191,6 +199,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
 
     private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
+    private final boolean eosEnabled;
 
     /**
      * Create a new test diver instance.
@@ -216,20 +225,7 @@ public class TopologyTestDriver implements Closeable {
     public TopologyTestDriver(final Topology topology,
                               final Properties config,
                               final long initialWallClockTimeMs) {
-
         this(topology.internalTopologyBuilder, config, initialWallClockTimeMs);
-    }
-
-    /**
-     * Create a new test diver instance.
-     *
-     * @param builder builder for the topology to be tested
-     * @param config the configuration for the topology
-     */
-    TopologyTestDriver(final InternalTopologyBuilder builder,
-                       final Properties config) {
-        this(builder, config,  System.currentTimeMillis());
-
     }
 
     /**
@@ -240,16 +236,18 @@ public class TopologyTestDriver implements Closeable {
      * @param initialWallClockTimeMs the initial value of internally mocked wall-clock time
      */
     private TopologyTestDriver(final InternalTopologyBuilder builder,
-                              final Properties config,
-                              final long initialWallClockTimeMs) {
-        final StreamsConfig streamsConfig = new StreamsConfig(config);
-        mockTime = new MockTime(initialWallClockTimeMs);
+                               final Properties config,
+                               final long initialWallClockTimeMs) {
+        final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
+        mockWallClockTime = new MockTime(initialWallClockTimeMs);
 
         internalTopologyBuilder = builder;
-        internalTopologyBuilder.setApplicationId(streamsConfig.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+        internalTopologyBuilder.rewriteTopology(streamsConfig);
 
         processorTopology = internalTopologyBuilder.build(null);
-        final ProcessorTopology globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        globalTopology = internalTopologyBuilder.buildGlobalStateTopology();
+        final boolean createStateDirectory = processorTopology.hasPersistentLocalStore() ||
+                (globalTopology != null && globalTopology.hasPersistentGlobalStore());
 
         final Serializer<byte[]> bytesSerializer = new ByteArraySerializer();
         producer = new MockProducer<byte[], byte[]>(true, bytesSerializer, bytesSerializer) {
@@ -260,8 +258,14 @@ public class TopologyTestDriver implements Closeable {
         };
 
         final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
-        stateDirectory = new StateDirectory(streamsConfig, mockTime);
-        metrics = new Metrics();
+        stateDirectory = new StateDirectory(streamsConfig, mockWallClockTime, createStateDirectory);
+
+        final MetricConfig metricConfig = new MetricConfig()
+            .samples(streamsConfig.getInt(StreamsConfig.METRICS_NUM_SAMPLES_CONFIG))
+            .recordLevel(Sensor.RecordingLevel.forName(streamsConfig.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+            .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
+
+        metrics = new Metrics(metricConfig, mockWallClockTime);
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             "topology-test-driver-virtual-thread"
@@ -323,6 +327,7 @@ public class TopologyTestDriver implements Closeable {
                 new LogContext()
             );
             globalStateTask.initialize();
+            globalProcessorContext.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             globalStateManager = null;
             globalStateTask = null;
@@ -336,19 +341,25 @@ public class TopologyTestDriver implements Closeable {
                 consumer,
                 new StoreChangelogReader(
                     createRestoreConsumer(processorTopology.storeToChangelogTopic()),
+                    Duration.ZERO,
                     stateRestoreListener,
                     new LogContext("topology-test-driver ")),
                 streamsConfig,
                 streamsMetrics,
                 stateDirectory,
                 cache,
-                mockTime,
-                producer);
+                mockWallClockTime,
+                () -> producer,
+                metrics.sensor("dummy"));
             task.initializeStateStores();
             task.initializeTopology();
+            context = (InternalProcessorContext) task.context();
+            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
         } else {
             task = null;
+            context = null;
         }
+        eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
     }
 
     /**
@@ -356,6 +367,7 @@ public class TopologyTestDriver implements Closeable {
      *
      * @return Map of all metrics.
      */
+    @SuppressWarnings("WeakerAccess")
     public Map<MetricName, ? extends Metric> metrics() {
         return Collections.unmodifiableMap(metrics.metrics());
     }
@@ -390,13 +402,10 @@ public class TopologyTestDriver implements Closeable {
                 consumerRecord.headers())));
 
             // Process the record ...
-            ((InternalProcessorContext) task.context()).setRecordContext(
-                    new ProcessorRecordContext(consumerRecord.timestamp(), offset, topicPartition.partition(), topicName, consumerRecord.headers()));
             task.process();
             task.maybePunctuateStreamTime();
             task.commit();
             captureOutputRecords();
-
         } else {
             final TopicPartition globalTopicPartition = globalPartitionsByTopic.get(topicName);
             if (globalTopicPartition == null) {
@@ -445,13 +454,12 @@ public class TopologyTestDriver implements Closeable {
         // Capture all the records sent to the producer ...
         final List<ProducerRecord<byte[], byte[]>> output = producer.history();
         producer.clear();
+        if (eosEnabled && !producer.closed()) {
+            producer.initTransactions();
+            producer.beginTransaction();
+        }
         for (final ProducerRecord<byte[], byte[]> record : output) {
-            Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(record.topic());
-            if (outputRecords == null) {
-                outputRecords = new LinkedList<>();
-                outputRecordsByTopic.put(record.topic(), outputRecords);
-            }
-            outputRecords.add(record);
+            outputRecordsByTopic.computeIfAbsent(record.topic(), k -> new LinkedList<>()).add(record);
 
             // Forward back into the topology if the produced record is to an internal or a source topic ...
             final String outputTopicName = record.topic();
@@ -491,13 +499,13 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) punctuations}.
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
     @SuppressWarnings("WeakerAccess")
     public void advanceWallClockTime(final long advanceMs) {
-        mockTime.sleep(advanceMs);
+        mockWallClockTime.sleep(advanceMs);
         if (task != null) {
             task.maybePunctuateSystemTime();
             task.commit();
@@ -549,6 +557,8 @@ public class TopologyTestDriver implements Closeable {
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     * <p>
+     * Note, that {@code StateStore} might be {@code null} if a store is added but not connected to any processor.
      *
      * @return all stores my name
      * @see #getStateStore(String)
@@ -579,13 +589,24 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
      */
+    @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) {
-        StateStore stateStore = task == null ? null :
-            ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
-        if (stateStore == null && globalStateManager != null) {
-            stateStore = globalStateManager.getGlobalStore(name);
+        if (task != null) {
+            final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
         }
-        return stateStore;
+
+        if (globalStateManager != null) {
+            final StateStore stateStore = globalStateManager.getGlobalStore(name);
+            if (stateStore != null) {
+                return stateStore;
+            }
+
+        }
+
+        return null;
     }
 
     /**
@@ -651,6 +672,7 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Close the driver, its topology, and all processors.
      */
+    @SuppressWarnings("WeakerAccess")
     public void close() {
         if (task != null) {
             task.close(true, false);
@@ -663,7 +685,14 @@ public class TopologyTestDriver implements Closeable {
             }
         }
         captureOutputRecords();
+        if (!eosEnabled) {
+            producer.close();
+        }
         stateDirectory.clean();
+    }
+
+    private Producer<byte[], byte[]> get() {
+        return producer;
     }
 
     static class MockTime implements Time {

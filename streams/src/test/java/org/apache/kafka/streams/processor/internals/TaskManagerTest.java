@@ -40,7 +40,6 @@ import org.junit.runner.RunWith;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,6 +49,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
 import static org.easymock.EasyMock.checkOrder;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -153,7 +153,7 @@ public class TaskManagerTest {
                         topologyBuilder,
                         subscriptionUpdates);
 
-        taskManager.updateSubscriptionsFromAssignment(Utils.mkList(t1p1, t2p1));
+        taskManager.updateSubscriptionsFromAssignment(asList(t1p1, t2p1));
 
         EasyMock.verify(activeTaskCreator,
                         topologyBuilder,
@@ -169,7 +169,7 @@ public class TaskManagerTest {
                         topologyBuilder,
                         subscriptionUpdates);
 
-        taskManager.updateSubscriptionsFromAssignment(Utils.mkList(t1p1));
+        taskManager.updateSubscriptionsFromAssignment(asList(t1p1));
 
         EasyMock.verify(activeTaskCreator,
                         topologyBuilder,
@@ -212,11 +212,11 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReturnCachedTaskIdsFromDirectory() throws IOException {
-        File[] taskFolders = Utils.mkList(testFolder.newFolder("0_1"),
-                testFolder.newFolder("0_2"),
-                testFolder.newFolder("0_3"),
-                testFolder.newFolder("1_1"),
-                testFolder.newFolder("dummy")).toArray(new File[0]);
+        final File[] taskFolders = asList(testFolder.newFolder("0_1"),
+                                                testFolder.newFolder("0_2"),
+                                                testFolder.newFolder("0_3"),
+                                                testFolder.newFolder("1_1"),
+                                                testFolder.newFolder("dummy")).toArray(new File[0]);
 
         assertTrue((new File(taskFolders[0], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
         assertTrue((new File(taskFolders[1], ProcessorStateManager.CHECKPOINT_FILE_NAME)).createNewFile());
@@ -227,7 +227,7 @@ public class TaskManagerTest {
 
         EasyMock.replay(activeTaskCreator, stateDirectory);
 
-        Set<TaskId> tasks = taskManager.cachedTasksIds();
+        final Set<TaskId> tasks = taskManager.cachedTasksIds();
 
         EasyMock.verify(activeTaskCreator, stateDirectory);
 
@@ -375,7 +375,7 @@ public class TaskManagerTest {
         try {
             taskManager.suspendTasksAndState();
             fail("Should have thrown streams exception");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // expected
         }
         verify(restoreConsumer, active, standby);
@@ -518,7 +518,7 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown first exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         verify(active, standby);
@@ -532,7 +532,7 @@ public class TaskManagerTest {
         try {
             taskManager.commitAll();
             fail("should have thrown exception");
-        } catch (Exception e) {
+        } catch (final Exception e) {
             // ok
         }
         verify(standby);
@@ -590,19 +590,19 @@ public class TaskManagerTest {
 
     @Test
     public void shouldMaybeCommitActiveTasks() {
-        EasyMock.expect(active.maybeCommit()).andReturn(5);
+        EasyMock.expect(active.maybeCommitPerUserRequested()).andReturn(5);
         replay();
 
-        assertThat(taskManager.maybeCommitActiveTasks(), equalTo(5));
+        assertThat(taskManager.maybeCommitActiveTasksPerUserRequested(), equalTo(5));
         verify(active);
     }
 
     @Test
     public void shouldProcessActiveTasks() {
-        EasyMock.expect(active.process()).andReturn(10);
+        EasyMock.expect(active.process(0L)).andReturn(10);
         replay();
 
-        assertThat(taskManager.process(), equalTo(10));
+        assertThat(taskManager.process(0L), equalTo(10));
         verify(active);
     }
 
@@ -618,7 +618,7 @@ public class TaskManagerTest {
     @Test
     public void shouldNotResumeConsumptionUntilAllStoresRestored() {
         EasyMock.expect(active.allTasksRunning()).andReturn(false);
-        Consumer<byte[], byte[]> consumer = (Consumer<byte[], byte[]>) EasyMock.createStrictMock(Consumer.class);
+        final Consumer<byte[], byte[]> consumer = EasyMock.createStrictMock(Consumer.class);
         taskManager.setConsumer(consumer);
         EasyMock.replay(active, consumer);
 
@@ -636,11 +636,11 @@ public class TaskManagerTest {
         assertTrue(taskManager.assignedActiveTasks().isEmpty());
 
         // assign two active tasks with two partitions each
-        activeTasks.put(task01, new HashSet<>(Arrays.asList(t1p1, t2p1)));
-        activeTasks.put(task02, new HashSet<>(Arrays.asList(t1p2, t2p2)));
+        activeTasks.put(task01, new HashSet<>(asList(t1p1, t2p1)));
+        activeTasks.put(task02, new HashSet<>(asList(t1p2, t2p2)));
 
         // assign one standby task with two partitions
-        standbyTasks.put(task03, new HashSet<>(Arrays.asList(t1p3, t2p3)));
+        standbyTasks.put(task03, new HashSet<>(asList(t1p3, t2p3)));
         taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
 
         assertThat(taskManager.assignedActiveTasks(), equalTo(activeTasks));

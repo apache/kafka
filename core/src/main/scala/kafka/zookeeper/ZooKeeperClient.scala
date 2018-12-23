@@ -17,21 +17,23 @@
 
 package kafka.zookeeper
 
+import java.util
 import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
+import java.util.concurrent._
 
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
-import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
+import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
+import org.apache.zookeeper.OpResult.{CreateResult, SetDataResult}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, WatchedEvent, Watcher, ZooKeeper}
+import org.apache.zookeeper._
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Set
@@ -92,7 +94,12 @@ class ZooKeeperClient(connectString: String,
   metricNames += "SessionState"
 
   expiryScheduler.startup()
-  waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  try waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  catch {
+    case e: Throwable =>
+      close()
+      throw e
+  }
 
   override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
     explicitMetricName(metricGroup, metricType, name, metricTags)
@@ -197,11 +204,22 @@ class ZooKeeperClient(connectString: String,
           override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
             callback(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
               stat, responseMetadata(sendTimeMs)))
-        }}, ctx.orNull)
+          }}, ctx.orNull)
       case SetAclRequest(path, acl, version, ctx) =>
         zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
             callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case MultiRequest(zkOps, ctx) =>
+        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, new MultiCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]): Unit = {
+            callback(MultiResponse(Code.get(rc), path, Option(ctx),
+              if (opResults == null)
+                null
+              else
+                zkOps.zip(opResults.asScala) map { case (zkOp, result) => ZkOpResult(zkOp, result) },
+              responseMetadata(sendTimeMs)))
+          }
         }, ctx.orNull)
     }
   }
@@ -324,7 +342,7 @@ class ZooKeeperClient(connectString: String,
   private[kafka] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
     zooKeeper
   }
-  
+
   private def reinitialize(): Unit = {
     // Initialization callbacks are invoked outside of the lock to avoid deadlock potential since their completion
     // may require additional Zookeeper requests, which will block to acquire the initialization lock
@@ -434,6 +452,29 @@ trait ZNodeChildChangeHandler {
   def handleChildChange(): Unit = {}
 }
 
+// Thin wrapper for zookeeper.Op
+sealed trait ZkOp {
+  def toZookeeperOp: Op
+}
+
+case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
+  override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
+}
+
+case class DeleteOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.delete(path, version)
+}
+
+case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.setData(path, data, version)
+}
+
+case class CheckOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.check(path, version)
+}
+
+case class ZkOpResult(zkOp: ZkOp, rawOpResult: OpResult)
+
 sealed trait AsyncRequest {
   /**
    * This type member allows us to define methods that take requests and return responses with the correct types.
@@ -477,6 +518,13 @@ case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends Asy
   type Response = GetChildrenResponse
 }
 
+case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = MultiResponse
+
+  override def path: String = null
+}
+
+
 sealed abstract class AsyncResponse {
   def resultCode: Code
   def path: String
@@ -501,17 +549,24 @@ case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
   def responseTimeMs: Long = receivedTimeMs - sendTimeMs
 }
 
-case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String, metadata: ResponseMetadata) extends AsyncResponse
-case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any], metadata: ResponseMetadata) extends AsyncResponse
-case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat, metadata: ResponseMetadata) extends AsyncResponse
+case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String,
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any],
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat,
                            metadata: ResponseMetadata) extends AsyncResponse
-case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat, metadata: ResponseMetadata) extends AsyncResponse
+case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                           metadata: ResponseMetadata) extends AsyncResponse
 case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat,
                           metadata: ResponseMetadata) extends AsyncResponse
-case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat, metadata: ResponseMetadata) extends AsyncResponse
+case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
                                metadata: ResponseMetadata) extends AsyncResponse
+case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
+                         metadata: ResponseMetadata) extends AsyncResponse
 
 class ZooKeeperClientException(message: String) extends RuntimeException(message)
 class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.isolation;
 
-import org.apache.kafka.common.config.ConfigProvider;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
@@ -46,6 +46,7 @@ import java.sql.Driver;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -56,10 +57,12 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 public class DelegatingClassLoader extends URLClassLoader {
     private static final Logger log = LoggerFactory.getLogger(DelegatingClassLoader.class);
     private static final String CLASSPATH_NAME = "classpath";
+    private static final String UNDEFINED_VERSION = "undefined";
 
     private final Map<String, SortedMap<PluginDesc<?>, ClassLoader>> pluginLoaders;
     private final Map<String, String> aliases;
@@ -70,14 +73,18 @@ public class DelegatingClassLoader extends URLClassLoader {
     private final SortedSet<PluginDesc<ConfigProvider>> configProviders;
     private final SortedSet<PluginDesc<ConnectRestExtension>> restExtensions;
     private final List<String> pluginPaths;
-    private final Map<Path, PluginClassLoader> activePaths;
+
+    private static final String MANIFEST_PREFIX = "META-INF/services/";
+    private static final Class[] SERVICE_LOADER_PLUGINS = new Class[] {ConnectRestExtension.class, ConfigProvider.class};
+    private static final Set<String> PLUGIN_MANIFEST_FILES =
+        Arrays.stream(SERVICE_LOADER_PLUGINS).map(serviceLoaderPlugin -> MANIFEST_PREFIX + serviceLoaderPlugin.getName())
+            .collect(Collectors.toSet());
 
     public DelegatingClassLoader(List<String> pluginPaths, ClassLoader parent) {
         super(new URL[0], parent);
         this.pluginPaths = pluginPaths;
         this.pluginLoaders = new HashMap<>();
         this.aliases = new HashMap<>();
-        this.activePaths = new HashMap<>();
         this.connectors = new TreeSet<>();
         this.converters = new TreeSet<>();
         this.headerConverters = new TreeSet<>();
@@ -87,7 +94,11 @@ public class DelegatingClassLoader extends URLClassLoader {
     }
 
     public DelegatingClassLoader(List<String> pluginPaths) {
-        this(pluginPaths, ClassLoader.getSystemClassLoader());
+        // Use as parent the classloader that loaded this class. In most cases this will be the
+        // System classloader. But this choice here provides additional flexibility in managed
+        // environments that control classloading differently (OSGi, Spring and others) and don't
+        // depend on the System classloader to load Connect's classes.
+        this(pluginPaths, DelegatingClassLoader.class.getClassLoader());
     }
 
     public Set<PluginDesc<Connector>> connectors() {
@@ -140,13 +151,8 @@ public class DelegatingClassLoader extends URLClassLoader {
             final URL[] urls,
             final ClassLoader parent
     ) {
-        return (PluginClassLoader) AccessController.doPrivileged(
-                new PrivilegedAction() {
-                    @Override
-                    public Object run() {
-                        return new PluginClassLoader(pluginLocation, urls, parent);
-                    }
-                }
+        return AccessController.doPrivileged(
+                (PrivilegedAction<PluginClassLoader>) () -> new PluginClassLoader(pluginLocation, urls, parent)
         );
     }
 
@@ -231,10 +237,6 @@ public class DelegatingClassLoader extends URLClassLoader {
         PluginScanResult plugins = scanPluginPath(loader, urls);
         log.info("Registered loader: {}", loader);
         if (!plugins.isEmpty()) {
-            if (loader instanceof PluginClassLoader) {
-                activePaths.put(pluginLocation, (PluginClassLoader) loader);
-            }
-
             addPlugins(plugins.connectors(), loader);
             connectors.addAll(plugins.connectors());
             addPlugins(plugins.converters(), loader);
@@ -301,7 +303,7 @@ public class DelegatingClassLoader extends URLClassLoader {
                 getPluginDesc(reflections, Converter.class, loader),
                 getPluginDesc(reflections, HeaderConverter.class, loader),
                 getPluginDesc(reflections, Transformation.class, loader),
-                getPluginDesc(reflections, ConfigProvider.class, loader),
+                getServiceLoaderPluginDesc(ConfigProvider.class, loader),
                 getServiceLoaderPluginDesc(ConnectRestExtension.class, loader)
         );
     }
@@ -316,7 +318,7 @@ public class DelegatingClassLoader extends URLClassLoader {
         Collection<PluginDesc<T>> result = new ArrayList<>();
         for (Class<? extends T> plugin : plugins) {
             if (PluginUtils.isConcrete(plugin)) {
-                result.add(new PluginDesc<>(plugin, versionFor(plugin.newInstance()), loader));
+                result.add(new PluginDesc<>(plugin, versionFor(plugin), loader));
             } else {
                 log.debug("Skipping {} as it is not concrete implementation", plugin);
             }
@@ -324,19 +326,23 @@ public class DelegatingClassLoader extends URLClassLoader {
         return result;
     }
 
-    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass,
-                                                                     ClassLoader loader) {
-
+    @SuppressWarnings("unchecked")
+    private <T> Collection<PluginDesc<T>> getServiceLoaderPluginDesc(Class<T> klass, ClassLoader loader) {
         ServiceLoader<T> serviceLoader = ServiceLoader.load(klass, loader);
         Collection<PluginDesc<T>> result = new ArrayList<>();
-        for (T impl : serviceLoader) {
-            result.add(new PluginDesc<>(klass, versionFor(impl), loader));
+        for (T pluginImpl : serviceLoader) {
+            result.add(new PluginDesc<>((Class<? extends T>) pluginImpl.getClass(), versionFor(pluginImpl), loader));
         }
         return result;
     }
 
     private static <T>  String versionFor(T pluginImpl) {
-        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : "undefined";
+        return pluginImpl instanceof Versioned ? ((Versioned) pluginImpl).version() : UNDEFINED_VERSION;
+    }
+
+    private static <T> String versionFor(Class<? extends T> pluginKlass) throws IllegalAccessException, InstantiationException {
+        // Temporary workaround until all the plugins are versioned.
+        return Connector.class.isAssignableFrom(pluginKlass) ? versionFor(pluginKlass.newInstance()) : UNDEFINED_VERSION;
     }
 
     @Override
@@ -407,5 +413,32 @@ public class DelegatingClassLoader extends URLClassLoader {
                 }
             }
         }
+    }
+
+    @Override
+    public URL getResource(String name) {
+        if (serviceLoaderManifestForPlugin(name)) {
+            // Default implementation of getResource searches the parent class loader and if not available/found, its own URL paths.
+            // This will enable thePluginClassLoader to limit its resource search only to its own URL paths.
+            return null;
+        } else {
+            return super.getResource(name);
+        }
+    }
+
+    @Override
+    public Enumeration<URL> getResources(String name) throws IOException {
+        if (serviceLoaderManifestForPlugin(name)) {
+            // Default implementation of getResources searches the parent class loader and and also its own URL paths. This will enable the
+            // PluginClassLoader to limit its resource search to only its own URL paths.
+            return null;
+        } else {
+            return super.getResources(name);
+        }
+    }
+
+    //Visible for testing
+    static boolean serviceLoaderManifestForPlugin(String name) {
+        return PLUGIN_MANIFEST_FILES.contains(name);
     }
 }

@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedList;
@@ -31,6 +30,9 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+
+import static java.util.Arrays.asList;
+import static java.util.Collections.unmodifiableList;
 
 /**
  * A sensor applies a continuous sequence of numerical values to a set of associated metrics. For example a sensor on
@@ -48,6 +50,7 @@ public final class Sensor {
     private final Time time;
     private volatile long lastRecordTime;
     private final long inactiveSensorExpirationTimeMs;
+    private final Object metricLock;
 
     public enum RecordingLevel {
         INFO(0, "INFO"), DEBUG(1, "DEBUG");
@@ -113,6 +116,7 @@ public final class Sensor {
         this.inactiveSensorExpirationTimeMs = TimeUnit.MILLISECONDS.convert(inactiveSensorExpirationTimeSeconds, TimeUnit.SECONDS);
         this.lastRecordTime = time.milliseconds();
         this.recordingLevel = recordingLevel;
+        this.metricLock = new Object();
         checkForest(new HashSet<Sensor>());
     }
 
@@ -129,6 +133,10 @@ public final class Sensor {
      */
     public String name() {
         return this.name;
+    }
+
+    List<Sensor> parents() {
+        return unmodifiableList(asList(parents));
     }
 
     /**
@@ -174,9 +182,11 @@ public final class Sensor {
         if (shouldRecord()) {
             this.lastRecordTime = timeMs;
             synchronized (this) {
-                // increment all the stats
-                for (Stat stat : this.stats)
-                    stat.record(config, value, timeMs);
+                synchronized (metricLock()) {
+                    // increment all the stats
+                    for (Stat stat : this.stats)
+                        stat.record(config, value, timeMs);
+                }
                 if (checkQuotas)
                     checkQuotas(timeMs);
             }
@@ -229,7 +239,7 @@ public final class Sensor {
             return false;
 
         this.stats.add(Utils.notNull(stat));
-        Object lock = metricLock(stat);
+        Object lock = metricLock();
         for (NamedMeasurable m : stat.stats()) {
             final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), config == null ? this.config : config, time);
             if (!metrics.containsKey(metric.metricName())) {
@@ -265,7 +275,7 @@ public final class Sensor {
             return true;
         } else {
             final KafkaMetric metric = new KafkaMetric(
-                metricLock(stat),
+                metricLock(),
                 Utils.notNull(metricName),
                 Utils.notNull(stat),
                 config == null ? this.config : config,
@@ -287,14 +297,30 @@ public final class Sensor {
     }
 
     synchronized List<KafkaMetric> metrics() {
-        return Collections.unmodifiableList(new LinkedList<>(this.metrics.values()));
+        return unmodifiableList(new LinkedList<>(this.metrics.values()));
     }
 
     /**
-     * KafkaMetrics of sensors which use SampledStat should be synchronized on the Sensor object
-     * to allow concurrent reads and updates. For simplicity, all sensors are synchronized on Sensor.
+     * KafkaMetrics of sensors which use SampledStat should be synchronized on the same lock
+     * for sensor record and metric value read to allow concurrent reads and updates. For simplicity,
+     * all sensors are synchronized on this object.
+     * <p>
+     * Sensor object is not used as a lock for reading metric value since metrics reporter is
+     * invoked while holding Sensor and Metrics locks to report addition and removal of metrics
+     * and synchronized reporters may deadlock if Sensor lock is used for reading metrics values.
+     * Note that Sensor object itself is used as a lock to protect the access to stats and metrics
+     * while recording metric values, adding and deleting sensors.
+     * </p><p>
+     * Locking order (assume all MetricsReporter methods may be synchronized):
+     * <ul>
+     *   <li>Sensor#add: Sensor -> Metrics -> MetricsReporter</li>
+     *   <li>Metrics#removeSensor: Sensor -> Metrics -> MetricsReporter</li>
+     *   <li>KafkaMetric#metricValue: MetricsReporter -> Sensor#metricLock</li>
+     *   <li>Sensor#record: Sensor -> Sensor#metricLock</li>
+     * </ul>
+     * </p>
      */
-    private Object metricLock(Stat stat) {
-        return this;
+    private Object metricLock() {
+        return metricLock;
     }
 }

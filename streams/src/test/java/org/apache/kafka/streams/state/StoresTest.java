@@ -24,11 +24,12 @@ import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.junit.Test;
 
+import static java.time.Duration.ZERO;
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
-import static org.junit.Assert.fail;
 
 public class StoresTest {
 
@@ -39,6 +40,7 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIMemoryKeyValueStoreStoreNameIsNull() {
+        //noinspection ResultOfMethodCallIgnored
         Stores.inMemoryKeyValueStore(null);
     }
 
@@ -54,32 +56,34 @@ public class StoresTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentWindowStoreStoreNameIsNull() {
-        Stores.persistentWindowStore(null, 0, 1, 0, false);
+        Stores.persistentWindowStore(null, ZERO, ZERO, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
-        Stores.persistentWindowStore("anyName", -1, 1, 0, false);
+        Stores.persistentWindowStore("anyName", ofMillis(-1L), ZERO, false);
     }
 
+    @Deprecated
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfNumberOfSegmentsSmallerThanOne() {
-        Stores.persistentWindowStore("anyName", 0, 0, 0, false);
+        Stores.persistentWindowStore("anyName", 0L, 1, 0L, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
-        Stores.persistentWindowStore("anyName", 0, 1, -1, false);
+        Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfIPersistentSessionStoreStoreNameIsNull() {
-        Stores.persistentSessionStore(null, 0);
+        Stores.persistentSessionStore(null, ofMillis(0));
+
     }
 
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentSessionStoreRetentionPeriodIsNegative() {
-        Stores.persistentSessionStore("anyName", -1);
+        Stores.persistentSessionStore("anyName", ofMillis(-1));
     }
 
     @Test(expected = NullPointerException.class)
@@ -95,16 +99,6 @@ public class StoresTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowIfSupplierIsNullForSessionStoreBuilder() {
         Stores.sessionStoreBuilder(null, Serdes.ByteArray(), Serdes.ByteArray());
-    }
-
-    @Test
-    public void shouldThrowIllegalArgumentExceptionWhenTryingToConstructWindowStoreWithLessThanTwoSegments() {
-        try {
-            Stores.persistentWindowStore("store", 1, 1, 1, false);
-            fail("Should have thrown illegal argument exception as number of segments is less than 2");
-        } catch (final IllegalArgumentException e) {
-         // ok
-        }
     }
 
     @Test
@@ -124,35 +118,41 @@ public class StoresTest {
 
     @Test
     public void shouldCreateRocksDbWindowStore() {
-        assertThat(Stores.persistentWindowStore("store", 1, 3, 1, false).get(), instanceOf(RocksDBWindowStore.class));
+        assertThat(Stores.persistentWindowStore("store", ofMillis(1L), ofMillis(1L), false).get(), instanceOf(RocksDBWindowStore.class));
     }
 
     @Test
     public void shouldCreateRocksDbSessionStore() {
-        assertThat(Stores.persistentSessionStore("store", 1).get(), instanceOf(RocksDBSessionStore.class));
+        assertThat(Stores.persistentSessionStore("store", ofMillis(1)).get(), instanceOf(RocksDBSessionStore.class));
     }
 
     @Test
     public void shouldBuildWindowStore() {
-        final WindowStore<String, String> store = Stores.windowStoreBuilder(Stores.persistentWindowStore("store", 3, 2, 3, true),
-                                                                      Serdes.String(),
-                                                                      Serdes.String()).build();
+        final WindowStore<String, String> store = Stores.windowStoreBuilder(
+            Stores.persistentWindowStore("store", ofMillis(3L), ofMillis(3L), true),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 
     @Test
     public void shouldBuildKeyValueStore() {
-        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("name"),
-                                                                          Serdes.String(),
-                                                                          Serdes.String()).build();
+        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 
     @Test
     public void shouldBuildSessionStore() {
-        final SessionStore<String, String> store = Stores.sessionStoreBuilder(Stores.persistentSessionStore("name", 10),
-                                                                       Serdes.String(),
-                                                                       Serdes.String()).build();
+        final SessionStore<String, String> store = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore("name", ofMillis(10)),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
         assertThat(store, not(nullValue()));
     }
 }

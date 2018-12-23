@@ -71,6 +71,12 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     val invalidConfig = Map("not.a.property" -> "error").asJava
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-config" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort, invalidConfig)).asJava, timeout).build(),
       Map("error-config" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
+
+    val config = Map("message.format.version" -> "invalid-value").asJava
+    validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(
+      Map("error-config-value" -> new CreateTopicsRequest.TopicDetails(1, 1.toShort, config)).asJava, timeout).build(),
+      Map("error-config-value" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
+
     val invalidAssignments = replicaAssignmentToJava(Map(0 -> List(0, 1), 1 -> List(0)))
     validateErrorCreateTopicsRequests(new CreateTopicsRequest.Builder(Map("error-assignment" -> new CreateTopicsRequest.TopicDetails(invalidAssignments)).asJava, timeout).build(),
       Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)

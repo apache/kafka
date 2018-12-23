@@ -16,6 +16,7 @@ import java.io.{BufferedWriter, File, FileWriter}
 import java.text.{ParseException, SimpleDateFormat}
 import java.util.{Calendar, Date, Properties}
 
+import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -91,7 +92,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsNewConsumerExistingTopic(): Unit = {
+  def testResetOffsetsExistingTopic(): Unit = {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", "new.group", "--topic", topic,
       "--to-offset", "50")
     produceMessages(topic, 100)
@@ -231,7 +232,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   @Test
   def testResetOffsetsToEarliestOnOneTopicAndPartition() {
     val topic = "bar"
-    adminZkClient.createTopic(topic, 2, 1)
+    createTopic(topic, 2, 1)
 
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic",
       s"$topic:1", "--to-earliest", "--execute")
@@ -252,8 +253,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   def testResetOffsetsToEarliestOnTopics() {
     val topic1 = "topic1"
     val topic2 = "topic2"
-    adminZkClient.createTopic(topic1, 1, 1)
-    adminZkClient.createTopic(topic2, 1, 1)
+    createTopic(topic1, 1, 1)
+    createTopic(topic2, 1, 1)
 
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic", topic1,
       "--topic", topic2, "--to-earliest", "--execute")
@@ -279,8 +280,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val topic1 = "topic1"
     val topic2 = "topic2"
 
-    adminZkClient.createTopic(topic1, 2, 1)
-    adminZkClient.createTopic(topic2, 2, 1)
+    createTopic(topic1, 2, 1)
+    createTopic(topic2, 2, 1)
 
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--topic",
       s"$topic1:1", "--topic", s"$topic2:1", "--to-earliest", "--execute")
@@ -309,7 +310,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val topic = "bar"
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
-    adminZkClient.createTopic(topic, 2, 1)
+    createTopic(topic, 2, 1)
 
     val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-offset", "2", "--export")
@@ -333,6 +334,13 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets.mapValues(_.offset))
 
     adminZkClient.deleteTopic(topic)
+  }
+
+  @Test(expected = classOf[OptionException])
+  def testResetWithUnrecognizedNewConsumerOption() {
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
+      "--to-offset", "2", "--export")
+    getConsumerGroupService(cgcArgs)
   }
 
   private def produceMessages(topic: String, numMessages: Int): Unit = {

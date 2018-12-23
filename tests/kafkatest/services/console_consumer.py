@@ -17,50 +17,13 @@ import itertools
 import os
 
 from ducktape.services.background_thread import BackgroundThreadService
-from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_10_0_0, V_0_11_0_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_8_2, LATEST_0_9, LATEST_0_10_0, V_0_9_0_0, V_0_10_0_0, V_0_11_0_0, V_2_0_0
 
 """
-0.8.2.1 ConsoleConsumer options
-
 The console consumer is a tool that reads data from Kafka and outputs it to standard output.
-Option                                  Description
-------                                  -----------
---blacklist <blacklist>                 Blacklist of topics to exclude from
-                                          consumption.
---consumer.config <config file>         Consumer config properties file.
---csv-reporter-enabled                  If set, the CSV metrics reporter will
-                                          be enabled
---delete-consumer-offsets               If specified, the consumer path in
-                                          zookeeper is deleted when starting up
---formatter <class>                     The name of a class to use for
-                                          formatting kafka messages for
-                                          display. (default: kafka.tools.
-                                          DefaultMessageFormatter)
---from-beginning                        If the consumer does not already have
-                                          an established offset to consume
-                                          from, start with the earliest
-                                          message present in the log rather
-                                          than the latest message.
---max-messages <Integer: num_messages>  The maximum number of messages to
-                                          consume before exiting. If not set,
-                                          consumption is continual.
---metrics-dir <metrics dictory>         If csv-reporter-enable is set, and
-                                          this parameter isset, the csv
-                                          metrics will be outputed here
---property <prop>
---skip-message-on-error                 If there is an error when processing a
-                                          message, skip it instead of halt.
---topic <topic>                         The topic id to consume on.
---whitelist <whitelist>                 Whitelist of topics to include for
-                                          consumption.
---zookeeper <urls>                      REQUIRED: The connection string for
-                                          the zookeeper connection in the form
-                                          host:port. Multiple URLS can be
-                                          given to allow fail-over.
 """
 
 
@@ -97,8 +60,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
     def __init__(self, context, num_nodes, kafka, topic, group_id="test-consumer-group", new_consumer=True,
                  message_validator=None, from_beginning=True, consumer_timeout_ms=None, version=DEV_BRANCH,
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
-                 enable_systest_events=False, stop_timeout_sec=15, print_timestamp=False,
-                 isolation_level="read_uncommitted"):
+                 enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
+                 isolation_level="read_uncommitted", jaas_override_variables=None,
+                 kafka_opts_override="", client_prop_file_override=""):
         """
         Args:
             context:                    standard context
@@ -119,6 +83,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                                         and the corresponding background thread to finish successfully.
             print_timestamp             if True, print each message's timestamp as well
             isolation_level             How to handle transactional messages.
+            jaas_override_variables     A dict of variables to be used in the jaas.conf template file
+            kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
+            client_prop_file_override   Override client.properties file used by the consumer
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -150,6 +117,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             assert version >= V_0_10_0_0
 
         self.print_timestamp = print_timestamp
+        self.jaas_override_variables = jaas_override_variables or {}
+        self.kafka_opts_override = kafka_opts_override
+        self.client_prop_file_override = client_prop_file_override
+
 
     def prop_file(self, node):
         """Return a string which can be used to create a configuration file appropriate for the given node."""
@@ -162,11 +133,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         # Add security properties to the config. If security protocol is not specified,
         # use the default in the template properties.
-        self.security_config = self.kafka.security_config.client_config(prop_file, node)
+        self.security_config = self.kafka.security_config.client_config(prop_file, node, self.jaas_override_variables)
         self.security_config.setup_node(node)
 
         prop_file += str(self.security_config)
         return prop_file
+
 
     def start_cmd(self, node):
         """Return the start command appropriate for the given node."""
@@ -181,23 +153,33 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         args['jmx_port'] = self.jmx_port
         args['console_consumer'] = self.path.script("kafka-console-consumer.sh", node)
         args['broker_list'] = self.kafka.bootstrap_servers(self.security_config.security_protocol)
-        args['kafka_opts'] = self.security_config.kafka_opts
+
+        if self.kafka_opts_override:
+            args['kafka_opts'] = "\"%s\"" % self.kafka_opts_override
+        else:
+            args['kafka_opts'] = self.security_config.kafka_opts
 
         cmd = "export JMX_PORT=%(jmx_port)s; " \
               "export LOG_DIR=%(log_dir)s; " \
               "export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%(log4j_config)s\"; " \
               "export KAFKA_OPTS=%(kafka_opts)s; " \
               "%(console_consumer)s " \
-              "--topic %(topic)s --consumer.config %(config_file)s" % args
+              "--topic %(topic)s " \
+              "--consumer.config %(config_file)s " % args
 
         if self.new_consumer:
+            assert node.version >= V_0_9_0_0, \
+                "new_consumer is only supported if version >= 0.9.0.0, version %s" % str(node.version)
             if node.version <= LATEST_0_10_0:
                 cmd += " --new-consumer"
             cmd += " --bootstrap-server %(broker_list)s" % args
             if node.version >= V_0_11_0_0:
                 cmd += " --isolation-level %s" % self.isolation_level
         else:
+            assert node.version < V_2_0_0, \
+                "new_consumer==false is only supported if version < 2.0.0, version %s" % str(node.version)
             cmd += " --zookeeper %(zk_connect)s" % args
+
         if self.from_beginning:
             cmd += " --from-beginning"
 
@@ -227,12 +209,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         return cmd
 
     def pids(self, node):
-        try:
-            cmd = "ps ax | grep -i console_consumer | grep java | grep -v grep | awk '{print $1}'"
-            pid_arr = [pid for pid in node.account.ssh_capture(cmd, allow_fail=True, callback=int)]
-            return pid_arr
-        except (RemoteCommandError, ValueError) as e:
-            return []
+        return node.account.java_pids(self.java_class_name())
 
     def alive(self, node):
         return len(self.pids(node)) > 0
@@ -243,7 +220,15 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         # Create and upload config file
         self.logger.info("console_consumer.properties:")
 
-        prop_file = self.prop_file(node)
+        self.security_config = self.kafka.security_config.client_config(node=node,
+                                                                        jaas_override_variables=self.jaas_override_variables)
+        self.security_config.setup_node(node)
+
+        if self.client_prop_file_override:
+            prop_file = self.client_prop_file_override
+        else:
+            prop_file = self.prop_file(node)
+
         self.logger.info(prop_file)
         node.account.create_file(ConsoleConsumer.CONFIG_FILE, prop_file)
 
@@ -282,7 +267,9 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         BackgroundThreadService.start_node(self, node)
 
     def stop_node(self, node):
-        node.account.kill_process("console_consumer", allow_fail=True)
+        self.logger.info("%s Stopping node %s" % (self.__class__.__name__, str(node.account)))
+        node.account.kill_java_processes(self.java_class_name(),
+                                         clean_shutdown=True, allow_fail=True)
 
         stopped = self.wait_node(node, timeout_sec=self.stop_timeout_sec)
         assert stopped, "Node %s: did not stop within the specified timeout of %s seconds" % \
@@ -293,9 +280,12 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             self.logger.warn("%s %s was still alive at cleanup time. Killing forcefully..." %
                              (self.__class__.__name__, node.account))
         JmxMixin.clean_node(self, node)
-        node.account.kill_process("java", clean_shutdown=False, allow_fail=True)
+        node.account.kill_java_processes(self.java_class_name(), clean_shutdown=False, allow_fail=True)
         node.account.ssh("rm -rf %s" % ConsoleConsumer.PERSISTENT_ROOT, allow_fail=False)
         self.security_config.clean_node(node)
+
+    def java_class_name(self):
+        return "ConsoleConsumer"
 
     def has_partitions_assigned(self, node):
         if self.new_consumer is False:

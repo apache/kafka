@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
@@ -29,6 +30,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
@@ -39,7 +41,7 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockProcessorSupplier;
-import org.apache.kafka.test.MockStoreBuilder;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -115,7 +117,12 @@ public class RegexSourceIntegrationTest {
         CLUSTER.deleteAndRecreateTopics(DEFAULT_OUTPUT_TOPIC);
 
         final Properties properties = new Properties();
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+
         streamsConfiguration = StreamsTestUtils.getStreamsConfig("regex-source-integration-test",
                                                                  CLUSTER.bootstrapServers(),
                                                                  STRING_SERDE_CLASSNAME,
@@ -134,9 +141,8 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
-
         final Serde<String> stringSerde = Serdes.String();
-        final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-1");
+        final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
         final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
 
         CLUSTER.createTopic("TEST-TOPIC-1");
@@ -160,23 +166,12 @@ public class RegexSourceIntegrationTest {
             }
         });
 
-
         streams.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return assignedTopics.equals(expectedFirstAssignment);
-            }
-        }, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.createTopic("TEST-TOPIC-2");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return assignedTopics.equals(expectedSecondAssignment);
-            }
-        }, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
 
     }
 
@@ -185,7 +180,7 @@ public class RegexSourceIntegrationTest {
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
-        final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-B");
+        final List<String> expectedSecondAssignment = Collections.singletonList("TEST-TOPIC-B");
 
         CLUSTER.createTopics("TEST-TOPIC-A", "TEST-TOPIC-B");
 
@@ -211,28 +206,18 @@ public class RegexSourceIntegrationTest {
 
 
         streams.start();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return assignedTopics.equals(expectedFirstAssignment);
-            }
-        }, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
 
         CLUSTER.deleteTopic("TEST-TOPIC-A");
 
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return assignedTopics.equals(expectedSecondAssignment);
-            }
-        }, STREAM_TASKS_NOT_UPDATED);
+        TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
     }
 
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
 
         final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
-        final StoreBuilder storeBuilder = new MockStoreBuilder("testStateStore", false);
+        final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
 
         final TopologyWrapper topology = new TopologyWrapper();
@@ -245,13 +230,10 @@ public class RegexSourceIntegrationTest {
         try {
             streams.start();
 
-            final TestCondition stateStoreNameBoundToSourceTopic = new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
-                    final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
-                    return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
-                }
+            final TestCondition stateStoreNameBoundToSourceTopic = () -> {
+                final Map<String, List<String>> stateStoreToSourceTopic = topology.getInternalBuilder().stateStoreNameToSourceTopics();
+                final List<String> topicNamesList = stateStoreToSourceTopic.get("testStateStore");
+                return topicNamesList != null && !topicNamesList.isEmpty() && topicNamesList.get(0).equals("topic-1");
             };
 
             TestUtils.waitForCondition(stateStoreNameBoundToSourceTopic, thirtySecondTimeout, "Did not find topic: [topic-1] connected to state store: [testStateStore]");
@@ -289,12 +271,12 @@ public class RegexSourceIntegrationTest {
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Arrays.asList(topic1TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_2, Arrays.asList(topic2TestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_A, Arrays.asList(topicATestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_C, Arrays.asList(topicCTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y, Arrays.asList(topicYTestMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z, Arrays.asList(topicZTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_1, Collections.singleton(topic1TestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_2, Collections.singleton(topic2TestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_A, Collections.singleton(topicATestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_C, Collections.singleton(topicCTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Y, Collections.singleton(topicYTestMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(TOPIC_Z, Collections.singleton(topicZTestMessage), producerConfig, mockTime);
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
@@ -357,15 +339,9 @@ public class RegexSourceIntegrationTest {
                 }
             });
 
-
             partitionedStreamsLeader.start();
             partitionedStreamsFollower.start();
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return followerAssignment.equals(expectedAssignment) && leaderAssignment.equals(expectedAssignment);
-                }
-            }, "topic assignment not completed");
+            TestUtils.waitForCondition(() -> followerAssignment.equals(expectedAssignment) && leaderAssignment.equals(expectedAssignment), "topic assignment not completed");
         } finally {
             if (partitionedStreamsLeader != null) {
                 partitionedStreamsLeader.close();
@@ -395,19 +371,17 @@ public class RegexSourceIntegrationTest {
         final AtomicBoolean expectError = new AtomicBoolean(false);
 
         streams = new KafkaStreams(builder.build(), streamsConfiguration);
-        streams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(KafkaStreams.State newState, KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.ERROR)
-                    expectError.set(true);
+        streams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.ERROR) {
+                expectError.set(true);
             }
         });
         streams.start();
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
 
-        IntegrationTestUtils.produceValuesSynchronously(FA_TOPIC, Arrays.asList(fMessage), producerConfig, mockTime);
-        IntegrationTestUtils.produceValuesSynchronously(FOO_TOPIC, Arrays.asList(fooMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(FA_TOPIC, Collections.singleton(fMessage), producerConfig, mockTime);
+        IntegrationTestUtils.produceValuesSynchronously(FOO_TOPIC, Collections.singleton(fooMessage), producerConfig, mockTime);
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
         try {
