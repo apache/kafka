@@ -19,17 +19,17 @@ package kafka.cluster
 import java.io.File
 import java.nio.ByteBuffer
 import java.util.{Optional, Properties}
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.api.Request
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
+import kafka.utils.{CoreUtils, MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.ReplicaNotAvailableException
+import org.apache.kafka.common.errors.{ApiException, LeaderNotAvailableException, OffsetNotAvailableException, ReplicaNotAvailableException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
@@ -39,7 +39,7 @@ import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, Li
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
-import org.easymock.EasyMock
+import org.easymock.{Capture, EasyMock, IAnswer}
 
 import scala.collection.JavaConverters._
 
@@ -382,6 +382,172 @@ class PartitionTest {
     assertEquals(Optional.of(leaderEpoch), timestampAndOffset.leaderEpoch)
   }
 
+  /**
+    * This test checks that after a new leader election, we don't answer any ListOffsetsRequest until
+    * the HW of the new leader has caught up to its startLogOffset for this epoch. From a client
+    * perspective this helps guarantee monotonic offsets
+    *
+    * @see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-207%3A+Offsets+returned+by+ListOffsetsResponse+should+be+monotonically+increasing+even+during+a+partition+leader+change">KIP-207</a>
+    */
+  @Test
+  def testMonotonicOffsetsAfterLeaderChange(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower1, follower2).asJava
+    val isr = List[Integer](leader, follower2).asJava
+    val leaderEpoch = 8
+    val batch1 = TestUtils.records(records = List(
+      new SimpleRecord(10, "k1".getBytes, "v1".getBytes),
+      new SimpleRecord(11,"k2".getBytes, "v2".getBytes)))
+    val batch2 = TestUtils.records(records = List(new SimpleRecord("k3".getBytes, "v1".getBytes),
+      new SimpleRecord(20,"k4".getBytes, "v2".getBytes),
+      new SimpleRecord(21,"k5".getBytes, "v3".getBytes)))
+    val batch3 = TestUtils.records(records = List(
+      new SimpleRecord(30,"k6".getBytes, "v1".getBytes),
+      new SimpleRecord(31,"k7".getBytes, "v2".getBytes)))
+
+    val partition = Partition(topicPartition, time, replicaManager)
+    assertTrue("Expected first makeLeader() to return 'leader changed'",
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0))
+    assertEquals("Current leader epoch", leaderEpoch, partition.getLeaderEpoch)
+    assertEquals("ISR", Set[Integer](leader, follower2), partition.inSyncReplicas.map(_.brokerId))
+
+    // after makeLeader(() call, partition should know about all the replicas
+    val leaderReplica = partition.getReplica(leader).get
+    val follower1Replica = partition.getReplica(follower1).get
+    val follower2Replica = partition.getReplica(follower2).get
+
+    // append records with initial leader epoch
+    val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, isFromClient = true).lastOffset
+    partition.appendRecordsToLeader(batch2, isFromClient = true)
+    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
+
+    // let the follower in ISR move leader's HW to move further but below LEO
+    def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
+      LogReadResult(info = fetchInfo,
+        highWatermark = leaderReplica.highWatermark.messageOffset,
+        leaderLogStartOffset = leaderReplica.logStartOffset,
+        leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset,
+        followerLogStartOffset = 0,
+        fetchTimeMs = time.milliseconds,
+        readSize = 10240,
+        lastStableOffset = None)
+    }
+
+    def fetchOffsetsForTimestamp(timestamp: Long, isolation: Option[IsolationLevel]): Either[ApiException, Option[TimestampAndOffset]] = {
+      try {
+        Right(partition.fetchOffsetForTimestamp(
+          timestamp = timestamp,
+          isolationLevel = isolation,
+          currentLeaderEpoch = Optional.of(partition.getLeaderEpoch),
+          fetchOnlyFromLeader = true
+        ))
+      } catch {
+        case e: ApiException => Left(e)
+      }
+    }
+
+    // Update follower 1
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
+
+    // Update follower 2
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
+
+    // At this point, the leader has gotten 5 writes, but followers have only fetched two
+    assertEquals(2, partition.localReplica.get.highWatermark.messageOffset)
+
+    // Get the LEO
+    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, None) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e) => fail("Should not have seen an error")
+    }
+
+    // Get the HW
+    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(2, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e) => fail("Should not have seen an error")
+    }
+
+    // Get a offset beyond the HW by timestamp, get a None
+    assertEquals(Right(None), fetchOffsetsForTimestamp(30, Some(IsolationLevel.READ_UNCOMMITTED)))
+
+    // Make into a follower
+    assertTrue(partition.makeFollower(controllerId,
+      new LeaderAndIsrRequest.PartitionState(controllerEpoch, follower2, leaderEpoch + 1, isr, 1, replicas, false), 1))
+
+    // Back to leader, this resets the startLogOffset for this epoch (to 2), we're now in the fault condition
+    assertTrue(partition.makeLeader(controllerId,
+      new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch + 2, isr, 1, replicas, false), 2))
+
+    // Try to get offsets as a client
+    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => fail("Should have failed with OffsetNotAvailable")
+      case Right(None) => fail("Should have seen an error")
+      case Left(e: OffsetNotAvailableException) => // ok
+      case Left(e: ApiException) => fail(s"Expected OffsetNotAvailableException, got $e")
+    }
+
+    // If request is not from a client, we skip the check
+    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, None) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // If we request the earliest timestamp, we skip the check
+    fetchOffsetsForTimestamp(ListOffsetRequest.EARLIEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(0, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // If we request an offset by timestamp earlier than the HW, we are ok
+    fetchOffsetsForTimestamp(11, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) =>
+        assertEquals(1, offsetAndTimestamp.offset)
+        assertEquals(11, offsetAndTimestamp.timestamp)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // Request an offset by timestamp beyond the HW, get an error now since we're in a bad state
+    fetchOffsetsForTimestamp(100, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => fail("Should have failed")
+      case Right(None) => fail("Should have failed")
+      case Left(e: OffsetNotAvailableException) => // ok
+      case Left(e: ApiException) => fail("Should have seen OffsetNotAvailableException, saw $e")
+    }
+
+
+    // Next fetch from replicas, HW is moved up to 5 (ahead of the LEO)
+    partition.updateReplicaLogReadResult(
+      follower1Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
+    partition.updateReplicaLogReadResult(
+      follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(5), MemoryRecords.EMPTY), leaderReplica))
+
+    // Error goes away
+    fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, Some(IsolationLevel.READ_UNCOMMITTED)) match {
+      case Right(Some(offsetAndTimestamp)) => assertEquals(5, offsetAndTimestamp.offset)
+      case Right(None) => fail("Should have seen some offsets")
+      case Left(e: ApiException) => fail(s"Got ApiException $e")
+    }
+
+    // Now we see None instead of an error for out of range timestamp
+    assertEquals(Right(None), fetchOffsetsForTimestamp(100, Some(IsolationLevel.READ_UNCOMMITTED)))
+  }
+
+
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
                                       log: Log = logManager.getOrCreateLog(topicPartition, logConfig)): Partition = {
@@ -671,7 +837,95 @@ class PartitionTest {
     partition.updateReplicaLogReadResult(follower1Replica,
                                          readResult(FetchDataInfo(LogOffsetMetadata(currentLeaderEpochStartOffset), batch3), leaderReplica))
     assertEquals("ISR", Set[Integer](leader, follower1, follower2), partition.inSyncReplicas.map(_.brokerId))
- }
+  }
+
+  /**
+   * Verify that delayed fetch operations which are completed when records are appended don't result in deadlocks.
+   * Delayed fetch operations acquire Partition leaderIsrUpdate read lock for one or more partitions. So they
+   * need to be completed after releasing the lock acquired to append records. Otherwise, waiting writers
+   * (e.g. to check if ISR needs to be shrinked) can trigger deadlock in request handler threads waiting for
+   * read lock of one Partition while holding on to read lock of another Partition.
+   */
+  @Test
+  def testDelayedFetchAfterAppendRecords(): Unit = {
+    val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
+    val zkClient: KafkaZkClient = EasyMock.mock(classOf[KafkaZkClient])
+    val controllerId = 0
+    val controllerEpoch = 0
+    val leaderEpoch = 5
+    val replicaIds = List[Integer](brokerId, brokerId + 1).asJava
+    val isr = replicaIds
+    val logConfig = LogConfig(new Properties)
+
+    val topicPartitions = (0 until 5).map { i => new TopicPartition("test-topic", i) }
+    val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, logConfig) }
+    val replicas = logs.map { log => new Replica(brokerId, log.topicPartition, time, log = Some(log)) }
+    val partitions = replicas.map { replica =>
+      val tp = replica.topicPartition
+      val partition = new Partition(tp,
+        isOffline = false,
+        replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+        localBrokerId = brokerId,
+        time,
+        replicaManager,
+        logManager,
+        zkClient)
+      partition.addReplicaIfNotExists(replica)
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
+        leaderEpoch, isr, 1, replicaIds, true), 0)
+      partition
+    }
+
+    // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
+    val tpKey: Capture[TopicPartitionOperationKey] = EasyMock.newCapture()
+    EasyMock.expect(replicaManager.tryCompleteDelayedFetch(EasyMock.capture(tpKey)))
+      .andAnswer(new IAnswer[Unit] {
+        override def answer(): Unit = {
+          val anotherPartition = (tpKey.getValue.partition + 1) % topicPartitions.size
+          val partition = partitions(anotherPartition)
+          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
+        }
+      }).anyTimes()
+    EasyMock.replay(replicaManager, zkClient)
+
+    def createRecords(baseOffset: Long): MemoryRecords = {
+      val records = List(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes))
+      val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))
+      val builder = MemoryRecords.builder(
+        buf, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
+        baseOffset, time.milliseconds, 0)
+      records.foreach(builder.append)
+      builder.build()
+    }
+
+    val done = new AtomicBoolean()
+    val executor = Executors.newFixedThreadPool(topicPartitions.size + 1)
+    try {
+      // Invoke some operation that acquires leaderIsrUpdate write lock on one thread
+      executor.submit(CoreUtils.runnable {
+        while (!done.get) {
+          partitions.foreach(_.maybeShrinkIsr(10000))
+        }
+      })
+      // Append records to partitions, one partition-per-thread
+      val futures = partitions.map { partition =>
+        executor.submit(CoreUtils.runnable {
+          (1 to 10000).foreach { _ => partition.appendRecordsToLeader(createRecords(baseOffset = 0), isFromClient = true) }
+        })
+      }
+      futures.foreach(_.get(10, TimeUnit.SECONDS))
+      done.set(true)
+    } catch {
+      case e: TimeoutException =>
+        val allThreads = TestUtils.allThreadStackTraces()
+        fail(s"Test timed out with exception $e, thread stack traces: $allThreads")
+    } finally {
+      executor.shutdownNow()
+      executor.awaitTermination(5, TimeUnit.SECONDS)
+    }
+  }
 
   def createRecords(records: Iterable[SimpleRecord], baseOffset: Long, partitionLeaderEpoch: Int = 0): MemoryRecords = {
     val buf = ByteBuffer.allocate(DefaultRecordBatch.sizeInBytes(records.asJava))

@@ -20,7 +20,7 @@ import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
-import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer}
+import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -92,8 +92,8 @@ class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
           val data = mirrorMakerConsumer.receive()
           data.topic == topic && new String(data.value) == msg
         } catch {
-          // this exception is thrown if no record is returned within a short timeout, so safe to ignore
-          case _: TimeoutException => false
+          // these exceptions are thrown if no records are returned within the timeout, so safe to ignore
+          case _: NoRecordsException => false
         }
       }, "MirrorMaker consumer should read the expected message from the expected topic within the timeout")
     } finally consumer.close()

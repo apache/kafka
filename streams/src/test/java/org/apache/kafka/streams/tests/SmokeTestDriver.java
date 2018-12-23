@@ -50,7 +50,7 @@ import java.util.concurrent.TimeUnit;
 
 public class SmokeTestDriver extends SmokeTestUtil {
 
-    public static final int MAX_RECORD_EMPTY_RETRIES = 60;
+    private static final int MAX_RECORD_EMPTY_RETRIES = 60;
 
     private static class ValueList {
         public final String key;
@@ -85,16 +85,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final int numKeys = 20;
         final int maxRecordsPerKey = 1000;
 
-        final Thread driver = new Thread() {
-            public void run() {
-                try {
-                    final Map<String, Set<Integer>> allData = generate(kafka, numKeys, maxRecordsPerKey);
-                    verify(kafka, allData, maxRecordsPerKey);
-                } catch (final Exception ex) {
-                    ex.printStackTrace();
-                }
+        final Thread driver = new Thread(() -> {
+            try {
+                final Map<String, Set<Integer>> allData = generate(kafka, numKeys, maxRecordsPerKey);
+                verify(kafka, allData, maxRecordsPerKey);
+            } catch (final Exception ex) {
+                ex.printStackTrace();
             }
-        };
+        });
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -601,10 +599,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
             for (final Map.Entry<String, Long> entry : map.entrySet()) {
                 final String key = entry.getKey();
                 Long expectedCount = expected.remove(key);
-                if (expectedCount == null)
+                if (expectedCount == null) {
                     expectedCount = 0L;
+                }
 
-                if (entry.getValue() != expectedCount) {
+                if (entry.getValue().longValue() != expectedCount.longValue()) {
                     if (print) {
                         System.out.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
                     }

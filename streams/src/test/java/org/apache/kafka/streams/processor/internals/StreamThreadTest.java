@@ -112,7 +112,7 @@ public class StreamThreadTest {
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime);
+    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 
     private UUID processId = UUID.randomUUID();
@@ -972,8 +972,7 @@ public class StreamThreadTest {
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
-        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2));
-        materialized.generateStoreNameIfNeeded(internalStreamsBuilder, "");
+        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, "");
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();

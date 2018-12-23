@@ -387,6 +387,18 @@ public class RecordCollectorTest {
         }
     }
 
+    @Test
+    public void testShouldNotThrowNPEOnCloseIfProducerIsNotInitialized() {
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+                "NoNPE",
+                logContext,
+                new DefaultProductionExceptionHandler(),
+                new Metrics().sensor("skipped-records")
+        );
+
+        collector.close();
+    }
+
     private static class CustomStringSerializer extends StringSerializer {
 
         private boolean isKey;

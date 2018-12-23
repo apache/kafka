@@ -26,8 +26,8 @@ import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-
 import javax.net.ssl.X509TrustManager
+
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -141,6 +141,11 @@ object TestUtils extends Logging {
 
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
+
+  def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           epoch: Long = 0): (Broker, Long) = {
+    (new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol), epoch)
+  }
 
   /**
    * Create a test config for the provided parameters.
@@ -953,6 +958,12 @@ object TestUtils extends Logging {
     assertEquals(0, threadCount)
   }
 
+  def allThreadStackTraces(): String = {
+    Thread.getAllStackTraces.asScala.map { case (thread, stackTrace) =>
+      thread.getName + "\n\t" + stackTrace.toList.map(_.toString).mkString("\n\t")
+    }.mkString("\n")
+  }
+
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1132,30 +1143,30 @@ object TestUtils extends Logging {
     }
   }
 
-  private def secureZkPaths(zkUtils: ZkUtils): Seq[String] = {
+  private def secureZkPaths(zkClient: KafkaZkClient): Seq[String] = {
     def subPaths(path: String): Seq[String] = {
-      if (zkUtils.pathExists(path))
-        path +: zkUtils.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
+      if (zkClient.pathExists(path))
+        path +: zkClient.getChildren(path).map(c => path + "/" + c).flatMap(subPaths)
       else
         Seq.empty
     }
-    val topLevelPaths = ZkUtils.SecureZkRootPaths ++ ZkUtils.SensitiveZkRootPaths
+    val topLevelPaths = ZkData.SecureRootPaths ++ ZkData.SensitiveRootPaths
     topLevelPaths.flatMap(subPaths)
   }
 
   /**
    * Verifies that all secure paths in ZK are created with the expected ACL.
    */
-  def verifySecureZkAcls(zkUtils: ZkUtils, usersWithAccess: Int) {
-    secureZkPaths(zkUtils).foreach(path => {
-      if (zkUtils.pathExists(path)) {
-        val sensitive = ZkUtils.sensitivePath(path)
+  def verifySecureZkAcls(zkClient: KafkaZkClient, usersWithAccess: Int) {
+    secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val sensitive = ZkData.sensitivePath(path)
         // usersWithAccess have ALL access to path. For paths that are
         // not sensitive, world has READ access.
         val aclCount = if (sensitive) usersWithAccess else usersWithAccess + 1
-        val acls = zkUtils.zkConnection.getAcl(path).getKey
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", aclCount, acls.size)
-        acls.asScala.foreach(acl => isAclSecure(acl, sensitive))
+        acls.foreach(acl => isAclSecure(acl, sensitive))
       }
     })
   }
@@ -1164,12 +1175,12 @@ object TestUtils extends Logging {
    * Verifies that secure paths in ZK have no access control. This is
    * the case when zookeeper.set.acl=false and no ACLs have been configured.
    */
-  def verifyUnsecureZkAcls(zkUtils: ZkUtils) {
-    secureZkPaths(zkUtils).foreach(path => {
-      if (zkUtils.pathExists(path)) {
-        val acls = zkUtils.zkConnection.getAcl(path).getKey
+  def verifyUnsecureZkAcls(zkClient: KafkaZkClient) {
+    secureZkPaths(zkClient).foreach(path => {
+      if (zkClient.pathExists(path)) {
+        val acls = zkClient.getAcl(path)
         assertEquals(s"Invalid ACLs for $path $acls", 1, acls.size)
-        acls.asScala.foreach(isAclUnsecure)
+        acls.foreach(isAclUnsecure)
       }
     })
   }

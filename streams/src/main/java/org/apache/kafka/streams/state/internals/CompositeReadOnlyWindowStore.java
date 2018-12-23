@@ -16,17 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.time.Instant;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.time.Instant;
 import java.util.List;
 import java.util.Objects;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * Wrapper over the underlying {@link ReadOnlyWindowStore}s found in a {@link
@@ -87,11 +89,13 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
         return KeyValueIterators.emptyWindowStoreIterator();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+        return fetch(
+            key,
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     @SuppressWarnings("deprecation")
@@ -99,12 +103,7 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         Objects.requireNonNull(from, "from can't be null");
         Objects.requireNonNull(to, "to can't be null");
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.fetch(from, to, timeFrom, timeTo);
-            }
-        };
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = store -> store.fetch(from, to, timeFrom, timeTo);
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                                                        new CompositeKeyValueIterator<>(
                                                                provider.stores(storeName, windowStoreType).iterator(),
@@ -113,34 +112,16 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondInstant(toTime, "toTime");
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+        return fetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.all();
-            }
-        };
-        return new DelegatingPeekingKeyValueIterator<>(storeName,
-                new CompositeKeyValueIterator<>(
-                        provider.stores(storeName, windowStoreType).iterator(),
-                        nextIteratorFunction));
-    }
-    
-    @Override
-    @Deprecated
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = new NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>>() {
-            @Override
-            public KeyValueIterator<Windowed<K>, V> apply(final ReadOnlyWindowStore<K, V> store) {
-                return store.fetchAll(timeFrom, timeTo);
-            }
-        };
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = ReadOnlyWindowStore::all;
         return new DelegatingPeekingKeyValueIterator<>(storeName,
                 new CompositeKeyValueIterator<>(
                         provider.stores(storeName, windowStoreType).iterator(),
@@ -148,9 +129,20 @@ public class CompositeReadOnlyWindowStore<K, V> implements ReadOnlyWindowStore<K
     }
 
     @Override
+    @Deprecated
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
+        final NextIteratorFunction<Windowed<K>, V, ReadOnlyWindowStore<K, V>> nextIteratorFunction = store -> store.fetchAll(timeFrom, timeTo);
+        return new DelegatingPeekingKeyValueIterator<>(storeName,
+                new CompositeKeyValueIterator<>(
+                        provider.stores(storeName, windowStoreType).iterator(),
+                        nextIteratorFunction));
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 }

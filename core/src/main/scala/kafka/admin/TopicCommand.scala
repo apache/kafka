@@ -119,10 +119,7 @@ object TopicCommand extends Logging {
   def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
-    if (topics.isEmpty && !ifExists) {
-      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
-          opts.options.valueOf(opts.zkConnectOpt)))
-    }
+    ensureTopicExists(opts, topics, ifExists)
     val adminZkClient = new AdminZkClient(zkClient)
     topics.foreach { topic =>
       val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
@@ -178,10 +175,7 @@ object TopicCommand extends Logging {
   def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
-    if (topics.isEmpty && !ifExists) {
-      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
-          opts.options.valueOf(opts.zkConnectOpt)))
-    }
+    ensureTopicExists(opts, topics, ifExists)
     topics.foreach { topic =>
       try {
         if (Topic.isInternal(topic)) {
@@ -204,6 +198,8 @@ object TopicCommand extends Logging {
 
   def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
+    val topicOptWithExits = opts.options.has(opts.topicOpt) && opts.options.has(opts.ifExistsOpt)
+    ensureTopicExists(opts, topics, topicOptWithExits)
     val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
     val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
     val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
@@ -253,6 +249,21 @@ object TopicCommand extends Logging {
         case None =>
           println("Topic " + topic + " doesn't exist!")
       }
+    }
+  }
+
+  /**
+    * ensures topic existence and throws exception if topic doesn't exist
+    *
+    * @param opts
+    * @param topics
+    * @param topicOptWithExists
+    */
+  private def ensureTopicExists(opts: TopicCommandOptions, topics: Seq[String], topicOptWithExists: Boolean) = {
+    if (topics.isEmpty && !topicOptWithExists) {
+      // If given topic doesn't exist then throw exception
+      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
+        opts.options.valueOf(opts.zkConnectOpt)))
     }
   }
 
@@ -308,8 +319,9 @@ object TopicCommand extends Logging {
     val deleteOpt = parser.accepts("delete", "Delete a topic")
     val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
     val describeOpt = parser.accepts("describe", "List details for the given topics.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                                           "expression except for --create option")
+    val topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
+                                           "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
+                                           "to escape regular expression symbols; e.g. \"test\\.topic\".")
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
@@ -345,7 +357,7 @@ object TopicCommand extends Logging {
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     val ifExistsOpt = parser.accepts("if-exists",
-                                     "if set when altering or deleting topics, the action will only execute if the topic exists")
+                                     "if set when altering or deleting or describing topics, the action will only execute if the topic exists")
     val ifNotExistsOpt = parser.accepts("if-not-exists",
                                         "if set when creating topics, the action will only execute if the topic does not already exist")
 
@@ -362,6 +374,8 @@ object TopicCommand extends Logging {
     def checkArgs() {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+      if(options.has(describeOpt) && options.has(ifExistsOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (!options.has(listOpt) && !options.has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
 
@@ -379,7 +393,7 @@ object TopicCommand extends Logging {
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
-      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt, describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
     }

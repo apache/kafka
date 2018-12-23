@@ -811,7 +811,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         "is before 0.10.0", topicPartition);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
-                       error == Errors.KAFKA_STORAGE_ERROR) {
+                       error == Errors.KAFKA_STORAGE_ERROR ||
+                       error == Errors.OFFSET_NOT_AVAILABLE ||
+                       error == Errors.LEADER_NOT_AVAILABLE) {
                 log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);

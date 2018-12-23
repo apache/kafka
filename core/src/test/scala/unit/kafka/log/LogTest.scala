@@ -142,6 +142,52 @@ class LogTest {
     assertEquals("Appending an empty message set should not roll log even if sufficient time has passed.", numSegments, log.numberOfSegments)
   }
 
+  @Test
+  def testRollSegmentThatAlreadyExists() {
+    val logConfig = LogTest.createLogConfig(segmentMs = 1 * 60 * 60L)
+
+    // create a log
+    val log = createLog(logDir, logConfig)
+    assertEquals("Log begins with a single empty segment.", 1, log.numberOfSegments)
+
+    // roll active segment with the same base offset of size zero should recreate the segment
+    log.roll(Some(0L))
+    assertEquals("Expect 1 segment after roll() empty segment with base offset.", 1, log.numberOfSegments)
+
+    // should be able to append records to active segment
+    val records = TestUtils.records(
+      List(new SimpleRecord(mockTime.milliseconds, "k1".getBytes, "v1".getBytes)),
+      baseOffset = 0L, partitionLeaderEpoch = 0)
+    log.appendAsFollower(records)
+    assertEquals("Expect one segment.", 1, log.numberOfSegments)
+    assertEquals(0L, log.activeSegment.baseOffset)
+
+    // make sure we can append more records
+    val records2 = TestUtils.records(
+      List(new SimpleRecord(mockTime.milliseconds + 10, "k2".getBytes, "v2".getBytes)),
+      baseOffset = 1L, partitionLeaderEpoch = 0)
+    log.appendAsFollower(records2)
+
+    assertEquals("Expect two records in the log", 2, log.logEndOffset)
+    assertEquals(0, readLog(log, 0, 100, Some(1)).records.batches.iterator.next().lastOffset)
+    assertEquals(1, readLog(log, 1, 100, Some(2)).records.batches.iterator.next().lastOffset)
+
+    // roll so that active segment is empty
+    log.roll()
+    assertEquals("Expect base offset of active segment to be LEO", 2L, log.activeSegment.baseOffset)
+    assertEquals("Expect two segments.", 2, log.numberOfSegments)
+
+    // manually resize offset index to force roll of an empty active segment on next append
+    log.activeSegment.offsetIndex.resize(0)
+    val records3 = TestUtils.records(
+      List(new SimpleRecord(mockTime.milliseconds + 12, "k3".getBytes, "v3".getBytes)),
+      baseOffset = 2L, partitionLeaderEpoch = 0)
+    log.appendAsFollower(records3)
+    assertTrue(log.activeSegment.offsetIndex.maxEntries > 1)
+    assertEquals(2, readLog(log, 2, 100, Some(3)).records.batches.iterator.next().lastOffset)
+    assertEquals("Expect two segments.", 2, log.numberOfSegments)
+  }
+
   @Test(expected = classOf[OutOfOrderSequenceException])
   def testNonSequentialAppend(): Unit = {
     // create a log
@@ -828,17 +874,17 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = 2048 * 5)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
-    log.roll(1L)
+    log.roll(Some(1L))
     assertEquals(Some(1L), log.latestProducerSnapshotOffset)
     assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("b".getBytes), leaderEpoch = 0)
-    log.roll(2L)
+    log.roll(Some(2L))
     assertEquals(Some(2L), log.latestProducerSnapshotOffset)
     assertEquals(Some(1L), log.oldestProducerSnapshotOffset)
 
     log.appendAsLeader(TestUtils.singletonRecords("c".getBytes), leaderEpoch = 0)
-    log.roll(3L)
+    log.roll(Some(3L))
     assertEquals(Some(3L), log.latestProducerSnapshotOffset)
 
     // roll triggers a flush at the starting offset of the new segment, we should retain all snapshots
@@ -1282,7 +1328,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig()
     val log = createLog(logDir,  logConfig)
     log.closeHandlers()
-    log.roll(1)
+    log.roll(Some(1L))
   }
 
   @Test
