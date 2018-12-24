@@ -27,11 +27,13 @@ import java.util.{Collections, Locale, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
+import kafka.tools.PrintHeaders.{LinePerHeader, NoPrint, SingleLine}
 import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
+import org.apache.kafka.common.header.Header
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
@@ -226,8 +228,12 @@ object ConsoleConsumer extends Logging {
         "\tprint.timestamp=true|false\n" +
         "\tprint.key=true|false\n" +
         "\tprint.value=true|false\n" +
+        "\tprint.offsets=true|false\n" +
+        "\tprint.headers=single_line|line_per_header|false\n" +
         "\tkey.separator=<key.separator>\n" +
         "\tline.separator=<line.separator>\n" +
+        "\theaders.separator=<headers.separator>\n" +
+        "\theaders.kv.separator=<headers.kv.separator>\n" +
         "\tkey.deserializer=<key.deserializer>\n" +
         "\tvalue.deserializer=<value.deserializer>\n" +
         "\nUsers can also pass in customized properties for their formatter; more specifically, users " +
@@ -452,61 +458,102 @@ object ConsoleConsumer extends Logging {
       resetUnconsumedOffsets()
       this.consumer.close()
     }
+  }
+}
 
+case class DefaultMessageFormatterData(printKey: Boolean, printValue: Boolean, printHeaders: PrintHeaders,
+                                       printOffsets: Boolean, printTimestamp: Boolean,
+                                       keySeparator: Array[Byte], lineSeparator: Array[Byte],
+                                       headersSeparator: String, headersKeyValueSeparator: String,
+                                       valueDeserializer: Option[Deserializer[_]], keyDeserializer: Option[Deserializer[_]]) {
+  def shouldPrintHeaders: Boolean = printHeaders != NoPrint
+}
+
+sealed trait PrintHeaders
+
+object PrintHeaders {
+
+  object SingleLine extends PrintHeaders
+
+  object LinePerHeader extends PrintHeaders
+
+  object NoPrint extends PrintHeaders
+
+  def parse(property: String): PrintHeaders = property match {
+    case "single_line" => SingleLine
+    case "line_per_header" => LinePerHeader
+    case _ => NoPrint
   }
 }
 
 class DefaultMessageFormatter extends MessageFormatter {
-  var printKey = false
-  var printValue = true
-  var printTimestamp = false
-  var keySeparator = "\t".getBytes(StandardCharsets.UTF_8)
-  var lineSeparator = "\n".getBytes(StandardCharsets.UTF_8)
-
-  var keyDeserializer: Option[Deserializer[_]] = None
-  var valueDeserializer: Option[Deserializer[_]] = None
+  var format: DefaultMessageFormatterData = _
 
   override def init(props: Properties) {
-    if (props.containsKey("print.timestamp"))
-      printTimestamp = props.getProperty("print.timestamp").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.key"))
-      printKey = props.getProperty("print.key").trim.equalsIgnoreCase("true")
-    if (props.containsKey("print.value"))
-      printValue = props.getProperty("print.value").trim.equalsIgnoreCase("true")
-    if (props.containsKey("key.separator"))
-      keySeparator = props.getProperty("key.separator").getBytes(StandardCharsets.UTF_8)
-    if (props.containsKey("line.separator"))
-      lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("key.deserializer")) {
-      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
-    }
-    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
-    if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).getDeclaredConstructor()
-        .newInstance().asInstanceOf[Deserializer[_]])
-      valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
-    }
+    implicit val properties: Properties = props
+
+    val printKey = parseBoolean("print.key", default = false)
+    val printValue = parseBoolean("print.value", default = true)
+    val printOffsets = parseBoolean("print.offsets", default = false)
+    val printTimestamp = parseBoolean("print.timestamp", default = false)
+    val printHeaders = PrintHeaders.parse(parseString("print.headers", default = "false"))
+    val lineSeparator = parseStringToBytes("line.separator", default = "\n")
+    val keySeparator = parseStringToBytes("key.separator", default = "\t")
+    val headersSeparator = parseString("headers.separator", default = ",")
+    val headersKeyValueSeparator = parseString("headers.kv.separator", default = ":")
+    val valueDeserializer = parseDeserializer("value.deserializer", default = None, isKey = false)
+    val keyDeserializer = parseDeserializer("key.deserializer", default = None, isKey = true)
+
+    format = DefaultMessageFormatterData(
+      printKey, printValue, printHeaders, printOffsets, printTimestamp,
+      keySeparator, lineSeparator, headersSeparator, headersKeyValueSeparator,
+      valueDeserializer, keyDeserializer)
   }
+
+  private def parseDeserializer(property: String, isKey: Boolean, default: Option[Deserializer[_]])(implicit props: Properties) = {
+    // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
+    val deserializer =
+      if (props.containsKey(property))
+        Some(Class.forName(props.getProperty(property)).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]])
+      else
+        None
+
+    deserializer.foreach(_.configure(propertiesWithKeyPrefixStripped(s"$property.", props).asScala.asJava, isKey))
+    deserializer
+  }
+
+  private def parseBoolean(property: String, default: Boolean)(implicit props: Properties) =
+    if (props.containsKey(property))
+      props.getProperty(property).trim.equalsIgnoreCase("true")
+    else
+      default
+
+  private def parseString(property: String, default: String)(implicit props: Properties): String =
+    if (props.containsKey(property))
+      props.getProperty(property)
+    else
+      default
+
+  private def parseStringToBytes(property: String, default: String)(implicit props: Properties) =
+    bytes(parseString(property, default))
 
   private def propertiesWithKeyPrefixStripped(prefix: String, props: Properties): Properties = {
     val newProps = new Properties()
     props.asScala.foreach { case (key, value) =>
-      if (key.startsWith(prefix) && key.length > prefix.length)
-        newProps.put(key.substring(prefix.length), value)
+        if (key.startsWith(prefix) && key.length > prefix.length)
+          newProps.put(key.substring(prefix.length), value)
     }
     newProps
   }
+
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
 
     def writeSeparator(columnSeparator: Boolean): Unit = {
       if (columnSeparator)
-        output.write(keySeparator)
+        output.write(format.keySeparator)
       else
-        output.write(lineSeparator)
+        output.write(format.lineSeparator)
     }
 
     def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) {
@@ -518,24 +565,69 @@ class DefaultMessageFormatter extends MessageFormatter {
 
     import consumerRecord._
 
-    if (printTimestamp) {
+    if (format.printTimestamp) {
       if (timestampType != TimestampType.NO_TIMESTAMP_TYPE)
-        output.write(s"$timestampType:$timestamp".getBytes(StandardCharsets.UTF_8))
+        output.write(bytes(s"$timestampType:$timestamp"))
       else
-        output.write(s"NO_TIMESTAMP".getBytes(StandardCharsets.UTF_8))
-      writeSeparator(printKey || printValue)
+        output.write(bytes("NO_TIMESTAMP"))
+      writeSeparator(format.printKey || format.printValue || format.printOffsets || format.shouldPrintHeaders)
     }
 
-    if (printKey) {
-      write(keyDeserializer, key, topic)
-      writeSeparator(printValue)
+    if (format.printOffsets) {
+      output.print(s"${consumerRecord.partition}:${consumerRecord.offset()}")
+      writeSeparator(format.printKey || format.printValue || format.shouldPrintHeaders)
     }
 
-    if (printValue) {
-      write(valueDeserializer, value, topic)
-      output.write(lineSeparator)
+    if (format.printKey) {
+      write(format.keyDeserializer, key, topic)
+      writeSeparator(format.printValue || format.shouldPrintHeaders)
+    }
+
+    if (format.printValue) {
+      write(format.valueDeserializer, value, topic)
+      writeSeparator(format.shouldPrintHeaders)
+    }
+
+    if (format.shouldPrintHeaders) {
+      val headersSeq = headers.toArray.toSeq
+      (format.printHeaders, headersSeq) match {
+        case (_, Nil) =>
+        case (LinePerHeader, _) => printLinePerHeader(output, headersSeq, format)
+        case (SingleLine, _) => printHeadersSingleLine(output, headersSeq, format)
+        case _ =>
+      }
+
+      output.write(format.lineSeparator)
     }
   }
+
+
+  private def printHeadersSingleLine(output: PrintStream, headersSeq: Seq[Header], format: DefaultMessageFormatterData): Unit = {
+    output.write(bytes("["))
+    printHeaders(output, headersSeq, format)
+    output.write(bytes("]"))
+  }
+
+  private def printLinePerHeader(output: PrintStream, headersSeq: Seq[Header], format: DefaultMessageFormatterData): Unit = {
+    writeLine("\nHeaders:", output)
+    printHeaders(output, headersSeq, format.copy(headersSeparator = "\n"))
+    writeLine("", output)
+  }
+
+  private def printHeaders(output: PrintStream, headersArray: Seq[Header], format: DefaultMessageFormatterData): Unit = {
+    val headersPrinted = headersArray.map { header =>
+      s"${header.key()}${format.headersKeyValueSeparator}${new String(header.value())}"
+    }.mkString(format.headersSeparator)
+
+    output.write(bytes(headersPrinted))
+  }
+
+  def writeLine(line: String, output: PrintStream): Unit = {
+    output.write(bytes(line))
+    output.write(format.lineSeparator)
+  }
+
+  def bytes(string: String): Array[Byte] = string.getBytes(StandardCharsets.UTF_8)
 }
 
 class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
@@ -555,7 +647,7 @@ class LoggingMessageFormatter extends MessageFormatter with LazyLogging {
 class NoOpMessageFormatter extends MessageFormatter {
   override def init(props: Properties) {}
 
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream){}
+  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {}
 }
 
 class ChecksumMessageFormatter extends MessageFormatter {
