@@ -101,258 +101,133 @@ public class InternalTopicManager {
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
 
-        while (!topicsNotReady.isEmpty()) {
-            try {
-                topicsNotReady = validateTopics(topicsNotReady, topics);
+        while (!topicsNotReady.isEmpty() && remainingRetries > 0) {
+            topicsNotReady = validateTopics(topicsNotReady, topics);
 
-                if (topicsNotReady.size() > 0) {
-                    final Set<NewTopic> newTopics = new HashSet<>();
+            if (topicsNotReady.size() > 0) {
+                final Set<NewTopic> newTopics = new HashSet<>();
 
-                    for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                        final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+                for (final String topicName : topicsNotReady) {
+                    final InternalTopicConfig internalTopicConfig = Utils.notNull(topics.get(topicName));
+                    final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
 
-                        log.debug("Going to create topic {} with {} partitions and config {}.",
-                            internalTopicConfig.name(),
-                            internalTopicConfig.numberOfPartitions(),
-                            topicConfig);
-
-                        newTopics.add(
-                            new NewTopic(
-                                internalTopicConfig.name(),
-                                internalTopicConfig.numberOfPartitions(),
-                                replicationFactor)
-                                .configs(topicConfig));
-                    }
-
-                    final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
-
-                    for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
-                        createTopicResult.getValue().get();
-                    }
-                }
-            } catch (final InterruptedException fatalException) {
-                // this should not happen; if it ever happens it indicate a bug
-                Thread.currentThread().interrupt();
-                log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
-                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
-            } catch (final ExecutionException executionException) {
-                final Throwable cause = executionException.getCause();
-                if (cause instanceof TopicExistsException) {
-                    // This topic didn't exist earlier, it might be marked for deletion or it might differ
-                    // from the desired setup. It needs re-validation.
-                    final Map<String, Integer> existingTopicPartition = getNumPartitions(Collections.singleton(topicName));
-
-                    if (existingTopicPartition.containsKey(topicName)
-                        && validateTopics(Collections.singleton(topics.get(topicName)), existingTopicPartition).isEmpty()) {
-                        createdTopicNames.add(createTopicResult.getKey());
-                        log.info("Topic {} exists already and has the right number of partitions: {}",
-                            topicName,
-                            couldNotCreateTopic.toString());
-                    } else {
-                        retry = true;
-                        retryBackOff = true;
-                        log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
-                            "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
-                            "Error message was: {}", topicName, retryBackOffMs, couldNotCreateTopic.toString());
-                    }
-                } if (cause instanceof TopicExistsException) {
-                    // This topic didn't exist earlier, it might be marked for deletion or it might differ
-                    // from the desired setup. It needs re-validation.
-                    final Map<String, Integer> existingTopicPartition = getNumPartitions(Collections.singleton(topicName));
-
-                    if (existingTopicPartition.containsKey(topicName)
-                        && validateTopics(Collections.singleton(topics.get(topicName)), existingTopicPartition).isEmpty()) {
-                        createdTopicNames.add(createTopicResult.getKey());
-                        log.info("Topic {} exists already and has the right number of partitions: {}",
-                            topicName,
-                            couldNotCreateTopic.toString());
-                    } else {
-                        retry = true;
-                        retryBackOff = true;
-                        log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
-                            "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
-                            "Error message was: {}", topicName, retryBackOffMs, couldNotCreateTopic.toString());
-                    }
-                } else {
-                    final String error = "Could not get number of partitions for topic {} due to {}";
-                    log.debug(error, topicFuture.getKey(), cause.toString());
-                }
-            }
-
-        }
-
-
-        try {
-
-        } catch (final InterruptedException fatalException) {
-            Thread.currentThread().interrupt();
-            log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
-            throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
-        } catch (final ExecutionException couldNotDescribeTopicException) {
-            final Throwable cause = couldNotDescribeTopicException.getCause();
-            if (cause instanceof TimeoutException) {
-                retry = true;
-                log.debug("Could not get number of partitions for topic {} due to timeout. " +
-                    "Will try again (remaining retries {}).", topicFuture.getKey(), remainingRetries - 1);
-            } else {
-                final String error = "Could not get number of partitions for topic {} due to {}";
-                log.debug(error, topicFuture.getKey(), cause.toString());
-            }
-        }
-
-
-        final Map<String, Integer> existingTopicPartitions = getNumPartitions(topics.keySet());
-        final Set<InternalTopicConfig> topicsToBeCreated = validateTopics(topics.values(), existingTopicPartitions);
-        if (topicsToBeCreated.size() > 0) {
-            final Set<NewTopic> newTopics = new HashSet<>();
-
-            for (final InternalTopicConfig internalTopicConfig : topicsToBeCreated) {
-                final Map<String, String> topicConfig = internalTopicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
-
-                log.debug("Going to create topic {} with {} partitions and config {}.",
+                    log.debug("Going to create topic {} with {} partitions and config {}.",
                         internalTopicConfig.name(),
                         internalTopicConfig.numberOfPartitions(),
                         topicConfig);
 
-                newTopics.add(
-                    new NewTopic(
-                        internalTopicConfig.name(),
-                        internalTopicConfig.numberOfPartitions(),
-                        replicationFactor)
-                    .configs(topicConfig));
-            }
-
-            // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
-            int remainingRetries = retries;
-            boolean retryBackOff = false;
-            boolean retry;
-            do {
-                retry = false;
+                    newTopics.add(
+                        new NewTopic(
+                            internalTopicConfig.name(),
+                            internalTopicConfig.numberOfPartitions(),
+                            replicationFactor)
+                            .configs(topicConfig));
+                }
 
                 final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
 
-                final Set<String> createdTopicNames = new HashSet<>();
                 for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
+                    final String topicName = createTopicResult.getKey();
                     try {
-                        if (retryBackOff) {
-                            retryBackOff = false;
-                            Thread.sleep(retryBackOffMs);
-                        }
                         createTopicResult.getValue().get();
-                        createdTopicNames.add(createTopicResult.getKey());
-                    } catch (final ExecutionException couldNotCreateTopic) {
-                        final Throwable cause = couldNotCreateTopic.getCause();
-                        final String topicName = createTopicResult.getKey();
-
-                        if (cause instanceof TimeoutException) {
-                            retry = true;
-                            log.debug("Could not get number of partitions for topic {} due to timeout. " +
-                                "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
-                        } else if (cause instanceof TopicExistsException) {
-                            // This topic didn't exist earlier, it might be marked for deletion or it might differ
-                            // from the desired setup. It needs re-validation.
-                            final Map<String, Integer> existingTopicPartition = getNumPartitions(Collections.singleton(topicName));
-
-                            if (existingTopicPartition.containsKey(topicName)
-                                    && validateTopics(Collections.singleton(topics.get(topicName)), existingTopicPartition).isEmpty()) {
-                                createdTopicNames.add(createTopicResult.getKey());
-                                log.info("Topic {} exists already and has the right number of partitions: {}",
-                                        topicName,
-                                        couldNotCreateTopic.toString());
-                            } else {
-                                retry = true;
-                                retryBackOff = true;
-                                log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
-                                        "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
-                                        "Error message was: {}", topicName, retryBackOffMs, couldNotCreateTopic.toString());
-                            }
-                        } else {
-                            throw new StreamsException(String.format("Could not create topic %s.", topicName),
-                                couldNotCreateTopic);
-                        }
+                        topicsNotReady.remove(topicName);
                     } catch (final InterruptedException fatalException) {
+                        // this should not happen; if it ever happens it indicate a bug
                         Thread.currentThread().interrupt();
                         log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
                         throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                    } catch (final ExecutionException executionException) {
+                        final Throwable cause = executionException.getCause();
+                        if (cause instanceof TopicExistsException) {
+                            // This topic didn't exist earlier, it might be marked for deletion or it might differ
+                            // from the desired setup. It needs re-validation.
+                            log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
+                                "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
+                                "Error message was: {}", topicName, retryBackOffMs, cause.toString());
+                        } else {
+                            log.error("Unexpected error during topic creation for {}.\n" +
+                                "Error message was: {}", topicName, cause.toString());
+                            throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
+                        }
                     }
                 }
 
-                if (retry) {
-                    newTopics.removeIf(newTopic -> createdTopicNames.contains(newTopic.name()));
+                if (!topicsNotReady.isEmpty()) {
+                    log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
 
-                    continue;
+                    try {
+                        Thread.sleep(retryBackOffMs);
+                    } catch (InterruptedException e) {
+                        // this is okay, we just wake up early
+                        Thread.currentThread().interrupt();
+                    }
+
+                    remainingRetries--;
                 }
+            }
 
-                return;
-            } while (remainingRetries-- > 0);
-
-            final String timeoutAndRetryError = "Could not create topics. " +
-                "This can happen if the Kafka cluster is temporary not available. " +
-                "You can increase admin client config `retries` to be resilient against this error.";
-            log.error(timeoutAndRetryError);
-            throw new StreamsException(timeoutAndRetryError);
         }
     }
 
     /**
-     * Get the number of partitions for the given topics
+     * Try to get the number of partitions for the given topics; return the number of partitions for topics that already exists.
+     *
+     * Topics that were not able to get its description will simply not be returned
      */
     // visible for testing
-    protected Map<String, Integer> getNumPartitions(final Set<String> topics) throws InterruptedException, ExecutionException {
+    protected Map<String, Integer> getNumPartitions(final Set<String> topics) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
         final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
         final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
 
-        final Map<String, Integer> existingNumberOfPartitionsPerTopic = new HashMap<>();
+        final Map<String, Integer> existedTopicPartition = new HashMap<>();
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
-            final TopicDescription topicDescription = topicFuture.getValue().get();
-            existingNumberOfPartitionsPerTopic.put(
-                topicFuture.getKey(),
-                topicDescription.partitions().size());
+            try {
+                final TopicDescription topicDescription = topicFuture.getValue().get();
+                existedTopicPartition.put(
+                    topicFuture.getKey(),
+                    topicDescription.partitions().size());
+            } catch (final InterruptedException fatalException) {
+                Thread.currentThread().interrupt();
+                log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
+            } catch (final ExecutionException couldNotDescribeTopicException) {
+                final Throwable cause = couldNotDescribeTopicException.getCause();
+                final String error = "Could not get number of partitions for topic {} due to {}";
+                log.debug(error, topicFuture.getKey(), cause.toString());
+            }
         }
 
-        return existingNumberOfPartitionsPerTopic;
+        return existedTopicPartition;
     }
 
     /**
      * Check the existing topics to have correct number of partitions; and return the remaining topics that needs to be created
      */
     private Set<String> validateTopics(final Set<String> topicsToValidate,
-                                       final Map<String, InternalTopicConfig> topicsMap)
-        throws InterruptedException, ExecutionException {
-        log.debug("Trying to check if topics {} have been created with expected number of partitions.", topicsToValidate);
+                                       final Map<String, InternalTopicConfig> topicsMap) {
 
-        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topicsToValidate);
-        final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.values();
+        final Map<String, Integer> existedTopicPartition = getNumPartitions(topicsToValidate);
 
-        final Map<String, Integer> existingTopicPartitions = new HashMap<>();
-        for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
-            final TopicDescription topicDescription = topicFuture.getValue().get();
-            existingTopicPartitions.put(
-                topicFuture.getKey(),
-                topicDescription.partitions().size());
-        }
-
-        final Set<String> topicsToBeCreated = new HashSet<>();
+        final Set<String> topicsToCreate = new HashSet<>();
         for (final Map.Entry<String, InternalTopicConfig> entry : topicsMap.entrySet()) {
             final String topicName = entry.getKey();
             final int numberOfPartitions = entry.getValue().numberOfPartitions();
-            if (existingTopicPartitions.containsKey(topicName)) {
-                if (!existingTopicPartitions.get(topicName).equals(numberOfPartitions)) {
+            if (existedTopicPartition.containsKey(topicName)) {
+                if (!existedTopicPartition.get(topicName).equals(numberOfPartitions)) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
                             "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
-                        topicName, numberOfPartitions, existingTopicPartitions.get(topicName));
+                        topicName, numberOfPartitions, existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);
                 }
             } else {
-                topicsToBeCreated.add(topicName);
+                topicsToCreate.add(topicName);
             }
         }
 
-        return topicsToBeCreated;
+        return topicsToCreate;
     }
-
 }
