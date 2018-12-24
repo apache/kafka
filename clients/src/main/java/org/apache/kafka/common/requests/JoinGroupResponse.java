@@ -77,7 +77,6 @@ public class JoinGroupResponse extends AbstractResponse {
     /**
      * The version number is bumped to indicate that client needs to issue a second join group request under first try
      * with UNKNOWN_MEMBER_ID.
-     * TODO: Define v4 schema to include `group.instance.id` for KIP-345.
      */
     private static final Schema JOIN_GROUP_RESPONSE_V4 = JOIN_GROUP_RESPONSE_V3;
 

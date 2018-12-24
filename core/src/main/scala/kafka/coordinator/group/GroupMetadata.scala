@@ -112,10 +112,7 @@ private object GroupMetadata {
       Stable -> Set(CompletingRebalance),
       PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
       Empty -> Set(PreparingRebalance))
-  val unknownMemberMetadata = new MemberMetadata("", "", "", "", 0, 0, "", List[(String, Array[Byte])]())
-  def isUnknownMember(member: MemberMetadata): Boolean = member == unknownMemberMetadata
 
-  // TODO: decide if ids should be predictable or random
   def generateMemberIdSuffix = UUID.randomUUID().toString
 
   def loadGroup(groupId: String,
@@ -189,6 +186,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  private val pendingMembers = new mutable.HashSet[String]
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -212,7 +210,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def currentStateTimestampOrDefault: Long = currentStateTimestamp.getOrElse(-1)
 
   def add(member: MemberMetadata, callback: JoinCallback = null) {
-    memberPrecheck(member.memberId, member.groupId, member.protocolType, member.protocols)
+    if (members.isEmpty)
+      this.protocolType = Some(member.protocolType)
+
+    assert(groupId == groupId)
+    assert(this.protocolType.orNull == member.protocolType)
+    assert(supportsProtocols(member.protocols))
+
+    member.protocols.foreach{ case (protocol) => supportedProtocols(protocol) += 1 }
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
@@ -222,31 +227,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       numMembersAwaitingJoin += 1
   }
 
-  def addUnknownMember(memberId: String,
-                       groupId: String,
-                       protocolType: String,
-                       protocols: List[(String, Array[Byte])]) {
-    memberPrecheck(memberId, groupId, protocolType, protocols.map(_._1).toSet)
+  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)
 
-    members.put(memberId, GroupMetadata.unknownMemberMetadata)
-  }
+  def addPendingMember(memberId: String) = pendingMembers.add(memberId)
 
-  private def memberPrecheck(memberId: String,
-                             groupId: String,
-                             protocolType: String,
-                             protocols: Set[String]): Unit = {
-    if (members.isEmpty)
-      this.protocolType = Some(protocolType)
+  def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
 
-    assert(groupId == groupId)
-    assert(this.protocolType.orNull == protocolType)
-    assert(supportsProtocols(protocols))
-    // If the member id is not in member map, this means it's the first
-    // time this member joins group, and we should increment number of supportedProtocols.
-    if (!has(memberId)) {
-      protocols.foreach{ case (protocol) => supportedProtocols(protocol) += 1 }
-    }
-  }
+  def clearPendingMembers() = pendingMembers.clear()
 
   def remove(memberId: String) {
     members.remove(memberId).foreach { member =>
@@ -270,10 +257,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 //   Only remove unknown members because they are not real members to work with assignment.
 //  def notYetRejoinedMembers = members.values.filter((member) => member.awaitingJoinCallback == null).toList
 
-  def notYetRejoinedMembers = members.filter( memberKV => GroupMetadata.isUnknownMember(memberKV._2)
-    || memberKV._2.awaitingJoinCallback == null)
+  def notYetRejoinedMembers = members.filter(memberKV => memberKV._2.awaitingJoinCallback == null)
 
-  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin
+  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 

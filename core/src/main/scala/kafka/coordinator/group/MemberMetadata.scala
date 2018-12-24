@@ -80,9 +80,7 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
-    if (GroupMetadata.isUnknownMember(this))
-      true
-    else if (awaitingJoinCallback != null)
+    if (awaitingJoinCallback != null)
       !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
     else awaitingSyncCallback != null ||
       latestHeartbeat + sessionTimeoutMs > deadlineMs

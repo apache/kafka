@@ -358,7 +358,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.MEMBER_ID_REQUIRED, joinGroupResult.error)
 
     EasyMock.reset(replicaManager)
-    responseFuture = sendJoinGroup(groupId, joinGroupResult.memberId, "invalidProtocolType", protocols, requireKnownMemberId = true)
+    responseFuture = sendJoinGroup(groupId, joinGroupResult.memberId, protocolType, List(), requireKnownMemberId = true)
     joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
   }
