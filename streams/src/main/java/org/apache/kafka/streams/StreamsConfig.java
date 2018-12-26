@@ -1162,6 +1162,7 @@ public class StreamsConfig extends AbstractConfig {
         props.keySet().removeAll(originalsWithPrefix(CONSUMER_PREFIX, false).keySet());
         props.keySet().removeAll(originalsWithPrefix(PRODUCER_PREFIX, false).keySet());
         props.keySet().removeAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX, false).keySet());
+        props.keySet().removeAll(originalsWithPrefix(TOPIC_PREFIX, false).keySet());
         return props;
     }
 
