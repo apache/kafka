@@ -425,7 +425,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   }
 
   class ErrorMeter(name: String, error: Errors) {
-    private val tags = mutable.LinkedHashMap("request" -> name, "error" -> error.name)
+    private val tags = Map("request" -> name, "error" -> error.name)
 
     @volatile private var meter: Meter = null
 

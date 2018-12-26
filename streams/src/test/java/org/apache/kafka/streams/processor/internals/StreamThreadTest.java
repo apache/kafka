@@ -80,7 +80,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -1431,7 +1430,7 @@ public class StreamThreadTest {
                 new LogContext(""),
                 new AtomicInteger()
                 );
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<String, String>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
                 testMetricName,
@@ -1475,7 +1474,7 @@ public class StreamThreadTest {
                 new LogContext(""),
                 new AtomicInteger()
                 );
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<String, String>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<String, String>());
         final Metric testMetric = new KafkaMetric(
                 new Object(),
                 testMetricName,

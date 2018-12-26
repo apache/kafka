@@ -40,7 +40,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.Map
 
 object Partition {
   def apply(topicPartition: TopicPartition,
@@ -94,7 +94,7 @@ class Partition(val topicPartition: TopicPartition,
 
   private def isReplicaLocal(replicaId: Int) : Boolean = replicaId == localBrokerId || replicaId == Request.FutureLocalReplicaId
 
-  private val tags = mutable.LinkedHashMap("topic" -> topic, "partition" -> partitionId.toString)
+  private val tags = Map("topic" -> topic, "partition" -> partitionId.toString)
 
   // Do not create metrics if this partition is ReplicaManager.OfflinePartition
   if (!isOffline) {

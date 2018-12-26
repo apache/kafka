@@ -1390,12 +1390,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = awaitNonEmptyRecords(consumer, tp)
     assertEquals("should be assigned once", 1, listener.callsToAssigned)
     // Verify the metric exist.
-    val tags1 = new util.LinkedHashMap[String, String]()
+    val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     tags1.put("topic", tp.topic())
     tags1.put("partition", String.valueOf(tp.partition()))
 
-    val tags2 = new util.LinkedHashMap[String, String]()
+    val tags2 = new util.HashMap[String, String]()
     tags2.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     tags2.put("topic", tp2.topic())
     tags2.put("partition", String.valueOf(tp2.partition()))
@@ -1429,12 +1429,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = awaitNonEmptyRecords(consumer, tp)
     assertEquals("should be assigned once", 1, listener.callsToAssigned)
     // Verify the metric exist.
-    val tags1 = new util.LinkedHashMap[String, String]()
+    val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
     tags1.put("topic", tp.topic())
     tags1.put("partition", String.valueOf(tp.partition()))
 
-    val tags2 = new util.LinkedHashMap[String, String]()
+    val tags2 = new util.HashMap[String, String]()
     tags2.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
     tags2.put("topic", tp2.topic())
     tags2.put("partition", String.valueOf(tp2.partition()))
@@ -1466,7 +1466,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.LinkedHashMap[String, String]()
+    val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadMetricsCleanUpWithAssign")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
@@ -1495,7 +1495,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.LinkedHashMap[String, String]()
+    val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
@@ -1526,7 +1526,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.LinkedHashMap[String, String]()
+    val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
@@ -1548,7 +1548,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     awaitNonEmptyRecords(consumer, tp)
 
-    val tags = new util.LinkedHashMap[String, String]()
+    val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadWithMaxPollRecords")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
@@ -1570,7 +1570,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
 
-    val tags = new util.LinkedHashMap[String, String]()
+    val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))

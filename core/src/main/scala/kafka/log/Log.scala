@@ -299,7 +299,7 @@ class Log(@volatile var dir: File,
 
   private val tags = {
     val maybeFutureTag = if (isFuture) Map("is-future" -> "true") else Map.empty[String, String]
-    mutable.LinkedHashMap("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
+    Map("topic" -> topicPartition.topic, "partition" -> topicPartition.partition.toString) ++ maybeFutureTag
   }
 
   newGauge("NumLogSegments",

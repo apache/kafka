@@ -29,7 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
-import scala.collection.{mutable, _}
+import scala.collection._
 
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
@@ -138,7 +138,7 @@ object DelayedProduceMetrics extends KafkaMetricsGroup {
     newMeter("ExpiresPerSec",
              "requests",
              TimeUnit.SECONDS,
-             tags = mutable.LinkedHashMap("topic" -> key.topic, "partition" -> key.partition.toString))
+             tags = Map("topic" -> key.topic, "partition" -> key.partition.toString))
   private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
 
   def recordExpiration(partition: TopicPartition) {
