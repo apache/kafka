@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Crc32C;
 
 import java.io.DataInputStream;
 import java.io.EOFException;
+import java.io.File;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -586,10 +587,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         DefaultFileChannelRecordBatch(long offset,
                                       byte magic,
+                                      File file,
                                       FileChannel channel,
                                       int position,
                                       int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, file, channel, position, batchSize);
         }
 
         @Override

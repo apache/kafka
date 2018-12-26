@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataOutputStream;
+import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
@@ -530,10 +531,11 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         LegacyFileChannelRecordBatch(long offset,
                                      byte magic,
+                                     File file,
                                      FileChannel channel,
                                      int position,
                                      int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, file, channel, position, batchSize);
         }
 
         @Override
