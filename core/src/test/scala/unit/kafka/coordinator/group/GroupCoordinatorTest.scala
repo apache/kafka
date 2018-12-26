@@ -60,9 +60,6 @@ class GroupCoordinatorTest extends JUnitSuite {
   val GroupMaxSessionTimeout = 10 * 60 * 1000
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
-  // Starting from 2.2, we shall require member id for allowing new member to join the group.
-  // So the default setting is to enable this change, and for backward compatibility we also
-  // keep the logical tests for older request versions.
   val DefaultRequireKnownMemberIdInJoinGroup = true
   var DefaultRequireKnownMemberIdInSendJoinGroup = false
   val GroupInitialRebalanceDelay = 50
@@ -319,7 +316,6 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     EasyMock.reset(replicaManager)
     val otherJoinGroupResult = joinGroup(groupId, otherMemberId, protocolType, List(("roundrobin", metadata)))
-    // Manually advance the clock
     timer.advanceClock(GroupInitialRebalanceDelay + 1)
 
     val joinGroupResult = await(joinGroupFuture, 1)
@@ -341,7 +337,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def testJoinGroupUnknownConsumerDeaGroup() {
+  def testJoinGroupUnknownConsumerDeadGroup() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
     val deadGroupId = "deadGroupId"
@@ -356,11 +352,20 @@ class GroupCoordinatorTest extends JUnitSuite {
     var responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, requireKnownMemberId = true)
     var joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
     assertEquals(Errors.MEMBER_ID_REQUIRED, joinGroupResult.error)
+    val memberId = joinGroupResult.memberId
 
+    // Sending an inconsistent protocol shall be refused
     EasyMock.reset(replicaManager)
-    responseFuture = sendJoinGroup(groupId, joinGroupResult.memberId, protocolType, List(), requireKnownMemberId = true)
+    responseFuture = sendJoinGroup(groupId, memberId, protocolType, List(), requireKnownMemberId = true)
     joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+
+    // Sending consistent protocol shall be accepted
+    EasyMock.reset(replicaManager)
+    responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, requireKnownMemberId = true)
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    joinGroupResult = Await.result(responseFuture, Duration(DefaultRebalanceTimeout + 1, TimeUnit.MILLISECONDS))
+    assertEquals(Errors.NONE, joinGroupResult.error)
   }
 
   @Test

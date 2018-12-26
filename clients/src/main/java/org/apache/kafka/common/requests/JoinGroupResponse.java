@@ -99,6 +99,7 @@ public class JoinGroupResponse extends AbstractResponse {
      * UNKNOWN_MEMBER_ID (25)
      * INVALID_SESSION_TIMEOUT (26)
      * GROUP_AUTHORIZATION_FAILED (30)
+     * MEMBER_ID_REQUIRED (79)
      */
 
     private final int throttleTimeMs;

@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -415,7 +416,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException)
+                        exception instanceof IllegalGenerationException ||
+                        exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
@@ -552,7 +554,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // Broker requires a concrete member id to be allowed to join the group. Update the generation
                 // and send another join group request in next cycle.
                 AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
-                        joinResponse.memberId(), joinResponse.groupProtocol());
+                        joinResponse.memberId(), generation.protocol);
                 requestRejoin();
                 future.raise(Errors.MEMBER_ID_REQUIRED);
             } else {

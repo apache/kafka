@@ -177,6 +177,19 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testJoinGroupRequestWithMemberIdRequired() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.MEMBER_ID_REQUIRED));
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertEquals(future.exception().getMessage(), Errors.MEMBER_ID_REQUIRED.message());
+        assertTrue(coordinator.rejoinNeededOrPending());
+    }
+
+    @Test
     public void testUncaughtExceptionInHeartbeatThread() throws Exception {
         setupCoordinator();
 

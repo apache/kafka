@@ -216,6 +216,7 @@ public class JoinGroupRequest extends AbstractRequest {
                     Collections.emptyMap());
             case 2:
             case 3:
+            case 4:
                 return new JoinGroupResponse(
                     throttleTimeMs,
                     Errors.forException(e),

@@ -113,8 +113,6 @@ private object GroupMetadata {
       PreparingRebalance -> Set(Stable, CompletingRebalance, Empty),
       Empty -> Set(PreparingRebalance))
 
-  def generateMemberIdSuffix = UUID.randomUUID().toString
-
   def loadGroup(groupId: String,
                 initialState: GroupState,
                 generationId: Int,
@@ -213,27 +211,18 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     if (members.isEmpty)
       this.protocolType = Some(member.protocolType)
 
-    assert(groupId == groupId)
+    assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
     assert(supportsProtocols(member.protocols))
-
-    member.protocols.foreach{ case (protocol) => supportedProtocols(protocol) += 1 }
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
     members.put(member.memberId, member)
+    member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.awaitingJoinCallback = callback
     if (member.awaitingJoinCallback != null)
       numMembersAwaitingJoin += 1
   }
-
-  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)
-
-  def addPendingMember(memberId: String) = pendingMembers.add(memberId)
-
-  def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
-
-  def clearPendingMembers() = pendingMembers.clear()
 
   def remove(memberId: String) {
     members.remove(memberId).foreach { member =>
@@ -251,13 +240,18 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
+  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)
+
+  def addPendingMember(memberId: String) = pendingMembers.add(memberId)
+
+  def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
+
+  def clearPendingMembers() = pendingMembers.clear()
+
   def currentState = state
 
   // TODO: deprecate the kick out logic for normal member's rejoin failure within rebalance timeout.
-//   Only remove unknown members because they are not real members to work with assignment.
-//  def notYetRejoinedMembers = members.values.filter((member) => member.awaitingJoinCallback == null).toList
-
-  def notYetRejoinedMembers = members.filter(memberKV => memberKV._2.awaitingJoinCallback == null)
+  def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
   def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty
 
@@ -269,7 +263,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     timeout.max(member.rebalanceTimeoutMs)
   }
 
+  def generateMemberIdSuffix = UUID.randomUUID().toString
+
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
+
+  def protocolNotMatch(memberProtocolType: String,
+                       memberProtocols: List[(String, Array[Byte])]): Boolean = {
+    val groupProtocolNotSupportedByNewMember = state != Empty && (!protocolType.contains(memberProtocolType) || !supportsProtocols(memberProtocols.map(_._1).toSet))
+    val firstMemberWithEmptyProtocolOrProtocolType = state == Empty && (memberProtocolType.isEmpty || memberProtocols.isEmpty)
+    groupProtocolNotSupportedByNewMember || firstMemberWithEmptyProtocolOrProtocolType
+  }
 
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
@@ -330,7 +333,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def initNextGeneration() = {
-    assert(notYetRejoinedMembers == Map.empty[String, MemberMetadata])
+    assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     if (members.nonEmpty) {
       generationId += 1
       protocol = Some(selectProtocol)
