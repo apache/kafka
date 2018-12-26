@@ -181,7 +181,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
      * note that the returned watchers may be removed from the list by other threads
      */
     def allWatchers = {
-      inLock(watchersLock) { watchersByKey.values }
+      watchersByKey.values
     }
   }
 
@@ -299,8 +299,8 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * on multiple lists, and some of its watched entries may still be in the watch lists
    * even when it has been completed, this number may be larger than the number of real operations watched
    */
-  def watched(): Int = {
-    watcherLists.foldLeft(0) { _ + _.allWatchers.map(_.countWatched).sum }
+  def watched: Int = {
+    watcherLists.foldLeft(0) { case (sum, watcherList) => sum + watcherList.allWatchers.map(_.countWatched).sum }
   }
 
   /**
@@ -441,7 +441,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       // a little overestimated total number of operations.
       estimatedTotalOperations.getAndSet(delayed)
       debug("Begin purging watch lists")
-      var purged = watcherLists.foldLeft(0) { _ + _.allWatchers.map(_.purgeCompleted()).sum }
+      val purged = watcherLists.foldLeft(0) {
+        case (sum, watcherList) => sum + watcherList.allWatchers.map(_.purgeCompleted()).sum
+      }
       debug("Purged %d elements from watch lists.".format(purged))
     }
   }
