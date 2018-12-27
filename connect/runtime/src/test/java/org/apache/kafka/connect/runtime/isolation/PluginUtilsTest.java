@@ -45,7 +45,7 @@ public class PluginUtilsTest {
     }
 
     @Test
-    public void testJavaLibraryClasses() throws Exception {
+    public void testJavaLibraryClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("java."));
         assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.Object"));
         assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.String"));
@@ -64,13 +64,13 @@ public class PluginUtilsTest {
     }
 
     @Test
-    public void testThirdPartyClasses() throws Exception {
+    public void testThirdPartyClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j.LoggerFactory"));
     }
 
     @Test
-    public void testConnectFrameworkClasses() throws Exception {
+    public void testConnectFrameworkClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.common."));
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.common.config.AbstractConfig")
@@ -114,10 +114,13 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.clients.admin.KafkaAdminClient")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.rest.ConnectRestExtension")
+        );
     }
 
     @Test
-    public void testAllowedConnectFrameworkClasses() throws Exception {
+    public void testAllowedConnectFrameworkClasses() {
         assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.transforms."));
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.transforms.ExtractField")
@@ -144,7 +147,41 @@ public class PluginUtilsTest {
                 "org.apache.kafka.connect.converters.ByteArrayConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.DoubleConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.FloatConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.IntegerConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.LongConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.ShortConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.StringConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.SimpleHeaderConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
+        ));
+    }
+
+    @Test
+    public void testClientConfigProvider() {
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.ConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.FileConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.FutureConfigProvider")
         );
     }
 

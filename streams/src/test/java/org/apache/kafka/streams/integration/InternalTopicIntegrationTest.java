@@ -18,13 +18,16 @@ package org.apache.kafka.streams.integration;
 
 import kafka.log.LogConfig;
 import kafka.utils.MockTime;
-import kafka.zk.AdminZkClient;
-import kafka.zk.KafkaZkClient;
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import org.apache.kafka.clients.admin.Config;
+import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -33,9 +36,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -49,12 +50,16 @@ import org.junit.experimental.categories.Category;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForCompletion;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -68,8 +73,6 @@ public class InternalTopicIntegrationTest {
 
     private static final String APP_ID = "internal-topics-integration-test";
     private static final String DEFAULT_INPUT_TOPIC = "inputTopic";
-    private static final int DEFAULT_ZK_SESSION_TIMEOUT_MS = 10 * 1000;
-    private static final int DEFAULT_ZK_CONNECTION_TIMEOUT_MS = 8 * 1000;
 
     private final MockTime mockTime = CLUSTER.time;
 
@@ -87,10 +90,10 @@ public class InternalTopicIntegrationTest {
         streamsProp.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         streamsProp.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
-        streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsProp.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         streamsProp.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         streamsProp.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        streamsProp.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsProp.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
     }
 
     @After
@@ -111,19 +114,27 @@ public class InternalTopicIntegrationTest {
     }
 
     private Properties getTopicProperties(final String changelog) {
-        try (KafkaZkClient kafkaZkClient = KafkaZkClient.apply(CLUSTER.zKConnectString(), false,
-                DEFAULT_ZK_SESSION_TIMEOUT_MS, DEFAULT_ZK_CONNECTION_TIMEOUT_MS, Integer.MAX_VALUE,
-                Time.SYSTEM, "testMetricGroup", "testMetricType")) {
-            final AdminZkClient adminZkClient = new AdminZkClient(kafkaZkClient);
-            final Map<String, Properties> topicConfigs = scala.collection.JavaConversions.mapAsJavaMap(adminZkClient.getAllTopicConfigs());
-
-            for (Map.Entry<String, Properties> topicConfig : topicConfigs.entrySet()) {
-                if (topicConfig.getKey().equals(changelog))
-                    return topicConfig.getValue();
+        try (final AdminClient adminClient = createAdminClient()) {
+            final ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, changelog);
+            try {
+                final Config config = adminClient.describeConfigs(Collections.singletonList(configResource)).values().get(configResource).get();
+                final Properties properties = new Properties();
+                for (final ConfigEntry configEntry : config.entries()) {
+                    if (configEntry.source() == ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG) {
+                        properties.put(configEntry.name(), configEntry.value());
+                    }
+                }
+                return properties;
+            } catch (final InterruptedException | ExecutionException e) {
+                throw new RuntimeException(e);
             }
-
-            return new Properties();
         }
+    }
+
+    private AdminClient createAdminClient() {
+        final Properties adminClientConfig = new Properties();
+        adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        return AdminClient.create(adminClientConfig);
     }
 
     @Test
@@ -137,14 +148,9 @@ public class InternalTopicIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
-        textLines.flatMapValues(new ValueMapper<String, Iterable<String>>() {
-            @Override
-            public Iterable<String> apply(final String value) {
-                return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
-            }
-        })
-                .groupBy(MockMapper.<String, String>selectValueMapper())
-                .count(Materialized.<String, Long, KeyValueStore<org.apache.kafka.common.utils.Bytes, byte[]>>as("Counts"));
+        textLines.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .groupBy(MockMapper.selectValueMapper())
+            .count(Materialized.as("Counts"));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
         streams.start();
@@ -157,6 +163,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 30000);
         streams.close();
 
         final Properties changelogProps = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "Counts"));
@@ -164,7 +171,7 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-Counts-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(4, repartitionProps.size());
+        assertEquals(5, repartitionProps.size());
     }
 
     @Test
@@ -175,22 +182,17 @@ public class InternalTopicIntegrationTest {
         //
         // Step 1: Configure and start a simple word count topology
         //
-        StreamsBuilder builder = new StreamsBuilder();
-        KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KStream<String, String> textLines = builder.stream(DEFAULT_INPUT_TOPIC);
 
         final int durationMs = 2000;
 
-        textLines.flatMapValues(new ValueMapper<String, Iterable<String>>() {
-            @Override
-            public Iterable<String> apply(final String value) {
-                return Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+"));
-            }
-        })
-                .groupBy(MockMapper.<String, String>selectValueMapper())
-                .windowedBy(TimeWindows.of(1000).until(2000))
-                .count(Materialized.<String, Long, WindowStore<org.apache.kafka.common.utils.Bytes, byte[]>>as("CountWindows"));
+        textLines.flatMapValues(value -> Arrays.asList(value.toLowerCase(Locale.getDefault()).split("\\W+")))
+            .groupBy(MockMapper.selectValueMapper())
+            .windowedBy(TimeWindows.of(ofSeconds(1L)).grace(ofMillis(0L)))
+            .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("CountWindows").withRetention(ofSeconds(2L)));
 
-        KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
+        final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProp);
         streams.start();
 
         //
@@ -201,6 +203,7 @@ public class InternalTopicIntegrationTest {
         //
         // Step 3: Verify the state changelog topics are compact
         //
+        waitForCompletion(streams, 2, 30000);
         streams.close();
         final Properties properties = getTopicProperties(ProcessorStateManager.storeChangelogTopic(appID, "CountWindows"));
         final List<String> policies = Arrays.asList(properties.getProperty(LogConfig.CleanupPolicyProp()).split(","));
@@ -213,6 +216,6 @@ public class InternalTopicIntegrationTest {
 
         final Properties repartitionProps = getTopicProperties(appID + "-CountWindows-repartition");
         assertEquals(LogConfig.Delete(), repartitionProps.getProperty(LogConfig.CleanupPolicyProp()));
-        assertEquals(4, repartitionProps.size());
+        assertEquals(5, repartitionProps.size());
     }
 }

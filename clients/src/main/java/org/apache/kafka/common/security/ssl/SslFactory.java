@@ -24,6 +24,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.net.ssl.KeyManager;
 import javax.net.ssl.KeyManagerFactory;
@@ -33,9 +35,11 @@ import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLException;
 import javax.net.ssl.SSLParameters;
 import javax.net.ssl.TrustManagerFactory;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.security.Principal;
@@ -45,6 +49,7 @@ import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
@@ -52,8 +57,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.HashSet;
 
-
 public class SslFactory implements Reconfigurable {
+    private static final Logger log = LoggerFactory.getLogger(SslFactory.class);
+
     private final Mode mode;
     private final String clientAuthConfigOverride;
     private final boolean keystoreVerifiableUsingTruststore;
@@ -132,7 +138,7 @@ public class SslFactory implements Reconfigurable {
                          (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
-            this.sslContext = createSSLContext(keystore);
+            this.sslContext = createSSLContext(keystore, truststore);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -147,8 +153,12 @@ public class SslFactory implements Reconfigurable {
     public void validateReconfiguration(Map<String, ?> configs) {
         try {
             SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-            if (newKeystore != null)
-                createSSLContext(newKeystore);
+            SecurityStore newTruststore = maybeCreateNewTruststore(configs);
+            if (newKeystore != null || newTruststore != null) {
+                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
+                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
+                createSSLContext(keystore, truststore);
+            }
         } catch (Exception e) {
             throw new ConfigException("Validation of dynamic config update failed", e);
         }
@@ -157,22 +167,29 @@ public class SslFactory implements Reconfigurable {
     @Override
     public void reconfigure(Map<String, ?> configs) throws KafkaException {
         SecurityStore newKeystore = maybeCreateNewKeystore(configs);
-        if (newKeystore != null) {
+        SecurityStore newTruststore = maybeCreateNewTruststore(configs);
+        if (newKeystore != null || newTruststore != null) {
             try {
-                this.sslContext = createSSLContext(newKeystore);
-                this.keystore = newKeystore;
+                SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
+                SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
+                this.sslContext = createSSLContext(keystore, truststore);
+                this.keystore = keystore;
+                this.truststore = truststore;
             } catch (Exception e) {
-                throw new ConfigException("Reconfiguration of SSL keystore failed", e);
+                throw new ConfigException("Reconfiguration of SSL keystore/truststore failed", e);
             }
         }
     }
 
     private SecurityStore maybeCreateNewKeystore(Map<String, ?> configs) {
-        boolean keystoreChanged = Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), keystore.type) ||
-                Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), keystore.path) ||
-                Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
-                Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
+        boolean keystoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), keystore.type) ||
+                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), keystore.path) ||
+                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
+                !Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
 
+        if (!keystoreChanged) {
+            keystoreChanged = keystore.modified();
+        }
         if (keystoreChanged) {
             return createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                     (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
@@ -182,8 +199,24 @@ public class SslFactory implements Reconfigurable {
             return null;
     }
 
+    private SecurityStore maybeCreateNewTruststore(Map<String, ?> configs) {
+        boolean truststoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), truststore.type) ||
+                !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), truststore.path) ||
+                !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG), truststore.password);
+
+        if (!truststoreChanged) {
+            truststoreChanged = truststore.modified();
+        }
+        if (truststoreChanged) {
+            return createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
+                    (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
+                    (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
+        } else
+            return null;
+    }
+
     // package access for testing
-    SSLContext createSSLContext(SecurityStore keystore) throws GeneralSecurityException, IOException  {
+    SSLContext createSSLContext(SecurityStore keystore, SecurityStore truststore) throws GeneralSecurityException, IOException  {
         SSLContext sslContext;
         if (provider != null)
             sslContext = SSLContext.getInstance(protocol, provider);
@@ -206,12 +239,17 @@ public class SslFactory implements Reconfigurable {
         tmf.init(ts);
 
         sslContext.init(keyManagers, tmf.getTrustManagers(), this.secureRandomImplementation);
-        if (keystore != null && keystore != this.keystore) {
+        boolean verifyKeystore = keystore != null && keystore != this.keystore;
+        boolean verifyTruststore = truststore != null && truststore != this.truststore;
+        if (verifyKeystore || verifyTruststore) {
             if (this.keystore == null)
                 throw new ConfigException("Cannot add SSL keystore to an existing listener for which no keystore was configured.");
-            if (keystoreVerifiableUsingTruststore)
-                SSLConfigValidatorEngine.validate(this, sslContext);
-            if (!CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
+            if (keystoreVerifiableUsingTruststore) {
+                SSLConfigValidatorEngine.validate(this, sslContext, this.sslContext);
+                SSLConfigValidatorEngine.validate(this, this.sslContext, sslContext);
+            }
+            if (verifyKeystore &&
+                    !CertificateEntries.create(this.keystore.load()).equals(CertificateEntries.create(keystore.load()))) {
                 throw new ConfigException("Keystore DistinguishedName or SubjectAltNames do not match");
             }
         }
@@ -278,6 +316,7 @@ public class SslFactory implements Reconfigurable {
         private final String path;
         private final Password password;
         private final Password keyPassword;
+        private Long fileLastModifiedMs;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -287,18 +326,40 @@ public class SslFactory implements Reconfigurable {
             this.keyPassword = keyPassword;
         }
 
-        KeyStore load() throws GeneralSecurityException, IOException {
-            FileInputStream in = null;
-            try {
+        /**
+         * Loads this keystore
+         * @return the keystore
+         * @throws KafkaException if the file could not be read or if the keystore could not be loaded
+         *   using the specified configs (e.g. if the password or keystore type is invalid)
+         */
+        KeyStore load() {
+            try (InputStream in = Files.newInputStream(Paths.get(path))) {
                 KeyStore ks = KeyStore.getInstance(type);
-                in = new FileInputStream(path);
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
+                fileLastModifiedMs = lastModifiedMs(path);
+
+                log.debug("Loaded key store with path {} modification time {}", path,
+                        fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs));
                 return ks;
-            } finally {
-                if (in != null) in.close();
+            } catch (GeneralSecurityException | IOException e) {
+                throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
             }
+        }
+
+        private Long lastModifiedMs(String path) {
+            try {
+                return Files.getLastModifiedTime(Paths.get(path)).toMillis();
+            } catch (IOException e) {
+                log.error("Modification time of key store could not be obtained: " + path, e);
+                return null;
+            }
+        }
+
+        boolean modified() {
+            Long modifiedMs = lastModifiedMs(path);
+            return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
         }
     }
 
@@ -307,16 +368,16 @@ public class SslFactory implements Reconfigurable {
      * The validator checks that a successful handshake can be performed using the keystore and
      * truststore configured on this SslFactory.
      */
-    static class SSLConfigValidatorEngine {
+    private static class SSLConfigValidatorEngine {
         private static final ByteBuffer EMPTY_BUF = ByteBuffer.allocate(0);
         private final SSLEngine sslEngine;
         private SSLEngineResult handshakeResult;
         private ByteBuffer appBuffer;
         private ByteBuffer netBuffer;
 
-        static void validate(SslFactory sslFactory, SSLContext sslContext) throws SSLException {
-            SSLConfigValidatorEngine clientEngine = new SSLConfigValidatorEngine(sslFactory, sslContext, Mode.CLIENT);
-            SSLConfigValidatorEngine serverEngine = new SSLConfigValidatorEngine(sslFactory, sslContext, Mode.SERVER);
+        static void validate(SslFactory sslFactory, SSLContext clientSslContext, SSLContext serverSslContext) throws SSLException {
+            SSLConfigValidatorEngine clientEngine = new SSLConfigValidatorEngine(sslFactory, clientSslContext, Mode.CLIENT);
+            SSLConfigValidatorEngine serverEngine = new SSLConfigValidatorEngine(sslFactory, serverSslContext, Mode.SERVER);
             try {
                 clientEngine.beginHandshake();
                 serverEngine.beginHandshake();
@@ -415,7 +476,7 @@ public class SslFactory implements Reconfigurable {
         private final Principal subjectPrincipal;
         private final Set<List<?>> subjectAltNames;
 
-        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException, IOException {
+        static List<CertificateEntries> create(KeyStore keystore) throws GeneralSecurityException {
             Enumeration<String> aliases = keystore.aliases();
             List<CertificateEntries> entries = new ArrayList<>();
             while (aliases.hasMoreElements()) {
@@ -431,7 +492,7 @@ public class SslFactory implements Reconfigurable {
             this.subjectPrincipal = cert.getSubjectX500Principal();
             Collection<List<?>> altNames = cert.getSubjectAlternativeNames();
             // use a set for comparison
-            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.<List<?>>emptySet();
+            this.subjectAltNames = altNames != null ? new HashSet<>(altNames) : Collections.emptySet();
         }
 
         @Override

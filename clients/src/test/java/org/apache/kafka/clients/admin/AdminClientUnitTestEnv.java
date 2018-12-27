@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -41,22 +44,45 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
     private final MockClient mockClient;
     private final KafkaAdminClient adminClient;
 
-    public AdminClientUnitTestEnv(Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Cluster cluster, String... vals) {
         this(Time.SYSTEM, cluster, vals);
     }
 
-    public AdminClientUnitTestEnv(Time time, Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Time time, Cluster cluster, String... vals) {
         this(time, cluster, newStrMap(vals));
+    }
+
+    public AdminClientUnitTestEnv(Time time, Cluster cluster) {
+        this(time, cluster, newStrMap());
     }
 
     public AdminClientUnitTestEnv(Time time, Cluster cluster, Map<String, Object> config) {
         this.time = time;
         this.cluster = cluster;
         AdminClientConfig adminClientConfig = new AdminClientConfig(config);
-        Metadata metadata = new Metadata(adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
-                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG), false);
-        this.mockClient = new MockClient(time, metadata);
-        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, mockClient, metadata, time);
+
+        AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
+                adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+        this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
+            @Override
+            public List<Node> fetchNodes() {
+                return cluster.nodes();
+            }
+
+            @Override
+            public boolean isUpdateNeeded() {
+                return false;
+            }
+
+            @Override
+            public void update(Time time, MockClient.MetadataUpdate update) {
+                throw new UnsupportedOperationException();
+            }
+        });
+
+        metadataManager.update(cluster, time.milliseconds());
+        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, time);
     }
 
     public Time time() {
@@ -91,5 +117,9 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
             map.put(vals[i], vals[i + 1]);
         }
         return map;
+    }
+
+    public static String kafkaAdminClientNetworkThreadPrefix() {
+        return KafkaAdminClient.NETWORK_THREAD_PREFIX;
     }
 }

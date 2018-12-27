@@ -26,6 +26,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.metrics.Sensor
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
@@ -533,7 +534,7 @@ class KafkaConfigTest {
 
     ApiVersion.allVersions.foreach { interBrokerVersion =>
       ApiVersion.allVersions.foreach { messageFormatVersion =>
-        if (interBrokerVersion.messageFormatVersion.value >= messageFormatVersion.messageFormatVersion.value) {
+        if (interBrokerVersion.recordVersion.value >= messageFormatVersion.recordVersion.value) {
           val config = buildConfig(interBrokerVersion, messageFormatVersion)
           assertEquals(messageFormatVersion, config.logMessageFormatVersion)
           assertEquals(interBrokerVersion, config.interBrokerProtocolVersion)
@@ -586,11 +587,12 @@ class KafkaConfigTest {
         case KafkaConfig.MaxConnectionsPerIpOverridesProp =>
           assertPropertyInvalid(getBaseProperties(), name, "127.0.0.1:not_a_number")
         case KafkaConfig.ConnectionsMaxIdleMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.FailedAuthenticationDelayMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
 
         case KafkaConfig.NumPartitionsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.LogDirsProp => // ignore string
         case KafkaConfig.LogDirProp => // ignore string
-        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", Message.MinMessageOverhead - 1)
+        case KafkaConfig.LogSegmentBytesProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", Records.LOG_OVERHEAD - 1)
 
         case KafkaConfig.LogRollTimeMillisProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.LogRollTimeHoursProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -672,6 +674,7 @@ class KafkaConfigTest {
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
+        case KafkaConfig.ConnectionsMaxReauthMsProp =>
         case KafkaConfig.SslProtocolProp => // ignore string
         case KafkaConfig.SslProviderProp => // ignore string
         case KafkaConfig.SslEnabledProtocolsProp =>
@@ -688,10 +691,15 @@ class KafkaConfigTest {
         case KafkaConfig.SslEndpointIdentificationAlgorithmProp => // ignore string
         case KafkaConfig.SslSecureRandomImplementationProp => // ignore string
         case KafkaConfig.SslCipherSuitesProp => // ignore string
+        case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
         //Sasl Configs
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
         case KafkaConfig.SaslEnabledMechanismsProp =>
+        case KafkaConfig.SaslClientCallbackHandlerClassProp =>
+        case KafkaConfig.SaslServerCallbackHandlerClassProp =>
+        case KafkaConfig.SaslLoginClassProp =>
+        case KafkaConfig.SaslLoginCallbackHandlerClassProp =>
         case KafkaConfig.SaslKerberosServiceNameProp => // ignore string
         case KafkaConfig.SaslKerberosKinitCmdProp =>
         case KafkaConfig.SaslKerberosTicketRenewWindowFactorProp =>
@@ -699,6 +707,10 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
         case KafkaConfig.SaslJaasConfigProp =>
+        case KafkaConfig.SaslLoginRefreshWindowFactorProp =>
+        case KafkaConfig.SaslLoginRefreshWindowJitterProp =>
+        case KafkaConfig.SaslLoginRefreshMinPeriodSecondsProp =>
+        case KafkaConfig.SaslLoginRefreshBufferSecondsProp =>
 
         // Password encoder configs
         case KafkaConfig.PasswordEncoderSecretProp =>
@@ -713,6 +725,10 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+
+        //Kafka Yammer metrics reporter configs
+        case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
+        case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
@@ -773,6 +789,17 @@ class KafkaConfigTest {
     val props = new Properties()
     props.put(KafkaConfig.ZkConnectProp, "127.0.0.1:2181")
     props.put(KafkaConfig.ListenersProp, "PLAINTEXT://0.0.0.0:9092")
+    assertFalse(isValidKafkaConfig(props))
+  }
+
+  @Test
+  def testMaxConnectionsPerIpProp() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 8181)
+    props.put(KafkaConfig.MaxConnectionsPerIpProp, "0")
+    assertFalse(isValidKafkaConfig(props))
+    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.1:100")
+    assertTrue(isValidKafkaConfig(props))
+    props.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, "127.0.0.0#:100")
     assertFalse(isValidKafkaConfig(props))
   }
 

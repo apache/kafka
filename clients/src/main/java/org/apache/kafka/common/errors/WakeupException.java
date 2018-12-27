@@ -21,7 +21,7 @@ import org.apache.kafka.common.KafkaException;
 /**
  * Exception used to indicate preemption of a blocking operation by an external thread.
  * For example, {@link org.apache.kafka.clients.consumer.KafkaConsumer#wakeup}
- * can be used to break out of an active {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(long)},
+ * can be used to break out of an active {@link org.apache.kafka.clients.consumer.KafkaConsumer#poll(java.time.Duration)},
  * which would raise an instance of this exception.
  */
 public class WakeupException extends KafkaException {

@@ -35,17 +35,22 @@ public class DefaultKafkaClientSupplier implements KafkaClientSupplier {
     }
 
     @Override
-    public Producer<byte[], byte[]> getProducer(Map<String, Object> config) {
+    public Producer<byte[], byte[]> getProducer(final Map<String, Object> config) {
         return new KafkaProducer<>(config, new ByteArraySerializer(), new ByteArraySerializer());
     }
 
     @Override
-    public Consumer<byte[], byte[]> getConsumer(Map<String, Object> config) {
+    public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
         return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
     @Override
-    public Consumer<byte[], byte[]> getRestoreConsumer(Map<String, Object> config) {
+    public Consumer<byte[], byte[]> getRestoreConsumer(final Map<String, Object> config) {
+        return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    }
+
+    @Override
+    public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
         return new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 }

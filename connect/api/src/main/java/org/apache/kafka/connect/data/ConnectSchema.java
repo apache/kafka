@@ -180,6 +180,7 @@ public class ConnectSchema implements Schema {
         return fields;
     }
 
+    @Override
     public Field field(String fieldName) {
         if (type != Type.STRUCT)
             throw new DataException("Cannot look up fields on non-struct type");
@@ -217,14 +218,10 @@ public class ConnectSchema implements Schema {
             if (!schema.isOptional())
                 throw new DataException("Invalid value: null used for required field: \"" + name
                         + "\", schema type: " + schema.type());
-            else
-                return;
+            return;
         }
 
-        List<Class> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
-
-        if (expectedClasses == null)
-                expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+        List<Class> expectedClasses = expectedClassesFor(schema);
 
         if (expectedClasses == null)
             throw new DataException("Invalid Java object for schema type " + schema.type()
@@ -265,6 +262,13 @@ public class ConnectSchema implements Schema {
         }
     }
 
+    private static List<Class> expectedClassesFor(Schema schema) {
+        List<Class> expectedClasses = LOGICAL_TYPE_CLASSES.get(schema.name());
+        if (expectedClasses == null)
+            expectedClasses = SCHEMA_TYPE_CLASSES.get(schema.type());
+        return expectedClasses;
+    }
+
     /**
      * Validate that the value can be used for this schema, i.e. that its type matches the schema type and optional
      * requirements. Throws a DataException if the value is invalid.
@@ -290,7 +294,7 @@ public class ConnectSchema implements Schema {
                 Objects.equals(name, schema.name) &&
                 Objects.equals(doc, schema.doc) &&
                 Objects.equals(type, schema.type) &&
-                Objects.equals(defaultValue, schema.defaultValue) &&
+                Objects.deepEquals(defaultValue, schema.defaultValue) &&
                 Objects.equals(fields, schema.fields) &&
                 Objects.equals(keySchema, schema.keySchema) &&
                 Objects.equals(valueSchema, schema.valueSchema) &&

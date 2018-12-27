@@ -505,6 +505,7 @@ public class ConnectHeaders implements Headers {
             this.key = key;
         }
 
+        @Override
         protected Header makeNext() {
             while (original.hasNext()) {
                 Header header = original.next();

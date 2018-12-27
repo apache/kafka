@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
@@ -46,6 +48,8 @@ public class MockAdminClient extends AdminClient {
 
     private Node controller;
     private int timeoutNextRequests = 0;
+
+    private Map<MetricName, Metric> mockMetrics = new HashMap<>();
 
     /**
      * Creates MockAdminClient for a cluster with the given brokers. The Kafka cluster ID uses the default value from
@@ -152,6 +156,7 @@ public class MockAdminClient extends AdminClient {
             if (allTopics.containsKey(topicName)) {
                 future.completeExceptionally(new TopicExistsException(String.format("Topic %s exists already.", topicName)));
                 createTopicResult.put(topicName, future);
+                continue;
             }
             int replicationFactor = newTopic.replicationFactor();
             List<Node> replicas = new ArrayList<>(replicationFactor);
@@ -276,6 +281,46 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds, DescribeConsumerGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public CreateAclsResult createAcls(Collection<AclBinding> acls, CreateAclsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -350,4 +395,12 @@ public class MockAdminClient extends AdminClient {
         }
     }
 
+    public void setMockMetrics(MetricName name, Metric metric) {
+        mockMetrics.put(name, metric);
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return mockMetrics;
+    }
 }

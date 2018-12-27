@@ -64,15 +64,20 @@ public class ConnectMetrics {
      * @param time     the time; may not be null
      */
     public ConnectMetrics(String workerId, WorkerConfig config, Time time) {
+        this(workerId, time, config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG),
+                config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG),
+                config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG),
+                config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class));
+    }
+
+    public ConnectMetrics(String workerId, Time time, int numSamples, long sampleWindowMs, String metricsRecordingLevel,
+                          List<MetricsReporter> reporters) {
         this.workerId = workerId;
         this.time = time;
 
-        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
-                                                      .timeWindow(config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG),
-                                                                  TimeUnit.MILLISECONDS).recordLevel(
-                        Sensor.RecordingLevel.forName(config.getString(CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG)));
-        List<MetricsReporter> reporters = config.getConfiguredInstances(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
-                                                                        MetricsReporter.class);
+        MetricConfig metricConfig = new MetricConfig().samples(numSamples)
+                .timeWindow(sampleWindowMs, TimeUnit.MILLISECONDS).recordLevel(
+                        Sensor.RecordingLevel.forName(metricsRecordingLevel));
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
@@ -227,7 +232,7 @@ public class ConnectMetrics {
      * the {@link Metrics} class, so that the sensor names are made to be unique (based on the group name)
      * and so the sensors are removed when this group is {@link #close() closed}.
      */
-    public class MetricGroup {
+    public class MetricGroup implements AutoCloseable {
         private final MetricGroupId groupId;
         private final Set<String> sensorNames = new HashSet<>();
         private final String sensorPrefix;

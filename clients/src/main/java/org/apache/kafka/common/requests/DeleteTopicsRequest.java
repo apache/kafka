@@ -46,8 +46,20 @@ public class DeleteTopicsRequest extends AbstractRequest {
     /* v1 request is the same as v0. Throttle time has been added to the response */
     private static final Schema DELETE_TOPICS_REQUEST_V1 = DELETE_TOPICS_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DELETE_TOPICS_REQUEST_V2 = DELETE_TOPICS_REQUEST_V1;
+
+    /**
+     * v3 request is the same that as v2. The response is different based on the request version.
+     * In v3 version a TopicDeletionDisabledException is returned
+     */
+    private static final Schema DELETE_TOPICS_REQUEST_V3 = DELETE_TOPICS_REQUEST_V2;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1};
+        return new Schema[]{DELETE_TOPICS_REQUEST_V0, DELETE_TOPICS_REQUEST_V1,
+            DELETE_TOPICS_REQUEST_V2, DELETE_TOPICS_REQUEST_V3};
     }
 
     private final Set<String> topics;
@@ -80,13 +92,13 @@ public class DeleteTopicsRequest extends AbstractRequest {
     }
 
     private DeleteTopicsRequest(Set<String> topics, Integer timeout, short version) {
-        super(version);
+        super(ApiKeys.DELETE_TOPICS, version);
         this.topics = topics;
         this.timeout = timeout;
     }
 
     public DeleteTopicsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DELETE_TOPICS, version);
         Object[] topicsArray = struct.getArray(TOPICS_KEY_NAME);
         Set<String> topics = new HashSet<>(topicsArray.length);
         for (Object topic : topicsArray)
@@ -114,6 +126,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
             case 0:
                 return new DeleteTopicsResponse(topicErrors);
             case 1:
+            case 2:
+            case 3:
                 return new DeleteTopicsResponse(throttleTimeMs, topicErrors);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",

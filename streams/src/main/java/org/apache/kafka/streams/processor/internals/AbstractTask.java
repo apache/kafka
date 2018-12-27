@@ -51,9 +51,11 @@ public abstract class AbstractTask implements Task {
     final boolean eosEnabled;
     final Logger log;
     final LogContext logContext;
+    final StateDirectory stateDirectory;
+
     boolean taskInitialized;
     boolean taskClosed;
-    final StateDirectory stateDirectory;
+    boolean commitNeeded;
 
     InternalProcessorContext processorContext;
 
@@ -76,7 +78,7 @@ public abstract class AbstractTask implements Task {
         this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         this.stateDirectory = stateDirectory;
 
-        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id());
+        this.logPrefix = String.format("%s [%s] ", isStandby ? "standby-task" : "task", id);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
 
@@ -127,8 +129,9 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * Produces a string representation containing useful information about a StreamTask.
+     * Produces a string representation containing useful information about a Task.
      * This is useful in debugging scenarios.
+     *
      * @return A string representation of the StreamTask instance.
      */
     @Override
@@ -136,15 +139,20 @@ public abstract class AbstractTask implements Task {
         return toString("");
     }
 
+    public boolean isEosEnabled() {
+        return eosEnabled;
+    }
+
     /**
-     * Produces a string representation containing useful information about a StreamTask starting with the given indent.
+     * Produces a string representation containing useful information about a Task starting with the given indent.
      * This is useful in debugging scenarios.
-     * @return A string representation of the StreamTask instance.
+     *
+     * @return A string representation of the Task instance.
      */
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder();
         sb.append(indent);
-        sb.append("StreamsTask taskId: ");
+        sb.append("TaskId: ");
         sb.append(id);
         sb.append("\n");
 
@@ -165,7 +173,7 @@ public abstract class AbstractTask implements Task {
         return sb.toString();
     }
 
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
         return Collections.emptyMap();
     }
 
@@ -197,9 +205,9 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * @throws StreamsException if the store's change log does not contain the partition
-     *
      * Package-private for testing only
+     *
+     * @throws StreamsException If the store's change log does not contain the partition
      */
     void registerStateStores() {
         if (topology.stateStores().isEmpty()) {
@@ -208,12 +216,12 @@ public abstract class AbstractTask implements Task {
 
         try {
             if (!stateDirectory.lock(id)) {
-                throw new LockException(String.format("%sFailed to lock the state directory for task %s",
-                                                      logPrefix, id));
+                throw new LockException(String.format("%sFailed to lock the state directory for task %s", logPrefix, id));
             }
-        } catch (IOException e) {
-            throw new StreamsException(String.format("%sFatal error while trying to lock the state directory for task %s",
-                                                     logPrefix, id));
+        } catch (final IOException e) {
+            throw new StreamsException(
+                String.format("%sFatal error while trying to lock the state directory for task %s",
+                logPrefix, id));
         }
         log.trace("Initializing state stores");
 
@@ -232,21 +240,21 @@ public abstract class AbstractTask implements Task {
     }
 
     /**
-     * @throws ProcessorStateException if there is an error while closing the state manager
      * @param writeCheckpoint boolean indicating if a checkpoint file should be written
+     * @throws ProcessorStateException if there is an error while closing the state manager
      */
     // visible for testing
     void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
         ProcessorStateException exception = null;
         log.trace("Closing state manager");
         try {
-            stateMgr.close(writeCheckpoint ? recordCollectorOffsets() : null);
+            stateMgr.close(writeCheckpoint ? activeTaskCheckpointableOffsets() : null);
         } catch (final ProcessorStateException e) {
             exception = e;
         } finally {
             try {
                 stateDirectory.unlock(id);
-            } catch (IOException e) {
+            } catch (final IOException e) {
                 if (exception == null) {
                     exception = new ProcessorStateException(String.format("%sFailed to release state dir lock", logPrefix), e);
                 }
@@ -259,6 +267,10 @@ public abstract class AbstractTask implements Task {
 
     public boolean isClosed() {
         return taskClosed;
+    }
+
+    public boolean commitNeeded() {
+        return commitNeeded;
     }
 
     public boolean hasStateStores() {

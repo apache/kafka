@@ -70,6 +70,11 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
         new Field(TOKEN_DETAILS_KEY_NAME, new ArrayOf(TOKEN_DETAILS_V0)),
         THROTTLE_TIME_MS);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema TOKEN_DESCRIBE_RESPONSE_V1 = TOKEN_DESCRIBE_RESPONSE_V0;
+
     public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error, List<DelegationToken> tokens) {
         this.throttleTimeMs = throttleTimeMs;
         this.error = error;
@@ -77,7 +82,7 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     public DescribeDelegationTokenResponse(int throttleTimeMs, Errors error) {
-        this(throttleTimeMs, error, new ArrayList<DelegationToken>());
+        this(throttleTimeMs, error, new ArrayList<>());
     }
 
     public DescribeDelegationTokenResponse(Struct struct) {
@@ -170,9 +175,10 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
     }
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{TOKEN_DESCRIBE_RESPONSE_V0};
+        return new Schema[]{TOKEN_DESCRIBE_RESPONSE_V0, TOKEN_DESCRIBE_RESPONSE_V1};
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -183,5 +189,14 @@ public class DescribeDelegationTokenResponse extends AbstractResponse {
 
     public List<DelegationToken> tokens() {
         return tokens;
+    }
+
+    public boolean hasError() {
+        return this.error != Errors.NONE;
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

@@ -38,7 +38,7 @@ import static org.junit.Assert.assertTrue;
 public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
-        public long segmentId(Bytes key) {
+        public long segmentId(final Bytes key) {
             return 0;
         }
     };
@@ -53,11 +53,8 @@ public class MergedSortedCacheWrappedWindowStoreKeyValueIteratorTest {
     private final TimeWindow cacheWindow = new TimeWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
-                WindowStoreUtils.toBinaryKey(
-                    cacheKey, cacheWindow.start(), 0,
-                    new StateSerdes<>("dummy", Serdes.String(), Serdes.String())
-                )
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(WindowKeySchema.toStoreKeyBinary(
+                    new Windowed<>(cacheKey, cacheWindow), 0, new StateSerdes<>("dummy", Serdes.String(), Serdes.ByteArray()))
             ),
             new LRUCacheEntry(cacheKey.getBytes())
         )).iterator();

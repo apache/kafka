@@ -16,65 +16,63 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.Consumed;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.TopologyTestDriverWrapper;
+import org.apache.kafka.streams.TopologyWrapper;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.test.MockMapper;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
-import org.apache.kafka.test.MockMapper;
-import org.apache.kafka.test.TestUtils;
-import org.junit.Before;
-import org.junit.Rule;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
 
-import java.io.File;
+import java.util.List;
+import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings("unchecked")
 public class KTableFilterTest {
 
-    final private Serde<Integer> intSerde = Serdes.Integer();
-    final private Serde<String> stringSerde = Serdes.String();
-    private final Consumed<String, Integer> consumed = Consumed.with(stringSerde, intSerde);
-    @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
-    private File stateDir = null;
+    private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
+    private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
-    @Before
-    public void setUp() {
-        stateDir = TestUtils.tempDirectory("kafka-test");
-    }
+    private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
     private void doTestKTable(final StreamsBuilder builder,
                               final KTable<String, Integer> table2,
                               final KTable<String, Integer> table3,
                               final String topic) {
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc3 = new MockProcessorSupplier<>();
-        table2.toStream().process(proc2);
-        table3.toStream().process(proc3);
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        table2.toStream().process(supplier);
+        table3.toStream().process(supplier);
 
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic, "A", 1));
+            driver.pipeInput(recordFactory.create(topic, "B", 2));
+            driver.pipeInput(recordFactory.create(topic, "C", 3));
+            driver.pipeInput(recordFactory.create(topic, "D", 4));
+            driver.pipeInput(recordFactory.create(topic, "A", null));
+            driver.pipeInput(recordFactory.create(topic, "B", null));
+        }
 
-        driver.process(topic, "A", 1);
-        driver.process(topic, "B", 2);
-        driver.process(topic, "C", 3);
-        driver.process(topic, "D", 4);
-        driver.flushState();
-        driver.process(topic, "A", null);
-        driver.process(topic, "B", null);
-        driver.flushState();
+        final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        proc2.checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        proc3.checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        processors.get(0).checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
+        processors.get(1).checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
     }
 
     @Test
@@ -83,69 +81,27 @@ public class KTableFilterTest {
 
         final String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table1 = builder.table(topic1, consumed);
 
-        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        });
-        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        });
+        final KTable<String, Integer> table2 = table1.filter(predicate);
+        final KTable<String, Integer> table3 = table1.filterNot(predicate);
 
         doTestKTable(builder, table2, table3, topic1);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
 
-        KTable<String, Integer> table1 = builder.table(topic1, consumed);
+        final KTable<String, Integer> table1 = builder.table(topic1, consumed);
 
-        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        }, "anyStoreNameFilter");
-        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        });
+        final KTable<String, Integer> table2 = table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
+        final KTable<String, Integer> table3 = table1.filterNot(predicate);
 
-        doTestKTable(builder, table2, table3, topic1);
-    }
-
-    @Test
-    public void shouldAddQueryableStore() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final String topic1 = "topic1";
-
-        KTable<String, Integer> table1 = builder.table(topic1, consumed);
-
-        KTable<String, Integer> table2 = table1.filter(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        }, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter"));
-        KTable<String, Integer> table3 = table1.filterNot(new Predicate<String, Integer>() {
-            @Override
-            public boolean test(String key, Integer value) {
-                return (value % 2) == 0;
-            }
-        });
+        assertEquals("anyStoreNameFilter", table2.queryableStoreName());
+        assertNull(table3.queryableStoreName());
 
         doTestKTable(builder, table2, table3, topic1);
     }
@@ -154,113 +110,88 @@ public class KTableFilterTest {
                                    final KTableImpl<String, Integer, Integer> table2,
                                    final KTableImpl<String, Integer, Integer> table3,
                                    final String topic1) {
-        KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
-        KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
+        final Topology topology = builder.build();
 
-        KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
-        KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier2 = table2.valueGetterSupplier();
+        final KTableValueGetterSupplier<String, Integer> getterSupplier3 = table3.valueGetterSupplier();
 
-        getter2.init(driver.context());
-        getter3.init(driver.context());
+        final InternalTopologyBuilder topologyBuilder = TopologyWrapper.getInternalTopologyBuilder(topology);
+        topologyBuilder.connectProcessorAndStateStores(table2.name, getterSupplier2.storeNames());
+        topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
 
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 1);
-        driver.process(topic1, "C", 1);
+        try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
 
-        assertNull(getter2.get("A"));
-        assertNull(getter2.get("B"));
-        assertNull(getter2.get("C"));
+            final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
+            final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
-        assertEquals(1, (int) getter3.get("A"));
-        assertEquals(1, (int) getter3.get("B"));
-        assertEquals(1, (int) getter3.get("C"));
+            getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
+            getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
-        driver.process(topic1, "A", 2);
-        driver.process(topic1, "B", 2);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", 1));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1));
 
-        assertEquals(2, (int) getter2.get("A"));
-        assertEquals(2, (int) getter2.get("B"));
-        assertNull(getter2.get("C"));
+            assertNull(getter2.get("A"));
+            assertNull(getter2.get("B"));
+            assertNull(getter2.get("C"));
 
-        assertNull(getter3.get("A"));
-        assertNull(getter3.get("B"));
-        assertEquals(1, (int) getter3.get("C"));
+            assertEquals(1, (int) getter3.get("A"));
+            assertEquals(1, (int) getter3.get("B"));
+            assertEquals(1, (int) getter3.get("C"));
 
-        driver.process(topic1, "A", 3);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", 2));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-        assertNull(getter2.get("A"));
-        assertEquals(2, (int) getter2.get("B"));
-        assertNull(getter2.get("C"));
+            assertEquals(2, (int) getter2.get("A"));
+            assertEquals(2, (int) getter2.get("B"));
+            assertNull(getter2.get("C"));
 
-        assertEquals(3, (int) getter3.get("A"));
-        assertNull(getter3.get("B"));
-        assertEquals(1, (int) getter3.get("C"));
+            assertNull(getter3.get("A"));
+            assertNull(getter3.get("B"));
+            assertEquals(1, (int) getter3.get("C"));
 
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", 3));
 
-        assertNull(getter2.get("A"));
-        assertNull(getter2.get("B"));
-        assertNull(getter2.get("C"));
+            assertNull(getter2.get("A"));
+            assertEquals(2, (int) getter2.get("B"));
+            assertNull(getter2.get("C"));
 
-        assertNull(getter3.get("A"));
-        assertNull(getter3.get("B"));
-        assertEquals(1, (int) getter3.get("C"));
-    }
+            assertEquals(3, (int) getter3.get("A"));
+            assertNull(getter3.get("B"));
+            assertEquals(1, (int) getter3.get("C"));
 
-    @Test
-    public void testValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "B", null));
 
-        String topic1 = "topic1";
+            assertNull(getter2.get("A"));
+            assertNull(getter2.get("B"));
+            assertNull(getter2.get("C"));
 
-        KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
-
-        doTestValueGetter(builder, table2, table3, topic1);
+            assertNull(getter3.get("A"));
+            assertNull(getter3.get("B"));
+            assertEquals(1, (int) getter3.get("C"));
+        }
     }
 
     @Test
     public void testQueryableValueGetter() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
-                }
-            }, "anyStoreNameFilter");
-        KTableImpl<String, Integer, Integer> table3 = (KTableImpl<String, Integer, Integer>) table1.filterNot(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
-                }
-            });
+        final KTableImpl<String, Integer, Integer> table2 =
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
+        final KTableImpl<String, Integer, Integer> table3 =
+            (KTableImpl<String, Integer, Integer>) table1.filterNot(predicate, Materialized.as("store3"));
+        final KTableImpl<String, Integer, Integer> table4 =
+            (KTableImpl<String, Integer, Integer>) table1.filterNot(predicate);
+
+        assertEquals("store2", table2.queryableStoreName());
+        assertEquals("store3", table3.queryableStoreName());
+        assertNull(table4.queryableStoreName());
 
         doTestValueGetter(builder, table2, table3, topic1);
     }
@@ -269,75 +200,65 @@ public class KTableFilterTest {
                                           final KTableImpl<String, Integer, Integer> table1,
                                           final KTableImpl<String, Integer, Integer> table2,
                                           final String topic1) {
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        builder.build().addProcessor("proc1", supplier, table1.name);
+        builder.build().addProcessor("proc2", supplier, table2.name);
 
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 1);
-        driver.process(topic1, "C", 1);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", 1));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1));
 
-        proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+            final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        driver.process(topic1, "A", 2);
-        driver.process(topic1, "B", 2);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
 
-        driver.process(topic1, "A", 3);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(3<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)");
+            driver.pipeInput(recordFactory.create(topic1, "A", 2));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-        proc2.checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+
+            driver.pipeInput(recordFactory.create(topic1, "A", 3));
+
+            processors.get(0).checkAndClearProcessResult("A:(3<-null)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null)");
+
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "B", null));
+
+            processors.get(0).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+        }
     }
 
 
     @Test
     public void testNotSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
                 (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
+        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
     @Test
     public void testQueryableNotSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
-                }
-            }, "anyStoreNameFilter");
+        final KTableImpl<String, Integer, Integer> table2 =
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
@@ -348,74 +269,66 @@ public class KTableFilterTest {
                                        final String topic1) {
         table2.enableSendingOldValues();
 
-        MockProcessorSupplier<String, Integer> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, Integer> proc2 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
+        final Topology topology = builder.build();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        topology.addProcessor("proc1", supplier, table1.name);
+        topology.addProcessor("proc2", supplier, table2.name);
 
-        driver.setUp(builder, stateDir, Serdes.String(), Serdes.Integer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
 
-        driver.process(topic1, "A", 1);
-        driver.process(topic1, "B", 1);
-        driver.process(topic1, "C", 1);
-        driver.flushState();
+            driver.pipeInput(recordFactory.create(topic1, "A", 1));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1));
 
-        proc1.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+            final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        driver.process(topic1, "A", 2);
-        driver.process(topic1, "B", 2);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-        proc2.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            processors.get(1).checkEmptyAndClearProcessResult();
 
-        driver.process(topic1, "A", 3);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(3<-2)");
-        proc2.checkAndClearProcessResult("A:(null<-2)");
+            driver.pipeInput(recordFactory.create(topic1, "A", 2));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-        driver.process(topic1, "A", null);
-        driver.process(topic1, "B", null);
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-        proc2.checkAndClearProcessResult("B:(null<-2)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+
+            driver.pipeInput(recordFactory.create(topic1, "A", 3));
+
+            processors.get(0).checkAndClearProcessResult("A:(3<-2)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-2)");
+
+            driver.pipeInput(recordFactory.create(topic1, "A", null));
+            driver.pipeInput(recordFactory.create(topic1, "B", null));
+
+            processors.get(0).checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
+            processors.get(1).checkAndClearProcessResult("B:(null<-2)");
+        }
     }
 
     @Test
     public void testSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
                 (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-                new Predicate<String, Integer>() {
-                    @Override
-                    public boolean test(String key, Integer value) {
-                        return (value % 2) == 0;
-                    }
-                });
+        final KTableImpl<String, Integer, Integer> table2 =
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
 
     @Test
     public void testQueryableSendingOldValue() {
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        KTableImpl<String, Integer, Integer> table1 =
+        final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(
-            new Predicate<String, Integer>() {
-                @Override
-                public boolean test(String key, Integer value) {
-                    return (value % 2) == 0;
-                }
-            }, "anyStoreNameFilter");
+        final KTableImpl<String, Integer, Integer> table2 =
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -424,40 +337,39 @@ public class KTableFilterTest {
                                                  final KTableImpl<String, String, String> table1,
                                                  final KTableImpl<String, String, String> table2,
                                                  final String topic1) {
-        MockProcessorSupplier<String, String> proc1 = new MockProcessorSupplier<>();
-        MockProcessorSupplier<String, String> proc2 = new MockProcessorSupplier<>();
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
+        final Topology topology = builder.build();
 
-        builder.build().addProcessor("proc1", proc1, table1.name);
-        builder.build().addProcessor("proc2", proc2, table2.name);
+        topology.addProcessor("proc1", supplier, table1.name);
+        topology.addProcessor("proc2", supplier, table2.name);
 
-        driver.setUp(builder, stateDir, stringSerde, stringSerde);
+        final ConsumerRecordFactory<String, String> stringRecordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
 
-        driver.process(topic1, "A", "reject");
-        driver.process(topic1, "B", "reject");
-        driver.process(topic1, "C", "reject");
-        driver.flushState();
-        proc1.checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
-        proc2.checkEmptyAndClearProcessResult();
+            driver.pipeInput(stringRecordFactory.create(topic1, "A", "reject"));
+            driver.pipeInput(stringRecordFactory.create(topic1, "B", "reject"));
+            driver.pipeInput(stringRecordFactory.create(topic1, "C", "reject"));
+        }
+
+        final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
+        processors.get(0).checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        processors.get(1).checkEmptyAndClearProcessResult();
     }
 
     @Test
     public void testSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-        KTableImpl<String, String, String> table1 =
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
-            new Predicate<String, String>() {
-                @Override
-                public boolean test(String key, String value) {
-                    return value.equalsIgnoreCase("accept");
-                }
-            }).groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+        final KTableImpl<String, String, String> table2 =
+            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"))
+                .groupBy(MockMapper.noOpKeyValueMapper())
+                .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER);
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }
@@ -465,38 +377,30 @@ public class KTableFilterTest {
     @Test
     public void testQueryableSkipNullOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
-        String topic1 = "topic1";
+        final String topic1 = "topic1";
 
-        final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
-        KTableImpl<String, String, String> table1 =
+        final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
+        final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        KTableImpl<String, String, String> table2 = (KTableImpl<String, String, String>) table1.filter(
-            new Predicate<String, String>() {
-                @Override
-                public boolean test(String key, String value) {
-                    return value.equalsIgnoreCase("accept");
-                }
-            }, "anyStoreNameFilter").groupBy(MockMapper.<String, String>noOpKeyValueMapper())
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, "mock-result");
+        final KTableImpl<String, String, String> table2 =
+            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"), Materialized.as("anyStoreNameFilter"))
+                .groupBy(MockMapper.noOpKeyValueMapper())
+                .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.as("mock-result"));
 
         doTestSkipNullOnMaterialization(builder, table1, table2, topic1);
     }
 
     @Test
     public void testTypeVariance() {
-        Predicate<Number, Object> numberKeyPredicate = new Predicate<Number, Object>() {
-            @Override
-            public boolean test(Number key, Object value) {
-                return false;
-            }
-        };
+        final Predicate<Number, Object> numberKeyPredicate = (key, value) -> false;
 
         new StreamsBuilder()
             .<Integer, String>table("empty")
             .filter(numberKeyPredicate)
             .filterNot(numberKeyPredicate)
+            .toStream()
             .to("nirvana");
     }
 }

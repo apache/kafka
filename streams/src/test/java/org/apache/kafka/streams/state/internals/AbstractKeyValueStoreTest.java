@@ -25,7 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -48,14 +48,14 @@ public abstract class AbstractKeyValueStoreTest {
 
     protected abstract <K, V> KeyValueStore<K, V> createKeyValueStore(final ProcessorContext context);
 
-    protected MockProcessorContext context;
+    protected InternalMockProcessorContext context;
     protected KeyValueStore<Integer, String> store;
     protected KeyValueStoreTestDriver<Integer, String> driver;
 
     @Before
     public void before() {
         driver = KeyValueStoreTestDriver.create(Integer.class, String.class);
-        context = (MockProcessorContext) driver.context();
+        context = (InternalMockProcessorContext) driver.context();
         context.setTime(10);
         store = createKeyValueStore(context);
     }
@@ -63,14 +63,13 @@ public abstract class AbstractKeyValueStoreTest {
     @After
     public void after() {
         store.close();
-        context.close();
         driver.clear();
     }
 
     private static Map<Integer, String> getContents(final KeyValueIterator<Integer, String> iter) {
         final HashMap<Integer, String> result = new HashMap<>();
         while (iter.hasNext()) {
-            KeyValue<Integer, String> entry = iter.next();
+            final KeyValue<Integer, String> entry = iter.next();
             result.put(entry.key, entry.value);
         }
         return result;
@@ -350,7 +349,7 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test
     public void shouldPutAll() {
-        List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
         entries.add(new KeyValue<>(1, "one"));
         entries.add(new KeyValue<>(2, "two"));
 

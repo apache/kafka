@@ -57,19 +57,20 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
         public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, V>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<K, V>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
         /**
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V> value) {
+        public void process(final K key, final Change<V> value) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable reduce operator with state " + storeName + " should not be null.");
+            }
 
-            V oldAgg = store.get(key);
+            final V oldAgg = store.get(key);
             V newAgg = oldAgg;
 
             // first try to add the new value
@@ -88,12 +89,12 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, V> view() {
-        return new KTableMaterializedValueGetterSupplier<K, V>(storeName);
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
 }

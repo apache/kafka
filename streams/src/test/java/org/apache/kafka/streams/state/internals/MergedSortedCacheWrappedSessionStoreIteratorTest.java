@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.test.KeyValueIteratorStub;
 import org.junit.Test;
@@ -36,7 +35,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
 
     private static final SegmentedCacheFunction SINGLE_SEGMENT_CACHE_FUNCTION = new SegmentedCacheFunction(null, -1) {
         @Override
-        public long segmentId(Bytes key) {
+        public long segmentId(final Bytes key) {
             return 0;
         }
     };
@@ -50,9 +49,9 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(
-                SessionKeySerde.bytesToBinary(new Windowed<>(cacheKey, cacheWindow))
-            ),
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(Bytes.wrap(
+                    SessionKeySchema.toBinary(new Windowed<>(cacheKey, cacheWindow))
+            )),
             new LRUCacheEntry(cacheKey.get())
         )).iterator();
 

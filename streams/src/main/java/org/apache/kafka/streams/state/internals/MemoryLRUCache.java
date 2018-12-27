@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -37,12 +36,9 @@ import java.util.Objects;
  *  * Note that the use of array-typed keys is discouraged because they result in incorrect ordering behavior.
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
-
  *
  * @param <K> The key type
  * @param <V> The value type
- *
- * @see org.apache.kafka.streams.state.Stores#create(String)
  */
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
@@ -76,8 +72,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             private static final long serialVersionUID = 1L;
 
             @Override
-            protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                boolean evict = super.size() > maxCacheSize;
+            protected boolean removeEldestEntry(final Map.Entry<K, V> eldest) {
+                final boolean evict = super.size() > maxCacheSize;
                 if (evict && !restoring && listener != null) {
                     listener.apply(eldest.getKey(), eldest.getValue());
                 }
@@ -103,7 +99,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(ProcessorContext context, StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -111,18 +107,15 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
-        context.register(root, false, new StateRestoreCallback() {
-            @Override
-            public void restore(byte[] key, byte[] value) {
-                restoring = true;
-                // check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    delete(serdes.keyFrom(key));
-                } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-                restoring = false;
+        context.register(root, (key, value) -> {
+            restoring = true;
+            // check value for null, to avoid  deserialization error.
+            if (value == null) {
+                delete(serdes.keyFrom(key));
+            } else {
+                put(serdes.keyFrom(key), serdes.valueFrom(value));
             }
+            restoring = false;
         });
     }
 
@@ -156,7 +149,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     @Override
     public synchronized V putIfAbsent(final K key, final V value) {
         Objects.requireNonNull(key);
-        V originalValue = get(key);
+        final V originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -165,8 +158,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        for (KeyValue<K, V> entry : entries)
+        for (final KeyValue<K, V> entry : entries) {
             put(entry.key, entry.value);
+        }
     }
 
     @Override
@@ -176,7 +170,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException at every invocation
      */
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
@@ -184,7 +178,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException at every invocation
      */
     @Override
     public KeyValueIterator<K, V> all() {

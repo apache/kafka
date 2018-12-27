@@ -24,7 +24,7 @@ import java.util.concurrent._
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.{Gauge, Meter}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.utils.{Logging, NotNothing}
+import kafka.utils.{Logging, NotNothing, Pool}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.network.Send
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -158,7 +158,7 @@ object RequestChannel extends Logging {
       val metricNames = fetchMetricNames :+ header.apiKey.name
       metricNames.foreach { metricName =>
         val m = metrics(metricName)
-        m.requestRate.mark()
+        m.requestRate(header.apiVersion).mark()
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
         m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
@@ -181,12 +181,8 @@ object RequestChannel extends Logging {
 
       if (isRequestLoggingEnabled) {
         val detailsEnabled = requestLogger.underlying.isTraceEnabled
-        val responseString =
-          if (response.responseSend.isDefined)
-            response.responseAsString.getOrElse(
-              throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
-          else ""
-
+        val responseString = response.responseString.getOrElse(
+          throw new IllegalStateException("responseAsString should always be defined if request logging is enabled"))
         val builder = new StringBuilder(256)
         builder.append("Completed request:").append(requestDesc(detailsEnabled))
           .append(",response:").append(responseString)
@@ -225,22 +221,55 @@ object RequestChannel extends Logging {
 
   }
 
-  /** responseAsString should only be defined if request logging is enabled */
-  class Response(val request: Request, val responseSend: Option[Send], val responseAction: ResponseAction,
-                 val responseAsString: Option[String]) {
-    request.responseCompleteTimeNanos = Time.SYSTEM.nanoseconds
-    if (request.apiLocalCompleteTimeNanos == -1L) request.apiLocalCompleteTimeNanos = Time.SYSTEM.nanoseconds
+  abstract class Response(val request: Request) {
+    locally {
+      val nowNs = Time.SYSTEM.nanoseconds
+      request.responseCompleteTimeNanos = nowNs
+      if (request.apiLocalCompleteTimeNanos == -1L)
+        request.apiLocalCompleteTimeNanos = nowNs
+    }
 
     def processor: Int = request.processor
 
-    override def toString =
-      s"Response(request=$request, responseSend=$responseSend, responseAction=$responseAction), responseAsString=$responseAsString"
+    def responseString: Option[String] = Some("")
+
+    def onComplete: Option[Send => Unit] = None
+
+    override def toString: String
   }
 
-  sealed trait ResponseAction
-  case object SendAction extends ResponseAction
-  case object NoOpAction extends ResponseAction
-  case object CloseConnectionAction extends ResponseAction
+  /** responseAsString should only be defined if request logging is enabled */
+  class SendResponse(request: Request,
+                     val responseSend: Send,
+                     val responseAsString: Option[String],
+                     val onCompleteCallback: Option[Send => Unit]) extends Response(request) {
+    override def responseString: Option[String] = responseAsString
+
+    override def onComplete: Option[Send => Unit] = onCompleteCallback
+
+    override def toString: String =
+      s"Response(type=Send, request=$request, send=$responseSend, asString=$responseAsString)"
+  }
+
+  class NoOpResponse(request: Request) extends Response(request) {
+    override def toString: String =
+      s"Response(type=NoOp, request=$request)"
+  }
+
+  class CloseConnectionResponse(request: Request) extends Response(request) {
+    override def toString: String =
+      s"Response(type=CloseConnection, request=$request)"
+  }
+
+  class StartThrottlingResponse(request: Request) extends Response(request) {
+    override def toString: String =
+      s"Response(type=StartThrottling, request=$request)"
+  }
+
+  class EndThrottlingResponse(request: Request) extends Response(request) {
+    override def toString: String =
+      s"Response(type=EndThrottling, request=$request)"
+  }
 }
 
 class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
@@ -285,13 +314,17 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
   def sendResponse(response: RequestChannel.Response) {
     if (isTraceEnabled) {
       val requestHeader = response.request.header
-      val message = response.responseAction match {
-        case SendAction =>
-          s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${response.responseSend.get.size} bytes."
-        case NoOpAction =>
+      val message = response match {
+        case sendResponse: SendResponse =>
+          s"Sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} of ${sendResponse.responseSend.size} bytes."
+        case _: NoOpResponse =>
           s"Not sending ${requestHeader.apiKey} response to client ${requestHeader.clientId} as it's not required."
-        case CloseConnectionAction =>
+        case _: CloseConnectionResponse =>
           s"Closing connection for client ${requestHeader.clientId} due to error during ${requestHeader.apiKey}."
+        case _: StartThrottlingResponse =>
+          s"Notifying channel throttling has started for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
+        case _: EndThrottlingResponse =>
+          s"Notifying channel throttling has ended for client ${requestHeader.clientId} for ${requestHeader.apiKey}"
       }
       trace(message)
     }
@@ -350,10 +383,11 @@ object RequestMetrics {
 }
 
 class RequestMetrics(name: String) extends KafkaMetricsGroup {
+
   import RequestMetrics._
 
   val tags = Map("request" -> name)
-  val requestRate = newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tags)
+  val requestRateInternal = new Pool[Short, Meter]()
   // time a request spent in a request queue
   val requestQueueTimeHist = newHistogram(RequestQueueTimeMs, biased = true, tags)
   // time a request takes to be processed at the local broker
@@ -385,6 +419,10 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
 
   private val errorMeters = mutable.Map[Errors, ErrorMeter]()
   Errors.values.foreach(error => errorMeters.put(error, new ErrorMeter(name, error)))
+
+  def requestRate(version: Short): Meter = {
+    requestRateInternal.getAndMaybePut(version, newMeter("RequestsPerSec", "requests", TimeUnit.SECONDS, tags + ("version" -> version.toString)))
+  }
 
   class ErrorMeter(name: String, error: Errors) {
     private val tags = Map("request" -> name, "error" -> error.name)
@@ -418,7 +456,7 @@ class RequestMetrics(name: String) extends KafkaMetricsGroup {
   }
 
   def removeMetrics(): Unit = {
-    removeMetric(RequestsPerSec, tags)
+    for (version <- requestRateInternal.keys) removeMetric(RequestsPerSec, tags + ("version" -> version.toString))
     removeMetric(RequestQueueTimeMs, tags)
     removeMetric(LocalTimeMs, tags)
     removeMetric(RemoteTimeMs, tags)

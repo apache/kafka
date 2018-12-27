@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.test.MockProcessorContext;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -45,7 +45,7 @@ import static org.junit.Assert.assertTrue;
 public class RocksDBSessionStoreTest {
 
     private SessionStore<String, Long> sessionStore;
-    private MockProcessorContext context;
+    private InternalMockProcessorContext context;
 
     @Before
     public void before() {
@@ -53,13 +53,13 @@ public class RocksDBSessionStoreTest {
         schema.init("topic");
 
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 10000L, 3, schema);
+                new RocksDBSegmentedBytesStore("session-store", "metrics-scope", 10_000L, 60_000L, schema);
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),
                                                  Serdes.Long());
 
-        context = new MockProcessorContext(TestUtils.tempDirectory(),
+        context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
                                            Serdes.String(),
                                            Serdes.Long(),
                                            new NoOpRecordCollector(),
@@ -69,7 +69,6 @@ public class RocksDBSessionStoreTest {
 
     @After
     public void close() {
-        context.close();
         sessionStore.close();
     }
 
@@ -97,7 +96,7 @@ public class RocksDBSessionStoreTest {
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
                                                                                     KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
-        for (KeyValue<Windowed<String>, Long> kv : expected) {
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
 
@@ -155,7 +154,7 @@ public class RocksDBSessionStoreTest {
     @Test
     public void shouldFetchExactKeys() {
         final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", 0x7a00000000000000L, 2, new SessionKeySchema());
+                new RocksDBSegmentedBytesStore("session-store", "metrics-scope", 0x7a00000000000000L, 0x7a00000000000000L, new SessionKeySchema());
 
         sessionStore = new RocksDBSessionStore<>(bytesStore,
                                                  Serdes.String(),

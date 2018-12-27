@@ -35,7 +35,6 @@ import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -72,40 +71,41 @@ public class GlobalStreamThreadTest {
     @SuppressWarnings("unchecked")
     @Before
     public void before() {
-        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>with(null, null),
-            new InternalNameProvider() {
-                @Override
-                public String newProcessorName(String prefix) {
-                    return "processorName";
-                }
+        final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
+            new MaterializedInternal<>(Materialized.with(null, null),
+                new InternalNameProvider() {
+                    @Override
+                    public String newProcessorName(final String prefix) {
+                        return "processorName";
+                    }
 
-                @Override
-                public String newStoreName(String prefix) {
-                    return GLOBAL_STORE_NAME;
-                }
-            },
-            "store-");
+                    @Override
+                    public String newStoreName(final String prefix) {
+                        return GLOBAL_STORE_NAME;
+                    }
+                },
+                "store-"
+            );
 
         builder.addGlobalStore(
-            (StoreBuilder) new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new KeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
             "sourceName",
             null,
             null,
             null,
             GLOBAL_STORE_TOPIC_NAME,
             "processorName",
-            new KTableSource<>(GLOBAL_STORE_NAME));
+            new KTableSource<>(GLOBAL_STORE_NAME, GLOBAL_STORE_NAME));
 
         final HashMap<String, Object> properties = new HashMap<>();
         properties.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "blah");
         properties.put(StreamsConfig.APPLICATION_ID_CONFIG, "blah");
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         config = new StreamsConfig(properties);
-        globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
+        globalStreamThread = new GlobalStreamThread(builder.rewriteTopology(config).buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory(config, time),
+                                                    new StateDirectory(config, time, true),
                                                     0,
                                                     new Metrics(),
                                                     new MockTime(),
@@ -120,7 +120,7 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
             fail("Should have thrown StreamsException if start up failed");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             // ok
         }
         assertFalse(globalStreamThread.stillRunning());
@@ -138,7 +138,7 @@ public class GlobalStreamThreadTest {
         globalStreamThread = new GlobalStreamThread(builder.buildGlobalStateTopology(),
                                                     config,
                                                     mockConsumer,
-                                                    new StateDirectory(config, time),
+                                                    new StateDirectory(config, time, true),
                                                     0,
                                                     new Metrics(),
                                                     new MockTime(),
@@ -148,7 +148,7 @@ public class GlobalStreamThreadTest {
         try {
             globalStreamThread.start();
             fail("Should have thrown StreamsException if start up failed");
-        } catch (StreamsException e) {
+        } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(RuntimeException.class));
             assertThat(e.getCause().getMessage(), equalTo("KABOOM!"));
         }

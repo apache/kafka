@@ -21,9 +21,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.SessionStore;
+
+import java.time.Duration;
 
 /**
  * {@code SessionWindowedKStream} is an abstraction of a <i>windowed</i> record stream of {@link KeyValue} pairs.
@@ -35,7 +38,7 @@ import org.apache.kafka.streams.state.SessionStore;
  * They have no fixed time boundaries, rather the size of the window is determined by the records.
  * Please see {@link SessionWindows} for more details.
  * <p>
- * {@link SessionWindows} are retained until their retention time expires (c.f. {@link SessionWindows#until(long)}).
+ * New events are added to {@link SessionWindows} until their grace period ends (see {@link SessionWindows#grace(Duration)}).
  *
  * Furthermore, updates are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
@@ -90,6 +93,17 @@ public interface SessionWindowedKStream<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     *
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      *                      Note: the valueSerde will be automatically set to {@link Serdes#Long()} if there is no valueSerde provided
@@ -168,6 +182,18 @@ public interface SessionWindowedKStream<K, V> {
      * String key = "some-key";
      * KeyValueIterator<Windowed<String>, Long> aggForKeyForSession = localWindowStore.fetch(key); // key must be local (application state is shared over all running Kafka Streams instances)
      * }</pre>
+     *
+     * <p>
+     * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * alphanumerics, '.', '_' and '-'.
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
+     * user-specified in {@link StreamsConfig} via parameter
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     *
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
      * @param initializer    the instance of {@link Initializer}
      * @param aggregator     the instance of {@link Aggregator}
      * @param sessionMerger  the instance of {@link Merger}
@@ -251,15 +277,18 @@ public interface SessionWindowedKStream<K, V> {
      * }</pre>
      * For non-local keys, a custom RPC mechanism must be implemented using {@link KafkaStreams#allMetadata()} to
      * query the value of the key on a parallel running instance of your Kafka Streams application.
+     *
      * <p>
      * For failure and recovery the store will be backed by an internal changelog topic that will be created in Kafka.
-     * Therefore, the store name must be a valid Kafka topic name and cannot contain characters other than ASCII
+     * Therefore, the store name defined by the Materialized instance must be a valid Kafka topic name and cannot contain characters other than ASCII
      * alphanumerics, '.', '_' and '-'.
-     * The changelog topic will be named "${applicationId}-${queryableStoreName}-changelog", where "applicationId" is
+     * The changelog topic will be named "${applicationId}-${storeName}-changelog", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "queryableStoreName" is the
-     * provide {@code queryableStoreName}, and "-changelog" is a fixed suffix.
-     * You can retrieve all generated internal topic names via {@link KafkaStreams#toString()}.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is the
+     * provide store name defined in {@code Materialized}, and "-changelog" is a fixed suffix.
+     * You can retrieve all generated internal topic names via {@link Topology#describe()}.
+     *
+     *
      * @param reducer a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param materializedAs an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}
      * @return a windowed {@link KTable} that contains "update" records with unmodified keys, and values that represent

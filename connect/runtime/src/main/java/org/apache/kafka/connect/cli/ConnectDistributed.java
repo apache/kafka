@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.Worker;
+import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedHerder;
@@ -37,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.net.URI;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 
@@ -52,8 +54,8 @@ import java.util.Map;
 public class ConnectDistributed {
     private static final Logger log = LoggerFactory.getLogger(ConnectDistributed.class);
 
-    public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
+    public static void main(String[] args) {
+        if (args.length < 1 || Arrays.asList(args).contains("--help")) {
             log.info("Usage: ConnectDistributed worker.properties");
             Exit.exit(1);
         }
@@ -85,12 +87,16 @@ public class ConnectDistributed {
             offsetBackingStore.configure(config);
 
             Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
+            WorkerConfigTransformer configTransformer = worker.configTransformer();
 
             Converter internalValueConverter = worker.getInternalValueConverter();
             StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
             statusBackingStore.configure(config);
 
-            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(internalValueConverter, config);
+            ConfigBackingStore configBackingStore = new KafkaConfigBackingStore(
+                    internalValueConverter,
+                    config,
+                    configTransformer);
 
             DistributedHerder herder = new DistributedHerder(config, time, worker,
                     kafkaClusterId, statusBackingStore, configBackingStore,

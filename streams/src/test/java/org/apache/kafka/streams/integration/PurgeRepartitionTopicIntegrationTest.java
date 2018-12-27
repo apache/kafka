@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -51,7 +52,6 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 @Category({IntegrationTest.class})
 public class PurgeRepartitionTopicIntegrationTest {
@@ -81,7 +81,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         @Override
         final public boolean conditionMet() {
             try {
-                Set<String> topics = adminClient.listTopics().names().get();
+                final Set<String> topics = adminClient.listTopics().names().get();
 
                 if (!topics.contains(REPARTITION_TOPIC)) {
                     return false;
@@ -91,8 +91,8 @@ public class PurgeRepartitionTopicIntegrationTest {
             }
 
             try {
-                ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, REPARTITION_TOPIC);
-                Config config = adminClient.describeConfigs(Collections.singleton(resource))
+                final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, REPARTITION_TOPIC);
+                final Config config = adminClient.describeConfigs(Collections.singleton(resource))
                         .values().get(resource).get();
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
                         && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(purgeIntervalMs.toString())
@@ -111,7 +111,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     private class RepartitionTopicVerified implements TestCondition {
         private final TopicSizeVerifier verifier;
 
-        RepartitionTopicVerified(TopicSizeVerifier verifier) {
+        RepartitionTopicVerified(final TopicSizeVerifier verifier) {
             this.verifier = verifier;
         }
 
@@ -145,12 +145,13 @@ public class PurgeRepartitionTopicIntegrationTest {
     @Before
     public void setup() {
         // create admin client for verification
-        Properties adminConfig = new Properties();
+        final Properties adminConfig = new Properties();
         adminConfig.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         adminClient = AdminClient.create(adminConfig);
 
-        Properties streamsConfiguration = new Properties();
+        final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, purgeIntervalMs);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -158,21 +159,21 @@ public class PurgeRepartitionTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), purgeIntervalMs);
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), purgeSegmentBytes);
         streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), purgeSegmentBytes / 2);    // we cannot allow batch size larger than segment size
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, purgeIntervalMs);
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
-        StreamsBuilder builder = new StreamsBuilder();
+        final StreamsBuilder builder = new StreamsBuilder();
 
         builder.stream(INPUT_TOPIC)
                .groupBy(MockMapper.selectKeyKeyValueMapper())
                .count();
 
-        kafkaStreams = new KafkaStreams(builder.build(), new StreamsConfig(streamsConfiguration), time);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
 
     @After
     public void shutdown() throws IOException {
         if (kafkaStreams != null) {
-            kafkaStreams.close(30, TimeUnit.SECONDS);
+            kafkaStreams.close(Duration.ofSeconds(30));
         }
     }
 
@@ -199,7 +200,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         TestUtils.waitForCondition(
                 new RepartitionTopicVerified(new TopicSizeVerifier() {
                     @Override
-                    public boolean verify(long currentSize) {
+                    public boolean verify(final long currentSize) {
                         return currentSize > 0;
                     }
                 }),
@@ -211,7 +212,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         TestUtils.waitForCondition(
                 new RepartitionTopicVerified(new TopicSizeVerifier() {
                     @Override
-                    public boolean verify(long currentSize) {
+                    public boolean verify(final long currentSize) {
                         return currentSize <= purgeSegmentBytes;
                     }
                 }),

@@ -16,7 +16,8 @@
  */
 package kafka
 
-import java.io.{File, FileOutputStream}
+import java.io.File
+import java.nio.file.Files
 import java.util
 
 import kafka.server.KafkaConfig
@@ -25,6 +26,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
 class KafkaTest {
 
@@ -55,12 +57,6 @@ class KafkaTest {
     val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
     assertEquals(2, config4.brokerId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
-  }
-
-  @Test(expected = classOf[FatalExitError])
-  def testGetKafkaConfigFromArgsWrongSetValue(): Unit = {
-    val propertiesFile = prepareDefaultConfig()
-    KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "a=b=c")))
   }
 
   @Test(expected = classOf[FatalExitError])
@@ -96,6 +92,38 @@ class KafkaTest {
     assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
   }
 
+  @Test
+  def testKafkaSslPasswordsWithSymbols(): Unit = {
+    val password = "=!#-+!?*/\"\'^%$=\\.,@:;="
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile,
+      "--override", "ssl.keystore.password=" + password,
+      "--override", "ssl.key.password=" + password,
+      "--override", "ssl.truststore.password=" + password)))
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
+
+    assertEquals(password, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+  }
+
+  @Test
+  def testConnectionsMaxReauthMsDefault(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    assertEquals(0L, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
+  }
+
+  @Test
+  def testConnectionsMaxReauthMsExplicit(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val expected = 3600000
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
+    assertEquals(expected, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
+  }
+
   def prepareDefaultConfig(): String = {
     prepareConfig(Array("broker.id=1", "zookeeper.connect=somewhere"))
   }
@@ -104,14 +132,13 @@ class KafkaTest {
     val file = File.createTempFile("kafkatest", ".properties")
     file.deleteOnExit()
 
-    val writer = new FileOutputStream(file)
-    lines.foreach { l =>
-      writer.write(l.getBytes)
-      writer.write("\n".getBytes)
-    }
-
-    writer.close
-
-    file.getAbsolutePath
+    val writer = Files.newOutputStream(file.toPath)
+    try {
+      lines.foreach { l =>
+        writer.write(l.getBytes)
+        writer.write("\n".getBytes)
+      }
+      file.getAbsolutePath
+    } finally writer.close()
   }
 }

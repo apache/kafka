@@ -70,20 +70,20 @@ class JmxMixin(object):
         use_jmxtool_version = get_version(node)
         if use_jmxtool_version <= V_0_11_0_0:
             use_jmxtool_version = DEV_BRANCH
-        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version),
-                          self.jmx_class_name())
+        cmd = "%s %s " % (self.path.script("kafka-run-class.sh", use_jmxtool_version), self.jmx_class_name())
         cmd += "--reporting-interval 1000 --jmx-url service:jmx:rmi:///jndi/rmi://127.0.0.1:%d/jmxrmi" % self.jmx_port
         cmd += " --wait"
         for jmx_object_name in self.jmx_object_names:
             cmd += " --object-name %s" % jmx_object_name
+        cmd += " --attributes "
         for jmx_attribute in self.jmx_attributes:
-            cmd += " --attributes %s" % jmx_attribute
+            cmd += "%s," % jmx_attribute
         cmd += " 1>> %s" % self.jmx_tool_log
         cmd += " 2>> %s &" % self.jmx_tool_err_log
 
         self.logger.debug("%s: Start JmxTool %d command: %s" % (node.account, idx, cmd))
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self._jmx_has_output(node), timeout_sec=10, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
+        wait_until(lambda: self._jmx_has_output(node), timeout_sec=20, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
         self.started[idx-1] = True
 
     def _jmx_has_output(self, node):

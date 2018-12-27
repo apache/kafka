@@ -83,4 +83,8 @@ public class MockClientSupplier implements KafkaClientSupplier {
         return restoreConsumer;
     }
 
+    @Override
+    public Consumer<byte[], byte[]> getGlobalConsumer(final Map<String, Object> config) {
+        return restoreConsumer;
+    }
 }

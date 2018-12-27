@@ -17,11 +17,13 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.errors.StreamsException;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -76,14 +78,13 @@ public interface ProcessorContext {
      * Registers and possibly restores the specified storage engine.
      *
      * @param store the storage engine
-     * @param loggingEnabledIsDeprecatedAndIgnored deprecated parameter {@code loggingEnabled} is ignored:
-     *                                             if you want to enable logging on a state stores call
-     *                                             {@link org.apache.kafka.streams.state.StoreBuilder#withLoggingEnabled(Map)}
-     *                                             when creating the store
+     * @param stateRestoreCallback the restoration callback logic for log-backed state stores upon restart
+     *
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void register(StateStore store, boolean loggingEnabledIsDeprecatedAndIgnored, StateRestoreCallback stateRestoreCallback);
+    void register(final StateStore store,
+                  final StateRestoreCallback stateRestoreCallback);
 
     /**
      * Get the state store given the store name.
@@ -91,22 +92,21 @@ public interface ProcessorContext {
      * @param name The store name
      * @return The state store instance
      */
-    StateStore getStateStore(String name);
+    StateStore getStateStore(final String name);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
      * {@link Processor#init(ProcessorContext) initialization} or
      * {@link Processor#process(Object, Object) processing} to
-     * schedule a periodic callback - called a punctuation - to {@link Punctuator#punctuate(long)}.
+     * schedule a periodic callback &mdash; called a punctuation  &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
-     *   <li>{@link PunctuationType#STREAM_TIME} - uses "stream time", which is advanced by the processing of messages
+     *   <li>{@link PunctuationType#STREAM_TIME} &mdash; uses "stream time", which is advanced by the processing of messages
      *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
      *   The first punctuation will be triggered by the first record that is processed.
      *   <b>NOTE:</b> Only advanced if messages arrive</li>
-     *   <li>{@link PunctuationType#WALL_CLOCK_TIME} - uses system time (the wall-clock time),
-     *   which is advanced at the polling interval ({@link org.apache.kafka.streams.StreamsConfig#POLL_MS_CONFIG})
-     *   independent of whether new messages arrive.
+     *   <li>{@link PunctuationType#WALL_CLOCK_TIME} &mdash; uses system time (the wall-clock time),
+     *   which is advanced independent of whether new messages arrive.
      *   The first punctuation will be triggered after interval has elapsed.
      *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
      *   processing loop takes to complete</li>
@@ -124,43 +124,87 @@ public interface ProcessorContext {
      * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
      * @param callback a function consuming timestamps representing the current stream or system time
      * @return a handle allowing cancellation of the punctuation schedule established by this method
+     * @deprecated Use {@link #schedule(Duration, PunctuationType, Punctuator)} instead
      */
-    Cancellable schedule(long intervalMs, PunctuationType type, Punctuator callback);
+    @Deprecated
+    Cancellable schedule(final long intervalMs,
+                         final PunctuationType type,
+                         final Punctuator callback);
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} to
-     * schedule a periodic call - called a punctuation - to {@link Processor#punctuate(long)}.
+     * {@link Processor#init(ProcessorContext) initialization} or
+     * {@link Processor#process(Object, Object) processing} to
+     * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
+     * The type parameter controls what notion of time is used for punctuation:
+     * <ul>
+     *   <li>{@link PunctuationType#STREAM_TIME} &mdash; uses "stream time", which is advanced by the processing of messages
+     *   in accordance with the timestamp as extracted by the {@link TimestampExtractor} in use.
+     *   The first punctuation will be triggered by the first record that is processed.
+     *   <b>NOTE:</b> Only advanced if messages arrive</li>
+     *   <li>{@link PunctuationType#WALL_CLOCK_TIME} &mdash; uses system time (the wall-clock time),
+     *   which is advanced independent of whether new messages arrive.
+     *   The first punctuation will be triggered after interval has elapsed.
+     *   <b>NOTE:</b> This is best effort only as its granularity is limited by how long an iteration of the
+     *   processing loop takes to complete</li>
+     * </ul>
      *
-     * @deprecated Please use {@link #schedule(long, PunctuationType, Punctuator)} instead.
+     * <b>Skipping punctuations:</b> Punctuations will not be triggered more than once at any given timestamp.
+     * This means that "missed" punctuation will be skipped.
+     * It's possible to "miss" a punctuation if:
+     * <ul>
+     *   <li>with {@link PunctuationType#STREAM_TIME}, when stream time advances more than interval</li>
+     *   <li>with {@link PunctuationType#WALL_CLOCK_TIME}, on GC pause, too short interval, ...</li>
+     * </ul>
      *
-     * @param interval the time interval between punctuations
+     * @param interval the time interval between punctuations (supported minimum is 1 millisecond)
+     * @param type one of: {@link PunctuationType#STREAM_TIME}, {@link PunctuationType#WALL_CLOCK_TIME}
+     * @param callback a function consuming timestamps representing the current stream or system time
+     * @return a handle allowing cancellation of the punctuation schedule established by this method
      */
-    @Deprecated
-    void schedule(long interval);
+    Cancellable schedule(final Duration interval,
+                         final PunctuationType type,
+                         final Punctuator callback) throws IllegalArgumentException;
 
     /**
-     * Forwards a key/value pair to the downstream processors
+     * Forwards a key/value pair to all downstream processors.
+     * Used the input record's timestamp as timestamp for the output record.
+     *
      * @param key key
      * @param value value
      */
-    <K, V> void forward(K key, V value);
+    <K, V> void forward(final K key, final V value);
+
+    /**
+     * Forwards a key/value pair to the specified downstream processors.
+     * Can be used to set the timestamp of the output record.
+     *
+     * @param key key
+     * @param value value
+     * @param to the options to use when forwarding
+     */
+    <K, V> void forward(final K key, final V value, final To to);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by childIndex
      * @param key key
      * @param value value
      * @param childIndex index in list of children of this node
+     * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
-    <K, V> void forward(K key, V value, int childIndex);
+    // TODO when we remove this method, we can also remove `ProcessorNode#children`
+    @Deprecated
+    <K, V> void forward(final K key, final V value, final int childIndex);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
      * @param key key
      * @param value value
      * @param childName name of downstream processor
+     * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
-    <K, V> void forward(K key, V value, String childName);
+    @Deprecated
+    <K, V> void forward(final K key, final V value, final String childName);
 
     /**
      * Requests a commit
@@ -190,6 +234,12 @@ public interface ProcessorContext {
      * @return the offset
      */
     long offset();
+
+    /**
+     * Returns the headers of the current input record; could be null if it is not available
+     * @return the headers
+     */
+    Headers headers();
 
     /**
      * Returns the current timestamp.
@@ -231,6 +281,6 @@ public interface ProcessorContext {
      * @return the key/values matching the given prefix from the StreamsConfig properties.
      *
      */
-    Map<String, Object> appConfigsWithPrefix(String prefix);
+    Map<String, Object> appConfigsWithPrefix(final String prefix);
 
 }

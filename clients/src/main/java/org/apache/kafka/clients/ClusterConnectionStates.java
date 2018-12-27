@@ -20,7 +20,10 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -104,16 +107,22 @@ final class ClusterConnectionStates {
      * Enter the connecting state for the given connection.
      * @param id the id of the connection
      * @param now the current time
+     * @throws UnknownHostException 
      */
-    public void connecting(String id, long now) {
+    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         if (nodeState.containsKey(id)) {
-            NodeConnectionState node = nodeState.get(id);
-            node.lastConnectAttemptMs = now;
-            node.state = ConnectionState.CONNECTING;
+            NodeConnectionState connectionState = nodeState.get(id);
+            connectionState.lastConnectAttemptMs = now;
+            connectionState.state = ConnectionState.CONNECTING;
+            connectionState.moveToNextAddress();
         } else {
             nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                this.reconnectBackoffInitMs));
+                this.reconnectBackoffInitMs, ClientUtils.resolve(host, clientDnsLookup)));
         }
+    }
+
+    public InetAddress currentAddress(String id) {
+        return nodeState.get(id).currentAddress();
     }
 
     /**
@@ -126,6 +135,49 @@ final class ClusterConnectionStates {
         nodeState.state = ConnectionState.DISCONNECTED;
         nodeState.lastConnectAttemptMs = now;
         updateReconnectBackoff(nodeState);
+    }
+
+    /**
+     * Indicate that the connection is throttled until the specified deadline.
+     * @param id the connection to be throttled
+     * @param throttleUntilTimeMs the throttle deadline in milliseconds
+     */
+    public void throttle(String id, long throttleUntilTimeMs) {
+        NodeConnectionState state = nodeState.get(id);
+        // The throttle deadline should never regress.
+        if (state != null && state.throttleUntilTimeMs < throttleUntilTimeMs) {
+            state.throttleUntilTimeMs = throttleUntilTimeMs;
+        }
+    }
+
+    /**
+     * Return the remaining throttling delay in milliseconds if throttling is in progress. Return 0, otherwise.
+     * @param id the connection to check
+     * @param now the current time in ms
+     */
+    public long throttleDelayMs(String id, long now) {
+        NodeConnectionState state = nodeState.get(id);
+        if (state != null && state.throttleUntilTimeMs > now) {
+            return state.throttleUntilTimeMs - now;
+        } else {
+            return 0;
+        }
+    }
+
+    /**
+     * Return the number of milliseconds to wait, based on the connection state and the throttle time, before
+     * attempting to send data. If the connection has been established but being throttled, return throttle delay.
+     * Otherwise, return connection delay.
+     * @param id the connection to check
+     * @param now the current time in ms
+     */
+    public long pollDelayMs(String id, long now) {
+        long throttleDelayMs = throttleDelayMs(id, now);
+        if (isConnected(id) && throttleDelayMs > 0) {
+            return throttleDelayMs;
+        } else {
+            return connectionDelay(id, now);
+        }
     }
 
     /**
@@ -144,6 +196,7 @@ final class ClusterConnectionStates {
     public void ready(String id) {
         NodeConnectionState nodeState = nodeState(id);
         nodeState.state = ConnectionState.READY;
+        nodeState.authenticationException = null;
         resetReconnectBackoff(nodeState);
     }
 
@@ -162,24 +215,41 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Return true if the connection is ready.
+     * Return true if the connection is in the READY state and currently not throttled.
+     *
      * @param id the connection identifier
+     * @param now the current time
      */
-    public boolean isReady(String id) {
-        NodeConnectionState state = nodeState.get(id);
-        return state != null && state.state == ConnectionState.READY;
+    public boolean isReady(String id, long now) {
+        return isReady(nodeState.get(id), now);
+    }
+
+    private boolean isReady(NodeConnectionState state, long now) {
+        return state != null && state.state == ConnectionState.READY && state.throttleUntilTimeMs <= now;
     }
 
     /**
-     * Return true if there is at least one node with connection in ready state and false otherwise.
+     * Return true if there is at least one node with connection in the READY state and not throttled. Returns false
+     * otherwise.
+     *
+     * @param now the current time
      */
-    public boolean hasReadyNodes() {
+    public boolean hasReadyNodes(long now) {
         for (Map.Entry<String, NodeConnectionState> entry : nodeState.entrySet()) {
-            NodeConnectionState state = entry.getValue();
-            if (state != null && state.state == ConnectionState.READY)
+            if (isReady(entry.getValue(), now)) {
                 return true;
+            }
         }
         return false;
+    }
+
+    /**
+     * Return true if the connection has been established
+     * @param id The id of the node to check
+     */
+    public boolean isConnected(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null && state.state.isConnected();
     }
 
     /**
@@ -271,17 +341,35 @@ final class ClusterConnectionStates {
         long lastConnectAttemptMs;
         long failedAttempts;
         long reconnectBackoffMs;
+        // Connection is being throttled if current time < throttleUntilTimeMs.
+        long throttleUntilTimeMs;
+        private final List<InetAddress> addresses;
+        private int index = 0;
 
-        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs) {
+        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
+                List<InetAddress> addresses) {
             this.state = state;
+            this.addresses = addresses;
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
+            this.throttleUntilTimeMs = 0;
+        }
+
+        public InetAddress currentAddress() {
+            return addresses.get(index);
+        }
+
+        /*
+         * implementing a ring buffer with the addresses
+         */
+        public void moveToNextAddress() {
+            index = (index + 1) % addresses.size();
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
         }
     }
 }

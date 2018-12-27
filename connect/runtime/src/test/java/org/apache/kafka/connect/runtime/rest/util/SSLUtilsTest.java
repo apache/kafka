@@ -29,6 +29,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
+@SuppressWarnings("deprecation")
 public class SSLUtilsTest {
     private static final Map<String, String> DEFAULT_CONFIG = new HashMap<>();
     static {
@@ -80,8 +81,8 @@ public class SSLUtilsTest {
         DistributedConfig config = new DistributedConfig(configMap);
         SslContextFactory ssl = SSLUtils.createSslContextFactory(config);
 
-        Assert.assertEquals("/path/to/keystore", ssl.getKeyStorePath());
-        Assert.assertEquals("/path/to/truststore", ssl.getTrustStore());
+        Assert.assertEquals("file:///path/to/keystore", ssl.getKeyStorePath());
+        Assert.assertEquals("file:///path/to/truststore", ssl.getTrustStorePath());
         Assert.assertEquals("SunJSSE", ssl.getProvider());
         Assert.assertArrayEquals(new String[] {"SSL_RSA_WITH_RC4_128_SHA", "SSL_RSA_WITH_RC4_128_MD5"}, ssl.getIncludeCipherSuites());
         Assert.assertEquals("SHA1PRNG", ssl.getSecureRandomAlgorithm());
@@ -90,7 +91,7 @@ public class SSLUtilsTest {
         Assert.assertEquals("JKS", ssl.getTrustStoreType());
         Assert.assertEquals("TLS", ssl.getProtocol());
         Assert.assertArrayEquals(new String[] {"TLSv1.2", "TLSv1.1", "TLSv1"}, ssl.getIncludeProtocols());
-        Assert.assertEquals("SunX509", ssl.getSslKeyManagerFactoryAlgorithm());
+        Assert.assertEquals("SunX509", ssl.getKeyManagerFactoryAlgorithm());
         Assert.assertEquals("PKIX", ssl.getTrustManagerFactoryAlgorithm());
     }
 
@@ -118,7 +119,7 @@ public class SSLUtilsTest {
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTSTORE_TYPE, ssl.getTrustStoreType());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_PROTOCOL, ssl.getProtocol());
         Assert.assertArrayEquals(Arrays.asList(SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS.split("\\s*,\\s*")).toArray(), ssl.getIncludeProtocols());
-        Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getSslKeyManagerFactoryAlgorithm());
+        Assert.assertEquals(SslConfigs.DEFAULT_SSL_KEYMANGER_ALGORITHM, ssl.getKeyManagerFactoryAlgorithm());
         Assert.assertEquals(SslConfigs.DEFAULT_SSL_TRUSTMANAGER_ALGORITHM, ssl.getTrustManagerFactoryAlgorithm());
         Assert.assertFalse(ssl.getNeedClientAuth());
         Assert.assertFalse(ssl.getWantClientAuth());

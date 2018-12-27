@@ -21,4 +21,4 @@ The log management system for Kafka.
 The entry point for this system is LogManager. LogManager is responsible for holding all the logs, and handing them out by topic/partition. It also handles the enforcement of the
 flush policy and retention policies.
 
-The Log itself is made up of log segments. A log is a FileMessageSet that contains the data and an OffsetIndex that supports reads by offset on the log.
+The Log itself is made up of log segments. A log is a FileRecords that contains the data and an OffsetIndex that supports reads by offset on the log.

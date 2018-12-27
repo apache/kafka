@@ -156,6 +156,15 @@ public interface Herder {
     void restartConnector(String connName, Callback<Void> cb);
 
     /**
+     * Restart the connector.
+     * @param delayMs delay before restart
+     * @param connName name of the connector
+     * @param cb callback to invoke upon completion
+     * @returns The id of the request
+     */
+    HerderRequest restartConnector(long delayMs, String connName, Callback<Void> cb);
+
+    /**
      * Pause the connector. This call will asynchronously suspend processing by the connector and all
      * of its tasks.
      * @param connector name of the connector
@@ -182,6 +191,11 @@ public interface Herder {
      * @return the cluster ID of the Kafka cluster backing this connect cluster
      */
     String kafkaClusterId();
+
+    enum ConfigReloadAction {
+        NONE,
+        RESTART
+    }
 
     class Created<T> {
         private final boolean created;

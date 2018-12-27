@@ -62,22 +62,24 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
         /**
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V> value) {
+        public void process(final K key, final Change<V> value) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
+            }
 
             T oldAgg = store.get(key);
 
-            if (oldAgg == null)
+            if (oldAgg == null) {
                 oldAgg = initializer.apply();
+            }
 
             T newAgg = oldAgg;
 
@@ -93,7 +95,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
 
     }

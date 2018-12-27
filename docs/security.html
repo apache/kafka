@@ -24,6 +24,7 @@
             <li>SASL/GSSAPI (Kerberos) - starting at version 0.9.0.0</li>
             <li>SASL/PLAIN - starting at version 0.10.0.0</li>
             <li>SASL/SCRAM-SHA-256 and SASL/SCRAM-SHA-512 - starting at version 0.10.2.0</li>
+            <li>SASL/OAUTHBEARER - starting at version 2.0</li>
         </ul></li>
         <li>Authentication of connections from brokers to ZooKeeper</li>
         <li>Encryption of data transferred between brokers and clients, between brokers, or between brokers and tools using SSL (Note that there is a performance degradation when SSL is enabled, the magnitude of which depends on the CPU type and the JVM implementation.)</li>
@@ -51,11 +52,29 @@
                 <li>validity: the valid time of the certificate in days.</li>
             </ol>
             <br>
-        Note: By default the property <code>ssl.endpoint.identification.algorithm</code> is not defined, so hostname verification is not performed. In order to enable hostname verification, set the following property:
+
+        <h5><a id="security_confighostname" href="#security_confighostname">Configuring Host Name Verification</a></h5>
+        From Kafka version 2.0.0 onwards, host name verification of servers is enabled by default for client connections
+        as well as inter-broker connections to prevent man-in-the-middle attacks. Server host name verification may be disabled
+        by setting <code>ssl.endpoint.identification.algorithm</code> to an empty string. For example,
+        <pre class="brush: text;">	ssl.endpoint.identification.algorithm=</pre>
+        For dynamically configured broker listeners, hostname verification may be disabled using <code>kafka-configs.sh</code>.
+        For example,
+        <pre class="brush: text;">
+        bin/kafka-configs.sh --bootstrap-server localhost:9093 --entity-type brokers --entity-name 0 --alter --add-config "listener.name.internal.ssl.endpoint.identification.algorithm="
+        </pre>
+
+        For older versions of Kafka, <code>ssl.endpoint.identification.algorithm</code> is not defined by default, so host name
+        verification is not performed. The property should be set to <code>HTTPS</code> to enable host name verification.
 
         <pre class="brush: text;">	ssl.endpoint.identification.algorithm=HTTPS </pre>
 
-        Once enabled, clients will verify the server's fully qualified domain name (FQDN) against one of the following two fields:
+        Host name verification must be enabled to prevent man-in-the-middle attacks if server endpoints are not validated
+        externally.
+
+        <h5><a id="security_configcerthostname" href="#security_configcerthstname">Configuring Host Name In Certificates</a></h5>
+        If host name verification is enabled, clients will verify the server's fully qualified domain name (FQDN) against one of
+        the following two fields:
         <ol>
             <li>Common Name (CN)
             <li>Subject Alternative Name (SAN)
@@ -201,7 +220,7 @@
             ssl.keystore.location=/var/private/ssl/client.keystore.jks
             ssl.keystore.password=test1234
             ssl.key.password=test1234</pre>
-			
+
             Other configuration settings that may also be needed depending on our requirements and the broker configuration:
                 <ol>
                     <li>ssl.provider (Optional). The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.</li>
@@ -273,8 +292,9 @@
             Note that ZooKeeper JAAS config may only be configured using static JAAS configuration.
 
             <p>See <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
-            <a href="#security_sasl_plain_brokerconfig">PLAIN</a> or
-            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> for example broker configurations.</p></li>
+            <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
+            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> or
+            <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a> for example broker configurations.</p></li>
 
 
         <li><h5><a id="security_jaas_client"
@@ -296,8 +316,9 @@
                 are specified, the client property will be used.</p>
 
                 <p>See <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
-                <a href="#security_sasl_plain_clientconfig">PLAIN</a> or
-                <a href="#security_sasl_scram_clientconfig">SCRAM</a> for example configurations.</p></li>
+                <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
+                <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
+                <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a> for example configurations.</p></li>
 
                 <li><h6><a id="security_client_staticjaas" href="#security_client_staticjaas">JAAS configuration using static config file</a></h6>
                 To configure SASL authentication on the clients using static JAAS config file:
@@ -305,8 +326,9 @@
                 <li>Add a JAAS config file with a client login section named <tt>KafkaClient</tt>. Configure
                     a login module in <tt>KafkaClient</tt> for the selected mechanism as described in the examples
                     for setting up <a href="#security_sasl_kerberos_clientconfig">GSSAPI (Kerberos)</a>,
-                    <a href="#security_sasl_plain_clientconfig">PLAIN</a> or
-                    <a href="#security_sasl_scram_clientconfig">SCRAM</a>.
+                    <a href="#security_sasl_plain_clientconfig">PLAIN</a>,
+                    <a href="#security_sasl_scram_clientconfig">SCRAM</a> or
+                    <a href="#security_sasl_oauthbearer_clientconfig">OAUTHBEARER</a>.
                     For example, <a href="#security_sasl_gssapi_clientconfig">GSSAPI</a>
                     credentials may be configured as:
                     <pre class="brush: text;">
@@ -320,7 +342,7 @@
                 </li>
                 <li>Pass the JAAS config file location as JVM parameter to each client JVM. For example:
                     <pre class="brush: bash;">    -Djava.security.auth.login.config=/etc/kafka/kafka_client_jaas.conf</pre></li>
-	</ol>
+                </ol>
                 </li>
             </ol>
             </li>
@@ -342,6 +364,7 @@
                 <li><a href="#security_sasl_plain">PLAIN</a></li>
                 <li><a href="#security_sasl_scram">SCRAM-SHA-256</a></li>
                 <li><a href="#security_sasl_scram">SCRAM-SHA-512</a></li>
+                <li><a href="#security_sasl_oauthbearer">OAUTHBEARER</a></li>
             </ul>
         </li>
         <li><h5><a id="security_sasl_brokerconfig"
@@ -425,14 +448,14 @@
             <pre>    sasl.kerberos.service.name=kafka</pre>
 
         </ol></li>
-        <li><h5><a id="security_sasl_kerberos_clientconfig" href="#security_kerberos_sasl_clientconfig">Configuring Kafka Clients</a></h5>
+        <li><h5><a id="security_sasl_kerberos_clientconfig" href="#security_sasl_kerberos_clientconfig">Configuring Kafka Clients</a></h5>
             To configure SASL authentication on the clients:
             <ol>
                 <li>
                     Clients (producers, consumers, connect workers, etc) will authenticate to the cluster with their
                     own principal (usually with the same name as the user running the client), so obtain or create
                     these principals as needed. Then configure the JAAS configuration property for each client.
-                    Different clients within a JVM may run as different users by specifiying different principals.
+                    Different clients within a JVM may run as different users by specifying different principals.
                     The property <code>sasl.jaas.config</code> in producer.properties or consumer.properties describes
                     how clients like producer and consumer can connect to the Kafka Broker. The following is an example
                     configuration for a client using a keytab (recommended for long-running processes):
@@ -524,27 +547,12 @@
             <ul>
             <li>SASL/PLAIN should be used only with SSL as transport layer to ensure that clear passwords are not transmitted on the wire without encryption.</li>
             <li>The default implementation of SASL/PLAIN in Kafka specifies usernames and passwords in the JAAS configuration file as shown
-                <a href="#security_sasl_plain_brokerconfig">here</a>. To avoid storing passwords on disk, you can plug in your own implementation of
-                <code>javax.security.auth.spi.LoginModule</code> that provides usernames and passwords from an external source. The login module implementation should
-                provide username as the public credential and password as the private credential of the <code>Subject</code>. The default implementation
-                <code>org.apache.kafka.common.security.plain.PlainLoginModule</code> can be used as an example.</li>
-            <li>In production systems, external authentication servers may implement password authentication. Kafka brokers can be integrated with these servers by adding
-                your own implementation of <code>javax.security.sasl.SaslServer</code>. The default implementation included in Kafka in the package
-                <code>org.apache.kafka.common.security.plain</code> can be used as an example to get started.
-                <ul>
-                <li>New providers must be installed and registered in the JVM. Providers can be installed by adding provider classes to
-                the normal <tt>CLASSPATH</tt> or bundled as a jar file and added to <tt><i>JAVA_HOME</i>/lib/ext</tt>.</li>
-                <li>Providers can be registered statically by adding a provider to the security properties file
-                <tt><i>JAVA_HOME</i>/lib/security/java.security</tt>.
-                <pre>    security.provider.n=providerClassName</pre>
-                where <i>providerClassName</i> is the fully qualified name of the new provider and <i>n</i> is the preference order with
-                lower numbers indicating higher preference.</li>
-                <li>Alternatively, you can register providers dynamically at runtime by invoking <code>Security.addProvider</code> at the beginning of the client
-                application or in a static initializer in the login module. For example:
-                <pre>    Security.addProvider(new PlainSaslServerProvider());</pre></li>
-                <li>For more details, see <a href="http://docs.oracle.com/javase/8/docs/technotes/guides/security/crypto/CryptoSpec.html">JCA Reference</a>.</li>
-                </ul>
-            </li>
+                <a href="#security_sasl_plain_brokerconfig">here</a>. From Kafka version 2.0 onwards, you can avoid storing clear passwords on disk
+                by configuring your own callback handlers that obtain username and password from an external source using the configuration options
+                <code>sasl.server.callback.handler.class</code> and <code>sasl.client.callback.handler.class</code>.</li>
+            <li>In production systems, external authentication servers may implement password authentication. From Kafka version 2.0 onwards,
+                you can plug in your own callback handlers that use external authentication servers for password verification by configuring
+                <code>sasl.server.callback.handler.class</code>.</li>
             </ul>
         </li>
         </ol>
@@ -613,9 +621,9 @@
         <li><h5><a id="security_sasl_scram_clientconfig" href="#security_sasl_scram_clientconfig">Configuring Kafka Clients</a></h5>
             To configure SASL authentication on the clients:
             <ol>
-	    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+            <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-	        The following is an example configuration for a client for the SCRAM mechanisms:
+                The following is an example configuration for a client for the SCRAM mechanisms:
                 <pre class="brush: text;">
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="alice" \
@@ -644,10 +652,218 @@
             against brute force attacks if Zookeeper security is compromised.</li>
             <li>SCRAM should be used only with TLS-encryption to prevent interception of SCRAM exchanges. This
             protects against dictionary or brute force attacks and against impersonation if Zookeeper is compromised.</li>
-            <li>The default SASL/SCRAM implementation may be overridden using custom login modules in installations
-            where Zookeeper is not secure. See <a href="#security_sasl_plain_production">here</a> for details.</li>
+            <li>From Kafka version 2.0 onwards, the default SASL/SCRAM credential store may be overridden using custom callback handlers
+            by configuring <code>sasl.server.callback.handler.class</code> in installations where Zookeeper is not secure.</li>
             <li>For more details on security considerations, refer to
             <a href="https://tools.ietf.org/html/rfc5802#section-9">RFC 5802</a>.
+            </ul>
+        </li>
+        </ol>
+    </li>
+
+    <li><h4><a id="security_sasl_oauthbearer" href="#security_sasl_oauthbearer">Authentication using SASL/OAUTHBEARER</a></h4>
+        <p>The <a href="https://tools.ietf.org/html/rfc6749">OAuth 2 Authorization Framework</a> "enables a third-party application to obtain limited access to an HTTP service,
+        either on behalf of a resource owner by orchestrating an approval interaction between the resource owner and the HTTP
+        service, or by allowing the third-party application to obtain access on its own behalf."  The SASL OAUTHBEARER mechanism
+        enables the use of the framework in a SASL (i.e. a non-HTTP) context; it is defined in <a href="https://tools.ietf.org/html/rfc7628">RFC 7628</a>.
+        The default OAUTHBEARER implementation in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>
+        and is only suitable for use in non-production Kafka installations. Refer to <a href="#security_sasl_oauthbearer_security">Security Considerations</a>
+        for more details.</p>
+        <ol>
+        <li><h5><a id="security_sasl_oauthbearer_brokerconfig" href="#security_sasl_oauthbearer_brokerconfig">Configuring Kafka Brokers</a></h5>
+            <ol>
+            <li>Add a suitably modified JAAS file similar to the one below to each Kafka broker's config directory, let's call it kafka_server_jaas.conf for this example:
+                <pre>
+    KafkaServer {
+        org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required
+        unsecuredLoginStringClaim_sub="admin";
+    };</pre>
+                The property <tt>unsecuredLoginStringClaim_sub</tt> in the <tt>KafkaServer</tt> section is used by
+                the broker when it initiates connections to other brokers. In this example, <i>admin</i> will appear in the
+                subject (<tt>sub</tt>) claim and will be the user for inter-broker communication.</li>
+            <li>Pass the JAAS config file location as JVM parameter to each Kafka broker:
+                <pre>    -Djava.security.auth.login.config=/etc/kafka/kafka_server_jaas.conf</pre></li>
+            <li>Configure SASL port and SASL mechanisms in server.properties as described <a href="#security_sasl_brokerconfig">here</a>.</pre> For example:
+                <pre>
+    listeners=SASL_SSL://host.name:port (or SASL_PLAINTEXT if non-production)
+    security.inter.broker.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
+    sasl.mechanism.inter.broker.protocol=OAUTHBEARER
+    sasl.enabled.mechanisms=OAUTHBEARER</pre></li>
+            </ol>
+        </li>
+
+        <li><h5><a id="security_sasl_oauthbearer_clientconfig" href="#security_sasl_oauthbearer_clientconfig">Configuring Kafka Clients</a></h5>
+            To configure SASL authentication on the clients:
+            <ol>
+	    <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
+                The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
+	        The following is an example configuration for a client for the OAUTHBEARER mechanisms:
+                <pre class="brush: text;">
+   sasl.jaas.config=org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule required \
+        unsecuredLoginStringClaim_sub="alice";</pre>
+
+                <p>The option <tt>unsecuredLoginStringClaim_sub</tt> is used by clients to configure
+                the subject (<tt>sub</tt>) claim, which determines the user for client connections.
+                In this example, clients connect to the broker as user <i>alice</i>.
+                Different clients within a JVM may connect as different users by specifying different subject (<tt>sub</tt>)
+                claims in <code>sasl.jaas.config</code>.</p>
+
+                <p>JAAS configuration for clients may alternatively be specified as a JVM parameter similar to brokers
+                as described <a href="#security_client_staticjaas">here</a>. Clients use the login section named
+                <tt>KafkaClient</tt>. This option allows only one user for all client connections from a JVM.</p></li>
+            <li>Configure the following properties in producer.properties or consumer.properties:
+                <pre>
+    security.protocol=SASL_SSL (or SASL_PLAINTEXT if non-production)
+    sasl.mechanism=OAUTHBEARER</pre></li>
+             <li>The default implementation of SASL/OAUTHBEARER depends on the jackson-databind library.
+                 Since it's an optional dependency, users have to configure it as a dependency via their build tool.</li>
+            </ol>
+        </li>
+        <li><h5><a id="security_sasl_oauthbearer_unsecured_retrieval" href="#security_sasl_oauthbearer_unsecured_retrieval">Unsecured Token Creation Options for SASL/OAUTHBEARER</a></h5>
+            <ul>
+            <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+            While suitable only for non-production use, it does provide the flexibility to create arbitrary tokens in a DEV or TEST environment.</li>
+            <li>Here are the various supported JAAS module options on the client side (and on the broker side if OAUTHBEARER is the inter-broker protocol):
+                 <table>
+                 <tr>
+                 <th>JAAS Module Option for Unsecured Token Creation</th>
+                 <th>Documentation</th>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginStringClaim_&lt;claimname&gt;="value"</tt></td>
+                 <td>Creates a <tt>String</tt> claim with the given name and value. Any valid
+                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                 automatically generated).</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginNumberClaim_&lt;claimname&gt;="value"</tt></td>
+                 <td>Creates a <tt>Number</tt> claim with the given name and value. Any valid
+                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                 automatically generated).</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginListClaim_&lt;claimname&gt;="value"</tt></td>
+                 <td>Creates a <tt>String List</tt> claim with the given name and values parsed
+                 from the given value where the first character is taken as the delimiter. For
+                 example: <tt>unsecuredLoginListClaim_fubar="|value1|value2"</tt>. Any valid
+                 claim name can be specified except '<tt>iat</tt>' and '<tt>exp</tt>' (these are
+                 automatically generated).</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginExtension_&lt;extensionname&gt;="value"</tt></td>
+                 <td>Creates a <tt>String</tt> extension with the given name and value.
+                 For example: <tt>unsecuredLoginExtension_traceId="123"</tt>. A valid extension name
+                 is any sequence of lowercase or uppercase alphabet characters. In addition, the "auth" extension name is reserved.
+                 A valid extension value is any combination of characters with ASCII codes 1-127.
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginPrincipalClaimName</tt></td>
+                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt>
+                 claim holding the principal name to be something other than '<tt>sub</tt>'.</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginLifetimeSeconds</tt></td>
+                 <td>Set to an integer value if the token expiration is to be set to something
+                 other than the default value of 3600 seconds (which is 1 hour). The
+                 '<tt>exp</tt>' claim will be set to reflect the expiration time.</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredLoginScopeClaimName</tt></td>
+                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
+                 <tt>String List</tt> claim holding any token scope to be something other than
+                 '<tt>scope</tt>'.</td>
+                 </tr>
+                 </table>
+            </li>
+            </ul>
+        </li>
+        <li><h5><a id="security_sasl_oauthbearer_unsecured_validation" href="#security_sasl_oauthbearer_unsecured_validation">Unsecured Token Validation Options for SASL/OAUTHBEARER</a></h5>
+            <ul>
+            <li>Here are the various supported JAAS module options on the broker side for <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Token</a> validation:
+                 <table>
+                 <tr>
+                 <th>JAAS Module Option for Unsecured Token Validation</th>
+                 <th>Documentation</th>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredValidatorPrincipalClaimName="value"</tt></td>
+                 <td>Set to a non-empty value if you wish a particular <tt>String</tt> claim
+                 holding a principal name to be checked for existence; the default is to check
+                 for the existence of the '<tt>sub</tt>' claim.</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredValidatorScopeClaimName="value"</tt></td>
+                 <td>Set to a custom claim name if you wish the name of the <tt>String</tt> or
+                 <tt>String List</tt> claim holding any token scope to be something other than
+                 '<tt>scope</tt>'.</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredValidatorRequiredScope="value"</tt></td>
+                 <td>Set to a space-delimited list of scope values if you wish the
+                 <tt>String/String List</tt> claim holding the token scope to be checked to
+                 make sure it contains certain values.</td>
+                 </tr>
+                 <tr>
+                 <td><tt>unsecuredValidatorAllowableClockSkewMs="value"</tt></td>
+                 <td>Set to a positive integer value if you wish to allow up to some number of
+                 positive milliseconds of clock skew (the default is 0).</td>
+                 </tr>
+                 </table>
+            </li>
+            <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
+            using custom login and SASL Server callback handlers.</li>
+            <li>For more details on security considerations, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
+            </ul>
+        </li>
+        <li><h5><a id="security_sasl_oauthbearer_refresh" href="#security_sasl_oauthbearer_refresh">Token Refresh for SASL/OAUTHBEARER</a></h5>
+        Kafka periodically refreshes any token before it expires so that the client can continue to make
+        connections to brokers. The parameters that impact how the refresh algorithm
+        operates are specified as part of the producer/consumer/broker configuration
+        and are as follows. See the documentation for these properties elsewhere for
+        details.  The default values are usually reasonable, in which case these
+        configuration parameters would not need to be explicitly set.
+        <table>
+        <tr>
+        <th>Producer/Consumer/Broker Configuration Property</th>
+        </tr>
+        <tr>
+        <td><tt>sasl.login.refresh.window.factor</tt></td>
+        </tr>
+        <tr>
+        <td><tt>sasl.login.refresh.window.jitter</tt></td>
+        </tr>
+        <tr>
+        <td><tt>sasl.login.refresh.min.period.seconds</tt></td>
+        </tr>
+        <tr>
+        <td><tt>sasl.login.refresh.min.buffer.seconds</tt></td>
+        </tr>
+        </table>
+        </li>
+        <li><h5><a id="security_sasl_oauthbearer_prod" href="#security_sasl_oauthbearer_prod">Secure/Production Use of SASL/OAUTHBEARER</a></h5>
+        Production use cases will require writing an implementation of
+        <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
+        <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerTokenCallback</tt> and declaring it via either the
+        <tt>sasl.login.callback.handler.class</tt> configuration option for a
+        non-broker client or via the
+        <tt>listener.name.sasl_ssl.oauthbearer.sasl.login.callback.handler.class</tt>
+        configuration option for brokers (when SASL/OAUTHBEARER is the inter-broker
+        protocol).
+        <p>
+        Production use cases will also require writing an implementation of
+        <tt>org.apache.kafka.common.security.auth.AuthenticateCallbackHandler</tt> that can handle an instance of
+        <tt>org.apache.kafka.common.security.oauthbearer.OAuthBearerValidatorCallback</tt> and declaring it via the
+        <tt>listener.name.sasl_ssl.oauthbearer.sasl.server.callback.handler.class</tt>
+        broker configuration option.
+        </li>
+        <li><h5><a id="security_sasl_oauthbearer_security" href="#security_sasl_oauthbearer_security">Security Considerations for SASL/OAUTHBEARER</a></h5>
+            <ul>
+            <li>The default implementation of SASL/OAUTHBEARER in Kafka creates and validates <a href="https://tools.ietf.org/html/rfc7515#appendix-A.5">Unsecured JSON Web Tokens</a>.
+            This is suitable only for non-production use.</li>
+            <li>OAUTHBEARER should be used in production enviromnments only with TLS-encryption to prevent interception of tokens.</li>
+            <li>The default unsecured SASL/OAUTHBEARER implementation may be overridden (and must be overridden in production environments)
+            using custom login and SASL Server callback handlers as described above.</li>
+            <li>For more details on OAuth 2 security considerations in general, refer to <a href="https://tools.ietf.org/html/rfc6749#section-10">RFC 6749, Section 10</a>.</li>
             </ul>
         </li>
         </ol>
@@ -670,13 +886,14 @@
             user_admin="admin-secret"
             user_alice="alice-secret";
         };</pre></li>
-        <li>Enable the SASL mechanisms in server.properties: <pre>    sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512</pre></li>
+        <li>Enable the SASL mechanisms in server.properties: <pre>    sasl.enabled.mechanisms=GSSAPI,PLAIN,SCRAM-SHA-256,SCRAM-SHA-512,OAUTHBEARER</pre></li>
         <li>Specify the SASL security protocol and mechanism for inter-broker communication in server.properties if required:
             <pre>
     security.inter.broker.protocol=SASL_PLAINTEXT (or SASL_SSL)
     sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechanisms)</pre></li>
         <li>Follow the mechanism-specific steps in <a href="#security_sasl_kerberos_brokerconfig">GSSAPI (Kerberos)</a>,
-            <a href="#security_sasl_plain_brokerconfig">PLAIN</a> and <a href="#security_sasl_scram_brokerconfig">SCRAM</a>
+            <a href="#security_sasl_plain_brokerconfig">PLAIN</a>,
+            <a href="#security_sasl_scram_brokerconfig">SCRAM</a> and <a href="#security_sasl_oauthbearer_brokerconfig">OAUTHBEARER</a>
             to configure SASL for the enabled mechanisms.</li>
         </ol>
     </li>
@@ -756,7 +973,7 @@
                 <ol>
                     <li>Configure the JAAS configuration property for each client in producer.properties or consumer.properties.
                 The login module describes how the clients like producer and consumer can connect to the Kafka Broker.
-	        The following is an example configuration for a client for the token authentication:
+                The following is an example configuration for a client for the token authentication:
                 <pre class="brush: text;">
    sasl.jaas.config=org.apache.kafka.common.security.scram.ScramLoginModule required \
         username="tokenID123" \
@@ -799,12 +1016,41 @@
     <h3><a id="security_authz" href="#security_authz">7.4 Authorization and ACLs</a></h3>
     Kafka ships with a pluggable Authorizer and an out-of-box authorizer implementation that uses zookeeper to store all the acls. The Authorizer is configured by setting <code>authorizer.class.name</code> in server.properties. To enable the out of the box implementation use:
     <pre>authorizer.class.name=kafka.security.auth.SimpleAclAuthorizer</pre>
-    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H On Resource R". You can read more about the acl structure on KIP-11. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if a Resource R has no associated acls, no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
+    Kafka acls are defined in the general format of "Principal P is [Allowed/Denied] Operation O From Host H on any Resource R matching ResourcePattern RP". You can read more about the acl structure in KIP-11 and resource patterns in KIP-290. In order to add, remove or list acls you can use the Kafka authorizer CLI. By default, if no ResourcePatterns match a specific Resource R, then R has no associated acls, and therefore no one other than super users is allowed to access R. If you want to change that behavior, you can include the following in server.properties.
     <pre>allow.everyone.if.no.acl.found=true</pre>
-    One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma).
+    One can also add super users in server.properties like the following (note that the delimiter is semicolon since SSL user names may contain comma). Default PrincipalType string "User" is case sensitive.
     <pre>super.users=User:Bob;User:Alice</pre>
-    By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting a customized PrincipalBuilder in server.properties like the following.
+
+    <h5><a id="security_authz_ssl" href="#security_authz_ssl">Customizing SSL User Name</a></h5>
+
+    By default, the SSL user name will be of the form "CN=writeuser,OU=Unknown,O=Unknown,L=Unknown,ST=Unknown,C=Unknown". One can change that by setting <code>ssl.principal.mapping.rules</code> to a customized rule in server.properties.
+    This config allows a list of rules for mapping X.500 distinguished name to short name. The rules are evaluated in order and the first rule that matches a distinguished name is used to map it to a short name. Any later rules in the list are ignored.
+
+    <br>The format of <code>ssl.principal.mapping.rules</code> is a list where each rule starts with "RULE:" and contains an expression as the following formats. Default rule will return
+    string representation of the X.500 certificate distinguished name. If the distinguished name matches the pattern, then the replacement command will be run over the name.
+    This also supports lowercase/uppercase options, to force the translated result to be all lower/uppercase case. This is done by adding a "/L" or "/U' to the end of the rule.
+
+    <pre>
+        RULE:pattern/replacement/
+        RULE:pattern/replacement/[LU]
+    </pre>
+
+    Example <code>ssl.principal.mapping.rules</code> values are:
+    <pre>
+        RULE:^CN=(.*?),OU=ServiceUsers.*$/$1/,
+        RULE:^CN=(.*?),OU=(.*?),O=(.*?),L=(.*?),ST=(.*?),C=(.*?)$/$1@$2/L,
+        RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L,
+        DEFAULT
+    </pre>
+
+    Above rules translate distinguished name "CN=serviceuser,OU=ServiceUsers,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "serviceuser"
+    and "CN=adminUser,OU=Admin,O=Unknown,L=Unknown,ST=Unknown,C=Unknown" to "adminuser@admin".
+
+    <br>For advanced use cases, one can customize the name by setting a customized PrincipalBuilder in server.properties like the following.
     <pre>principal.builder.class=CustomizedPrincipalBuilderClass</pre>
+
+    <h5><a id="security_authz_sasl" href="#security_authz_sasl">Customizing SASL User Name</a></h5>
+
     By default, the SASL user name will be the primary part of the Kerberos principal. One can change that by setting <code>sasl.kerberos.principal.to.local.rules</code> to a customized rule in server.properties.
     The format of <code>sasl.kerberos.principal.to.local.rules</code> is a list where each rule works in the same way as the auth_to_local in <a href="http://web.mit.edu/Kerberos/krb5-latest/doc/admin/conf_files/krb5_conf.html">Kerberos configuration file (krb5.conf)</a>. This also support additional lowercase rule, to force the translated result to be all lower case. This is done by adding a "/L" to the end of the rule. check below formats for syntax.
     Each rules starts with RULE: and contains an expression as the following formats. See the kerberos documentation for more details.
@@ -859,32 +1105,74 @@
             <td>Configuration</td>
         </tr>
         <tr>
-            <td>--cluster</td>
-            <td>Specifies cluster as resource.</td>
+            <td>--bootstrap-server</td>
+            <td>A list of host/port pairs to use for establishing the connection to the Kafka cluster. Only one of --bootstrap-server or --authorizer option must be specified.</td>
             <td></td>
-            <td>Resource</td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
+            <td>--command-config</td>
+            <td>A property file containing configs to be passed to Admin Client. This option can only be used with --bootstrap-server option.</td>
+            <td></td>
+            <td>Configuration</td>
+        </tr>
+        <tr>
+            <td>--cluster</td>
+            <td>Indicates to the script that the user is trying to interact with acls on the singular cluster resource.</td>
+            <td></td>
+            <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--topic [topic-name]</td>
-            <td>Specifies the topic as resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on topic resource pattern(s).</td>
             <td></td>
-            <td>Resource</td>
+            <td>ResourcePattern</td>
         </tr>
         <tr>
             <td>--group [group-name]</td>
-            <td>Specifies the consumer-group as resource.</td>
+            <td>Indicates to the script that the user is trying to interact with acls on consumer-group resource pattern(s)</td>
             <td></td>
-            <td>Resource</td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--transactional-id [transactional-id]</td>
+            <td>The transactionalId to which ACLs should be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--delegation-token [delegation-token]</td>
+            <td>Delegation token to which ACLs should be added or removed. A value of * indicates ACL should apply to all tokens.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--resource-pattern-type [pattern-type]</td>
+            <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
+                When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
+                When listing or removing acls, a specific pattern type filter can be used to list or remove acls from a specific type of resource pattern,
+                or the filter values of 'any' or 'match' can be used, where 'any' will match any pattern type, but will match the resource name exactly,
+                and 'match' will perform pattern matching to list or remove all acls that affect the supplied resource(s).<br>
+                WARNING: 'match', when used in combination with the '--remove' switch, should be used with care.
+            </td>
+            <td>literal</td>
+            <td>Configuration</td>
         </tr>
         <tr>
             <td>--allow-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. <br>You can specify multiple --allow-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Allow permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --allow-principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
         <tr>
             <td>--deny-principal</td>
-            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. <br>You can specify multiple --deny-principal in a single command.</td>
+            <td>Principal is in PrincipalType:name format that will be added to ACL with Deny permission. Default PrincipalType string "User" is case sensitive. <br>You can specify multiple --deny-principal in a single command.</td>
+            <td></td>
+            <td>Principal</td>
+        </tr>
+        <tr>
+            <td>--principal</td>
+            <td>Principal is in PrincipalType:name format that will be used along with --list option. Default PrincipalType string "User" is case sensitive. This will list the ACLs for the specified principal. <br>You can specify multiple --principal in a single command.</td>
             <td></td>
             <td>Principal</td>
         </tr>
@@ -903,14 +1191,28 @@
         <tr>
             <td>--operation</td>
             <td>Operation that will be allowed or denied.<br>
-                Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+                Valid values are:
+                <ul>
+                    <li>Read</li>
+                    <li>Write</li>
+                    <li>Create</li>
+                    <li>Delete</li>
+                    <li>Alter</li>
+                    <li>Describe</li>
+                    <li>ClusterAction</li>
+                    <li>DescribeConfigs</li>
+                    <li>AlterConfigs</li>
+                    <li>IdempotentWrite</li>
+                    <li>All</li>
+                </ul>
+            </td>
             <td>All</td>
             <td>Operation</td>
         </tr>
         <tr>
             <td>--producer</td>
             <td> Convenience option to add/remove acls for producer role. This will generate acls that allows WRITE,
-                DESCRIBE on topic and CREATE on cluster.</td>
+                DESCRIBE and CREATE on topic.</td>
             <td></td>
             <td>Convenience</td>
         </tr>
@@ -918,6 +1220,14 @@
             <td>--consumer</td>
             <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
                 DESCRIBE on topic and READ on consumer-group.</td>
+            <td></td>
+            <td>Convenience</td>
+        </tr>
+        <tr>
+            <td>--idempotent</td>
+            <td>Enable idempotence for the producer. This should be used in combination with the --producer option.<br>
+                Note that idempotence is enabled automatically if the producer is authorized to a particular transactional-id.
+            </td>
             <td></td>
             <td>Convenience</td>
         </tr>
@@ -937,15 +1247,31 @@
             By default, all principals that don't have an explicit acl that allows access for an operation to a resource are denied. In rare cases where an allow acl is defined that allows access to all but some principal we will have to use the --deny-principal and --deny-host option. For example, if we want to allow all users to Read from Test-topic but only deny User:BadBob from IP 198.51.100.3 we can do so using following commands:
             <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:* --allow-host * --deny-principal User:BadBob --deny-host 198.51.100.3 --operation Read --topic Test-topic</pre>
             Note that ``--allow-host`` and ``deny-host`` only support IP addresses (hostnames are not supported).
-            Above examples add acls to a topic by specifying --topic [topic-name] as the resource option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].</li>
+            Above examples add acls to a topic by specifying --topic [topic-name] as the resource pattern option. Similarly user can add acls to cluster by specifying --cluster and to a consumer group by specifying --group [group-name].
+            You can add acls on any resource of a certain type, e.g. suppose you wanted to add an acl "Principal User:Peter is allowed to produce to any Topic from IP 198.51.200.0"
+            You can do that by using the wildcard resource '*', e.g. by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Peter --allow-host 198.51.200.1 --producer --topic *</pre>
+            You can add acls on prefixed resource patterns, e.g. suppose you want to add an acl "Principal User:Jane is allowed to produce to any Topic whose name starts with 'Test-' from any host".
+            You can do that by executing the CLI with following options:
+            <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Jane --producer --topic Test- --resource-pattern-type prefixed</pre>
+            Note, --resource-pattern-type defaults to 'literal', which only affects resources with the exact same name or, in the case of the wildcard resource name '*', a resource with any name.</li>
 
         <li><b>Removing Acls</b><br>
                 Removing acls is pretty much the same. The only difference is instead of --add option users will have to specify --remove option. To remove the acls added by the first example above we can execute the CLI with following options:
-            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre></li>
+            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Bob --allow-principal User:Alice --allow-host 198.51.100.0 --allow-host 198.51.100.1 --operation Read --operation Write --topic Test-topic </pre>
+            If you wan to remove the acl added to the prefixed resource pattern above we can execute the CLI with following options:
+            <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --remove --allow-principal User:Jane --producer --topic Test- --resource-pattern-type Prefixed</pre></li>
 
         <li><b>List Acls</b><br>
-                We can list acls for any resource by specifying the --list option with the resource. To list all acls for Test-topic we can execute the CLI with following options:
-                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre></li>
+                We can list acls for any resource by specifying the --list option with the resource. To list all acls on the literal resource pattern Test-topic, we can execute the CLI with following options:
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic</pre>
+                However, this will only return the acls that have been added to this exact resource pattern. Other acls can exist that affect access to the topic,
+                e.g. any acls on the topic wildcard '*', or any acls on prefixed resource patterns. Acls on the wildcard resource pattern can be queried explicitly:
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic *</pre>
+                However, it is not necessarily possible to explicitly query for acls on prefixed resource patterns that match Test-topic as the name of such patterns may not be known.
+                We can list <i>all</i> acls affecting Test-topic by using '--resource-pattern-type match', e.g.
+                <pre class="brush: bash;">bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --list --topic Test-topic --resource-pattern-type match</pre>
+                This will list acls on all matching literal, wildcard and prefixed resource patterns.</li>
 
         <li><b>Adding or removing a principal as producer or consumer</b><br>
                 The most common use case for acl management are adding/removing a principal as producer or consumer so we added convenience options to handle these cases. In order to add User:Bob as a producer of  Test-topic we can execute the following command:
@@ -954,7 +1280,461 @@
             <pre class="brush: bash;"> bin/kafka-acls.sh --authorizer-properties zookeeper.connect=localhost:2181 --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1 </pre>
                 Note that for consumer option we must also specify the consumer group.
                 In order to remove a principal from producer or consumer role we just need to pass --remove option. </li>
-        </ul>
+
+        <li><b>AdminClient API based acl management</b><br>
+            Users having Alter permission on ClusterResource can use AdminClient API for ACL management. kafka-acls.sh script supports AdminClient API to manage ACLs without interacting with zookeeper/authorizer directly.
+            All the above examples can be executed by using <b>--bootstrap-server</b> option. For example:
+
+            <pre class="brush: bash;">
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --producer --topic Test-topic
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --add --allow-principal User:Bob --consumer --topic Test-topic --group Group-1
+            bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic</pre></li>
+
+    </ul>
+
+    <h4><a id="security_authz_primitives" href="#security_authz_primitives">Authorization Primitives</a></h4>
+    <p>Protocol calls are usually performing some operations on certain resources in Kafka. It is required to know the
+        operations and resources to set up effective protection. In this section we'll list these operations and
+        resources, then list the combination of these with the protocols to see the valid scenarios.</p>
+    <h5><a id="operations_in_kafka" href="#operations_in_kafka">Operations in Kafka</a></h5>
+    <p>There are a few operation primitives that can be used to build up privileges. These can be matched up with
+        certain resources to allow specific protocol calls for a given user. These are:</p>
+    <ul>
+        <li>Read</li>
+        <li>Write</li>
+        <li>Create</li>
+        <li>Delete</li>
+        <li>Alter</li>
+        <li>Describe</li>
+        <li>ClusterAction</li>
+        <li>DescribeConfigs</li>
+        <li>AlterConfigs</li>
+        <li>IdempotentWrite</li>
+        <li>All</li>
+    </ul>
+    <h5><a id="resources_in_kafka" href="#resources_in_kafka">Resources in Kafka</a></h5>
+    <p>The operations above can be applied on certain resources which are described below.</p>
+    <ul>
+        <li><b>Topic:</b> this simply represents a Topic. All protocol calls that are acting on topics (such as reading,
+            writing them) require the corresponding privilege to be added. If there is an authorization error with a
+            topic resource, then a TOPIC_AUTHORIZATION_FAILED (error code: 29) will be returned.</li>
+        <li><b>Group:</b> this represents the consumer groups in the brokers. All protocol calls that are working with
+            consumer groups, like joining a group must have privileges with the group in subject. If the privilege is not
+            given then a GROUP_AUTHORIZATION_FAILED (error code: 30) will be returned in the protocol response.</li>
+        <li><b>Cluster:</b> this resource represents the cluster. Operations that are affecting the whole cluster, like
+            controlled shutdown are protected by privileges on the Cluster resource. If there is an authorization problem
+            on a cluster resource, then a CLUSTER_AUTHORIZATION_FAILED (error code: 31) will be returned.</li>
+        <li><b>TransactionalId:</b> this resource represents actions related to transactions, such as committing.
+            If any error occurs, then a TRANSACTIONAL_ID_AUTHORIZATION_FAILED (error code: 53) will be returned by brokers.</li>
+        <li><b>DelegationToken:</b> this represents the delegation tokens in the cluster. Actions, such as describing
+            delegation tokens could be protected by a privilege on the DelegationToken resource. Since these objects have
+            a little special behavior in Kafka it is recommended to read
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka#KIP-48DelegationtokensupportforKafka-DescribeDelegationTokenRequest">KIP-48</a>
+            and the related upstream documentation at <a href="#security_delegation_token">Authentication using Delegation Tokens</a>.</li>
+    </ul>
+    <h5><a id="operations_resources_and_protocols" href="#operations_resources_and_protocols">Operations and Resources on Protocols</a></h5>
+    <p>In the below table we'll list the valid operations on resources that are executed by the Kafka API protocols.</p>
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Protocol (API key)</th>
+            <th>Operation</th>
+            <th>Resource</th>
+            <th>Note</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>An transactional producer which has its transactional.id set requires this privilege.</td>
+        </tr>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>IdempotentWrite</td>
+            <td>Cluster</td>
+            <td>An idempotent produce action requires this privilege.</td>
+        </tr>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>Write</td>
+            <td>Topic</td>
+            <td>This applies to a normal produce action.</td>
+        </tr>
+        <tr>
+            <td>FETCH (1)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td>A follower must have ClusterAction on the Cluster resource in order to fetch partition data.</td>
+        </tr>
+        <tr>
+            <td>FETCH (1)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td>Regular Kafka consumers need READ permission on each partition they are fetching.</td>
+        </tr>
+        <tr>
+            <td>LIST_OFFSETS (2)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Create</td>
+            <td>Cluster</td>
+            <td>If topic auto-creation is enabled, then the broker-side API will check for the existence of a Cluster
+            level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the
+            Topic level privileges (see the next one).</td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Create</td>
+            <td>Topic</td>
+            <td>This authorizes auto topic creation if enabled but the given user doesn't have a cluster level
+                permission (above).</td>
+        </tr>
+        <tr>
+            <td>LEADER_AND_ISR (4)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>STOP_REPLICA (5)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>UPDATE_METADATA (6)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CONTROLLED_SHUTDOWN (7)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_COMMIT (8)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td>An offset can only be committed if it's authorized to the given group and the topic too (see below).
+                Group access is checked first, then Topic access.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_COMMIT (8)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td>Since offset commit is part of the consuming process, it needs privileges for the read action.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FETCH (9)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>Similarly to OFFSET_COMMIT, the application must have privileges on group and topic level too to be able
+                to fetch. However in this case it requires describe access instead of read. Group access is checked first,
+                then Topic access.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FETCH (9)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>FIND_COORDINATOR (10)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>The FIND_COORDINATOR request can be of "Group" type in which case it is looking for consumergroup
+                coordinators. This privilege would represent the Group mode.</td>
+        </tr>
+        <tr>
+            <td>FIND_COORDINATOR (10)</td>
+            <td>Describe</td>
+            <td>TransactionalId</td>
+            <td>This applies only on transactional producers and checked when a producer tries to find the transaction
+                coordinator.</td>
+        </tr>
+        <tr>
+            <td>JOIN_GROUP (11)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>HEARTBEAT (12)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LEAVE_GROUP (13)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>SYNC_GROUP (14)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_GROUPS (15)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LIST_GROUPS (16)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td>When the broker checks to authorize a list_groups request it first checks for this cluster
+                level authorization. If none found then it proceeds to check the groups individually. This operation
+                doesn't return CLUSTER_AUTHORIZATION_FAILED.</td>
+        </tr>
+        <tr>
+            <td>LIST_GROUPS (16)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>If none of the groups are authorized, then just an empty response will be sent back instead
+                of an error. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED. This is applicable from the
+                2.1 release.</td>
+        </tr>
+        <tr>
+            <td>SASL_HANDSHAKE (17)</td>
+            <td></td>
+            <td></td>
+            <td>The SASL handshake is part of the authentication process and therefore it's not possible to
+                apply any kind of authorization here.</td>
+        </tr>
+        <tr>
+            <td>API_VERSIONS (18)</td>
+            <td></td>
+            <td></td>
+            <td>The API_VERSIONS request is part of the Kafka protocol handshake and happens on connection
+                and before any authentication. Therefore it's not possible to control this with authorization.</td>
+        </tr>
+        <tr>
+            <td>CREATE_TOPICS (19)</td>
+            <td>Create</td>
+            <td>Cluster</td>
+            <td>If there is no cluster level authorization then it won't return CLUSTER_AUTHORIZATION_FAILED but
+                fall back to use topic level, which is just below. That'll throw error if there is a problem.</td>
+        </tr>
+        <tr>
+            <td>CREATE_TOPICS (19)</td>
+            <td>Create</td>
+            <td>Topic</td>
+            <td>This is applicable from the 2.0 release.</td>
+        </tr>
+        <tr>
+            <td>DELETE_TOPICS (20)</td>
+            <td>Delete</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DELETE_RECORDS (21)</td>
+            <td>Delete</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INIT_PRODUCER_ID (22)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INIT_PRODUCER_ID (22)</td>
+            <td>IdempotentWrite</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_FOR_LEADER_EPOCH (23)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td>If there is no cluster level privilege for this operation, then it'll check for topic level one.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FOR_LEADER_EPOCH (23)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td>This is applicable from the 2.1 release.</td>
+        </tr>
+        <tr>
+            <td>ADD_PARTITIONS_TO_TXN (24)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>This API is only applicable to transactional requests. It first checks for the Write action on the
+                TransactionalId resource, then it checks the Topic in subject (below).</td>
+        </tr>
+        <tr>
+            <td>ADD_PARTITIONS_TO_TXN (24)</td>
+            <td>Write</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>ADD_OFFSETS_TO_TXN (25)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks
+                for Write action on the TransactionalId resource, then it checks whether it can Read on the given group
+                (below).</td>
+        </tr>
+        <tr>
+            <td>ADD_OFFSETS_TO_TXN (25)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>END_TXN (26)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>WRITE_TXN_MARKERS (27)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_ACLS (29)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CREATE_ACLS (30)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DELETE_ACLS (31)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_CONFIGS (32)</td>
+            <td>DescribeConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are requested, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_CONFIGS (32)</td>
+            <td>DescribeConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are requested, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_CONFIGS (33)</td>
+            <td>AlterConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are altered, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_CONFIGS (33)</td>
+            <td>AlterConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are altered, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_REPLICA_LOG_DIRS (34)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_LOG_DIRS (35)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td>An empty response will be returned on authorization failure.</td>
+        </tr>
+        <tr>
+            <td>SASL_AUTHENTICATE (36)</td>
+            <td></td>
+            <td></td>
+            <td>SASL_AUTHENTICATE is part of the authentication process and therefore it's not possible to
+                apply any kind of authorization here.</td>
+        </tr>
+        <tr>
+            <td>CREATE_PARTITIONS (37)</td>
+            <td>Alter</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CREATE_DELEGATION_TOKEN (38)</td>
+            <td></td>
+            <td></td>
+            <td>Creating delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>RENEW_DELEGATION_TOKEN (39)</td>
+            <td></td>
+            <td></td>
+            <td>Renewing delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>EXPIRE_DELEGATION_TOKEN (40)</td>
+            <td></td>
+            <td></td>
+            <td>Expiring delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_DELEGATION_TOKEN (41)</td>
+            <td>Describe</td>
+            <td>DelegationToken</td>
+            <td>Describing delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DELETE_GROUPS (42)</td>
+            <td>Delete</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        </tbody>
+    </table>
 
     <h3><a id="security_rolling_upgrade" href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></h3>
         You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:
@@ -1041,7 +1821,7 @@
         <li> Set the configuration property <tt>zookeeper.set.acl</tt> in each broker to true</li>
     </ol>
 
-    The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper if the new Java consumer and producer clients are used).
+    The metadata stored in ZooKeeper for the Kafka cluster is world-readable, but can only be modified by the brokers. The rationale behind this decision is that the data stored in ZooKeeper is not sensitive, but inappropriate manipulation of that data can cause cluster disruption. We also recommend limiting the access to ZooKeeper via network segmentation (only brokers and some admin tools need access to ZooKeeper).
 
     <h4><a id="zk_authz_migration" href="#zk_authz_migration">7.6.2 Migrating clusters</a></h4>
     If you are running a version of Kafka that does not support security or simply with security disabled, and you want to make the cluster secure, then you need to execute the following steps to enable ZooKeeper authentication with minimal disruption to your operations:

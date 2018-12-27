@@ -17,10 +17,12 @@
 
 package org.apache.kafka.trogdor.common;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.datatype.jdk8.Jdk8Module;
 
 /**
  * Utilities for working with JSON.
@@ -32,6 +34,8 @@ public class JsonUtil {
         JSON_SERDE = new ObjectMapper();
         JSON_SERDE.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
         JSON_SERDE.configure(DeserializationFeature.ACCEPT_SINGLE_VALUE_AS_ARRAY, true);
+        JSON_SERDE.registerModule(new Jdk8Module());
+        JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
     public static String toJsonString(Object object) {

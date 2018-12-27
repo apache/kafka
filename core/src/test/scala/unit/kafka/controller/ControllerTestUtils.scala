@@ -22,7 +22,7 @@ object ControllerTestUtils {
 
   /** Since ControllerEvent is sealed, return a subclass of ControllerEvent created with EasyMock */
   def createMockControllerEvent(controllerState: ControllerState, process: () => Unit): ControllerEvent = {
-    val mockEvent = EasyMock.createMock(classOf[ControllerEvent])
+    val mockEvent: ControllerEvent = EasyMock.createNiceMock(classOf[ControllerEvent])
     EasyMock.expect(mockEvent.state).andReturn(controllerState)
     EasyMock.expect(mockEvent.process()).andAnswer(new IAnswer[Unit]() {
       def answer(): Unit = {

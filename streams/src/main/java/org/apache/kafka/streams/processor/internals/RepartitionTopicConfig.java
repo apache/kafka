@@ -33,13 +33,14 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
     static {
         final Map<String, String> tempTopicDefaultOverrides = new HashMap<>();
         tempTopicDefaultOverrides.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");     // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");           // 50 MB
-        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                // 10 min
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, "52428800");               // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800");                     // 50 MB
+        tempTopicDefaultOverrides.put(TopicConfig.SEGMENT_MS_CONFIG, "600000");                          // 10 min
+        tempTopicDefaultOverrides.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(Long.MAX_VALUE));  // Infinity
         REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
-    public RepartitionTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    RepartitionTopicConfig(final String name, final Map<String, String> topicConfigs) {
         super(name, topicConfigs);
     }
 
@@ -63,8 +64,12 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final RepartitionTopicConfig that = (RepartitionTopicConfig) o;
         return Objects.equals(name, that.name) &&
                Objects.equals(topicConfigs, that.topicConfigs);

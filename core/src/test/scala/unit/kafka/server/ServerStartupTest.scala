@@ -17,9 +17,9 @@
 
 package kafka.server
 
-import kafka.common.KafkaException
-import kafka.utils.{TestUtils, ZkUtils}
+import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.common.KafkaException
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.easymock.EasyMock
 import org.junit.Assert._
@@ -105,7 +105,7 @@ class ServerStartupTest extends ZooKeeperTestHarness {
   @Test
   def testBrokerStateRunningAfterZK(): Unit = {
     val brokerId = 0
-    val mockBrokerState = EasyMock.niceMock(classOf[kafka.server.BrokerState])
+    val mockBrokerState: BrokerState = EasyMock.niceMock(classOf[BrokerState])
 
     class BrokerStateInterceptor() extends BrokerState {
       override def newState(newState: BrokerStates): Unit = {

@@ -30,7 +30,7 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
-import org.apache.kafka.common.security.scram.ScramMechanism
+import org.apache.kafka.common.security.scram.internals.ScramMechanism
 
 /*
  * Implements an enumeration for the modes enabled here:
@@ -138,8 +138,12 @@ trait SaslSetup {
     props
   }
 
-  def jaasClientLoginModule(clientSaslMechanism: String): String =
-    JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  def jaasClientLoginModule(clientSaslMechanism: String, serviceName: Option[String] = None): String = {
+    if (serviceName.isDefined)
+      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile, serviceName.get)
+    else
+      JaasTestUtils.clientLoginModule(clientSaslMechanism, clientKeytabFile)
+  }
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val credentials = ScramMechanism.values.map(m => s"${m.mechanismName}=[iterations=4096,password=$password]")

@@ -23,7 +23,7 @@ public class MockReducer {
     private static class StringAdd implements Reducer<String> {
 
         @Override
-        public String apply(String value1, String value2) {
+        public String apply(final String value1, final String value2) {
             return value1 + "+" + value2;
         }
     }
@@ -31,7 +31,7 @@ public class MockReducer {
     private static class StringRemove implements Reducer<String> {
 
         @Override
-        public String apply(String value1, String value2) {
+        public String apply(final String value1, final String value2) {
             return value1 + "-" + value2;
         }
     }

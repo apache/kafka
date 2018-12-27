@@ -126,7 +126,7 @@ public class ProducerPerformance {
 
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
-            for (int i = 0; i < numRecords; i++) {
+            for (long i = 0; i < numRecords; i++) {
                 if (transactionsEnabled && currentTransactionSize == 0) {
                     producer.beginTransaction();
                     transactionStartTime = System.currentTimeMillis();
@@ -315,7 +315,6 @@ public class ProducerPerformance {
         public Stats(long numRecords, int reportingInterval) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
-            this.index = 0;
             this.iteration = 0;
             this.sampling = (int) (numRecords / Math.min(numRecords, 500000));
             this.latencies = new int[(int) (numRecords / this.sampling) + 1];
@@ -360,7 +359,7 @@ public class ProducerPerformance {
             long ellapsed = System.currentTimeMillis() - windowStart;
             double recsPerSec = 1000.0 * windowCount / (double) ellapsed;
             double mbPerSec = 1000.0 * this.windowBytes / (double) ellapsed / (1024.0 * 1024.0);
-            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f max latency.%n",
+            System.out.printf("%d records sent, %.1f records/sec (%.2f MB/sec), %.1f ms avg latency, %.1f ms max latency.%n",
                               windowCount,
                               recsPerSec,
                               mbPerSec,

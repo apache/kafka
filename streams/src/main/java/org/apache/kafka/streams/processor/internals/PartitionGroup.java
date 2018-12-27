@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.Collections;
 import java.util.Comparator;
@@ -27,13 +28,24 @@ import java.util.Set;
 
 /**
  * A PartitionGroup is composed from a set of partitions. It also maintains the timestamp of this
- * group, hence the associated task as the min timestamp across all partitions in the group.
+ * group, a.k.a. the stream time of the associated task. It is defined as the maximum timestamp of
+ * all the records having been retrieved for processing from this PartitionGroup so far.
+ *
+ * We decide from which partition to retrieve the next record to process based on partitions' timestamps.
+ * The timestamp of a specific partition is initialized as UNKNOWN (-1), and is updated with the head record's timestamp
+ * if it is smaller (i.e. it should be monotonically increasing); when the partition's buffer becomes empty and there is
+ * no head record, the partition's timestamp will not be updated any more.
  */
 public class PartitionGroup {
 
     private final Map<TopicPartition, RecordQueue> partitionQueues;
+    private final Sensor recordLatenessSensor;
+    private final PriorityQueue<RecordQueue> nonEmptyQueuesByTime;
 
-    private final PriorityQueue<RecordQueue> queuesByTime;
+    private long streamTime;
+    private int totalBuffered;
+    private boolean allBuffered;
+
 
     public static class RecordInfo {
         RecordQueue queue;
@@ -51,30 +63,13 @@ public class PartitionGroup {
         }
     }
 
-    // since task is thread-safe, we do not need to synchronize on local variables
-    private int totalBuffered;
-
-    PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues) {
-        queuesByTime = new PriorityQueue<>(partitionQueues.size(), new Comparator<RecordQueue>() {
-
-            @Override
-            public int compare(final RecordQueue queue1, final RecordQueue queue2) {
-                final long time1 = queue1.timestamp();
-                final long time2 = queue2.timestamp();
-
-                if (time1 < time2) {
-                    return -1;
-                }
-                if (time1 > time2) {
-                    return 1;
-                }
-                return 0;
-            }
-        });
-
+    PartitionGroup(final Map<TopicPartition, RecordQueue> partitionQueues, final Sensor recordLatenessSensor) {
+        nonEmptyQueuesByTime = new PriorityQueue<>(partitionQueues.size(), Comparator.comparingLong(RecordQueue::timestamp));
         this.partitionQueues = partitionQueues;
-
+        this.recordLatenessSensor = recordLatenessSensor;
         totalBuffered = 0;
+        allBuffered = false;
+        streamTime = RecordQueue.UNKNOWN;
     }
 
     /**
@@ -85,19 +80,31 @@ public class PartitionGroup {
     StampedRecord nextRecord(final RecordInfo info) {
         StampedRecord record = null;
 
-        final RecordQueue queue = queuesByTime.poll();
+        final RecordQueue queue = nonEmptyQueuesByTime.poll();
+        info.queue = queue;
+
         if (queue != null) {
             // get the first record from this queue.
             record = queue.poll();
 
-            if (!queue.isEmpty()) {
-                queuesByTime.offer(queue);
-            }
-        }
-        info.queue = queue;
+            if (record != null) {
+                --totalBuffered;
 
-        if (record != null) {
-            --totalBuffered;
+                if (queue.isEmpty()) {
+                    // if a certain queue has been drained, reset the flag
+                    allBuffered = false;
+                } else {
+                    nonEmptyQueuesByTime.offer(queue);
+                }
+
+                // always update the stream time to the record's timestamp yet to be processed if it is larger
+                if (record.timestamp > streamTime) {
+                    streamTime = record.timestamp;
+                    recordLatenessSensor.record(0);
+                } else {
+                    recordLatenessSensor.record(streamTime - record.timestamp);
+                }
+            }
         }
 
         return record;
@@ -118,7 +125,14 @@ public class PartitionGroup {
 
         // add this record queue to be considered for processing in the future if it was empty before
         if (oldSize == 0 && newSize > 0) {
-            queuesByTime.offer(recordQueue);
+            nonEmptyQueuesByTime.offer(recordQueue);
+
+            // if all partitions now are non-empty, set the flag
+            // we do not need to update the stream time here since this task will definitely be
+            // processed next, and hence the stream time will be updated when we retrieved records by then
+            if (nonEmptyQueuesByTime.size() == this.partitionQueues.size()) {
+                allBuffered = true;
+            }
         }
 
         totalBuffered += newSize - oldSize;
@@ -135,15 +149,7 @@ public class PartitionGroup {
      * partition timestamp among all its partitions
      */
     public long timestamp() {
-        // we should always return the smallest timestamp of all partitions
-        // to avoid group partition time goes backward
-        long timestamp = Long.MAX_VALUE;
-        for (final RecordQueue queue : partitionQueues.values()) {
-            if (timestamp > queue.timestamp()) {
-                timestamp = queue.timestamp();
-            }
-        }
-        return timestamp;
+        return streamTime;
     }
 
     /**
@@ -163,12 +169,17 @@ public class PartitionGroup {
         return totalBuffered;
     }
 
+    boolean allPartitionsBuffered() {
+        return allBuffered;
+    }
+
     public void close() {
+        clear();
         partitionQueues.clear();
     }
 
     public void clear() {
-        queuesByTime.clear();
+        nonEmptyQueuesByTime.clear();
         for (final RecordQueue queue : partitionQueues.values()) {
             queue.clear();
         }

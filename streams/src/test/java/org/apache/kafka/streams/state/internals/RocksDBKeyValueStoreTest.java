@@ -51,7 +51,6 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     public static class TheRocksDbConfigSetter implements RocksDBConfigSetter {
-
         static boolean called = false;
 
         @Override
