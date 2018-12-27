@@ -948,6 +948,7 @@ project(':clients') {
     compile libs.snappy
     compile libs.slf4jApi
 
+    compileOnly libs.slf4jlog4j
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 

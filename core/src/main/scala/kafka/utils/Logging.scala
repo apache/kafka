@@ -18,20 +18,12 @@
 package kafka.utils
 
 import com.typesafe.scalalogging.Logger
+import org.apache.kafka.common.logging.{Log4jController, LogLevelManager}
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 
 
 object Log4jControllerRegistration {
-  private val logger = Logger(this.getClass.getName)
-
-  try {
-    val log4jController = Class.forName("kafka.utils.Log4jController").asInstanceOf[Class[Object]]
-    val instance = log4jController.getDeclaredConstructor().newInstance()
-    CoreUtils.registerMBean(instance, "kafka:type=kafka.Log4jController")
-    logger.info("Registered kafka:type=kafka.Log4jController MBean")
-  } catch {
-    case _: Exception => logger.info("Couldn't register kafka:type=kafka.Log4jController MBean")
-  }
+  LogLevelManager.registerLog4jController("kafka")
 }
 
 private object Logging {

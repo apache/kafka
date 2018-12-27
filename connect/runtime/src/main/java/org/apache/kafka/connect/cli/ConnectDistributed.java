@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.cli;
 
+import org.apache.kafka.common.logging.LogLevelManager;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -69,6 +70,8 @@ public class ConnectDistributed {
         try {
             WorkerInfo initInfo = new WorkerInfo();
             initInfo.logAll();
+
+            LogLevelManager.registerLog4jController("kafka.connect");
 
             String workerPropsFile = args[0];
             Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
