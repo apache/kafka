@@ -22,7 +22,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 
-import java.util.concurrent.Callable;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -53,12 +52,9 @@ public class SampleTaskWorker implements TaskWorker {
         if (exitMs == null) {
             exitMs = Long.MAX_VALUE;
         }
-        this.future = platform.scheduler().schedule(executor, new Callable<Void>() {
-            @Override
-            public Void call() throws Exception {
-                haltFuture.complete(spec.error());
-                return null;
-            }
+        this.future = platform.scheduler().schedule(executor, () -> {
+            haltFuture.complete(spec.error());
+            return null;
         }, exitMs);
     }
 
