@@ -456,23 +456,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
         }
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-
-        FileRecords that = (FileRecords) o;
-
-        return channel != null ? channel.equals(that.channel) : that.channel == null;
-    }
-
-    @Override
-    public int hashCode() {
-        return channel != null ? channel.hashCode() : 0;
-    }
-
     public static class LogOffsetPosition {
         public final long offset;
         public final int position;

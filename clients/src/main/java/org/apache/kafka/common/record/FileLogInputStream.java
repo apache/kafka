@@ -227,10 +227,13 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
 
             FileChannelRecordBatch that = (FileChannelRecordBatch) o;
 
+            FileChannel channel = fileRecords == null ? null : fileRecords.channel();
+            FileChannel thatChannel = that.fileRecords == null ? null : that.fileRecords.channel();
+
             return offset == that.offset &&
                     position == that.position &&
                     batchSize == that.batchSize &&
-                    (fileRecords == null ? that.fileRecords == null : fileRecords.equals(that.fileRecords));
+                    (channel == null ? thatChannel == null : channel.equals(thatChannel));
         }
 
         @Override
