@@ -100,7 +100,7 @@ public class InternalTopicManager {
         int remainingRetries = retries;
         Set<String> topicsNotReady = new HashSet<>(topics.keySet());
 
-        while (!topicsNotReady.isEmpty() && remainingRetries > 0) {
+        while (!topicsNotReady.isEmpty() && remainingRetries >= 0) {
             topicsNotReady = validateTopics(topicsNotReady, topics);
 
             if (topicsNotReady.size() > 0) {

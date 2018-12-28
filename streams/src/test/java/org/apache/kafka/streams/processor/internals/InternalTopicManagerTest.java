@@ -39,6 +39,8 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class InternalTopicManagerTest {
@@ -166,27 +168,47 @@ public class InternalTopicManagerTest {
             mockAdminClient,
             new StreamsConfig(config));
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         internalTopicManager2.makeReady(Collections.singletonMap(topic, internalTopicConfig));
     }
 
     @Test
     public void shouldNotThrowExceptionForEmptyTopicMap() {
-        internalTopicManager.makeReady(Collections.<String, InternalTopicConfig>emptyMap());
+        internalTopicManager.makeReady(Collections.emptyMap());
     }
 
     @Test
     public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
         mockAdminClient.timeoutNextRequest(1);
 
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.<String, String>emptyMap());
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
         internalTopicConfig.setNumberOfPartitions(1);
         try {
             internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
             fail("Should have thrown StreamsException.");
         } catch (final StreamsException expected) {
             assertEquals(TimeoutException.class, expected.getCause().getClass());
+        }
+    }
+
+    @Test
+    public void shouldExhaustRetriesOnMarkedForDeletionTopic() {
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+        mockAdminClient.markTopicForDeletion(topic);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+        try {
+            internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
+            fail("Should have thrown StreamsException.");
+        } catch (final StreamsException expected) {
+            assertNull(expected.getCause());
+            assertTrue(expected.getMessage().startsWith("Could not create topics after 1 retries"));
         }
     }
 
