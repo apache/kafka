@@ -27,15 +27,13 @@ import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetRe
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.test.MockDeserializer
-import org.mockito.Mockito._
-import org.mockito.ArgumentMatchers
-import ArgumentMatchers._
 import org.junit.Assert._
 import org.junit.{Before, Test}
+import org.mockito.{ArgumentMatchersSugar, IdiomaticMockito}
 
 import scala.collection.JavaConverters._
 
-class ConsoleConsumerTest {
+class ConsoleConsumerTest extends IdiomaticMockito with ArgumentMatchersSugar {
 
   @Before
   def setup(): Unit = {
@@ -63,7 +61,7 @@ class ConsoleConsumerTest {
       mockConsumer.addRecord(new ConsumerRecord[Array[Byte], Array[Byte]](topic, i % 2, i / 2, "key".getBytes, "value".getBytes))
     }
 
-    val formatter = mock(classOf[MessageFormatter])
+    val formatter = mock[MessageFormatter]
 
     ConsoleConsumer.process(maxMessages, formatter, consumer, System.out, skipMessageOnError = false)
     assertEquals(totalMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
@@ -71,43 +69,41 @@ class ConsoleConsumerTest {
     consumer.resetUnconsumedOffsets()
     assertEquals(maxMessages, mockConsumer.position(tp1) + mockConsumer.position(tp2))
 
-    verify(formatter, times(maxMessages)).writeTo(any(), any())
+    formatter.writeTo(*, *) wasCalled maxMessages.times
   }
 
   @Test
   def shouldLimitReadsToMaxMessageLimit() {
-    val consumer = mock(classOf[ConsumerWrapper])
-    val formatter = mock(classOf[MessageFormatter])
+    val consumer = mock[ConsumerWrapper]
+    val formatter = mock[MessageFormatter]
     val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
 
     val messageLimit: Int = 10
-    when(consumer.receive()).thenReturn(record)
+    consumer.receive() shouldReturn record
 
-    ConsoleConsumer.process(messageLimit, formatter, consumer, System.out, true)
+    ConsoleConsumer.process(messageLimit, formatter, consumer, System.out, skipMessageOnError = true)
 
-    verify(consumer, times(messageLimit)).receive()
-    verify(formatter, times(messageLimit)).writeTo(any(), any())
-
-    consumer.cleanup()
+    consumer.receive() wasCalled messageLimit.times
+    formatter.writeTo(*, *) wasCalled messageLimit.times
   }
 
   @Test
   def shouldStopWhenOutputCheckErrorFails() {
-    val consumer = mock(classOf[ConsumerWrapper])
-    val formatter = mock(classOf[MessageFormatter])
-    val printStream = mock(classOf[PrintStream])
+    val consumer = mock[ConsumerWrapper]
+    val formatter = mock[MessageFormatter]
+    val printStream = mock[PrintStream]
 
     val record = new ConsumerRecord("foo", 1, 1, Array[Byte](), Array[Byte]())
 
-    when(consumer.receive()).thenReturn(record)
+    consumer.receive() shouldReturn record
     //Simulate an error on System.out after the first record has been printed
-    when(printStream.checkError()).thenReturn(true)
+    printStream.checkError() shouldReturn true
 
-    ConsoleConsumer.process(-1, formatter, consumer, printStream, true)
+    ConsoleConsumer.process(-1, formatter, consumer, printStream, skipMessageOnError = true)
 
-    verify(formatter).writeTo(any(), ArgumentMatchers.eq(printStream))
-    verify(consumer).receive()
-    verify(printStream).checkError()
+    formatter.writeTo(*, printStream) was called
+    consumer.receive() was called
+    printStream.checkError() was called
 
     consumer.cleanup()
   }

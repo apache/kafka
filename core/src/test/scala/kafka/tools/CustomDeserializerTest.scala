@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Deserializer
 import org.hamcrest.CoreMatchers
 import org.junit.Test
 import org.junit.Assert.assertThat
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.MockitoSugar
 
 class CustomDeserializer extends Deserializer[String] {
   override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {
