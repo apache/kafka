@@ -1246,48 +1246,48 @@ project(':streams:upgrade-system-tests-21') {
     dependsOn testJar
   }
 }
-//
-//project(':jmh-benchmarks') {
-//
-//  apply plugin: 'com.github.johnrengelman.shadow'
-//
-//  shadowJar {
-//    baseName = 'kafka-jmh-benchmarks-all'
-//    classifier = null
-//    version = null
-//  }
-//
-//  dependencies {
-//    compile project(':clients')
-//    compile project(':streams')
-//    compile libs.jmhCore
-//    annotationProcessor libs.jmhGeneratorAnnProcess
-//    compile libs.jmhCoreBenchmarks
-//  }
-//
-//  jar {
-//    manifest {
-//      attributes "Main-Class": "org.openjdk.jmh.Main"
-//    }
-//  }
-//
-//
-//  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
-//
-//    main="-jar"
-//
-//    doFirst {
-//      if (System.getProperty("jmhArgs")) {
-//          args System.getProperty("jmhArgs").split(',')
-//      }
-//      args = [shadowJar.archivePath, *args]
-//    }
-//  }
-//
-//  javadoc {
-//     enabled = false
-//  }
-//}
+
+project(':jmh-benchmarks') {
+
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  shadowJar {
+    baseName = 'kafka-jmh-benchmarks-all'
+    classifier = null
+    version = null
+  }
+
+  dependencies {
+    compile project(':clients')
+    compile project(':streams')
+    compile libs.jmhCore
+    annotationProcessor libs.jmhGeneratorAnnProcess
+    compile libs.jmhCoreBenchmarks
+  }
+
+  jar {
+    manifest {
+      attributes "Main-Class": "org.openjdk.jmh.Main"
+    }
+  }
+
+
+  task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
+
+    main="-jar"
+
+    doFirst {
+      if (System.getProperty("jmhArgs")) {
+          args System.getProperty("jmhArgs").split(',')
+      }
+      args = [shadowJar.archivePath, *args]
+    }
+  }
+
+  javadoc {
+     enabled = false
+  }
+}
 
 project(':log4j-appender') {
   archivesBaseName = "kafka-log4j-appender"

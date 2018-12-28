@@ -240,13 +240,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId)
+  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
 
   def addPendingMember(memberId: String) = pendingMembers.add(memberId)
 
   def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
-
-  def clearPendingMembers() = pendingMembers.clear()
 
   def currentState = state
 

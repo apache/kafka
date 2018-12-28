@@ -28,6 +28,7 @@ trait DelayedOperationKey {
 
 object DelayedOperationKey {
   val globalLabel = "All"
+  val pendingSuffix = "-pending"
 }
 
 /* used by delayed-produce and delayed-fetch operations */
@@ -39,9 +40,8 @@ case class TopicPartitionOperationKey(topic: String, partition: Int) extends Del
 }
 
 /* used by delayed-join-group operations */
-case class MemberKey(groupId: String, consumerId: String) extends DelayedOperationKey {
-
-  override def keyLabel = "%s-%s".format(groupId, consumerId)
+case class MemberKey(groupId: String, consumerId: String, suffix: String = "") extends DelayedOperationKey {
+  override def keyLabel = "%s-%s%s".format(groupId, consumerId, suffix)
 }
 
 /* used by delayed-rebalance operations */

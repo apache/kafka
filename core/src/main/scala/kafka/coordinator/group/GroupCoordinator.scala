@@ -161,10 +161,16 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
+
         if (requireKnownMemberId) {
           // If member id required, register the member with unknown metadata
           // and send back a response to call for another join group request with allocated member id.
           group.addPendingMember(newMemberId)
+          val newMember = new MemberMetadata(newMemberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+            sessionTimeoutMs, protocolType, protocols)
+          // A pending member never joins the group.
+          newMember.pending = true
+          completeAndScheduleNextHeartbeatExpiration(group, newMember)
           responseCallback(joinError(newMemberId, error = Errors.MEMBER_ID_REQUIRED))
         } else {
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, clientId, clientHost, protocolType,
@@ -703,7 +709,11 @@ class GroupCoordinator(val brokerId: Int,
   private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
-    val memberKey = MemberKey(member.groupId, member.memberId)
+
+    var memberKey = MemberKey(member.groupId, member.memberId)
+    if (member.pending) {
+      memberKey = MemberKey(member.groupId, member.memberId, DelayedOperationKey.pendingSuffix)
+    }
     heartbeatPurgatory.checkAndComplete(memberKey)
 
     // reschedule the next heartbeat expiration deadline
@@ -824,9 +834,6 @@ class GroupCoordinator(val brokerId: Int,
         // TODO: cut the socket connection to the client
       }
 
-      // pending members not joined are cleared.
-      group.clearPendingMembers()
-
       if (!group.is(Dead)) {
         group.initNextGeneration()
         if (group.is(Empty)) {
@@ -879,7 +886,10 @@ class GroupCoordinator(val brokerId: Int,
 
   def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
     group.inLock {
-      if (!member.shouldKeepAlive(heartbeatDeadline)) {
+      if (member.pending) {
+        // Clean out pending member from purgatory through the member given session timeout.
+        group.removePendingMember(member.memberId)
+      } else if (!member.shouldKeepAlive(heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
       }
