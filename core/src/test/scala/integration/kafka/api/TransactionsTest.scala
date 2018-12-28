@@ -560,13 +560,9 @@ class TransactionsTest extends KafkaServerTestHarness {
   def testConsecutivelyRunInitTransactions(): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
-    try {
-      producer.initTransactions()
-      producer.initTransactions()
-      fail("Should have raised a KafkaException")
-    } finally {
-      producer.close()
-    }
+    producer.initTransactions()
+    producer.initTransactions()
+    fail("Should have raised a KafkaException")
   }
 
   @Test(expected = classOf[TimeoutException])
@@ -581,10 +577,9 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     try {
       producer.commitTransaction()
-      fail("Should have raised a TimeoutException")
     } finally {
-      producer.close(0, TimeUnit.MILLISECONDS)
       restartDeadBrokers() // bring them back
+      producer.close(0, TimeUnit.MILLISECONDS)
     }
   }
 

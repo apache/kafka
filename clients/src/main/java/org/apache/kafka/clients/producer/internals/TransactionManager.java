@@ -24,6 +24,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -56,6 +58,8 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
@@ -100,6 +104,7 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+    private Map<State, TransactionalRequestResult> stateToTransactionRequestResult;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
@@ -194,6 +199,7 @@ public class TransactionManager {
         this.lastAckedOffset = new HashMap<>();
 
         this.retryBackoffMs = retryBackoffMs;
+        this.stateToTransactionRequestResult = new HashMap<>();
     }
 
     TransactionManager() {
@@ -202,13 +208,20 @@ public class TransactionManager {
 
     public synchronized TransactionalRequestResult initializeTransactions() {
         ensureTransactional();
-        transitionTo(State.INITIALIZING);
-        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.nextSequence.clear();
-        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
-        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
-        enqueueRequest(handler);
-        return handler.result;
+
+        TransactionalRequestResult initTransactionResult = this.stateToTransactionRequestResult.get(State.INITIALIZING);
+
+        if (initTransactionResult == null) {
+            transitionTo(State.INITIALIZING);
+            setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
+            this.nextSequence.clear();
+            InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+            InitProducerIdHandler handler = new InitProducerIdHandler(builder);
+            enqueueRequest(handler);
+            initTransactionResult = handler.result;
+            stateToTransactionRequestResult.put(State.INITIALIZING, initTransactionResult);
+        }
+        return initTransactionResult;
     }
 
     public synchronized void beginTransaction() {
@@ -220,19 +233,31 @@ public class TransactionManager {
     public synchronized TransactionalRequestResult beginCommit() {
         ensureTransactional();
         maybeFailWithError();
-        transitionTo(State.COMMITTING_TRANSACTION);
-        return beginCompletingTransaction(TransactionResult.COMMIT);
+
+        TransactionalRequestResult commitTransactionResult = this.stateToTransactionRequestResult.get(State.COMMITTING_TRANSACTION);
+        if (commitTransactionResult == null) {
+            transitionTo(State.COMMITTING_TRANSACTION);
+            commitTransactionResult = beginCompletingTransaction(TransactionResult.COMMIT);
+            stateToTransactionRequestResult.put(State.COMMITTING_TRANSACTION, commitTransactionResult);
+        }
+        return commitTransactionResult;
     }
 
     public synchronized TransactionalRequestResult beginAbort() {
         ensureTransactional();
         if (currentState != State.ABORTABLE_ERROR)
             maybeFailWithError();
-        transitionTo(State.ABORTING_TRANSACTION);
 
-        // We're aborting the transaction, so there should be no need to add new partitions
-        newPartitionsInTransaction.clear();
-        return beginCompletingTransaction(TransactionResult.ABORT);
+        TransactionalRequestResult abortTransactionResult = this.stateToTransactionRequestResult.get(State.ABORTING_TRANSACTION);
+        if (abortTransactionResult == null) {
+            transitionTo(State.ABORTING_TRANSACTION);
+
+            // We're aborting the transaction, so there should be no need to add new partitions
+            newPartitionsInTransaction.clear();
+            abortTransactionResult = beginCompletingTransaction(TransactionResult.ABORT);
+            stateToTransactionRequestResult.put(State.ABORTING_TRANSACTION, abortTransactionResult);
+        }
+        return abortTransactionResult;
     }
 
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
@@ -287,6 +312,38 @@ public class TransactionManager {
 
             if (currentState != State.IN_TRANSACTION)
                 throw new IllegalStateException("Cannot call send in state " + currentState);
+        }
+    }
+
+    public void awaitResultOrThrowTimeoutException(long maxBlockTimeMs,
+                                                   Supplier<String> timeoutExceptionDes,
+                                                   Supplier<String> interruptExceptionDes) {
+        boolean shouldClearCache = true;
+
+        try {
+            maybeFailWithError();
+            TransactionalRequestResult result;
+
+            synchronized (this) {
+                result = this.stateToTransactionRequestResult.get(currentState);
+            }
+
+            if (result == null) {
+                throw new IllegalStateException("There is no ongoing transaction request awaiting completion for the current state: " + currentState);
+            }
+            try {
+                if (!result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
+                    shouldClearCache = false;
+                    throw new TimeoutException(timeoutExceptionDes.get());
+                }
+            } catch (InterruptedException e) {
+                shouldClearCache = false;
+                throw new InterruptException(interruptExceptionDes.get(), e);
+            }
+        } finally {
+            if (shouldClearCache) {
+                clearTransactionRequestResultCache();
+            }
         }
     }
 
@@ -775,6 +832,10 @@ public class TransactionManager {
         currentState = target;
     }
 
+    private synchronized void clearTransactionRequestResultCache() {
+        stateToTransactionRequestResult.clear();
+    }
+
     private void ensureTransactional() {
         if (!isTransactional())
             throw new IllegalStateException("Transactional method invoked on a non-transactional producer.");
@@ -1140,7 +1201,7 @@ public class TransactionManager {
                 abortableError(new GroupAuthorizationException(builder.coordinatorKey()));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
-                        "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
+                                "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
                         findCoordinatorResponse.error().message())));
             }
         }
@@ -1190,6 +1251,7 @@ public class TransactionManager {
             } else {
                 fatalError(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
+
         }
     }
 
