@@ -23,16 +23,15 @@ import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.slf4j.Logger;
 
-import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -139,8 +138,7 @@ public class InternalTopicManager {
                     } catch (final ExecutionException executionException) {
                         final Throwable cause = executionException.getCause();
                         if (cause instanceof TopicExistsException) {
-                            // This topic didn't exist earlier, it might be marked for deletion or it might differ
-                            // from the desired setup. It needs re-validation.
+                            // This topic didn't exist earlier or its leader not known before; just retain it for next round of validation.
                             log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
                                 "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
                                 "Error message was: {}", topicName, retryBackOffMs, cause.toString());
@@ -151,21 +149,29 @@ public class InternalTopicManager {
                         }
                     }
                 }
-
-                if (!topicsNotReady.isEmpty()) {
-                    log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
-
-                    try {
-                        Thread.sleep(retryBackOffMs);
-                    } catch (InterruptedException e) {
-                        // this is okay, we just wake up early
-                        Thread.currentThread().interrupt();
-                    }
-
-                    remainingRetries--;
-                }
             }
 
+
+            if (!topicsNotReady.isEmpty()) {
+                log.info("Topics {} can not be made ready with {} retries left", topicsNotReady, retries);
+
+                try {
+                    Thread.sleep(retryBackOffMs);
+                } catch (final InterruptedException e) {
+                    // this is okay, we just wake up early
+                    Thread.currentThread().interrupt();
+                }
+
+                remainingRetries--;
+            }
+        }
+
+        if (!topicsNotReady.isEmpty()) {
+            final String timeoutAndRetryError = String.format("Could not create topics after %d retries. " +
+                "This can happen if the Kafka cluster is temporary not available. " +
+                "You can increase admin client config `retries` to be resilient against this error.", retries);
+            log.error(timeoutAndRetryError);
+            throw new StreamsException(timeoutAndRetryError);
         }
     }
 
@@ -183,6 +189,7 @@ public class InternalTopicManager {
 
         final Map<String, Integer> existedTopicPartition = new HashMap<>();
         for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
+            final String topicName = topicFuture.getKey();
             try {
                 final TopicDescription topicDescription = topicFuture.getValue().get();
                 existedTopicPartition.put(
@@ -194,8 +201,15 @@ public class InternalTopicManager {
                 throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
             } catch (final ExecutionException couldNotDescribeTopicException) {
                 final Throwable cause = couldNotDescribeTopicException.getCause();
-                final String error = "Could not get number of partitions for topic {} due to {}";
-                log.debug(error, topicFuture.getKey(), cause.toString());
+                if (cause instanceof UnknownTopicOrPartitionException ||
+                    cause instanceof LeaderNotAvailableException) {
+                    // This topic didn't exist or leader is not known yet, proceed to try to create it
+                    log.debug("Topic {} is unknown, hence not existed yet.", topicName);
+                } else {
+                    log.error("Unexpected error during topic description for {}.\n" +
+                        "Error message was: {}", topicName, cause.toString());
+                    throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
+                }
             }
         }
 
