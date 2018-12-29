@@ -97,8 +97,25 @@ public class StreamsResetter {
     private static OptionSpec<String> fromFileOption;
     private static OptionSpec<Long> shiftByOption;
     private static OptionSpecBuilder dryRunOption;
+    private static OptionSpecBuilder helpOption;
     private static OptionSpecBuilder executeOption;
     private static OptionSpec<String> commandConfigOption;
+
+    private static String usage = "This tool helps to quickly reset an application in order to reprocess "
+            + "its data from scratch.\n"
+            + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
+            + "intermediate topics (topics used in the through() method).\n"
+            + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
+            + "\"<application.id>-\").\n"
+            + "You do not need to specify internal topics because the tool finds them automatically.\n"
+            + "* This tool will not delete output topics (if you want to delete them, you need to do it yourself "
+            + "with the bin/kafka-topics.sh command).\n"
+            + "* This tool will not clean up the local state on the stream application instances (the persisted "
+            + "stores used to cache aggregation results).\n"
+            + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
+            + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n\n"
+            + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
+            + "reset tool!\n\n";
 
     private OptionSet options = null;
     private final List<String> allTopics = new LinkedList<>();
@@ -214,12 +231,16 @@ public class StreamsResetter {
             .describedAs("file name");
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
+        helpOption = optionParser.accepts("help", "Print usage information.");
 
         // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
         optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");
 
         try {
             options = optionParser.parse(args);
+            if (args.length == 0 || options.has(helpOption)) {
+                CommandLineUtils.printUsageAndDie(optionParser, usage);
+            }
         } catch (final OptionException e) {
             printHelp(optionParser);
             throw e;
@@ -626,23 +647,8 @@ public class StreamsResetter {
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
 
-    private void printHelp(final OptionParser parser) throws IOException {
-        System.err.println("The Streams Reset Tool allows you to quickly reset an application in order to reprocess "
-                + "its data from scratch.\n"
-                + "* This tool resets offsets of input topics to the earliest available offset and it skips to the end of "
-                + "intermediate topics (topics used in the through() method).\n"
-                + "* This tool deletes the internal topics that were created by Kafka Streams (topics starting with "
-                + "\"<application.id>-\").\n"
-                + "You do not need to specify internal topics because the tool finds them automatically.\n"
-                + "* This tool will not delete output topics (if you want to delete them, you need to do it yourself "
-                + "with the bin/kafka-topics.sh command).\n"
-                + "* This tool will not clean up the local state on the stream application instances (the persisted "
-                + "stores used to cache aggregation results).\n"
-                + "You need to call KafkaStreams#cleanUp() in your application or manually delete them from the "
-                + "directory specified by \"state.dir\" configuration (/tmp/kafka-streams/<application.id> by default).\n\n"
-                + "*** Important! You will get wrong output if you don't clean up the local stores after running the "
-                + "reset tool!\n\n"
-        );
+    private void printHelp(OptionParser parser) throws IOException {
+        System.err.println(usage);
         parser.printHelpOn(System.err);
     }
 

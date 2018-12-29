@@ -14,21 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
+/**
+ * Indicates that the leader is not able to guarantee monotonically increasing offsets
+ * due to the high watermark lagging behind the epoch start offset after a recent leader election
+ */
+public class OffsetNotAvailableException extends RetriableException {
+    private static final long serialVersionUID = 1L;
 
-class KStreamWindowReduce<K, V, W extends Window> extends KStreamWindowAggregate<K, V, V, W> {
-    KStreamWindowReduce(final Windows<W> windows,
-                        final String storeName,
-                        final Reducer<V> reducer) {
-        super(
-            windows,
-            storeName,
-            () -> null,
-            (key, newValue, oldValue) -> oldValue == null ? newValue : reducer.apply(oldValue, newValue)
-        );
+    public OffsetNotAvailableException(String message) {
+        super(message);
     }
 }

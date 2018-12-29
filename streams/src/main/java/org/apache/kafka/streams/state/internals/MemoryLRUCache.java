@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -108,18 +107,15 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         // register the store
-        context.register(root, new StateRestoreCallback() {
-            @Override
-            public void restore(final byte[] key, final byte[] value) {
-                restoring = true;
-                // check value for null, to avoid  deserialization error.
-                if (value == null) {
-                    delete(serdes.keyFrom(key));
-                } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
-                }
-                restoring = false;
+        context.register(root, (key, value) -> {
+            restoring = true;
+            // check value for null, to avoid  deserialization error.
+            if (value == null) {
+                delete(serdes.keyFrom(key));
+            } else {
+                put(serdes.keyFrom(key), serdes.valueFrom(value));
             }
+            restoring = false;
         });
     }
 
@@ -162,8 +158,9 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        for (final KeyValue<K, V> entry : entries)
+        for (final KeyValue<K, V> entry : entries) {
             put(entry.key, entry.value);
+        }
     }
 
     @Override
@@ -173,7 +170,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException at every invocation
      */
     @Override
     public KeyValueIterator<K, V> range(final K from, final K to) {
@@ -181,7 +178,7 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     /**
-     * @throws UnsupportedOperationException
+     * @throws UnsupportedOperationException at every invocation
      */
     @Override
     public KeyValueIterator<K, V> all() {

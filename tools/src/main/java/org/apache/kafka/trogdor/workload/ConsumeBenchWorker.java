@@ -233,7 +233,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             long bytesConsumed = 0;
             long startTimeMs = Time.SYSTEM.milliseconds();
             long startBatchMs = startTimeMs;
-            int maxMessages = spec.maxMessages();
+            long maxMessages = spec.maxMessages();
             try {
                 while (messagesConsumed < maxMessages) {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll();

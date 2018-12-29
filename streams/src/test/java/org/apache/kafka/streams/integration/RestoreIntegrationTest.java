@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -37,13 +36,10 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
@@ -62,6 +58,7 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
@@ -132,7 +129,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(INPUT_STREAM);
         setCommittedOffset(INPUT_STREAM, offsetLimitDelta);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime());
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(INPUT_STREAM, 0), (long) offsetCheckpointed));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
@@ -141,23 +138,18 @@ public class RestoreIntegrationTest {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()))
+        builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
-                .foreach(new ForeachAction<Integer, Integer>() {
-                    @Override
-                    public void apply(final Integer key, final Integer value) {
-                        if (numReceived.incrementAndGet() == 2 * offsetLimitDelta)
-                            shutdownLatch.countDown();
+                .foreach((key, value) -> {
+                    if (numReceived.incrementAndGet() == 2 * offsetLimitDelta) {
+                        shutdownLatch.countDown();
                     }
                 });
 
         kafkaStreams = new KafkaStreams(builder.build(), props);
-        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    startupLatch.countDown();
-                }
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                startupLatch.countDown();
             }
         });
 
@@ -199,7 +191,7 @@ public class RestoreIntegrationTest {
         createStateForRestoration(APPID + "-store-changelog");
         createStateForRestoration(INPUT_STREAM);
 
-        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime());
+        final StateDirectory stateDirectory = new StateDirectory(new StreamsConfig(props), new MockTime(), true);
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 0)), ".checkpoint"))
                 .write(Collections.singletonMap(new TopicPartition(APPID + "-store-changelog", 0), (long) offsetCheckpointed));
         new OffsetCheckpoint(new File(stateDirectory.directoryForTask(new TaskId(0, 1)), ".checkpoint"))
@@ -210,21 +202,16 @@ public class RestoreIntegrationTest {
 
         builder.table(INPUT_STREAM, Consumed.with(Serdes.Integer(), Serdes.Integer()), Materialized.as("store"))
                 .toStream()
-                .foreach(new ForeachAction<Integer, Integer>() {
-                    @Override
-                    public void apply(final Integer key, final Integer value) {
-                        if (numReceived.incrementAndGet() == numberOfKeys)
-                            shutdownLatch.countDown();
+                .foreach((key, value) -> {
+                    if (numReceived.incrementAndGet() == numberOfKeys) {
+                        shutdownLatch.countDown();
                     }
                 });
 
         kafkaStreams = new KafkaStreams(builder.build(), props);
-        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    startupLatch.countDown();
-                }
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                startupLatch.countDown();
             }
         });
 
@@ -261,21 +248,15 @@ public class RestoreIntegrationTest {
 
         final KStream<Integer, Integer> stream = builder.stream(INPUT_STREAM);
         stream.groupByKey()
-                .reduce(new Reducer<Integer>() {
-                    @Override
-                    public Integer apply(final Integer value1, final Integer value2) {
-                        return value1 + value2;
-                    }
-                }, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
+                .reduce(
+                    (value1, value2) -> value1 + value2,
+                    Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("reduce-store").withLoggingDisabled());
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
         kafkaStreams = new KafkaStreams(builder.build(), props(APPID));
-        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    startupLatch.countDown();
-                }
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                startupLatch.countDown();
             }
         });
 
@@ -310,24 +291,16 @@ public class RestoreIntegrationTest {
 
         final KStream<Integer, Integer> stream = streamsBuilder.stream(INPUT_STREAM_2);
         final CountDownLatch processorLatch = new CountDownLatch(3);
-        stream.process(new ProcessorSupplier<Integer, Integer>() {
-            @Override
-            public Processor<Integer, Integer> get() {
-                return new KeyValueStoreProcessor(INPUT_STREAM_2, processorLatch);
-            }
-        }, INPUT_STREAM_2);
+        stream.process(() -> new KeyValueStoreProcessor(INPUT_STREAM_2, processorLatch), INPUT_STREAM_2);
 
         final Topology topology = streamsBuilder.build();
 
         kafkaStreams = new KafkaStreams(topology, props(APPID + "-logging-disabled"));
 
         final CountDownLatch latch = new CountDownLatch(1);
-        kafkaStreams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    latch.countDown();
-                }
+        kafkaStreams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                latch.countDown();
             }
         });
         kafkaStreams.start();
@@ -341,12 +314,12 @@ public class RestoreIntegrationTest {
 
     public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
 
-        private String topic;
+        private final String topic;
         private final CountDownLatch processorLatch;
 
         private KeyValueStore<Integer, Integer> store;
 
-        public KeyValueStoreProcessor(final String topic, final CountDownLatch processorLatch) {
+        KeyValueStoreProcessor(final String topic, final CountDownLatch processorLatch) {
             this.topic = topic;
             this.processorLatch = processorLatch;
         }
@@ -366,9 +339,7 @@ public class RestoreIntegrationTest {
         }
 
         @Override
-        public void close() {
-
-        }
+        public void close() { }
     }
 
     private void createStateForRestoration(final String changelogTopic) {

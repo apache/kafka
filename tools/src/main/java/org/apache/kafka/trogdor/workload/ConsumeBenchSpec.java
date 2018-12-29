@@ -91,7 +91,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final String consumerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
-    private final int maxMessages;
+    private final long maxMessages;
     private final Map<String, String> consumerConf;
     private final Map<String, String> adminClientConf;
     private final Map<String, String> commonClientConf;
@@ -105,7 +105,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("consumerNode") String consumerNode,
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                            @JsonProperty("maxMessages") int maxMessages,
+                            @JsonProperty("maxMessages") long maxMessages,
                             @JsonProperty("consumerGroup") String consumerGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
@@ -146,7 +146,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     }
 
     @JsonProperty
-    public int maxMessages() {
+    public long maxMessages() {
         return maxMessages;
     }
 

@@ -57,6 +57,7 @@ public class InternalTopicManager {
     private final AdminClient adminClient;
 
     private final int retries;
+    private final long retryBackOffMs;
 
     public InternalTopicManager(final AdminClient adminClient,
                                 final StreamsConfig streamsConfig) {
@@ -67,7 +68,9 @@ public class InternalTopicManager {
 
         replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
-        retries = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy")).getInt(AdminClientConfig.RETRIES_CONFIG);
+        final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
+        retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);
+        retryBackOffMs = dummyAdmin.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG);
 
         log.debug("Configs:" + Utils.NL,
             "\t{} = {}" + Utils.NL,
@@ -115,17 +118,22 @@ public class InternalTopicManager {
 
             // TODO: KAFKA-6928. should not need retries in the outer caller as it will be retried internally in admin client
             int remainingRetries = retries;
+            boolean retryBackOff = false;
             boolean retry;
             do {
                 retry = false;
 
                 final CreateTopicsResult createTopicsResult = adminClient.createTopics(newTopics);
 
-                final Set<String> createTopicNames = new HashSet<>();
+                final Set<String> createdTopicNames = new HashSet<>();
                 for (final Map.Entry<String, KafkaFuture<Void>> createTopicResult : createTopicsResult.values().entrySet()) {
                     try {
+                        if (retryBackOff) {
+                            retryBackOff = false;
+                            Thread.sleep(retryBackOffMs);
+                        }
                         createTopicResult.getValue().get();
-                        createTopicNames.add(createTopicResult.getKey());
+                        createdTopicNames.add(createTopicResult.getKey());
                     } catch (final ExecutionException couldNotCreateTopic) {
                         final Throwable cause = couldNotCreateTopic.getCause();
                         final String topicName = createTopicResult.getKey();
@@ -135,10 +143,23 @@ public class InternalTopicManager {
                             log.debug("Could not get number of partitions for topic {} due to timeout. " +
                                 "Will try again (remaining retries {}).", topicName, remainingRetries - 1);
                         } else if (cause instanceof TopicExistsException) {
-                            createTopicNames.add(createTopicResult.getKey());
-                            log.info("Topic {} exist already: {}",
-                                topicName,
-                                couldNotCreateTopic.toString());
+                            // This topic didn't exist earlier, it might be marked for deletion or it might differ
+                            // from the desired setup. It needs re-validation.
+                            final Map<String, Integer> existingTopicPartition = getNumPartitions(Collections.singleton(topicName));
+
+                            if (existingTopicPartition.containsKey(topicName)
+                                    && validateTopicPartitions(Collections.singleton(topics.get(topicName)), existingTopicPartition).isEmpty()) {
+                                createdTopicNames.add(createTopicResult.getKey());
+                                log.info("Topic {} exists already and has the right number of partitions: {}",
+                                        topicName,
+                                        couldNotCreateTopic.toString());
+                            } else {
+                                retry = true;
+                                retryBackOff = true;
+                                log.info("Could not create topic {}. Topic is probably marked for deletion (number of partitions is unknown).\n" +
+                                        "Will retry to create this topic in {} ms (to let broker finish async delete operation first).\n" +
+                                        "Error message was: {}", topicName, retryBackOffMs, couldNotCreateTopic.toString());
+                            }
                         } else {
                             throw new StreamsException(String.format("Could not create topic %s.", topicName),
                                 couldNotCreateTopic);
@@ -151,7 +172,7 @@ public class InternalTopicManager {
                 }
 
                 if (retry) {
-                    newTopics.removeIf(newTopic -> createTopicNames.contains(newTopic.name()));
+                    newTopics.removeIf(newTopic -> createdTopicNames.contains(newTopic.name()));
 
                     continue;
                 }

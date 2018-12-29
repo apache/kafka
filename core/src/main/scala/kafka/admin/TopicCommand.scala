@@ -21,18 +21,17 @@ import java.util.Properties
 
 import joptsimple._
 import kafka.common.AdminCommandFailedException
-import kafka.utils.Implicits._
-import kafka.utils.Whitelist
 import kafka.log.LogConfig
 import kafka.server.ConfigType
+import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.zookeeper.KeeperException.NodeExistsException
-import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -44,8 +43,7 @@ object TopicCommand extends Logging {
 
     val opts = new TopicCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Create, delete, describe, or change a topic.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to create, delete, describe, or change a topic.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.listOpt, opts.alterOpt, opts.describeOpt, opts.deleteOpt).count(opts.options.has _)
@@ -121,10 +119,7 @@ object TopicCommand extends Logging {
   def alterTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
-    if (topics.isEmpty && !ifExists) {
-      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
-          opts.options.valueOf(opts.zkConnectOpt)))
-    }
+    ensureTopicExists(opts, topics, ifExists)
     val adminZkClient = new AdminZkClient(zkClient)
     topics.foreach { topic =>
       val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
@@ -180,10 +175,7 @@ object TopicCommand extends Logging {
   def deleteTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
     val ifExists = opts.options.has(opts.ifExistsOpt)
-    if (topics.isEmpty && !ifExists) {
-      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
-          opts.options.valueOf(opts.zkConnectOpt)))
-    }
+    ensureTopicExists(opts, topics, ifExists)
     topics.foreach { topic =>
       try {
         if (Topic.isInternal(topic)) {
@@ -206,6 +198,8 @@ object TopicCommand extends Logging {
 
   def describeTopic(zkClient: KafkaZkClient, opts: TopicCommandOptions) {
     val topics = getTopics(zkClient, opts)
+    val topicOptWithExits = opts.options.has(opts.topicOpt) && opts.options.has(opts.ifExistsOpt)
+    ensureTopicExists(opts, topics, topicOptWithExits)
     val reportUnderReplicatedPartitions = opts.options.has(opts.reportUnderReplicatedPartitionsOpt)
     val reportUnavailablePartitions = opts.options.has(opts.reportUnavailablePartitionsOpt)
     val reportOverriddenConfigs = opts.options.has(opts.topicsWithOverridesOpt)
@@ -258,6 +252,21 @@ object TopicCommand extends Logging {
     }
   }
 
+  /**
+    * ensures topic existence and throws exception if topic doesn't exist
+    *
+    * @param opts
+    * @param topics
+    * @param topicOptWithExists
+    */
+  private def ensureTopicExists(opts: TopicCommandOptions, topics: Seq[String], topicOptWithExists: Boolean) = {
+    if (topics.isEmpty && !topicOptWithExists) {
+      // If given topic doesn't exist then throw exception
+      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.options.valueOf(opts.topicOpt),
+        opts.options.valueOf(opts.zkConnectOpt)))
+    }
+  }
+
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.options.valuesOf(opts.configOpt).asScala.map(_.split("""\s*=\s*"""))
     require(configsToBeAdded.forall(config => config.length == 2),
@@ -299,8 +308,7 @@ object TopicCommand extends Logging {
     ret.toMap
   }
 
-  class TopicCommandOptions(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class TopicCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the form host:port. " +
                                       "Multiple hosts can be given to allow fail-over.")
                            .withRequiredArg
@@ -311,9 +319,9 @@ object TopicCommand extends Logging {
     val deleteOpt = parser.accepts("delete", "Delete a topic")
     val alterOpt = parser.accepts("alter", "Alter the number of partitions, replica assignment, and/or configuration for the topic.")
     val describeOpt = parser.accepts("describe", "List details for the given topics.")
-    val helpOpt = parser.accepts("help", "Print usage information.")
-    val topicOpt = parser.accepts("topic", "The topic to be create, alter or describe. Can also accept a regular " +
-                                           "expression except for --create option")
+    val topicOpt = parser.accepts("topic", "The topic to create, alter, describe or delete. It also accepts a regular " +
+                                           "expression, except for --create option. Put topic name in double quotes and use the '\\' prefix " +
+                                           "to escape regular expression symbols; e.g. \"test\\.topic\".")
                          .withRequiredArg
                          .describedAs("topic")
                          .ofType(classOf[String])
@@ -349,7 +357,7 @@ object TopicCommand extends Logging {
     val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     val ifExistsOpt = parser.accepts("if-exists",
-                                     "if set when altering or deleting topics, the action will only execute if the topic exists")
+                                     "if set when altering or deleting or describing topics, the action will only execute if the topic exists")
     val ifNotExistsOpt = parser.accepts("if-not-exists",
                                         "if set when creating topics, the action will only execute if the topic does not already exist")
 
@@ -359,13 +367,15 @@ object TopicCommand extends Logging {
 
     val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
     val allTopicLevelOpts: Set[OptionSpec[_]] = Set(alterOpt, createOpt, describeOpt, listOpt, deleteOpt)
 
     def checkArgs() {
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
+      if(options.has(describeOpt) && options.has(ifExistsOpt))
+        CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (!options.has(listOpt) && !options.has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
 
@@ -383,7 +393,7 @@ object TopicCommand extends Logging {
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
-      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt, describeOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
     }

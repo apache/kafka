@@ -43,7 +43,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   val zkSessionTimeout = 6000
   val zkMaxInFlightRequests = Int.MaxValue
 
-  protected val zkAclsEnabled: Option[Boolean] = None
+  protected def zkAclsEnabled: Option[Boolean] = None
 
   var zkClient: KafkaZkClient = null
   var adminZkClient: AdminZkClient = null

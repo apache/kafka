@@ -17,17 +17,20 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.internals.metrics.Sensors;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -57,6 +60,8 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     private long minTimestamp = Long.MAX_VALUE;
     private RecordCollector collector;
     private String changelogTopic;
+    private Sensor bufferSizeSensor;
+    private Sensor bufferCountSensor;
 
     private volatile boolean open;
 
@@ -136,8 +141,12 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
         @Override
         public boolean equals(final Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
             final BufferKey bufferKey = (BufferKey) o;
             return time == bufferKey.time &&
                 Objects.equals(key, bufferKey.key);
@@ -174,11 +183,16 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
+        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+        bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
+        bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
+
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         if (loggingEnabled) {
             collector = ((RecordCollector.Supplier) context).recordCollector();
             changelogTopic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         }
+        updateBufferMetrics();
         open = true;
     }
 
@@ -189,12 +203,13 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
     @Override
     public void close() {
+        open = false;
         index.clear();
         sortedMap.clear();
         dirtyKeys.clear();
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
-        open = false;
+        updateBufferMetrics();
     }
 
     @Override
@@ -265,6 +280,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
                 );
             }
         }
+        updateBufferMetrics();
     }
 
 
@@ -272,6 +288,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<KeyValue<Bytes, ContextualRecord>> callback) {
         final Iterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.entrySet().iterator();
+        int evictions = 0;
 
         if (predicate.get()) {
             Map.Entry<BufferKey, ContextualRecord> next = null;
@@ -298,7 +315,12 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
                     next = null;
                     minTimestamp = Long.MAX_VALUE;
                 }
+
+                evictions++;
             }
+        }
+        if (evictions > 0) {
+            updateBufferMetrics();
         }
     }
 
@@ -308,6 +330,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
                     final ContextualRecord value) {
         cleanPut(time, key, value);
         dirtyKeys.add(key);
+        updateBufferMetrics();
     }
 
     private void cleanPut(final long time, final Bytes key, final ContextualRecord value) {
@@ -354,5 +377,10 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
             size += value.sizeBytes();
         }
         return size;
+    }
+
+    private void updateBufferMetrics() {
+        bufferSizeSensor.record(memBufferSize);
+        bufferCountSensor.record(index.size());
     }
 }
