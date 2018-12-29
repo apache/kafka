@@ -30,7 +30,6 @@ import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.kstream.Printed;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
@@ -47,7 +46,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
@@ -451,29 +449,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public <KR, VR> KStream<KR, VR> transform(final TransformerSupplier<? super K, ? super V, KeyValue<KR, VR>> transformerSupplier,
                                               final String... stateStoreNames) {
         Objects.requireNonNull(transformerSupplier, "transformerSupplier can't be null");
-        return flatTransform(() -> new Transformer<K, V, Iterable<KeyValue<KR, VR>>>() {
-
-            private Transformer<? super K, ? super V, KeyValue<KR, VR>> transformer = transformerSupplier.get();
-
-            @Override
-            public void init(final ProcessorContext context) {
-                transformer.init(context);
-            }
-
-            @Override
-            public Iterable<KeyValue<KR, VR>> transform(final K key, final V value) {
-                final KeyValue<KR, VR> pair = transformer.transform(key, value);
-                if (pair != null) {
-                    return Arrays.asList(pair);
-                }
-                return Arrays.asList();
-            }
-
-            @Override
-            public void close() {
-                transformer.close();
-            }
-        }, stateStoreNames);
+        return flatTransform(new TransformerSupplierAdapter<>(transformerSupplier), stateStoreNames);
     }
 
     @Override
