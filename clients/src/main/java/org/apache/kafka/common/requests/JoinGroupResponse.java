@@ -73,7 +73,6 @@ public class JoinGroupResponse extends AbstractResponse {
      */
     private static final Schema JOIN_GROUP_RESPONSE_V3 = JOIN_GROUP_RESPONSE_V2;
 
-
     /**
      * The version number is bumped to indicate that client needs to issue a second join group request under first try
      * with UNKNOWN_MEMBER_ID.

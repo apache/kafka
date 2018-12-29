@@ -376,6 +376,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testHeartbeatUnknownGroup() {
+
     val heartbeatResult = heartbeat(groupId, memberId, -1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }

@@ -267,8 +267,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def protocolNotMatch(memberProtocolType: String,
                        memberProtocols: List[(String, Array[Byte])]): Boolean = {
-    val groupProtocolNotSupportedByNewMember = state != Empty && (!protocolType.contains(memberProtocolType) || !supportsProtocols(memberProtocols.map(_._1).toSet))
-    val firstMemberWithEmptyProtocolOrProtocolType = state == Empty && (memberProtocolType.isEmpty || memberProtocols.isEmpty)
+    val groupProtocolNotSupportedByNewMember = !is(Empty) && (!protocolType.contains(memberProtocolType) || !supportsProtocols(memberProtocols.map(_._1).toSet))
+    val firstMemberWithEmptyProtocolOrProtocolType = is(Empty) && (memberProtocolType.isEmpty || memberProtocols.isEmpty)
     groupProtocolNotSupportedByNewMember || firstMemberWithEmptyProtocolOrProtocolType
   }
 

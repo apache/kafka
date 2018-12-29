@@ -212,6 +212,7 @@ class GroupCoordinator(val brokerId: Int,
           case PreparingRebalance =>
             val member = group.get(memberId)
             updateMemberAndRebalance(group, member, protocols, responseCallback)
+
           case CompletingRebalance =>
             val member = group.get(memberId)
             if (member.matches(protocols)) {
@@ -233,6 +234,7 @@ class GroupCoordinator(val brokerId: Int,
               // member has changed metadata, so force a rebalance
               updateMemberAndRebalance(group, member, protocols, responseCallback)
             }
+
           case Empty | Stable =>
             val member = group.get(memberId)
             if (group.isLeader(memberId) || !member.matches(protocols)) {
@@ -276,8 +278,7 @@ class GroupCoordinator(val brokerId: Int,
 
       case None =>
         groupManager.getGroup(groupId) match {
-          case None =>
-            responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+          case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
           case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
         }
     }
@@ -709,11 +710,7 @@ class GroupCoordinator(val brokerId: Int,
   private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
-
-    var memberKey = MemberKey(member.groupId, member.memberId)
-    if (member.pending) {
-      memberKey = MemberKey(member.groupId, member.memberId, DelayedOperationKey.pendingSuffix)
-    }
+    val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
     // reschedule the next heartbeat expiration deadline
@@ -764,7 +761,7 @@ class GroupCoordinator(val brokerId: Int,
                                        protocols: List[(String, Array[Byte])],
                                        callback: JoinCallback) {
     group.updateMember(member, protocols, callback)
-    maybePrepareRebalance(group, s"Updating metadata for member $member.memberId")
+    maybePrepareRebalance(group, s"Updating metadata for member ${member.memberId}")
   }
 
   private def maybePrepareRebalance(group: GroupMetadata, reason: String) {

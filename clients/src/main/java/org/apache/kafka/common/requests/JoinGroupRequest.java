@@ -82,7 +82,6 @@ public class JoinGroupRequest extends AbstractRequest {
      */
     private static final Schema JOIN_GROUP_REQUEST_V4 = JOIN_GROUP_REQUEST_V3;
 
-
     public static Schema[] schemaVersions() {
         return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2,
             JOIN_GROUP_REQUEST_V3, JOIN_GROUP_REQUEST_V4};
