@@ -534,7 +534,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
     def restart_cluster(self, clean_shutdown=True):
         for node in self.nodes:
-            self.restart_node(node, clean_shutdown=True)
+            self.restart_node(node, clean_shutdown=clean_shutdown)
 
     def restart_node(self, node, clean_shutdown=True):
         """Restart the given node."""

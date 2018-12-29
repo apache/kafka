@@ -159,5 +159,6 @@ class ReplicationTest(EndToEndTest):
         self.create_consumer(log_level="DEBUG")
         self.consumer.start()
 
+        self.await_startup()
         failures[failure_mode](self, broker_type)
         self.run_validation(enable_idempotence=enable_idempotence)

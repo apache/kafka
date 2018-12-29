@@ -99,6 +99,21 @@ class EndToEndTest(Test):
                    err_msg="Consumer failed to consume up to offsets %s after waiting %ds." %\
                    (str(last_acked_offsets), timeout_sec))
 
+
+    def _collect_all_logs(self):
+        for s in self.test_context.services:
+            self.mark_for_collect(s)
+
+    def await_startup(self, min_records=5, timeout_sec=30):
+        try:
+            wait_until(lambda: self.consumer.total_consumed() >= min_records,
+                       timeout_sec=timeout_sec,
+                       err_msg="Timed out after %ds while awaiting initial record delivery of %d records" %\
+                       (timeout_sec, min_records))
+        except BaseException:
+            self._collect_all_logs()
+            raise
+
     def run_validation(self, min_records=5000, producer_timeout_sec=30,
                        consumer_timeout_sec=30, enable_idempotence=False):
         try:
@@ -115,9 +130,8 @@ class EndToEndTest(Test):
             self.consumer.stop()
             
             self.validate(enable_idempotence)
-        except BaseException as e:
-            for s in self.test_context.services:
-                self.mark_for_collect(s)
+        except BaseException:
+            self._collect_all_logs()
             raise
 
     def validate(self, enable_idempotence):
@@ -132,7 +146,6 @@ class EndToEndTest(Test):
 
         # Collect all logs if validation fails
         if not succeeded:
-            for s in self.test_context.services:
-                self.mark_for_collect(s)
+            self._collect_all_logs()
 
         assert succeeded, error_msg
