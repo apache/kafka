@@ -34,28 +34,24 @@ import java.util.Map;
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     private final Long windowSize;
-    private final boolean isChangelogTopic;
+    private boolean isChangelogTopic;
 
     private Deserializer<T> inner;
     
     // Default constructor needed by Kafka
     public TimeWindowedDeserializer() {
-        this(null, Long.MAX_VALUE, false);
+        this(null, Long.MAX_VALUE);
     }
 
     // TODO: fix this part as last bits of KAFKA-4468
     public TimeWindowedDeserializer(final Deserializer<T> inner) {
-        this(inner, Long.MAX_VALUE, false);
+        this(inner, Long.MAX_VALUE);
     }
 
     public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize) {
-        this(inner, windowSize, false);
-    }
-
-    public TimeWindowedDeserializer(final Deserializer<T> inner, final long windowSize, final boolean isChangelogTopic) {
         this.inner = inner;
         this.windowSize = windowSize;
-        this.isChangelogTopic = isChangelogTopic;
+        this.isChangelogTopic = false;
     }
 
     public Long getWindowSize() {
@@ -95,7 +91,11 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
     public void close() {
         inner.close();
     }
-    
+
+    public void setIsChangelogTopic(final boolean isChangelogTopic) {
+        this.isChangelogTopic = isChangelogTopic;
+    }
+
     // Only for testing
     Deserializer<T> innerDeserializer() {
         return inner;

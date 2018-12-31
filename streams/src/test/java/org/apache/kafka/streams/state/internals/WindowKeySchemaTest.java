@@ -215,8 +215,9 @@ public class WindowKeySchemaTest {
 
         final List<Long> results = new ArrayList<>();
         for (final KeyValue<Bytes, Integer> keyValue : keys) {
-            final Windowed<String> result = new TimeWindowedDeserializer<>(serde.deserializer(), keyValue.value, true)
-                .deserialize(topic, keyValue.key.get());
+            // Let the deserializer know that it's deserializing a changelog windowed key
+            final Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde, keyValue.value).forChangelog(true);
+            final Windowed<String> result = keySerde.deserializer().deserialize(topic, keyValue.key.get());
             final Window resultWindow = result.window();
             results.add(resultWindow.end() - resultWindow.start());
         }
@@ -242,7 +243,7 @@ public class WindowKeySchemaTest {
     @Test
     public void shouldConvertToBinaryAndBack() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
-        final Windowed<String> result = WindowKeySchema.fromStoreKey(serialized.get(), endTime - startTime, stateSerdes);
+        final Windowed<String> result = WindowKeySchema.fromStoreKey(serialized.get(), endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic());
         assertEquals(windowedKey, result);
     }
 
@@ -273,13 +274,13 @@ public class WindowKeySchemaTest {
     @Test
     public void shouldExtractKeyFromBinary() {
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedKey, 0, stateSerdes);
-        assertEquals(windowedKey, WindowKeySchema.fromStoreKey(serialized.get(), endTime - startTime, stateSerdes));
+        assertEquals(windowedKey, WindowKeySchema.fromStoreKey(serialized.get(), endTime - startTime, stateSerdes.keyDeserializer(), stateSerdes.topic()));
     }
 
     @Test
     public void shouldExtractBytesKeyFromBinary() {
         final Windowed<Bytes> windowedBytesKey = new Windowed<>(Bytes.wrap(key.getBytes()), window);
         final Bytes serialized = WindowKeySchema.toStoreKeyBinary(windowedBytesKey, 0);
-        assertEquals(windowedBytesKey, WindowKeySchema.fromStoreKey(serialized.get(), endTime - startTime));
+        assertEquals(windowedBytesKey, WindowKeySchema.fromStoreBytesKey(serialized.get(), endTime - startTime));
     }
 }
