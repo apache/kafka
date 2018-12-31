@@ -258,7 +258,7 @@ public class GlobalStreamThread extends Thread {
             } catch (final RuntimeException e) {
                 // just log an error if the consumer throws an exception during close
                 // so we can always attempt to close the state stores.
-                log.error("Failed to close consumer due to the following error:", e);
+                log.error("Failed to close global consumer due to the following error:", e);
             }
 
             stateMaintainer.close();

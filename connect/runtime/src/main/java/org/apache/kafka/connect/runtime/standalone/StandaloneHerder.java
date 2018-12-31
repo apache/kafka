@@ -318,7 +318,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping reconfiguration of connector {} since it is not running", connName);
+            log.info("Skipping update of connector {} since it is not running", connName);
             return;
         }
 

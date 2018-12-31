@@ -340,7 +340,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
         try {
             SchemaAndValue schemaAndValue = converter.toConnectData(topic, data);
             if (!(schemaAndValue.value() instanceof Map)) {
-                log.error("Invalid connector status type {}", schemaAndValue.value().getClass());
+                log.error("Invalid task status type {}", schemaAndValue.value().getClass());
                 return null;
             }
             @SuppressWarnings("unchecked")
