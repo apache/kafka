@@ -64,7 +64,6 @@ public class KStreamMetricsIntegrationTest {
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, Sensor.RecordingLevel.DEBUG.name);
@@ -75,10 +74,7 @@ public class KStreamMetricsIntegrationTest {
 
     @Test
     public void testStreamMetric() throws Exception {
-        stream.to(metricOutput, Produced.with(Serdes.Integer(), Serdes.String()));
-
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
+        startApplication();
 
         Thread.sleep(10000);
 
@@ -95,6 +91,13 @@ public class KStreamMetricsIntegrationTest {
         List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains("stream")).collect(Collectors.toList());
         Assert.assertEquals(0, listMetricAfterClosingApp.size());
 
+    }
+
+    private void startApplication() {
+        stream.to(metricOutput, Produced.with(Serdes.Integer(), Serdes.String()));
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.start();
     }
 
     private void closeApplication() throws IOException {
