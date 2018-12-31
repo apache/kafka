@@ -161,20 +161,19 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
+        val newMember = new MemberMetadata(newMemberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+          sessionTimeoutMs, protocolType, protocols)
 
         if (requireKnownMemberId) {
           // If member id required, register the member with unknown metadata
           // and send back a response to call for another join group request with allocated member id.
           group.addPendingMember(newMemberId)
-          val newMember = new MemberMetadata(newMemberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
-            sessionTimeoutMs, protocolType, protocols)
           // A pending member never joins the group.
           newMember.pending = true
           completeAndScheduleNextHeartbeatExpiration(group, newMember)
           responseCallback(joinError(newMemberId, error = Errors.MEMBER_ID_REQUIRED))
         } else {
-          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, clientId, clientHost, protocolType,
-            protocols, group, responseCallback)
+          addMemberAndRebalance(newMember, group, responseCallback)
         }
       }
     }
@@ -200,8 +199,10 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted.
-        addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, clientId, clientHost, protocolType,
-          protocols, group, responseCallback)
+        val rejoiningMember = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+          sessionTimeoutMs, protocolType, protocols)
+
+        addMemberAndRebalance(rejoiningMember, group, responseCallback)
         group.removePendingMember(memberId)
       } else if (!group.has(memberId)) {
         // if the member trying to register with a un-recognized id, send the response to let
@@ -725,18 +726,9 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
-  private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
-                                    sessionTimeoutMs: Int,
-                                    memberId: String,
-                                    clientId: String,
-                                    clientHost: String,
-                                    protocolType: String,
-                                    protocols: List[(String, Array[Byte])],
+  private def addMemberAndRebalance(member: MemberMetadata,
                                     group: GroupMetadata,
                                     callback: JoinCallback): MemberMetadata = {
-    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, protocols)
-
     member.isNew = true
 
     // update the newMemberAdded flag to indicate that the join group can be further delayed
@@ -752,7 +744,7 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    maybePrepareRebalance(group, s"Adding new member $memberId")
+    maybePrepareRebalance(group, s"Adding new member ${member.memberId}")
     member
   }
 
