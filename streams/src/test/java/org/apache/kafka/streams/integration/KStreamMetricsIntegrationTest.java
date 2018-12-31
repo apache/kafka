@@ -80,9 +80,9 @@ public class KStreamMetricsIntegrationTest {
 
         Thread.sleep(10000);
 
-        List<Metric> listMetricAfterStartingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains("stream")).collect(Collectors.toList());
+        final List<Metric> listMetricAfterStartingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains("stream")).collect(Collectors.toList());
         Assert.assertTrue(listMetricAfterStartingApp.size() > 0);
-        for(Metric metric : listMetricAfterStartingApp){
+        for (final Metric metric : listMetricAfterStartingApp) {
             Assert.assertTrue(!Objects.isNull(metric.metricValue()));
         }
 
@@ -90,7 +90,7 @@ public class KStreamMetricsIntegrationTest {
 
         Thread.sleep(10000);
 
-        List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains("stream")).collect(Collectors.toList());
+        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains("stream")).collect(Collectors.toList());
         Assert.assertEquals(0, listMetricAfterClosingApp.size());
 
     }
