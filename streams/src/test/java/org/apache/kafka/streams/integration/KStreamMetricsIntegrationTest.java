@@ -95,6 +95,13 @@ public class KStreamMetricsIntegrationTest {
 
     }
 
+    private void createTopics() throws InterruptedException {
+        streamInput = "streamInput";
+        metricOutput = "metricOutput";
+        CLUSTER.createTopic(streamInput, 3, 1);
+        CLUSTER.createTopics(metricOutput);
+    }
+
     private void startApplication() {
         stream.to(metricOutput, Produced.with(Serdes.Integer(), Serdes.String()));
 
@@ -107,13 +114,5 @@ public class KStreamMetricsIntegrationTest {
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
-
-    private void createTopics() throws InterruptedException {
-        streamInput = "streamInput";
-        metricOutput = "metricOutput";
-        CLUSTER.createTopic(streamInput, 3, 1);
-        CLUSTER.createTopics(metricOutput);
-    }
-
 
 }
