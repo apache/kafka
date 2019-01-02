@@ -155,7 +155,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <Match>
         <!-- Suppress warnings about generated schema arrays. -->
-        <Package name="org.apache.kafka.message"/>
+        <Package name="org.apache.kafka.common.message"/>
         <Bug pattern="MS_MUTABLE_ARRAY"/>
     </Match>
 

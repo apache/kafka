@@ -240,4 +240,4 @@ final class SchemaGenerator {
         buffer.printf("};%n");
         buffer.printf("%n");
     }
-};
+}

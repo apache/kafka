@@ -139,4 +139,4 @@ public final class FieldSpec {
     public String about() {
         return about;
     }
-};
+}

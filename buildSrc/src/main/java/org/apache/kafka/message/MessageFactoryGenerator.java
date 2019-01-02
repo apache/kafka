@@ -30,13 +30,13 @@ public final class MessageFactoryGenerator {
 
     public void registerMessageType(MessageSpec spec) {
         if (spec.type() == MessageSpecType.REQUEST) {
-            if (requestApis.containsKey(Short.valueOf(spec.apiKey()))) {
+            if (requestApis.containsKey(spec.apiKey())) {
                 throw new RuntimeException("Found more than one request with " +
                     "API key " + spec.apiKey());
             }
             requestApis.put(spec.apiKey(), spec.generatedClassName());
         } else if (spec.type() == MessageSpecType.RESPONSE) {
-            if (responseApis.containsKey(Short.valueOf(spec.apiKey()))) {
+            if (responseApis.containsKey(spec.apiKey())) {
                 throw new RuntimeException("Found more than one response with " +
                     "API key " + spec.apiKey());
             }
@@ -122,4 +122,4 @@ public final class MessageFactoryGenerator {
         headerGenerator.buffer().write(writer);
         buffer.write(writer);
     }
-};
+}

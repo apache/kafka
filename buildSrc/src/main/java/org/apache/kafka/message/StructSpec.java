@@ -67,4 +67,4 @@ public final class StructSpec {
     boolean hasKeys() {
         return hasKeys;
     }
-};
+}

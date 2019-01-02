@@ -56,4 +56,4 @@ public class MessageGeneratorTest {
         assertEquals("foo_bar_baz", MessageGenerator.toSnakeCase("fooBarBaz"));
         assertEquals("fortran", MessageGenerator.toSnakeCase("FORTRAN"));
     }
-};
+}

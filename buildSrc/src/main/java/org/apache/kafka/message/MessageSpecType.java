@@ -28,4 +28,4 @@ public enum MessageSpecType {
 
     @JsonProperty("header")
     HEADER;
-};
+}

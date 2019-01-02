@@ -197,4 +197,4 @@ public final class MessageGenerator {
         }
         processDirectories(args[0], args[1]);
     }
-};
+}

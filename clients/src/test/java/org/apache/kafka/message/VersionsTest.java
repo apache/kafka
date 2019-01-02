@@ -82,4 +82,4 @@ public class VersionsTest {
         assertTrue(newVersions(0, Short.MAX_VALUE).contains((short) 100));
         assertFalse(newVersions(2, Short.MAX_VALUE).contains((short) 0));
     }
-};
+}

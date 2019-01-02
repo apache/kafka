@@ -30,10 +30,6 @@ public class CodeBuffer {
         this.indent = 0;
     }
 
-    public int indent() {
-        return indent;
-    }
-
     public void incrementIndent() {
         indent++;
     }
@@ -45,7 +41,7 @@ public class CodeBuffer {
         }
     }
 
-    public void printf(String format, Object... args) throws IOException {
+    public void printf(String format, Object... args) {
         lines.add(String.format(indentSpaces() + format, args));
     }
 
@@ -71,7 +67,7 @@ public class CodeBuffer {
 
     @Override
     public boolean equals(Object other) {
-        if ((other == null) || (!(other instanceof CodeBuffer))) {
+        if (!(other instanceof CodeBuffer)) {
             return false;
         }
         CodeBuffer o = (CodeBuffer) other;

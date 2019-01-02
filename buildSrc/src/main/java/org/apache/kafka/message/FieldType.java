@@ -207,7 +207,7 @@ public interface FieldType {
             default:
                 if (string.startsWith(STRUCT_PREFIX)) {
                     String elementTypeString = string.substring(STRUCT_PREFIX.length());
-                    if (string.length() == 0) {
+                    if (elementTypeString.length() == 0) {
                         throw new RuntimeException("Can't parse array type " + string +
                             ".  No element type found.");
                     }
@@ -278,4 +278,4 @@ public interface FieldType {
      * Convert the field type to a JSON string.
      */
     String toString();
-};
+}

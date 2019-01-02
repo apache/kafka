@@ -75,4 +75,4 @@ public final class HeaderGenerator {
     public CodeBuffer buffer() {
         return buffer;
     }
-};
+}

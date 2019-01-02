@@ -1276,4 +1276,4 @@ public final class MessageDataGenerator {
         buffer.decrementIndent();
         buffer.printf("}%n");
     }
-};
+}

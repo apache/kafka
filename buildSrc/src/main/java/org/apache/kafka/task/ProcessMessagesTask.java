@@ -65,4 +65,4 @@ public class ProcessMessagesTask extends DefaultTask {
             throw new RuntimeException(e);
         }
     }
-};
+}

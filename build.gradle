@@ -889,8 +889,8 @@ project(':clients') {
   }
 
   task processMessages(type:org.apache.kafka.task.ProcessMessagesTask) {
-    inputDirectory = file("src/main/resources/message")
-    outputDirectory = file("src/generated/java/org/apache/kafka/message")
+    inputDirectory = file("src/main/resources/common/message")
+    outputDirectory = file("src/generated/java/org/apache/kafka/common/message")
   }
 
   sourceSets {

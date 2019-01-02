@@ -53,10 +53,9 @@ public final class MessageTest {
     @Test
     public void testRoundTrips() throws Exception {
         testMessageRoundTrips(new MetadataRequestData().setTopics(
-            Arrays.asList(new MetadataRequestData.MetadataRequestTopic[] {
-                new MetadataRequestData.MetadataRequestTopic().setName("foo"),
+            Arrays.asList(new MetadataRequestData.MetadataRequestTopic().setName("foo"),
                 new MetadataRequestData.MetadataRequestTopic().setName("bar")
-            })), (short) 6);
+            )), (short) 6);
         testMessageRoundTrips(new AddOffsetsToTxnRequestData().
             setTransactionalId("foobar").
             setProducerId(0xbadcafebadcafeL).
@@ -125,23 +124,23 @@ public final class MessageTest {
     @Test
     public void testMessageVersions() throws Exception {
         for (ApiKeys apiKey : ApiKeys.values()) {
-            Message message;
+            Message message = null;
             try {
                 message = MessageFactory.newRequest(apiKey.id);
             } catch (UnsupportedVersionException e) {
-                throw new RuntimeException("No request message spec found for API " + apiKey);
+                Assert.fail("No request message spec found for API " + apiKey);
             }
             if (apiKey.latestVersion() > message.highestSupportedVersion()) {
-                throw new RuntimeException("Request message spec for " + apiKey + " only " +
+                Assert.fail("Request message spec for " + apiKey + " only " +
                     "supports versions up to " + message.highestSupportedVersion());
             }
             try {
                 message = MessageFactory.newResponse(apiKey.id);
             } catch (UnsupportedVersionException e) {
-                throw new RuntimeException("No response message spec found for API " + apiKey);
+                Assert.fail("No response message spec found for API " + apiKey);
             }
             if (apiKey.latestVersion() > message.highestSupportedVersion()) {
-                throw new RuntimeException("Response message spec for " + apiKey + " only " +
+                Assert.fail("Response message spec for " + apiKey + " only " +
                     "supports versions up to " + message.highestSupportedVersion());
             }
         }
@@ -305,4 +304,4 @@ public final class MessageTest {
     private void verifySizeSucceeds(short version, Message message) throws Exception {
         message.size(version);
     }
-};
+}

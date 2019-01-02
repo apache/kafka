@@ -73,4 +73,4 @@ public final class MessageSpec {
     public String generatedClassName() {
         return struct.name() + "Data";
     }
-};
+}
