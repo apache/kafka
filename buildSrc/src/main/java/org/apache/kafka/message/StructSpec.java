@@ -39,7 +39,11 @@ public final class StructSpec {
                       @JsonProperty("versions") String versions,
                       @JsonProperty("fields") List<FieldSpec> fields) {
         this.name = Objects.requireNonNull(name);
-        this.versions = Versions.parse(versions, Versions.ALL);
+        this.versions = Versions.parse(versions, null);
+        if (this.versions == null) {
+            throw new RuntimeException("You must specify the version of the " +
+                    name + " structure.");
+        }
         this.fields = Collections.unmodifiableList(fields == null ?
             Collections.emptyList() : new ArrayList<>(fields));
         this.hasKeys = fields == null ? false : fields.stream().anyMatch(f -> f.mapKey());
