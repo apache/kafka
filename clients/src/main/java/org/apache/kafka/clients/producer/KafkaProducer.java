@@ -970,7 +970,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         // or until maxWaitTimeMs is exceeded. This is necessary in case the metadata
         // is stale and the number of partitions for this topic has increased in the meantime.
         do {
-            log.trace("Requesting metadata update for topic {}.", topic);
+            if (partition != null) {
+                log.trace("Requesting metadata update for partition {} of topic {}.", partition, topic);
+            } else {
+                log.trace("Requesting metadata update for topic {}.", topic);
+            }
             metadata.add(topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -981,15 +985,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
             }
             cluster = metadata.fetch();
-            partitionsCount = cluster.partitionCountForTopic(topic);
             elapsed = time.milliseconds() - begin;
-            if (elapsed >= maxWaitMs)
-                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            if (elapsed >= maxWaitMs) {
+                if (partitionsCount == null) {
+                    throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+                } else {
+                    throw new TimeoutException(
+                            String.format("Partition %d of topic %s not present in metadata after %d ms.",
+                                    partition, topic, maxWaitMs));
+                }
+            }
             if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             if (cluster.invalidTopics().contains(topic))
                 throw new InvalidTopicException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
+            partitionsCount = cluster.partitionCountForTopic(topic);
         } while (partitionsCount == null || (partition != null && partition >= partitionsCount));
 
         return new ClusterAndWaitTime(cluster, elapsed);
