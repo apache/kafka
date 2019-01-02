@@ -551,7 +551,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
-                // Broker requires a concrete member id to be allowed to join the group. Update the generation
+                // Broker requires a concrete member id to be allowed to join the group. Update generation and member id
                 // and send another join group request in next cycle.
                 AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
                         joinResponse.memberId(), generation.protocol);
@@ -735,6 +735,14 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized Generation generation() {
         if (this.state != MemberState.STABLE)
             return null;
+        return generation;
+    }
+
+    /**
+     * Return generation info regardless of the group state.
+     * @return the current generation info
+     */
+    protected synchronized Generation getGeneration() {
         return generation;
     }
 

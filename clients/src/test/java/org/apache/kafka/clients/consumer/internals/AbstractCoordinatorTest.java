@@ -182,11 +182,16 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
-        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.MEMBER_ID_REQUIRED));
+        String memberId = "memberId";
+        int generation = 10;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, "leaderId", Errors.MEMBER_ID_REQUIRED));
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertEquals(future.exception().getMessage(), Errors.MEMBER_ID_REQUIRED.message());
+        assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
+        assertEquals(memberId, coordinator.getGeneration().memberId);
+        assertEquals(generation, coordinator.getGeneration().generationId);
     }
 
     @Test
