@@ -75,6 +75,6 @@ public class EagerBufferConfigImpl extends BufferConfigInternal {
 
     @Override
     public String toString() {
-        return "EagerBufferConfigImpl{maxKeys=" + maxRecords + ", maxBytes=" + maxBytes + '}';
+        return "EagerBufferConfigImpl{maxRecords=" + maxRecords + ", maxBytes=" + maxBytes + '}';
     }
 }
