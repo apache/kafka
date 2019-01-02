@@ -94,7 +94,7 @@ public class MeteredSessionStoreTest {
     @Test
     public void testMetrics() {
         init();
-        JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
                 "scope", "test", taskId.toString(), "scope", "metered")));

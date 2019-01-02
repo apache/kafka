@@ -135,7 +135,7 @@ public class ProcessorNodeTest {
                                                                "The average number of occurrence of " + throughputOperation + " operation per second.",
                                                                metricTags)));
 
-        JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=mock,task-id=%s,processor-node-id=%s",
                 groupName, context.taskId().toString(), node.name())));

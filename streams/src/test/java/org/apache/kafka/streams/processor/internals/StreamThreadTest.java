@@ -283,7 +283,7 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
 
-        JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
                 defaultGroupName, thread.getName())));

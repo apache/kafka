@@ -89,7 +89,7 @@ public class MeteredWindowStoreTest {
     public void testMetrics() {
         EasyMock.replay(innerStoreMock);
         store.init(context, store);
-        JmxReporter reporter = new JmxReporter("kafka.streams");
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
                 "scope", "test", context.taskId().toString(), "scope", "mocked-store")));
