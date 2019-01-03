@@ -724,10 +724,10 @@ class GroupCoordinator(val brokerId: Int,
     * Add pending member expiration to heartbeat purgatory
     */
   private def addPendingMemberExpiration(group: GroupMetadata, pendingMemberId: String, timeoutMs: Long) {
-    val memberKey = MemberKey(group.groupId, pendingMemberId)
+    val pendingMemberKey = MemberKey(group.groupId, pendingMemberId)
     val deadline = time.milliseconds() + timeoutMs
     val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, null, deadline, timeoutMs)
-    heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
+    heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(pendingMemberKey))
   }
 
   private def removeHeartbeatForLeavingMember(group: GroupMetadata, member: MemberMetadata) {
@@ -755,6 +755,7 @@ class GroupCoordinator(val brokerId: Int,
       group.newMemberAdded = true
 
     group.add(member, callback)
+
     // The session timeout does not affect new members since they do not have their memberId and
     // cannot send heartbeats. Furthermore, we cannot detect disconnects because sockets are muted
     // while the JoinGroup is in purgatory. If the client does disconnect (e.g. because of a request
@@ -763,8 +764,8 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    maybePrepareRebalance(group, s"Adding new member ${member.memberId}")
-    group.removePendingMember(member.memberId)
+    maybePrepareRebalance(group, s"Adding new member ${memberId}")
+    group.removePendingMember(memberId)
     member
   }
 

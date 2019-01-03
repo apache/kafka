@@ -65,7 +65,6 @@ private[group] class MemberMetadata(val memberId: String,
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
   var isNew: Boolean = false
-  var pending: Boolean = false
 
   def protocols = supportedProtocols.map(_._1).toSet
 
