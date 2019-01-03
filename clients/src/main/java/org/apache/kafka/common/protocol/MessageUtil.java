@@ -17,6 +17,8 @@
 
 package org.apache.kafka.common.protocol;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.util.Iterator;
 
 public final class MessageUtil {
@@ -24,21 +26,8 @@ public final class MessageUtil {
      * Get the length of the UTF8 representation of a string, without allocating
      * a byte buffer for the string.
      */
-    public static short utf8Length(CharSequence input) {
-        int count = 0, len = input.length();
-        for (int i = 0; i < len; i++) {
-            char c = input.charAt(i);
-            if (c <= 0x7f) {
-                count++;
-            } else if (c <= 0x7ff) {
-                count += 2;
-            } else if (Character.isHighSurrogate(c)) {
-                count += 4;
-                i++;
-            } else {
-                count += 3;
-            }
-        }
+    public static short serializedUtf8Length(CharSequence input) {
+        int count = Utils.utf8Length(input);
         if (count > Short.MAX_VALUE) {
             throw new RuntimeException("String " + input + " is too long to serialize.");
         }

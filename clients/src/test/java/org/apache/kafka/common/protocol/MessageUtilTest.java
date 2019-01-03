@@ -46,7 +46,7 @@ public final class MessageUtilTest {
 
     private void validateUtf8Length(String string) {
         byte[] arr = string.getBytes(StandardCharsets.UTF_8);
-        assertEquals(arr.length, MessageUtil.utf8Length(string));
+        assertEquals(arr.length, MessageUtil.serializedUtf8Length(string));
     }
 
     @Test

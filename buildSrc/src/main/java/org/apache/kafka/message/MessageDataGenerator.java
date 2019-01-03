@@ -835,7 +835,7 @@ public final class MessageDataGenerator {
                 buffer.incrementIndent();
             }
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("size += MessageUtil.utf8Length(%s);%n", fieldName);
+            buffer.printf("size += MessageUtil.serializedUtf8Length(%s);%n", fieldName);
             if (nullable) {
                 buffer.decrementIndent();
                 buffer.printf("}%n");

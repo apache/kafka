@@ -53,7 +53,6 @@
     <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />
-    <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.kafka.test" />
 
     <subpackage name="acl">
@@ -163,7 +162,6 @@
     <allow pkg="org.slf4j" />
     <allow pkg="org.apache.kafka.common" />
     <allow pkg="org.apache.kafka.clients" exact-match="true"/>
-    <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.kafka.test" />
 
     <subpackage name="consumer">
@@ -299,7 +297,6 @@
     <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
-    <allow pkg="org.apache.kafka.message" />
     <allow pkg="org.apache.kafka.test"/>
 
     <subpackage name="source">

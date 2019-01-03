@@ -45,7 +45,7 @@ public final class HeaderGenerator {
         ""
     };
 
-    static final String PACKAGE = "org.apache.kafka.message";
+    static final String PACKAGE = "org.apache.kafka.common.message";
 
     private final CodeBuffer buffer;
 

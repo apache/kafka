@@ -902,7 +902,7 @@ project(':clients') {
     test {
       java {
         srcDirs = ["src/generated/java", "src/test/java",
-            "$rootDir/buildSrc/src/main/java/org/apache/kafka/message/"]
+            "$rootDir/buildSrc/src/main/java/org/apache/kafka/common/message/"]
       }
     }
   }
