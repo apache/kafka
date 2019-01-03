@@ -296,7 +296,7 @@ public enum Errors {
     OFFSET_NOT_AVAILABLE(78, "The leader high watermark has not caught up from a recent leader " +
             "election so the offsets cannot be guaranteed to be monotonically increasing",
             OffsetNotAvailableException::new),
-    MEMBER_ID_REQUIRED(79, "Consumer needs to have a valid member id before actually entering group",
+    MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering group",
             MemberIdRequiredException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

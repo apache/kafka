@@ -515,7 +515,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                                                         final Timer timer) {
         if (partitions.isEmpty()) return Collections.emptyMap();
 
-        final Generation generation = generation();
+        final Generation generation = generationOnGroupStable();
         if (pendingCommittedOffsetRequest != null && !pendingCommittedOffsetRequest.sameRequest(partitions, generation)) {
             // if we were waiting for a different request, then just clear it.
             pendingCommittedOffsetRequest = null;
@@ -768,7 +768,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         final Generation generation;
         if (subscriptions.partitionsAutoAssigned())
-            generation = generation();
+            generation = generationOnGroupStable();
         else
             generation = Generation.NO_GENERATION;
 

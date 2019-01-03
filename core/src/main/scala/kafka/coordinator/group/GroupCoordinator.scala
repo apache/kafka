@@ -151,7 +151,7 @@ class GroupCoordinator(val brokerId: Int,
                                  protocols: List[(String, Array[Byte])],
                                  responseCallback: JoinCallback): Unit = {
     group.inLock {
-      if (group.currentState == Dead) {
+      if (group.is(Dead)) {
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
@@ -189,7 +189,7 @@ class GroupCoordinator(val brokerId: Int,
                           protocols: List[(String, Array[Byte])],
                           responseCallback: JoinCallback) {
     group.inLock {
-      if (group.currentState == Dead) {
+      if (group.is(Dead)) {
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
@@ -203,7 +203,6 @@ class GroupCoordinator(val brokerId: Int,
           sessionTimeoutMs, protocolType, protocols)
 
         addMemberAndRebalance(rejoiningMember, group, responseCallback)
-        group.removePendingMember(memberId)
       } else if (!group.has(memberId)) {
         // if the member trying to register with a un-recognized id, send the response to let
         // it reset its member id and retry.
@@ -236,7 +235,7 @@ class GroupCoordinator(val brokerId: Int,
               updateMemberAndRebalance(group, member, protocols, responseCallback)
             }
 
-          case Empty | Stable =>
+          case Stable =>
             val member = group.get(memberId)
             if (group.isLeader(memberId) || !member.matches(protocols)) {
               // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
@@ -254,6 +253,12 @@ class GroupCoordinator(val brokerId: Int,
                 leaderId = group.leaderOrNull,
                 error = Errors.NONE))
             }
+
+          case Empty | Dead =>
+            // Group reaches unexpected state. Let the joining member reset the info and rejoin.
+            warn(s"Attempt to add rejoining member ${memberId} of group ${group.groupId} in " +
+              s"unexpected group state ${group.currentState}")
+            responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
         }
 
         if (group.is(PreparingRebalance))
@@ -745,6 +750,7 @@ class GroupCoordinator(val brokerId: Int,
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
     maybePrepareRebalance(group, s"Adding new member ${member.memberId}")
+    group.removePendingMember(member.memberId)
     member
   }
 

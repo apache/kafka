@@ -248,7 +248,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  // TODO: deprecate the kick out logic for normal member's rejoin failure within rebalance timeout.
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
   def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty

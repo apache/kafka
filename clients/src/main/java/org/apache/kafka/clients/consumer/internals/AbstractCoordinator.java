@@ -732,7 +732,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Get the current generation state if the group is stable.
      * @return the current generation or null if the group is unjoined/rebalancing
      */
-    protected synchronized Generation generation() {
+    protected synchronized Generation generationOnGroupStable() {
         if (this.state != MemberState.STABLE)
             return null;
         return generation;
@@ -742,7 +742,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Return generation info regardless of the group state.
      * @return the current generation info
      */
-    protected synchronized Generation getGeneration() {
+    protected synchronized Generation generation() {
         return generation;
     }
 

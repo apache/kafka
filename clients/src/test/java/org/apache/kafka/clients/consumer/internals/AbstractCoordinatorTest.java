@@ -190,8 +190,8 @@ public class AbstractCoordinatorTest {
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertEquals(memberId, coordinator.getGeneration().memberId);
-        assertEquals(generation, coordinator.getGeneration().generationId);
+        assertEquals(memberId, coordinator.generation().memberId);
+        assertEquals(generation, coordinator.generation().generationId);
     }
 
     @Test
