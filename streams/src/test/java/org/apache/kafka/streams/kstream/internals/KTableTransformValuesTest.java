@@ -75,8 +75,8 @@ public class KTableTransformValuesTest {
 
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
-    private final ConsumerRecordFactory<String, String> recordFactory
-        = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
     private TopologyTestDriver driver;
     private MockProcessorSupplier<String, String> capture;
@@ -140,8 +140,8 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, transformer, null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
@@ -151,8 +151,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldNotSendOldValuesByDefault() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         final Processor<String, Change<String>> processor = transformValues.get();
         processor.init(context);
@@ -216,8 +216,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetFromStateStoreIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
         expect(stateStore.get("Key")).andReturn("something");
@@ -233,8 +233,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetStoreNamesFromParentIfNotMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.storeNames()).andReturn(new String[]{"store1", "store2"});
@@ -247,8 +247,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldGetQueryableStoreNameIfMaterialized() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         final String[] storeNames = transformValues.view().storeNames();
 
@@ -257,8 +257,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseTransformerOnProcessorClose() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
         transformer.close();
@@ -273,8 +273,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseTransformerOnGetterClose() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(mockSupplier.get()).andReturn(transformer);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
@@ -293,8 +293,8 @@ public class KTableTransformValuesTest {
 
     @Test
     public void shouldCloseParentGetterClose() {
-        final KTableTransformValues<String, String, String> transformValues
-            = new KTableTransformValues<>(parent, mockSupplier, null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, mockSupplier, null);
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(mockSupplier.get()).andReturn(transformer);

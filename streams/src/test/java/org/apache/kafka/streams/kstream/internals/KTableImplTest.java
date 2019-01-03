@@ -70,8 +70,8 @@ public class KTableImplTest {
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory
-        = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
@@ -129,8 +129,8 @@ public class KTableImplTest {
         final KeyValueMapper<String, String, String> selector = (key, value) -> key;
         final ValueMapper<String, String> mapper = value -> value;
         final ValueJoiner<String, String, String> joiner = (value1, value2) -> value1;
-        final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier
-            = () -> new ValueTransformerWithKey<String, String, String>() {
+        final ValueTransformerWithKeySupplier<String, String, String> valueTransformerWithKeySupplier =
+            () -> new ValueTransformerWithKey<String, String, String>() {
                 @Override
                 public void init(final ProcessorContext context) {}
 
@@ -251,12 +251,12 @@ public class KTableImplTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table1
-            = (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped
-            = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String, Integer> table1Mapped =
+            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -271,15 +271,15 @@ public class KTableImplTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table1
-            = (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2
-            = (KTableImpl<String, String, String>) builder.table(topic2, consumed);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, String> table2 =
+            (KTableImpl<String, String, String>) builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped
-            = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
-        final KTableImpl<String, Integer, Integer> table1MappedFiltered
-            = (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
+        final KTableImpl<String, String, Integer> table1Mapped =
+            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, Integer, Integer> table1MappedFiltered =
+            (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -452,16 +452,16 @@ public class KTableImplTest {
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenMaterializedIsNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier
-            = mock(ValueTransformerWithKeySupplier.class);
+        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
+            mock(ValueTransformerWithKeySupplier.class);
         table.transformValues(valueTransformerSupplier, (Materialized) null);
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier
-            = mock(ValueTransformerWithKeySupplier.class);
+        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
+            mock(ValueTransformerWithKeySupplier.class);
         table.transformValues(valueTransformerSupplier, (String[]) null);
     }
 }

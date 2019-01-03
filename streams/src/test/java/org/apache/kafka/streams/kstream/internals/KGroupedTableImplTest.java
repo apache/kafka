@@ -135,8 +135,8 @@ public class KGroupedTableImplTest {
     private void assertReduced(final Map<String, Integer> reducedResults,
                                final String topic,
                                final TopologyTestDriver driver) {
-        final ConsumerRecordFactory<String, Double> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new DoubleSerializer());
+        final ConsumerRecordFactory<String, Double> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new DoubleSerializer());
         driver.pipeInput(recordFactory.create(topic, "A", 1.1, 10));
         driver.pipeInput(recordFactory.create(topic, "B", 2.2, 10));
 
@@ -345,8 +345,8 @@ public class KGroupedTableImplTest {
 
     private void processData(final String topic,
                              final TopologyTestDriver driver) {
-        final ConsumerRecordFactory<String, String> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         driver.pipeInput(recordFactory.create(topic, "A", "1"));
         driver.pipeInput(recordFactory.create(topic, "B", "1"));
         driver.pipeInput(recordFactory.create(topic, "C", "1"));

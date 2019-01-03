@@ -72,8 +72,8 @@ public class StreamsBuilderTest {
             .join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -95,8 +95,8 @@ public class StreamsBuilderTest {
             .join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -119,8 +119,8 @@ public class StreamsBuilderTest {
             .join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -142,8 +142,8 @@ public class StreamsBuilderTest {
             .join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -165,8 +165,8 @@ public class StreamsBuilderTest {
             .join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER), MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -189,8 +189,8 @@ public class StreamsBuilderTest {
                 MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -209,8 +209,8 @@ public class StreamsBuilderTest {
         builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(
             topology.stateStores().size(),
@@ -231,8 +231,8 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         source.process(processorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
@@ -253,8 +253,8 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> throughProcessorSupplier = new MockProcessorSupplier<>();
         through.process(throughProcessorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
@@ -276,8 +276,8 @@ public class StreamsBuilderTest {
         final MockProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
         merged.process(processorSupplier);
 
-        final ConsumerRecordFactory<String, String> recordFactory
-            = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
@@ -299,8 +299,8 @@ public class StreamsBuilderTest {
                 .withValueSerde(Serdes.String()))
                 .toStream().foreach(action);
 
-        final ConsumerRecordFactory<Long, String> recordFactory
-            = new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<Long, String> recordFactory =
+            new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
@@ -321,8 +321,8 @@ public class StreamsBuilderTest {
                 .withKeySerde(Serdes.Long())
                 .withValueSerde(Serdes.String()));
 
-        final ConsumerRecordFactory<Long, String> recordFactory
-            = new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<Long, String> recordFactory =
+            new ConsumerRecordFactory<>(new LongSerializer(), new StringSerializer());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic, 1L, "value1"));
@@ -339,8 +339,8 @@ public class StreamsBuilderTest {
         final String topic = "topic";
         builder.table(topic, Materialized.with(Serdes.Long(), Serdes.String()));
 
-        final ProcessorTopology topology
-            = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        final ProcessorTopology topology =
+            builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
 
         assertThat(topology.stateStores().size(), equalTo(0));
     }

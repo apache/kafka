@@ -47,8 +47,8 @@ import static org.junit.Assert.assertTrue;
 public class KTableMapValuesTest {
 
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-    private final ConsumerRecordFactory<String, String> recordFactory
-        = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private void doTestKTable(final StreamsBuilder builder,
@@ -171,20 +171,20 @@ public class KTableMapValuesTest {
         final String storeName2 = "store2";
         final String storeName3 = "store3";
 
-        final KTableImpl<String, String, String> table1
-            = (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2
-            = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, Integer> table2 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(
                 Integer::new,
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2)
                     .withValueSerde(Serdes.Integer()));
-        final KTableImpl<String, String, Integer> table3
-            = (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String, Integer> table3 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(
                 value -> new Integer(value) * (-1),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
-        final KTableImpl<String, String, Integer> table4
-            = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String, Integer> table4 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
 
         assertEquals(storeName2, table2.queryableStoreName());
         assertEquals(storeName3, table3.queryableStoreName());
@@ -199,10 +199,10 @@ public class KTableMapValuesTest {
 
         final String topic1 = "topic1";
 
-        final KTableImpl<String, String, String> table1
-            = (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2
-            = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, Integer> table2 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
@@ -242,10 +242,10 @@ public class KTableMapValuesTest {
 
         final String topic1 = "topic1";
 
-        final KTableImpl<String, String, String> table1
-            = (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2
-            = (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String, String> table1 =
+            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String, Integer> table2 =
+            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
 
         table2.enableSendingOldValues();
 
