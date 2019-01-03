@@ -161,19 +161,16 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
-        val newMember = new MemberMetadata(newMemberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
-          sessionTimeoutMs, protocolType, protocols)
 
         if (requireKnownMemberId) {
           // If member id required, register the member with unknown metadata
           // and send back a response to call for another join group request with allocated member id.
           group.addPendingMember(newMemberId)
-          // A pending member never joins the group.
-          newMember.pending = true
-          completeAndScheduleNextHeartbeatExpiration(group, newMember)
+          addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
           responseCallback(joinError(newMemberId, error = Errors.MEMBER_ID_REQUIRED))
         } else {
-          addMemberAndRebalance(newMember, group, responseCallback)
+          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, clientId, clientHost, protocolType,
+            protocols, group, responseCallback)
         }
       }
     }
@@ -199,10 +196,8 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted.
-        val rejoiningMember = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
-          sessionTimeoutMs, protocolType, protocols)
-
-        addMemberAndRebalance(rejoiningMember, group, responseCallback)
+        addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, clientId, clientHost, protocolType,
+          protocols, group, responseCallback)
       } else if (!group.has(memberId)) {
         // if the member trying to register with a un-recognized id, send the response to let
         // it reset its member id and retry.
@@ -713,7 +708,7 @@ class GroupCoordinator(val brokerId: Int,
     completeAndScheduleNextExpiration(group, member, member.sessionTimeoutMs)
   }
 
-  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
+  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long) {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
     val memberKey = MemberKey(member.groupId, member.memberId)
@@ -721,7 +716,17 @@ class GroupCoordinator(val brokerId: Int,
 
     // reschedule the next heartbeat expiration deadline
     val deadline = member.latestHeartbeat + timeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, member, deadline, timeoutMs)
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, JoinGroupRequest.UNKNOWN_MEMBER_ID, member, deadline, timeoutMs)
+    heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
+  }
+
+  /**
+    * Add pending member expiration to heartbeat purgatory
+    */
+  private def addPendingMemberExpiration(group: GroupMetadata, pendingMemberId: String, timeoutMs: Long) {
+    val memberKey = MemberKey(group.groupId, pendingMemberId)
+    val deadline = time.milliseconds() + timeoutMs
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, null, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
   }
 
@@ -731,9 +736,18 @@ class GroupCoordinator(val brokerId: Int,
     heartbeatPurgatory.checkAndComplete(memberKey)
   }
 
-  private def addMemberAndRebalance(member: MemberMetadata,
+  private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
+                                    sessionTimeoutMs: Int,
+                                    memberId: String,
+                                    clientId: String,
+                                    clientHost: String,
+                                    protocolType: String,
+                                    protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback): MemberMetadata = {
+    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+      sessionTimeoutMs, protocolType, protocols)
+
     member.isNew = true
 
     // update the newMemberAdded flag to indicate that the join group can be further delayed
@@ -871,19 +885,20 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def tryCompleteHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
+  def tryCompleteHeartbeat(group: GroupMetadata, pendingMemberId: String, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving)
+      if (pendingMemberId == JoinGroupRequest.UNKNOWN_MEMBER_ID &&
+        (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving))
         forceComplete()
       else false
     }
   }
 
-  def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
+  def onExpireHeartbeat(group: GroupMetadata, pendingMemberId: String, member: MemberMetadata, heartbeatDeadline: Long) {
     group.inLock {
-      if (member.pending) {
+      if (pendingMemberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
         // Clean out pending member from purgatory through the member given session timeout.
-        group.removePendingMember(member.memberId)
+        group.removePendingMember(pendingMemberId)
       } else if (!member.shouldKeepAlive(heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
