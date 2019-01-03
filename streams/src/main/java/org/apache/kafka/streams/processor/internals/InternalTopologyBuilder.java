@@ -710,8 +710,8 @@ public class InternalTopologyBuilder {
 
         final Set<String> sourceTopics = new HashSet<>();
         final Set<Pattern> sourcePatterns = new HashSet<>();
-        final Set<SourceNodeFactory> sourceNodesForPredecessor
-            = findSourcesForProcessorPredecessors(processorNodeFactory.predecessors);
+        final Set<SourceNodeFactory> sourceNodesForPredecessor =
+            findSourcesForProcessorPredecessors(processorNodeFactory.predecessors);
 
         for (final SourceNodeFactory sourceNodeFactory : sourceNodesForPredecessor) {
             if (sourceNodeFactory.pattern != null) {
@@ -1047,8 +1047,8 @@ public class InternalTopologyBuilder {
                                 storeToChangelogTopic.get(stateFactory.name()) :
                                 ProcessorStateManager.storeChangelogTopic(applicationId, stateFactory.name());
                         if (!stateChangelogTopics.containsKey(topicName)) {
-                            final InternalTopicConfig internalTopicConfig
-                                = createChangelogTopicConfig(stateFactory, topicName);
+                            final InternalTopicConfig internalTopicConfig =
+                                createChangelogTopicConfig(stateFactory, topicName);
                             stateChangelogTopics.put(topicName, internalTopicConfig);
                         }
                     }
@@ -1069,8 +1069,8 @@ public class InternalTopologyBuilder {
     // Adjust the generated topology based on the configs.
     // Not exposed as public API and should be removed post 2.0
     private void adjust(final StreamsConfig config) {
-        final boolean enableOptimization20
-            = config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
+        final boolean enableOptimization20 =
+            config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
 
         if (enableOptimization20) {
             for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
@@ -1088,8 +1088,8 @@ public class InternalTopologyBuilder {
     private void setRegexMatchedTopicsToSourceNodes() {
         if (subscriptionUpdates.hasUpdates()) {
             for (final Map.Entry<String, Pattern> stringPatternEntry : nodeToSourcePatterns.entrySet()) {
-                final SourceNodeFactory sourceNode
-                    = (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
+                final SourceNodeFactory sourceNode =
+                    (SourceNodeFactory) nodeFactories.get(stringPatternEntry.getKey());
                 //need to update nodeToSourceTopics with topics matched from given regex
                 nodeToSourceTopics.put(
                     stringPatternEntry.getKey(),
@@ -1780,10 +1780,10 @@ public class InternalTopologyBuilder {
         public String toString() {
             final StringBuilder sb = new StringBuilder();
             sb.append("Topologies:\n ");
-            final TopologyDescription.Subtopology[] sortedSubtopologies
-                = subtopologies.descendingSet().toArray(new Subtopology[0]);
-            final TopologyDescription.GlobalStore[] sortedGlobalStores
-                = globalStores.descendingSet().toArray(new GlobalStore[0]);
+            final TopologyDescription.Subtopology[] sortedSubtopologies =
+                subtopologies.descendingSet().toArray(new Subtopology[0]);
+            final TopologyDescription.GlobalStore[] sortedGlobalStores =
+                globalStores.descendingSet().toArray(new GlobalStore[0]);
             int expectedId = 0;
             int subtopologiesIndex = sortedSubtopologies.length - 1;
             int globalStoresIndex = sortedGlobalStores.length - 1;
