@@ -25,7 +25,6 @@ import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
@@ -41,11 +40,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
@@ -158,6 +157,33 @@ public class RestServerTest {
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
     }
 
+    @Test
+    public void testOptionsDoesNotIncludeWadlOutput() {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class))
+            .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        server.start(herder);
+
+        Response response = request("/connectors")
+            .accept(MediaType.WILDCARD)
+            .options();
+        Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
+        Assert.assertArrayEquals(
+            response.getAllowedMethods().toArray(new String[0]),
+            response.readEntity(String.class).split(", ")
+        );
+
+        PowerMock.verifyAll();
+    }
+
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
         // To be able to set the Origin, we need to toggle this flag
 
@@ -175,12 +201,9 @@ public class RestServerTest {
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(connectorsCallback));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
+            return null;
         });
 
         PowerMock.replayAll();
