@@ -67,6 +67,11 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
+    public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
+        return assign(metadata, subscriptions, 0);
+    }
+
+    @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions, int generation) {
         Set<String> allSubscribedTopics = new HashSet<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())

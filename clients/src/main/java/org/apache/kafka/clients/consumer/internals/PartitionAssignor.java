@@ -56,9 +56,7 @@ public interface PartitionAssignor {
      * @return A map from the members to their respective assignment. This should have one entry
      *         for all members who in the input subscription map.
      */
-    default Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-        return assign(metadata, subscriptions, 0);
-    }
+    Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
 
     /**
      * Perform the group assignment given the member subscriptions, current cluster metadata and group generation.

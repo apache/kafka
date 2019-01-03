@@ -203,8 +203,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     private int generation; // consumer group generation
 
     static final class ConsumerUserData {
-        List<TopicPartition> partitions;
-        int generation;
+        final List<TopicPartition> partitions;
+        final int generation;
         ConsumerUserData(List<TopicPartition> partitions, int generation) {
             this.partitions = partitions;
             this.generation = generation;
@@ -212,8 +212,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     static final class ConsumerGenerationPair {
-        String consumer;
-        int generation;
+        final String consumer;
+        final int generation;
         ConsumerGenerationPair(String consumer, int generation) {
             this.consumer = consumer;
             this.generation = generation;
@@ -410,7 +410,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return assignments;
     }
 
-    public int generation() {
+    int generation() {
         return generation;
     }
 
