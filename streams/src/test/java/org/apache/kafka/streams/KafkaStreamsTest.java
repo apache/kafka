@@ -629,8 +629,7 @@ public class KafkaStreamsTest {
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
                     @Override
-                    public void process(final String key,
-                                        final String value) {
+                    public void process(final String key, final String value) {
                         if (value.length() % 2 == 0) {
                             context().forward(key, key + value);
                         }
@@ -680,8 +679,7 @@ public class KafkaStreamsTest {
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
                     @Override
-                    public void process(final String key,
-                                        final String value) {
+                    public void process(final String key, final String value) {
                         final KeyValueStore<String, Long> kvStore =
                                 (KeyValueStore<String, Long>) context().getStateStore(storeName);
                         kvStore.put(key, 5L);

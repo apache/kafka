@@ -139,16 +139,16 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() {
         mockThread(true);
-        final List<ReadOnlyKeyValueStore<String, String>> kvStores
-            = provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
+        final List<ReadOnlyKeyValueStore<String, String>> kvStores =
+            provider.stores("kv-store", QueryableStoreTypes.keyValueStore());
         assertEquals(2, kvStores.size());
     }
 
     @Test
     public void shouldFindWindowStores() {
         mockThread(true);
-        final List<ReadOnlyWindowStore<Object, Object>> windowStores
-            = provider.stores("window-store", windowStore());
+        final List<ReadOnlyWindowStore<Object, Object>> windowStores =
+            provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
 

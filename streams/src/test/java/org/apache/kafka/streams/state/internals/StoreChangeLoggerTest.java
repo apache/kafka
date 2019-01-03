@@ -77,8 +77,8 @@ public class StoreChangeLoggerTest {
         }
     );
 
-    private final StoreChangeLogger<Integer, String> changeLogger
-        = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    private final StoreChangeLogger<Integer, String> changeLogger =
+        new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
     @Test
     public void testAddRemove() {

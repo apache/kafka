@@ -74,8 +74,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     }
 
     @Override
-    public void process(final K key,
-                        final V value) {
+    public void process(final K key, final V value) {
         processedKeys.add(key);
         processedValues.add(value);
         processed.add((key == null ? "null" : key) + ":" +
@@ -105,8 +104,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         processed.clear();
     }
 
-    public void checkAndClearPunctuateResult(final PunctuationType type,
-                                             final long... expected) {
+    public void checkAndClearPunctuateResult(final PunctuationType type, final long... expected) {
         final ArrayList<Long> punctuated = type == PunctuationType.STREAM_TIME ? punctuatedStreamTime : punctuatedSystemTime;
         assertEquals("the number of outputs:", expected.length, punctuated.size());
 

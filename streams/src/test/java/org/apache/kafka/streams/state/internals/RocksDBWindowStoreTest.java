@@ -83,8 +83,8 @@ public class RocksDBWindowStoreTest {
         DEFAULT_CACHE_SIZE_BYTES,
         new MockStreamsMetrics(new Metrics()));
 
-    private final Producer<byte[], byte[]> producer
-        = new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
+    private final Producer<byte[], byte[]> producer =
+        new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
     private final RecordCollector recordCollector = new RecordCollectorImpl(
         "RocksDBWindowStoreTestTask",
         new LogContext("RocksDBWindowStoreTestTask "),
@@ -108,8 +108,8 @@ public class RocksDBWindowStoreTest {
     };
 
     private final File baseDir = TestUtils.tempDirectory("test");
-    private final InternalMockProcessorContext context
-        = new InternalMockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
+    private final InternalMockProcessorContext context =
+        new InternalMockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
     private WindowStore<Integer, String> windowStore;
 
     private WindowStore<Integer, String> createWindowStore(final ProcessorContext context, final boolean retainDuplicates) {

@@ -94,8 +94,8 @@ public class RocksDBSessionStoreTest {
         final List<KeyValue<Windowed<String>, Long>> expected =
             Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
 
-        final KeyValueIterator<Windowed<String>, Long> values
-            = sessionStore.findSessions(key, 0, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> values =
+            sessionStore.findSessions(key, 0, 1000L);
         assertEquals(expected, toList(values));
     }
 
@@ -123,8 +123,8 @@ public class RocksDBSessionStoreTest {
         final String key = "a";
         sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
         sessionStore.put(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L);
-        final KeyValueIterator<Windowed<String>, Long> results
-            = sessionStore.findSessions(key, -1, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions(key, -1, 1000L);
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
                 KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L),
@@ -156,8 +156,8 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(session3, 3L);
         sessionStore.put(session4, 4L);
         sessionStore.put(session5, 5L);
-        final KeyValueIterator<Windowed<String>, Long> results
-            = sessionStore.findSessions("a", 150, 300);
+        final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 150, 300);
         assertEquals(session2, results.next().key);
         assertEquals(session3, results.next().key);
         assertFalse(results.hasNext());
@@ -185,8 +185,8 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
         sessionStore.put(new Windowed<>("a", new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
-        KeyValueIterator<Windowed<String>, Long> iterator
-            = sessionStore.findSessions("a", 0, Long.MAX_VALUE);
+        KeyValueIterator<Windowed<String>, Long> iterator =
+            sessionStore.findSessions("a", 0, Long.MAX_VALUE);
         List<Long> results = new ArrayList<>();
         while (iterator.hasNext()) {
             results.add(iterator.next().value);
@@ -204,8 +204,8 @@ public class RocksDBSessionStoreTest {
         assertThat(results, equalTo(Arrays.asList(2L, 4L)));
 
 
-        final KeyValueIterator<Windowed<String>, Long> rangeIterator
-            = sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
+        final KeyValueIterator<Windowed<String>, Long> rangeIterator =
+            sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
         final List<Long> rangeResults = new ArrayList<>();
         while (rangeIterator.hasNext()) {
             rangeResults.add(rangeIterator.next().value);
