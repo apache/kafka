@@ -138,8 +138,8 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore
-            = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),
@@ -182,8 +182,8 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore
-            = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
 
         TestUtils.waitForCondition(
             () -> "J".equals(replicatedStore.get(5L)),

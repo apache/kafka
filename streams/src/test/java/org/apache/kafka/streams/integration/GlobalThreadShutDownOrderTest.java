@@ -182,8 +182,7 @@ public class GlobalThreadShutDownOrderTest {
         }
 
         @Override
-        public void process(final String key,
-                            final Long value) {
+        public void process(final String key, final Long value) {
             firstRecordProcessed = true;
         }
 

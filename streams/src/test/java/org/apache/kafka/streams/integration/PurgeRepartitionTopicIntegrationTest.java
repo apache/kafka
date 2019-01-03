@@ -120,12 +120,12 @@ public class PurgeRepartitionTopicIntegrationTest {
             time.sleep(PURGE_INTERVAL_MS);
 
             try {
-                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo
-                    = adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
+                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo =
+                    adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
 
                 for (final DescribeLogDirsResponse.LogDirInfo partitionInfo : logDirInfo) {
-                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo
-                        = partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
+                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo =
+                        partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
                     if (replicaInfo != null && verifier.verify(replicaInfo.size)) {
                         return true;
                     }

@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -48,6 +49,7 @@ import org.junit.experimental.categories.Category;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -153,26 +155,24 @@ public class EosIntegrationTest {
         output.to(outputTopic);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
-            try (
-                final KafkaStreams streams = new KafkaStreams(
-                    builder.build(),
-                    StreamsTestUtils.getStreamsConfig(
-                        applicationId,
-                        CLUSTER.bootstrapServers(),
-                        Serdes.LongSerde.class.getName(),
-                        Serdes.LongSerde.class.getName(),
-                        new Properties() {
-                            {
-                                put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                                put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-                                put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-                                put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
-                                put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
-                                put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
-                                put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
-                            }
-                        }))
-            ) {
+            final Properties config = StreamsTestUtils.getStreamsConfig(
+                applicationId,
+                CLUSTER.bootstrapServers(),
+                Serdes.LongSerde.class.getName(),
+                Serdes.LongSerde.class.getName(),
+                new Properties() {
+                    {
+                        put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+                        put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+                        put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+                        put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+                    }
+                });
+
+            try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
                 streams.start();
 
                 final List<KeyValue<Long, Long>> inputData = prepareData(i * 100, i * 100 + 10L, 0L, 1L);
@@ -191,11 +191,10 @@ public class EosIntegrationTest {
                             CONSUMER_GROUP_ID,
                             LongDeserializer.class,
                             LongDeserializer.class,
-                            new Properties() {
-                                {
-                                    put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                                }
-                            }),
+                            Utils.mkProperties(Collections.singletonMap(
+                                ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                                IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
+                            ),
                         outputTopic,
                         inputData.size()
                     );
@@ -242,24 +241,21 @@ public class EosIntegrationTest {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream(SINGLE_PARTITION_INPUT_TOPIC).to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
-        try (
-            final KafkaStreams streams = new KafkaStreams(
-                builder.build(),
-                StreamsTestUtils.getStreamsConfig(
-                    applicationId,
-                    CLUSTER.bootstrapServers(),
-                    Serdes.LongSerde.class.getName(),
-                    Serdes.LongSerde.class.getName(),
-                    new Properties() {
-                        {
-                            put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                            put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-                            put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-                            put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
-                            put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-                        }
-                    }))
-        ) {
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
+        properties.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+
+        final Properties config = StreamsTestUtils.getStreamsConfig(
+            applicationId,
+            CLUSTER.bootstrapServers(),
+            Serdes.LongSerde.class.getName(),
+            Serdes.LongSerde.class.getName(),
+            properties);
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
             streams.start();
 
             final List<KeyValue<Long, Long>> firstBurstOfData = prepareData(0L, 5L, 0L);
@@ -570,9 +566,9 @@ public class EosIntegrationTest {
         String[] storeNames = null;
         if (withState) {
             storeNames = new String[] {storeName};
-            final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder
-                = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
-                    .withCachingEnabled();
+            final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
+                .keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
+                .withCachingEnabled();
 
             builder.addStateStore(storeBuilder);
         }
@@ -644,28 +640,27 @@ public class EosIntegrationTest {
             } }, storeNames)
             .to(SINGLE_PARTITION_OUTPUT_TOPIC);
 
-        final KafkaStreams streams = new KafkaStreams(
-            builder.build(),
-            StreamsTestUtils.getStreamsConfig(
-                applicationId,
-                CLUSTER.bootstrapServers(),
-                Serdes.LongSerde.class.getName(),
-                Serdes.LongSerde.class.getName(),
-                new Properties() {
-                    {
-                        put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                        put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
-                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
-                        put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-                        put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
-                        put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
-                    }
-                }));
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numberOfStreamsThreads);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.MAX_VALUE);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG), 5 * 1000);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG), 5 * 1000 - 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
+
+        final Properties config = StreamsTestUtils.getStreamsConfig(
+            applicationId,
+            CLUSTER.bootstrapServers(),
+            Serdes.LongSerde.class.getName(),
+            Serdes.LongSerde.class.getName(),
+            properties);
+
+        final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
             if (uncaughtException != null) {
