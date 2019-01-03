@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -370,12 +371,13 @@ public class MetadataResponse extends AbstractResponse {
      * @return the cluster snapshot
      */
     public Cluster cluster() {
-        return cluster(topic -> true, MetadataResponse::partitionMetaToInfo);
+        return cluster(topic -> true, (topic, partitionMetadata, partitionInfoConsumer) ->
+                partitionInfoConsumer.accept(partitionMetaToInfo(topic, partitionMetadata)));
     }
 
     public Cluster cluster(
             Predicate<String> topicsToRetain,
-            BiFunction<String, PartitionMetadata, PartitionInfo> computePartitionInfo) {
+            Metadata.PartitionUpdater partitionUpdater) {
         Set<String> internalTopics = new HashSet<>();
         List<PartitionInfo> partitions = new ArrayList<>();
         for (TopicMetadata metadata : topicMetadata) {
@@ -386,7 +388,7 @@ public class MetadataResponse extends AbstractResponse {
                 if (metadata.isInternal)
                     internalTopics.add(metadata.topic);
                 for (PartitionMetadata partitionMetadata : metadata.partitionMetadata) {
-                    partitions.add(computePartitionInfo.apply(metadata.topic, partitionMetadata));
+                    partitionUpdater.update(metadata.topic, partitionMetadata, partitions::add);
                 }
             }
         }

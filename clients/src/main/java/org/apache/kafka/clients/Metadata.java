@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
 import java.util.function.Predicate;
 
 /**
@@ -342,7 +343,7 @@ public class Metadata implements Closeable {
 
         String previousClusterId = cluster.clusterResource().clusterId();
 
-        this.cluster = metadataResponse.cluster(topic -> true, this::getPartitionInfoFromMeta);
+        this.cluster = metadataResponse.cluster(topic -> true, partitionUpdater);
         this.unavailableTopics = metadataResponse.unavailableTopics();
 
         fireListeners(cluster, unavailableTopics);
@@ -351,7 +352,7 @@ public class Metadata implements Closeable {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = metadataResponse.cluster(topics.keySet()::contains, this::getPartitionInfoFromMeta);
+            this.cluster = metadataResponse.cluster(topics.keySet()::contains, partitionUpdater);
         }
 
         String newClusterId = cluster.clusterResource().clusterId();
@@ -363,33 +364,35 @@ public class Metadata implements Closeable {
         log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
     }
 
+    @FunctionalInterface
+    public interface PartitionUpdater {
+        void update(String topic, MetadataResponse.PartitionMetadata partitionMetadata, Consumer<PartitionInfo> partitionInfoConsumer);
+    }
+
     /**
-     * Convert a {@link org.apache.kafka.common.requests.MetadataResponse.PartitionMetadata} into a
-     * {@link PartitionInfo}. If the epoch in the partition metadata is not newer than the last one we saw, use the
-     * previous partition info instance.
+     * Accept a topic + metadata, transform the metadata to PartitionInfo, and (possibly) hand it off to the consumer
      */
-    private PartitionInfo getPartitionInfoFromMeta(String topic, MetadataResponse.PartitionMetadata partitionMetadata) {
+    private PartitionUpdater partitionUpdater = (topic, partitionMetadata, partitionInfoConsumer) -> {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
         if (partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
             if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch) == newEpoch) {
                 // If the received leader epoch is at least the same as the previous one, use the new partition info
-                return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+                partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
                 PartitionInfo previousInfo = cluster.partition(tp);
                 if (previousInfo != null) {
-                    return previousInfo;
+                    partitionInfoConsumer.accept(previousInfo);
                 } else {
                     log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
-                             "info to use so defaulting to the possible stale data from latest response", tp);
-                    return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+                            "info to use. Refusing to update metadata", tp);
                 }
             }
         } else {
-            return MetadataResponse.partitionMetaToInfo(topic, partitionMetadata);
+            partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
-    }
+    };
 
     private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {
         for (Listener listener: listeners)
