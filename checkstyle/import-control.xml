@@ -213,6 +213,11 @@
     <allow pkg="org.glassfish.jersey" />
   </subpackage>
 
+  <subpackage name="message">
+    <allow pkg="com.fasterxml.jackson" />
+    <allow pkg="com.fasterxml.jackson.annotation" />
+  </subpackage>
+
   <subpackage name="streams">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.test"/>

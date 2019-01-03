@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.message;
+package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -34,8 +34,8 @@ import java.util.List;
 
 import org.apache.kafka.common.protocol.types.Type;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
-import org.apache.kafka.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicSet;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicSet;
 import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
