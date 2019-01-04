@@ -567,6 +567,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
+                    // In #commit, we don't do checkpoint file writing when eos is turned on. To avoid race condition when writing checkpoint file
+                    // through StateManager #closeSuspendedwe, we decide to always checkpoint offsets after commit for EOS.
+                    // The check here is to avoid double checkpoint file write through #commit and #suspend.
+                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
                     try {
                         recordCollector.close();
                     } catch (final ProducerFencedException e) {

@@ -271,10 +271,6 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.error("Failed to close state store {}: ", store.name(), e);
                 }
             }
-
-            if (ackedOffsets != null) {
-                checkpoint(ackedOffsets);
-            }
             stores.clear();
         }
 
