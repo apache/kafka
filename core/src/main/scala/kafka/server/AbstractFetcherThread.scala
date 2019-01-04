@@ -145,7 +145,7 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
 
-    partitionStates.partitionStates.asScala.foreach { state =>
+    partitionStates.stream().forEach { state =>
       val tp = state.topicPartition
       if (state.value.isTruncating) {
         latestEpoch(tp) match {
