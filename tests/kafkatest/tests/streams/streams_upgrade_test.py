@@ -137,7 +137,6 @@ class StreamsUpgradeTest(Test):
                 stdout_monitor.wait_until(self.processed_msg,
                                           timeout_sec=60,
                                           err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
-        self.driver.wait()
         self.driver.stop()
 
         processor.stop()
@@ -184,7 +183,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -194,8 +192,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
     @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
@@ -240,7 +236,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -250,8 +245,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     def test_version_probing_upgrade(self):
         """
@@ -297,7 +290,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -307,8 +299,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     def update_leader(self):
         self.leader = None
