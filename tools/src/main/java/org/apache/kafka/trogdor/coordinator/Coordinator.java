@@ -162,18 +162,15 @@ public final class Coordinator {
         final Coordinator coordinator = new Coordinator(platform, Scheduler.SYSTEM,
             restServer, resource, ThreadLocalRandom.current().nextLong(0, Long.MAX_VALUE / 2));
         restServer.start(resource);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                log.warn("Running coordinator shutdown hook.");
-                try {
-                    coordinator.beginShutdown(false);
-                    coordinator.waitForShutdown();
-                } catch (Exception e) {
-                    log.error("Got exception while running coordinator shutdown hook.", e);
-                }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            log.warn("Running coordinator shutdown hook.");
+            try {
+                coordinator.beginShutdown(false);
+                coordinator.waitForShutdown();
+            } catch (Exception e) {
+                log.error("Got exception while running coordinator shutdown hook.", e);
             }
-        });
+        }));
         coordinator.waitForShutdown();
     }
 };

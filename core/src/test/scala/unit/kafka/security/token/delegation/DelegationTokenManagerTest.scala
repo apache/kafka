@@ -19,7 +19,7 @@ package kafka.security.token.delegation
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Properties
+import java.util.{Base64, Properties}
 
 import kafka.network.RequestChannel.Session
 import kafka.security.auth.Acl.WildCardHost
@@ -187,6 +187,30 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
     assert(tokenManager.getToken(tokenId).isEmpty)
     assertEquals(Errors.NONE, error)
     assertEquals(time.milliseconds, expiryTimeStamp)
+  }
+
+  @Test
+  def testRemoveTokenHmac():Unit = {
+    val config = KafkaConfig.fromProps(props)
+    val tokenManager = createDelegationTokenManager(config, tokenCache, time, zkClient)
+    tokenManager.startup
+
+    tokenManager.createToken(owner, renewer, -1 , createTokenResultCallBack)
+    val issueTime = time.milliseconds
+    val tokenId = createTokenResult.tokenId
+    val password = DelegationTokenManager.createHmac(tokenId, masterKey)
+    assertEquals(CreateTokenResult(issueTime, issueTime + renewTimeMsDefault,  issueTime + maxLifeTimeMsDefault, tokenId, password, Errors.NONE), createTokenResult)
+
+    // expire the token immediately
+    tokenManager.expireToken(owner, ByteBuffer.wrap(password), -1, renewResponseCallback)
+
+    val encodedHmac = Base64.getEncoder.encodeToString(password)
+    // check respective hmac map entry is removed for the expired tokenId.
+    val tokenInformation = tokenManager.tokenCache.tokenIdForHmac(encodedHmac)
+    assertNull(tokenInformation)
+
+    //check that the token is removed
+    assert(tokenManager.getToken(tokenId).isEmpty)
   }
 
   @Test

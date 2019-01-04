@@ -53,6 +53,7 @@ public class RepartitionTopicNamingTest {
     private final String secondRepartitionTopicName = "aggregate-stream";
     private final String thirdRepartitionTopicName = "reduced-stream";
     private final String fourthRepartitionTopicName = "joined-stream";
+    private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
 
     @Test
@@ -60,7 +61,6 @@ public class RepartitionTopicNamingTest {
 
         final String optimizedTopology = buildTopology(StreamsConfig.OPTIMIZE).describe().toString();
         final String unOptimizedTopology = buildTopology(StreamsConfig.NO_OPTIMIZATION).describe().toString();
-        final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
 
         assertThat(optimizedTopology, is(EXPECTED_OPTIMIZED_TOPOLOGY));
         // only one repartition topic
@@ -95,7 +95,7 @@ public class RepartitionTopicNamingTest {
     }
 
     // each KGroupedStream will result in repartition, can't reuse
-    // KGroupedStreams when specifying repartition topic names
+    // KGroupedStreams when specifying repartition topic names and Optimization is turned off
     // need to have separate groupByKey calls when naming repartition topics
     // see test shouldHandleUniqueGroupedInstances below for an example
     @Test
@@ -110,6 +110,18 @@ public class RepartitionTopicNamingTest {
         } catch (final TopologyException te) {
             // ok
         }
+    }
+
+    @Test
+    public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStreamOptimizationsOn() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
+        final Topology topology = builder.build(properties);
+        assertThat(getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern), is(1));
     }
 
 
