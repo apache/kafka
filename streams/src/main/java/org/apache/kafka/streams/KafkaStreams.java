@@ -171,11 +171,11 @@ public class KafkaStreams implements AutoCloseable {
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----> | Pending      |<--- | Error (5)  |---+
-     *                 | Shutdown (3) |     +------------+   |
-     *                 +------+-------+          ^           |
-     *                        |                  |           |
-     *                        v                  +-----------+
+     *         +-----> | Pending      |<--- | Error (5)  |
+     *                 | Shutdown (3) |     +------------+
+     *                 +------+-------+
+     *                        |
+     *                        v
      *                 +------+-------+
      *                 | Not          |
      *                 | Running (4)  |
@@ -252,12 +252,11 @@ public class KafkaStreams implements AutoCloseable {
                 // will be refused but we do not throw exception here, to allow idempotent close calls
                 return false;
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
-                // when the state is already in REBALANCING, it should not transit to REBALANCING
+                // when the state is already in REBALANCING, it should not transit to REBALANCING again
                 return false;
-//            } else if (state == State.RUNNING && newState == State.RUNNING) {
-                // when the state is already in RUNNING, it should not transit to RUNNING
-                // this can happen during starting up
-//                return false;
+            } else if (state == State.ERROR && newState == State.ERROR) {
+                // when the state is already in ERROR, it should not transit to ERROR again
+                return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
@@ -464,8 +463,9 @@ public class KafkaStreams implements AutoCloseable {
 
                     // special case when global thread is dead
                     if (newState == GlobalStreamThread.State.DEAD) {
-                        setState(State.ERROR);
-                        log.error("Global thread has died. The instance will be in error state and should be closed.");
+                        if (setState(State.ERROR)) {
+                            log.error("Global thread has died. The instance will be in error state and should be closed.");
+                        }
                     }
                 }
             }
