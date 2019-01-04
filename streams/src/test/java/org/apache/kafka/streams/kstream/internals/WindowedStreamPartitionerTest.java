@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -50,7 +49,7 @@ public class WindowedStreamPartitionerTest {
             new PartitionInfo(topicName, 5, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private Cluster cluster = new DefaultCluster("cluster", Collections.singletonList(Node.noNode()), infos,
+    private Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
             Collections.<String>emptySet(), Collections.<String>emptySet());
 
     @Test

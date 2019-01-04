@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -50,7 +49,7 @@ public class AdminMetadataManagerTest {
         assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
 
         // Metadata is not ready when bootstrap servers are set
-        mgr.update(DefaultCluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))),
+        mgr.update(Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 9999))),
                 time.milliseconds());
         assertFalse(mgr.isReady());
         assertEquals(0, mgr.metadataFetchDelayMs(time.milliseconds()));
@@ -100,7 +99,7 @@ public class AdminMetadataManagerTest {
         nodes.put(0, new Node(0, "localhost", 8121));
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
-        return new DefaultCluster("mockClusterId", nodes.values(),
+        return new Cluster("mockClusterId", nodes.values(),
                 Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
     }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.clients.producer.internals.FutureRecordMetadata;
@@ -111,7 +110,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public MockProducer(final boolean autoComplete,
                         final Serializer<K> keySerializer,
                         final Serializer<V> valueSerializer) {
-        this(DefaultCluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer);
+        this(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer);
     }
 
     /**
@@ -123,7 +122,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
                         final Partitioner partitioner,
                         final Serializer<K> keySerializer,
                         final Serializer<V> valueSerializer) {
-        this(DefaultCluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
+        this(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer);
     }
 
     /**
@@ -132,7 +131,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer)} new MockProducer(Cluster.empty(), false, null, null, null)}
      */
     public MockProducer() {
-        this(DefaultCluster.empty(), false, null, null, null);
+        this(Cluster.empty(), false, null, null, null);
     }
 
     @Override

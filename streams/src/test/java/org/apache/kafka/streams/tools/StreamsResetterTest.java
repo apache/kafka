@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.tools;
 
 import kafka.tools.StreamsResetter;
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -248,7 +247,7 @@ public class StreamsResetterTest {
         for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
-        return new DefaultCluster("mockClusterId", nodes.values(),
+        return new Cluster("mockClusterId", nodes.values(),
             Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
             Collections.<String>emptySet(), nodes.get(0));
     }

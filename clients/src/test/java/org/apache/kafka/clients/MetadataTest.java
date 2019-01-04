@@ -502,7 +502,7 @@ public class MetadataTest {
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
                         new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, isr, offlineReplicas));
             metadata.update(metadataResponse, 10L);
-            assertNull(metadata.fetch().partition(tp));
+            assertNotNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
         }
     }
@@ -554,9 +554,9 @@ public class MetadataTest {
         // Last-seen is updated
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
-        // Old metadata, rejected, should not populate the cache
+        // Old metadata, rejected
         metadata.update(metadataResponse, 20L);
-        assertNull(metadata.fetch().partition(tp));
+        assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Up-to-date metadata, accepted

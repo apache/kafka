@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.producer.Partitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -43,7 +42,7 @@ public class DefaultPartitionerTest {
     private List<PartitionInfo> partitions = asList(new PartitionInfo(topic, 1, null, nodes, nodes),
                                                     new PartitionInfo(topic, 2, node1, nodes, nodes),
                                                     new PartitionInfo(topic, 0, node0, nodes, nodes));
-    private Cluster cluster = new DefaultCluster("clusterId", asList(node0, node1, node2), partitions,
+    private Cluster cluster = new Cluster("clusterId", asList(node0, node1, node2), partitions,
             Collections.<String>emptySet(), Collections.<String>emptySet());
 
     @Test
@@ -79,7 +78,7 @@ public class DefaultPartitionerTest {
                 new PartitionInfo(topicA, 2, node2, nodes, nodes),
                 new PartitionInfo(topicB, 0, node0, nodes, nodes)
                 );
-        Cluster testCluster = new DefaultCluster("clusterId", asList(node0, node1, node2), allPartitions,
+        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
                 Collections.<String>emptySet(), Collections.<String>emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();

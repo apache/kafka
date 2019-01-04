@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin.internals;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.MetadataUpdater;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
@@ -75,7 +74,7 @@ public class AdminMetadataManager {
     /**
      * The current cluster information.
      */
-    private Cluster cluster = DefaultCluster.empty();
+    private Cluster cluster = Cluster.empty();
 
     /**
      * If we got an authorization exception when we last attempted to fetch
@@ -181,7 +180,7 @@ public class AdminMetadataManager {
     public void clearController() {
         if (cluster.controller() != null) {
             log.trace("Clearing cached controller node {}.", cluster.controller());
-            this.cluster = new DefaultCluster(cluster.clusterResource().clusterId(),
+            this.cluster = new Cluster(cluster.clusterResource().clusterId(),
                 cluster.nodes(),
                 Collections.emptySet(),
                 Collections.emptySet(),

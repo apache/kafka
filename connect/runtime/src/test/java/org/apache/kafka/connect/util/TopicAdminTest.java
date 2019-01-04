@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv;
@@ -122,7 +121,7 @@ public class TopicAdminTest {
         for (int i = 0; i < numNodes; ++i) {
             nodes.put(i, new Node(i, "localhost", 8121 + i));
         }
-        Cluster cluster = new DefaultCluster("mockClusterId", nodes.values(),
+        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
                 Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
         return cluster;

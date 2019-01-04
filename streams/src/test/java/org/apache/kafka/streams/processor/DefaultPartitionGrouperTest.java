@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -43,7 +42,7 @@ public class DefaultPartitionGrouperTest {
             new PartitionInfo("topic2", 1, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final Cluster metadata = new DefaultCluster(
+    private final Cluster metadata = new Cluster(
         "cluster",
         Collections.singletonList(Node.noNode()),
         infos,

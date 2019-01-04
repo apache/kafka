@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
@@ -879,7 +878,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 throw new IllegalStateException("This code should never be reached. Please file a bug report at https://issues.apache.org/jira/projects/KAFKA/");
         }
 
-        taskManager.setClusterMetadata(DefaultCluster.empty().withPartitions(topicToPartitionInfo));
+        taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
         taskManager.setPartitionsByHostState(partitionsByHost);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
         taskManager.updateSubscriptionsFromAssignment(partitions);

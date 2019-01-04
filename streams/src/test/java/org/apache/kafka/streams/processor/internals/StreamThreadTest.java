@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.processor.internals;
 
 import java.time.Duration;
-
-import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -221,7 +219,7 @@ public class StreamThreadTest {
 
     private Cluster createCluster() {
         final Node node = new Node(0, "localhost", 8121);
-        return new DefaultCluster(
+        return new Cluster(
             "mockClusterId",
             singletonList(node),
             Collections.<PartitionInfo>emptySet(),

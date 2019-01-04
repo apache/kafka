@@ -68,7 +68,7 @@ public class Metadata implements Closeable {
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
-    private MutableCluster cluster;
+    private Cluster cluster;
     private Set<String> unavailableTopics = Collections.emptySet();
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -109,7 +109,7 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
-        this.cluster = DefaultCluster.empty();
+        this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
@@ -307,7 +307,7 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
-        this.cluster = DefaultCluster.bootstrap(addresses);
+        this.cluster = Cluster.bootstrap(addresses);
     }
 
     /**
