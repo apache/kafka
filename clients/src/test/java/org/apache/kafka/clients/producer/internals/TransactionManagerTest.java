@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -1901,7 +1902,7 @@ public class TransactionManagerTest {
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
         PartitionInfo part2 = new PartitionInfo(topic, 1, node2, null, null);
 
-        Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
+        Cluster cluster = new DefaultCluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
                 Collections.emptySet(), Collections.emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
@@ -1939,7 +1940,7 @@ public class TransactionManagerTest {
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
+        Cluster cluster = new DefaultCluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
@@ -1966,7 +1967,7 @@ public class TransactionManagerTest {
         Node node1 = new Node(0, "localhost", 1111);
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
 
-        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
+        Cluster cluster = new DefaultCluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
                 Collections.emptySet(), Collections.emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);

@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.ManualMetadataUpdater;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NetworkClientUtils;
@@ -129,7 +130,7 @@ public class ConnectionStressWorker implements TaskWorker {
                 List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                         conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                         conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
-                ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
+                ManualMetadataUpdater updater = new ManualMetadataUpdater(DefaultCluster.bootstrap(addresses).nodes());
                 while (true) {
                     if (doneFuture.isDone()) {
                         break;

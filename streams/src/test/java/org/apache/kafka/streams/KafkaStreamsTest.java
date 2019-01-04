@@ -21,6 +21,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
@@ -175,7 +176,7 @@ public class KafkaStreamsTest {
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         builder.globalTable("anyTopic");
         final List<Node> nodes = asList(new Node(0, "localhost", 8121));
-        final Cluster cluster = new Cluster("mockClusterId", nodes,
+        final Cluster cluster = new DefaultCluster("mockClusterId", nodes,
                                             Collections.emptySet(), Collections.emptySet(),
                                             Collections.emptySet(), nodes.get(0));
         final MockClientSupplier clientSupplier = new MockClientSupplier();

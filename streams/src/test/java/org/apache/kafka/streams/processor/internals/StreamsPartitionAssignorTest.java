@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
@@ -97,7 +98,7 @@ public class StreamsPartitionAssignorTest {
             new PartitionInfo("topic3", 3, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final Cluster metadata = new Cluster(
+    private final Cluster metadata = new DefaultCluster(
         "cluster",
         Collections.singletonList(Node.noNode()),
         infos,
@@ -278,7 +279,7 @@ public class StreamsPartitionAssignorTest {
             new PartitionInfo("topic2", 3, Node.noNode(), new Node[0], new Node[0])
         );
 
-        final Cluster localMetadata = new Cluster(
+        final Cluster localMetadata = new DefaultCluster(
             "cluster",
             Collections.singletonList(Node.noNode()),
             localInfos,
@@ -373,7 +374,7 @@ public class StreamsPartitionAssignorTest {
 
         final Set<TaskId> prevTasks10 = Utils.mkSet(task0);
         final Set<TaskId> standbyTasks10 = Utils.mkSet(task1);
-        final  Cluster emptyMetadata = new Cluster("cluster", Collections.singletonList(Node.noNode()),
+        final  Cluster emptyMetadata = new DefaultCluster("cluster", Collections.singletonList(Node.noNode()),
             Collections.emptySet(),
             Collections.emptySet(),
             Collections.emptySet());

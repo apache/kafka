@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
 
@@ -32,7 +33,7 @@ public class ClusterTest {
     public void testBootstrap() {
         String ipAddress = "140.211.11.105";
         String hostName = "www.example.com";
-        Cluster cluster = Cluster.bootstrap(Arrays.asList(
+        Cluster cluster = DefaultCluster.bootstrap(Arrays.asList(
                 new InetSocketAddress(ipAddress, 9002),
                 new InetSocketAddress(hostName, 9002)
         ));

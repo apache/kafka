@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -64,7 +65,7 @@ public class RecordCollectorTest {
         new PartitionInfo("topic1", 2, Node.noNode(), new Node[0], new Node[0])
     );
 
-    private final Cluster cluster = new Cluster("cluster", Collections.singletonList(Node.noNode()), infos,
+    private final Cluster cluster = new DefaultCluster("cluster", Collections.singletonList(Node.noNode()), infos,
         Collections.emptySet(), Collections.emptySet());
 
 

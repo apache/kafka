@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -120,7 +121,7 @@ public class StreamsMetadataStateTest {
                 new PartitionInfo("topic-three", 0, null, null, null),
                 new PartitionInfo("topic-four", 0, null, null, null));
 
-        cluster = new Cluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
+        cluster = new DefaultCluster(null, Collections.<Node>emptyList(), partitionInfos, Collections.<String>emptySet(), Collections.<String>emptySet());
         metadataState = new StreamsMetadataState(TopologyWrapper.getInternalTopologyBuilder(builder.build()), hostOne);
         metadataState.onChange(hostToPartitions, cluster);
         partitioner = new StreamPartitioner<String, Object>() {
@@ -229,7 +230,7 @@ public class StreamsMetadataStateTest {
 
     @Test
     public void shouldReturnNotAvailableWhenClusterIsEmpty() {
-        metadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), Cluster.empty());
+        metadataState.onChange(Collections.<HostInfo, Set<TopicPartition>>emptyMap(), DefaultCluster.empty());
         final StreamsMetadata result = metadataState.getMetadataWithKey("table-one", "a", Serdes.String().serializer());
         assertEquals(StreamsMetadata.NOT_AVAILABLE, result);
     }

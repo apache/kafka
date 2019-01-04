@@ -27,6 +27,7 @@ import kafka.api._
 import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.clients.DefaultCluster
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
@@ -204,7 +205,7 @@ class MetadataCache(brokerId: Int) extends Logging {
       }
     val unauthorizedTopics = Collections.emptySet[String]
     val internalTopics = getAllTopics(snapshot).filter(Topic.isInternal).asJava
-    new Cluster(clusterId, nodes.values.filter(_ != null).toList.asJava,
+    new DefaultCluster(clusterId, nodes.values.filter(_ != null).toList.asJava,
       partitions.toList.asJava,
       unauthorizedTopics, internalTopics,
       snapshot.controllerId.map(id => node(id)).orNull)

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
@@ -36,7 +37,7 @@ public class CopartitionedTopicsValidatorTest {
     private final StreamsPartitionAssignor.CopartitionedTopicsValidator validator
             = new StreamsPartitionAssignor.CopartitionedTopicsValidator("thread");
     private final Map<TopicPartition, PartitionInfo> partitions = new HashMap<>();
-    private final Cluster cluster = Cluster.empty();
+    private final Cluster cluster = DefaultCluster.empty();
 
     @Before
     public void before() {

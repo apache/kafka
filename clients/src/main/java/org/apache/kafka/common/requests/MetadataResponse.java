@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MutableCluster;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -37,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.function.Predicate;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
@@ -370,12 +371,12 @@ public class MetadataResponse extends AbstractResponse {
      * Get a snapshot of the cluster metadata from this response
      * @return the cluster snapshot
      */
-    public Cluster cluster() {
+    public MutableCluster cluster() {
         return cluster(topic -> true, (topic, partitionMetadata, partitionInfoConsumer) ->
                 partitionInfoConsumer.accept(partitionMetaToInfo(topic, partitionMetadata)));
     }
 
-    public Cluster cluster(
+    public MutableCluster cluster(
             Predicate<String> topicsToRetain,
             Metadata.PartitionUpdater partitionUpdater) {
         Set<String> internalTopics = new HashSet<>();
@@ -393,7 +394,7 @@ public class MetadataResponse extends AbstractResponse {
             }
         }
 
-        return new Cluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
+        return new DefaultCluster(this.clusterId, this.brokers, partitions, topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 topicsByError(Errors.INVALID_TOPIC_EXCEPTION), internalTopics, this.controller);
     }
 

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -291,11 +292,11 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         String topic = "topic";
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
+        final Cluster emptyCluster = new DefaultCluster(null, nodes,
                 Collections.emptySet(),
                 Collections.emptySet(),
                 Collections.emptySet());
-        final Cluster cluster = new Cluster(
+        final Cluster cluster = new DefaultCluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
@@ -346,17 +347,17 @@ public class KafkaProducerTest {
         // Create a record with a partition higher than the initial (outdated) partition range
         ProducerRecord<String, String> extendedRecord = new ProducerRecord<>(topic, 2, null, "value");
         Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
+        final Cluster emptyCluster = new DefaultCluster(null, nodes,
                 Collections.emptySet(),
                 Collections.emptySet(),
                 Collections.emptySet());
-        final Cluster initialCluster = new Cluster(
+        final Cluster initialCluster = new DefaultCluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
                 Collections.emptySet(),
                 Collections.emptySet());
-        final Cluster extendedCluster = new Cluster(
+        final Cluster extendedCluster = new DefaultCluster(
                 "dummy",
                 Collections.singletonList(new Node(0, "host1", 1000)),
                 Arrays.asList(

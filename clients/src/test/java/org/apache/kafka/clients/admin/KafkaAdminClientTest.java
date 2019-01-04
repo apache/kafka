@@ -18,6 +18,7 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.DefaultCluster;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
@@ -188,13 +189,13 @@ public class KafkaAdminClientTest {
         nodes.put(0, new Node(0, "localhost", 8121));
         nodes.put(1, new Node(1, "localhost", 8122));
         nodes.put(2, new Node(2, "localhost", 8123));
-        return new Cluster("mockClusterId", nodes.values(),
+        return new DefaultCluster("mockClusterId", nodes.values(),
                 Collections.emptySet(), Collections.emptySet(),
                 Collections.emptySet(), nodes.get(controllerIndex));
     }
 
     private static Cluster mockBootstrapCluster() {
-        return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
+        return DefaultCluster.bootstrap(ClientUtils.parseAndValidateAddresses(
                 Collections.singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
     }
 
@@ -253,7 +254,7 @@ public class KafkaAdminClientTest {
         // This tests the scenario in which the bootstrap server is unreachable for a short while,
         // which prevents AdminClient from being able to send the initial metadata request
 
-        Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
+        Cluster cluster = DefaultCluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster)) {
             Cluster discoveredCluster = mockCluster(0);
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -430,7 +431,7 @@ public class KafkaAdminClientTest {
         // We should continue retrying on metadata update failures in spite of retry configuration
 
         String topic = "topic";
-        Cluster bootstrapCluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999)));
+        Cluster bootstrapCluster = DefaultCluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999)));
         Cluster initializedCluster = mockCluster(0);
 
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, bootstrapCluster,
@@ -643,7 +644,7 @@ public class KafkaAdminClientTest {
         HashMap<Integer, Node> nodes = new HashMap<>();
         MockTime time = new MockTime();
         nodes.put(0, new Node(0, "localhost", 8121));
-        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+        Cluster cluster = new DefaultCluster("mockClusterId", nodes.values(),
             Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
             Collections.<String>emptySet(), nodes.get(0));
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
@@ -742,7 +743,7 @@ public class KafkaAdminClientTest {
         partitionInfos.add(new PartitionInfo("my_topic", 2, null, new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         partitionInfos.add(new PartitionInfo("my_topic", 3, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         partitionInfos.add(new PartitionInfo("my_topic", 4, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
-        Cluster cluster = new Cluster("mockClusterId", nodes.values(),
+        Cluster cluster = new DefaultCluster("mockClusterId", nodes.values(),
                 partitionInfos, Collections.<String>emptySet(),
                 Collections.<String>emptySet(), nodes.get(0));
 
@@ -849,7 +850,7 @@ public class KafkaAdminClientTest {
         nodes.put(2, node2);
         nodes.put(3, node3);
 
-        final Cluster cluster = new Cluster(
+        final Cluster cluster = new DefaultCluster(
                 "mockClusterId",
                 nodes.values(),
                 Collections.emptyList(),
@@ -948,7 +949,7 @@ public class KafkaAdminClientTest {
         nodes.put(1, node1);
         nodes.put(2, node2);
 
-        final Cluster cluster = new Cluster(
+        final Cluster cluster = new DefaultCluster(
                 "mockClusterId",
                 nodes.values(),
                 Collections.emptyList(),
@@ -980,7 +981,7 @@ public class KafkaAdminClientTest {
         nodes.put(0, new Node(0, "localhost", 8121));
 
         final Cluster cluster =
-            new Cluster(
+            new DefaultCluster(
                 "mockClusterId",
                 nodes.values(),
                 Collections.<PartitionInfo>emptyList(),
@@ -1042,7 +1043,7 @@ public class KafkaAdminClientTest {
         nodes.put(0, new Node(0, "localhost", 8121));
 
         final Cluster cluster =
-            new Cluster(
+            new DefaultCluster(
                 "mockClusterId",
                 nodes.values(),
                 Collections.emptyList(),
@@ -1083,7 +1084,7 @@ public class KafkaAdminClientTest {
         nodes.put(0, new Node(0, "localhost", 8121));
 
         final Cluster cluster =
-            new Cluster(
+            new DefaultCluster(
                 "mockClusterId",
                 nodes.values(),
                 Collections.<PartitionInfo>emptyList(),
