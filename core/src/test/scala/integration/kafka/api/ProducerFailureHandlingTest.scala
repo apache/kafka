@@ -195,7 +195,7 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
       producer1.send(higherRecord).get
     }.getCause match {
       case _: TimeoutException => // this is ok
-      case _ => fail("Sending to a partition not present in the metadata should result in a TimeoutException")
+      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
     }
   }
 
