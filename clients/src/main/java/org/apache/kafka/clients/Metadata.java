@@ -255,30 +255,6 @@ public class Metadata implements Closeable {
         }
     }
 
-    /**
-     * Update the last seen leader epoch for a partition. Requests a metadata update if the given leader epoch differs
-     * from what is in the cache.
-     */
-    public synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition, int leaderEpoch) {
-        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
-        if (updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch != oldEpoch) == leaderEpoch) {
-            this.needUpdate = true;
-            return true;
-        } else {
-            return false;
-        }
-    }
-
-    /**
-     * Unset the last seen leader epoch for a partition and remove its cached metadata
-     */
-    public synchronized void resetLastSeenEpoch(TopicPartition topicPartition) {
-        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
-        if (lastSeenLeaderEpochs.remove(topicPartition) != null) {
-            cache.removePartition(topicPartition);
-        }
-    }
-
     // Visible for testing
     Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
         return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition));
