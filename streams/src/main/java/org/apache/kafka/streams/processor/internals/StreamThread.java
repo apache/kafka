@@ -89,7 +89,7 @@ public class StreamThread extends Thread {
      *          |           |
      *          |           v
      *          |     +-----+-------+
-     *          +<--- | Partitions  |
+     *          +<--- | Partitions  |------+
      *          |     | Revoked (2) | <----+
      *          |     +-----+-------+      |
      *          |           |              |
@@ -133,7 +133,7 @@ public class StreamThread extends Thread {
      * </ul>
      */
     public enum State implements ThreadStateTransitionValidator {
-        CREATED(1, 5), STARTING(2, 5), PARTITIONS_REVOKED(3, 5), PARTITIONS_ASSIGNED(2, 4, 5), RUNNING(2, 5), PENDING_SHUTDOWN(6), DEAD;
+        CREATED(1, 5), STARTING(2, 5), PARTITIONS_REVOKED(2, 3, 5), PARTITIONS_ASSIGNED(2, 4, 5), RUNNING(2, 5), PENDING_SHUTDOWN(6), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -203,10 +203,10 @@ public class StreamThread extends Thread {
                 // when the state is already in NOT_RUNNING, all its transitions
                 // will be refused but we do not throw exception here
                 return null;
-            } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
+///            } else if (state == State.PARTITIONS_REVOKED && newState == State.PARTITIONS_REVOKED) {
                 // when the state is already in PARTITIONS_REVOKED, its transition to itself will be
                 // refused but we do not throw exception here
-                return null;
+//                return null;
             } else if (!state.isValidTransition(newState)) {
                 log.error("Unexpected state transition from {} to {}", oldState, newState);
                 throw new StreamsException(logPrefix + "Unexpected state transition from " + oldState + " to " + newState);

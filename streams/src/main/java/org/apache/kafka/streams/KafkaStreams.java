@@ -171,11 +171,11 @@ public class KafkaStreams implements AutoCloseable {
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----> | Pending      |<--- | Error (5)  |
-     *                 | Shutdown (3) |     +------------+
-     *                 +------+-------+
-     *                        |
-     *                        v
+     *         +-----> | Pending      |<--- | Error (5)  |---+
+     *                 | Shutdown (3) |     +------------+   |
+     *                 +------+-------+          ^           |
+     *                        |                  |           |
+     *                        v                  +-----------+
      *                 +------+-------+
      *                 | Not          |
      *                 | Running (4)  |
@@ -191,7 +191,7 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3);
+        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3, 5);
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -254,10 +254,10 @@ public class KafkaStreams implements AutoCloseable {
             } else if (state == State.REBALANCING && newState == State.REBALANCING) {
                 // when the state is already in REBALANCING, it should not transit to REBALANCING
                 return false;
-            } else if (state == State.RUNNING && newState == State.RUNNING) {
+//            } else if (state == State.RUNNING && newState == State.RUNNING) {
                 // when the state is already in RUNNING, it should not transit to RUNNING
                 // this can happen during starting up
-                return false;
+//                return false;
             } else if (!state.isValidTransition(newState)) {
                 throw new IllegalStateException("Stream-client " + clientId + ": Unexpected state transition from " + oldState + " to " + newState);
             } else {
@@ -463,7 +463,8 @@ public class KafkaStreams implements AutoCloseable {
                     globalThreadState = newState;
 
                     // special case when global thread is dead
-                    if (newState == GlobalStreamThread.State.DEAD && state != State.ERROR && setState(State.ERROR)) {
+                    if (newState == GlobalStreamThread.State.DEAD) {
+                        setState(State.ERROR);
                         log.error("Global thread has died. The instance will be in error state and should be closed.");
                     }
                 }
