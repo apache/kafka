@@ -360,6 +360,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 latSummary.percentiles().get(1).value(),
                 latSummary.percentiles().get(2).value());
             statusUpdater.updateConsumeStatus(consumer.clientId(), statusData);
+            statusUpdater.update();
             log.info("Status={}", JsonUtil.toJsonString(statusData));
             return statusData;
         }

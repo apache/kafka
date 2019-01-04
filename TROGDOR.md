@@ -15,7 +15,7 @@ Running ZooKeeper:
 Running Kafka:
 
     > ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
-
+    
 Then, we want to run a Trogdor Agent, plus a Trogdor broker.
 
 To run the Trogdor Agent:
@@ -91,7 +91,14 @@ To get the test results, we run --show-tasks:
         }
       }
     }
+    
+If we want to run single-node experiments, we can directly execute Trogdor tasks without setting up the coordinator and agents:
 
+      # trogdor-local-run.sh reads the task from the spec, executes it, then reports the result
+      ./tests/trogdor/bin/trogdor-local-run.sh ./tests/trogdor/spec/produce-bench-spec.json
+      Start a task produce_bench_28094 with SPEC: {"class":"org.apache.kafka.trogdor.workload.ProduceBenchSpec"...
+      Result: {"totalSent":50000,"averageLatencyMs":8.40732,"p50LatencyMs":9,"p95LatencyMs":11,"p99LatencyMs":12,"transactionsCommitted":0}      
+     
 Trogdor Architecture
 ========================================
 Trogdor has a single coordinator process which manages multiple agent processes.  Each agent process is responsible for a single cluster node.

@@ -1,0 +1,14 @@
+{
+  "taskId": "TASK_ID",
+  "spec": {
+    "class": "org.apache.kafka.trogdor.workload.ConsumeBenchSpec",
+    "durationMs": 10000000,
+    "consumerNode": "node0",
+    "bootstrapServers": "localhost:9092",
+    "targetMessagesPerSec": 100,
+    "threadsPerWorker": 5,
+    "consumerGroup": "cg",
+    "maxMessages": 100,
+    "activeTopics": ["foo[1-3]"]
+  }
+}
