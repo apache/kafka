@@ -30,7 +30,6 @@ import org.junit.{After, Before, Test}
 
 import scala.util.{Failure, Success, Try}
 import javax.security.auth.login.Configuration
-
 import kafka.api.ApiVersion
 import kafka.cluster.{Broker, EndPoint}
 import org.apache.kafka.common.network.ListenerName
@@ -250,6 +249,8 @@ class ZkAuthorizationTest extends ZooKeeperTestHarness with Logging {
     // Check consumers path.
     val consumersAcl = firstZk.getAcl(ConsumerPathZNode.path)
     assertTrue(ConsumerPathZNode.path, isAclCorrect(consumersAcl, false, false))
+    assertTrue("/kafka-acl-extended", isAclCorrect(firstZk.getAcl("/kafka-acl-extended"), secondZk.secure,
+      ZkData.sensitivePath(ExtendedAclZNode.path)))
   }
 
   /**
