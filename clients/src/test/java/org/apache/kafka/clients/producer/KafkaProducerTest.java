@@ -85,6 +85,27 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
+    private String topic = "topic";
+    private Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+    private final Cluster emptyCluster = new Cluster(null, nodes,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet());
+    private final Cluster onePartitionCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(new Node(0, "host1", 1000)),
+            Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
+    private final Cluster threePartitionCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(new Node(0, "host1", 1000)),
+            Arrays.asList(
+                    new PartitionInfo(topic, 0, null, null, null),
+                    new PartitionInfo(topic, 1, null, null, null),
+                    new PartitionInfo(topic, 2, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
 
     @Rule
     public ExpectedException thrown = ExpectedException.none();
@@ -295,22 +316,10 @@ public class KafkaProducerTest {
     public void testMetadataFetch() throws InterruptedException {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        String topic = "topic";
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet());
-        final Cluster cluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
-                Collections.emptySet(),
-                Collections.emptySet());
         Metadata metadata = mock(Metadata.class);
 
         // Return empty cluster 4 times and cluster from then on
-        when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, cluster);
+        when(metadata.fetch()).thenReturn(emptyCluster, emptyCluster, emptyCluster, emptyCluster, onePartitionCluster);
 
         KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
                 new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, Time.SYSTEM) {
@@ -344,49 +353,23 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testMetadataFetchOnStaleMetadata() throws Exception {
+    public void testMetadataTimeoutWithMissingTopic() throws Exception {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
-        String topic = "topic";
-        ProducerRecord<String, String> initialRecord = new ProducerRecord<>(topic, "value");
+
         // Create a record with a partition higher than the initial (outdated) partition range
-        ProducerRecord<String, String> extendedRecord = new ProducerRecord<>(topic, 2, null, "value");
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
-                Collections.emptySet(),
-                Collections.emptySet(),
-                Collections.emptySet());
-        final Cluster initialCluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
-                Collections.emptySet(),
-                Collections.emptySet());
-        final Cluster extendedCluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(
-                        new PartitionInfo(topic, 0, null, null, null),
-                        new PartitionInfo(topic, 1, null, null, null),
-                        new PartitionInfo(topic, 2, null, null, null)),
-                Collections.emptySet(),
-                Collections.emptySet());
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
         Metadata metadata = mock(Metadata.class);
 
-        AtomicInteger invocationCount = new AtomicInteger(0);
         MockTime mockTime = new MockTime();
-
-        // Return empty cluster 4 times, initialCluster 5 times and extendedCluster after that
+        AtomicInteger invocationCount = new AtomicInteger(0);
         when(metadata.fetch()).then(invocation -> {
             invocationCount.incrementAndGet();
-            if (invocationCount.get() == 11) {
+            if (invocationCount.get() == 5) {
                 mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
             }
-            if (invocationCount.get() > 11)
-                return extendedCluster;
-            else if (invocationCount.get() > 4)
-                return initialCluster;
+
             return emptyCluster;
         });
 
@@ -398,41 +381,86 @@ public class KafkaProducerTest {
                 return super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
             }
         };
-        producer.send(initialRecord);
 
-        // One request update for each empty cluster returned
+        // Four request updates where the topic isn't present, at which point the timeout expires and a
+        // TimeoutException is thrown
+        thrown.expectCause(instanceOf(TimeoutException.class));
+        producer.send(record).get();
         verify(metadata, times(4)).requestUpdate();
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(5)).fetch();
 
-        // Should not request update if metadata is available and records are within range
-        producer.send(initialRecord);
-        verify(metadata, times(4)).requestUpdate();
-        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(6)).fetch();
+        producer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void testMetadataWithPartitionOutOfRange() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        Metadata metadata = mock(Metadata.class);
+
+        MockTime mockTime = new MockTime();
+
+        when(metadata.fetch()).thenReturn(onePartitionCluster, onePartitionCluster, threePartitionCluster);
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
+            }
+        };
+        // One request update if metadata is available but outdated for the given record
+        producer.send(record);
+        verify(metadata, times(2)).requestUpdate();
+        verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(3)).fetch();
+
+        producer.close(0, TimeUnit.MILLISECONDS);
+    }
+
+    @Test
+    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 60000);
+
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        Metadata metadata = mock(Metadata.class);
+
+        MockTime mockTime = new MockTime();
+        AtomicInteger invocationCount = new AtomicInteger(0);
+        when(metadata.fetch()).then(invocation -> {
+            invocationCount.incrementAndGet();
+            if (invocationCount.get() == 5) {
+                mockTime.setCurrentTimeMs(mockTime.milliseconds() + 70000);
+            }
+
+            return onePartitionCluster;
+        });
+
+        KafkaProducer<String, String> producer = new KafkaProducer<String, String>(configs, new StringSerializer(),
+                new StringSerializer(), metadata, new MockClient(Time.SYSTEM, metadata), null, mockTime) {
+            @Override
+            Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
+                // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+                return super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
+            }
+        };
 
         // Four request updates where the requested partition is out of range, at which point the timeout expires
         // and a TimeoutException is thrown
         thrown.expectCause(instanceOf(TimeoutException.class));
-        producer.send(extendedRecord).get();
-        verify(metadata, times(8)).requestUpdate();
-        verify(metadata, times(8)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(11)).fetch();
-        thrown = ExpectedException.none();
-
-        // One request update followed by exception if topic metadata is available but metadata response still returns
-        // the same partition size (either because metadata are still stale at the broker too or because
-        // there weren't any partitions added in the first place)
-        producer.send(extendedRecord);
-        verify(metadata, times(12)).requestUpdate();
-        verify(metadata, times(12)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(16)).fetch();
-
-        // One request update if metadata is available but outdated for the given record
-        producer.send(extendedRecord);
-        verify(metadata, times(13)).requestUpdate();
-        verify(metadata, times(13)).awaitUpdate(anyInt(), anyLong());
-        verify(metadata, times(18)).fetch();
+        producer.send(record).get();
+        verify(metadata, times(4)).requestUpdate();
+        verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
+        verify(metadata, times(5)).fetch();
 
         producer.close(0, TimeUnit.MILLISECONDS);
     }
