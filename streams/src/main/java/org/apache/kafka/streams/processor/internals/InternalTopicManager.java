@@ -196,6 +196,7 @@ public class InternalTopicManager {
                     topicFuture.getKey(),
                     topicDescription.partitions().size());
             } catch (final InterruptedException fatalException) {
+                // this should not happen; if it ever happens it indicate a bug
                 Thread.currentThread().interrupt();
                 log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
                 throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
