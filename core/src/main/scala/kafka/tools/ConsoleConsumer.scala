@@ -152,7 +152,7 @@ object ConsoleConsumer extends Logging {
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props
   }

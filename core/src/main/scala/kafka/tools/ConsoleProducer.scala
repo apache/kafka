@@ -24,7 +24,7 @@ import java.util.Properties
 import kafka.common._
 import kafka.message._
 import kafka.utils.Implicits._
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, ConfigUtils, Exit, ToolsUtils}
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.KafkaException
@@ -95,25 +95,25 @@ object ConsoleProducer {
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
 
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.ACKS_CONFIG, config.options, config.requestRequiredAcksOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.options, config.requestTimeoutMsOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.RETRIES_CONFIG, config.options, config.messageSendMaxRetriesOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.options, config.retryBackoffMsOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.SEND_BUFFER_CONFIG, config.options, config.socketBufferSizeOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.METADATA_MAX_AGE_CONFIG, config.options, config.metadataExpiryMsOpt)
-    ConfigUtils.maybeMergeOptions(
+    CommandLineUtils.maybeMergeOptions(
       props, ProducerConfig.MAX_BLOCK_MS_CONFIG, config.options, config.maxBlockMsOpt)
 
     props
