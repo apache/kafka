@@ -27,6 +27,7 @@ import java.util.Collections;
 
 public class JoinGroupRequest extends AbstractRequest {
 
+
     public static class Builder extends AbstractRequest.Builder<JoinGroupRequest> {
 
         private final JoinGroupRequestData data;
@@ -51,6 +52,7 @@ public class JoinGroupRequest extends AbstractRequest {
     private final short version;
 
     public static final String UNKNOWN_MEMBER_ID = "";
+    public static final String EMPTY_GROUP_INSTANCE_ID = "";
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
         super(ApiKeys.JOIN_GROUP, version);
@@ -86,6 +88,7 @@ public class JoinGroupRequest extends AbstractRequest {
             case 2:
             case 3:
             case 4:
+            case 5:
                 return new JoinGroupResponse(
                         new JoinGroupResponseData()
                                 .setThrottleTimeMs(throttleTimeMs)

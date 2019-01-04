@@ -50,6 +50,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -567,6 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final String clientId;
     private String groupId;
+    private String groupInstanceId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -671,6 +673,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+
+            String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null) {
+                if (groupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)) {
+                    throw new InvalidConfigurationException("group instance id must be non-empty string");
+                }
+                this.groupInstanceId = groupInstanceId;
+            } else {
+                this.groupInstanceId = JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID;
+            }
+
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
@@ -764,6 +777,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 new ConsumerCoordinator(logContext,
                         this.client,
                         groupId,
+                        this.groupInstanceId,
                         maxPollIntervalMs,
                         sessionTimeoutMs,
                         new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
@@ -776,8 +790,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         retryBackoffMs,
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                        this.interceptors,
-                        config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
+                        this.interceptors);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,

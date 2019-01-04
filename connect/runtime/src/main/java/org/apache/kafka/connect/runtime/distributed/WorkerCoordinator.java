@@ -78,14 +78,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         super(logContext,
               client,
               groupId,
+              JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
               heartbeatIntervalMs,
               metrics,
               metricGrpPrefix,
               time,
-              retryBackoffMs,
-              true);
+              retryBackoffMs);
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;

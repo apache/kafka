@@ -266,6 +266,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGroupId("test-join-group")
               .setSessionTimeoutMs(200)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setGroupInstanceId(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
               .setProtocolType("consumer")
               .setProtocols(
                 new JoinGroupRequestData.JoinGroupRequestProtocolSet(
@@ -276,7 +277,6 @@ class RequestQuotaTest extends BaseRequestTest {
               )
               .setRebalanceTimeoutMs(100)
           )
-
         case ApiKeys.HEARTBEAT =>
           new HeartbeatRequest.Builder("test-group", 1, "")
 

@@ -53,6 +53,13 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String GROUP_ID_CONFIG = "group.id";
     private static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
 
+    /**
+     * <code>group.instance.id</code>
+     */
+    public static final String GROUP_INSTANCE_ID_CONFIG = "group.instance.id";
+    private static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by end user. If set to non-empty string, "
+        + "the consumer is treated as a static member, otherwise an empty id indicates a dynamic member.";
+
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
     private static final String MAX_POLL_RECORDS_DOC = "The maximum number of records returned in a single call to poll().";
@@ -239,17 +246,6 @@ public class ConsumerConfig extends AbstractConfig {
             "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
-    /**
-     * <code>internal.leave.group.on.close</code>
-     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
-     * won't occur until <code>session.timeout.ms</code> expires.
-     *
-     * <p>
-     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
-     *
-     */
-    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
-
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
     public static final String ISOLATION_LEVEL_DOC = "<p>Controls how to read messages written transactionally. If set to <code>read_committed</code>, consumer.poll() will only return" +
@@ -278,6 +274,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
+                                .define(GROUP_INSTANCE_ID_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.MEDIUM,
+                                        GROUP_INSTANCE_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
                                         10000,
@@ -454,10 +455,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
-                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                                Type.BOOLEAN,
-                                                true,
-                                                Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,

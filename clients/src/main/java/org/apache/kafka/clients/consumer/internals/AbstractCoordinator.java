@@ -107,11 +107,11 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private final Logger log;
     private final int sessionTimeoutMs;
-    private final boolean leaveGroupOnClose;
     private final GroupCoordinatorMetrics sensors;
     private final Heartbeat heartbeat;
     protected final int rebalanceTimeoutMs;
     protected final String groupId;
+    protected final String groupInstanceId;
     protected final ConsumerNetworkClient client;
     protected final Time time;
     protected final long retryBackoffMs;
@@ -132,22 +132,22 @@ public abstract class AbstractCoordinator implements Closeable {
     public AbstractCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
+                               String groupInstanceId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                Heartbeat heartbeat,
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
-                               long retryBackoffMs,
-                               boolean leaveGroupOnClose) {
+                               long retryBackoffMs) {
         this.log = logContext.logger(AbstractCoordinator.class);
         this.client = client;
         this.time = time;
         this.groupId = Objects.requireNonNull(groupId,
                 "Expected a non-null group id for coordinator construction");
+        this.groupInstanceId = groupInstanceId;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.sessionTimeoutMs = sessionTimeoutMs;
-        this.leaveGroupOnClose = leaveGroupOnClose;
         this.heartbeat = heartbeat;
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
         this.retryBackoffMs = retryBackoffMs;
@@ -156,17 +156,17 @@ public abstract class AbstractCoordinator implements Closeable {
     public AbstractCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
+                               String groupInstanceId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                int heartbeatIntervalMs,
                                Metrics metrics,
                                String metricGrpPrefix,
                                Time time,
-                               long retryBackoffMs,
-                               boolean leaveGroupOnClose) {
-        this(logContext, client, groupId, rebalanceTimeoutMs, sessionTimeoutMs,
+                               long retryBackoffMs) {
+        this(logContext, client, groupId, groupInstanceId, rebalanceTimeoutMs, sessionTimeoutMs,
                 new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs),
-                metrics, metricGrpPrefix, time, retryBackoffMs, leaveGroupOnClose);
+                metrics, metricGrpPrefix, time, retryBackoffMs);
     }
 
     /**
@@ -495,10 +495,12 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setGroupId(groupId)
                         .setSessionTimeoutMs(this.sessionTimeoutMs)
                         .setMemberId(this.generation.memberId)
+                        .setGroupInstanceId(this.groupInstanceId)
                         .setProtocolType(protocolType())
                         .setProtocols(metadata())
                         .setRebalanceTimeoutMs(this.rebalanceTimeoutMs)
         );
+
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
 
@@ -552,7 +554,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.INVALID_SESSION_TIMEOUT
                     || error == Errors.INVALID_GROUP_ID
                     || error == Errors.GROUP_AUTHORIZATION_FAILED
-                    || error == Errors.GROUP_MAX_SIZE_REACHED) {
+                    || error == Errors.GROUP_MAX_SIZE_REACHED
+                    || error == Errors.MEMBER_ID_MISMATCH) {
+                // log the error and re-throw the exception
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {
                     future.raise(new GroupMaxSizeReachedException(groupId));
@@ -800,9 +804,7 @@ public abstract class AbstractCoordinator implements Closeable {
             // Synchronize after closing the heartbeat thread since heartbeat thread
             // needs this lock to complete and terminate after close flag is set.
             synchronized (this) {
-                if (leaveGroupOnClose) {
-                    maybeLeaveGroup();
-                }
+                maybeLeaveGroup();
 
                 // At this point, there may be pending commits (async commits or sync commits that were
                 // interrupted using wakeup) and the leave group request which have been queued, but not
@@ -820,7 +822,11 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.hasMemberId()) {
+        // Starting from 2.3, only dynamic members will send LeaveGroupRequest to the broker,
+        // consumer with valid group.instance.id is viewed as static member that never sends LeaveGroup,
+        // and the membership expiration is only controlled by session timeout.
+        if (isDynamicMember() && !coordinatorUnknown() &&
+                state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Member {} sending LeaveGroup request to coordinator {}", generation.memberId, coordinator);
@@ -832,6 +838,10 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         resetGeneration();
+    }
+
+    protected boolean isDynamicMember() {
+        return groupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
     }
 
     private class LeaveGroupResponseHandler extends CoordinatorResponseHandler<LeaveGroupResponse, Void> {

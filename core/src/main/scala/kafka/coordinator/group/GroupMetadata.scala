@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -128,7 +129,12 @@ private object GroupMetadata {
     group.protocol = Option(protocol)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(group.add(_, null))
+    members.foreach(member => {
+      group.add(member, null)
+      if (member.isStaticMember) {
+        group.addStaticMember(member.groupInstanceId, member.memberId)
+      }
+    })
     group
   }
 }
@@ -184,6 +190,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  // Static membership mapping [key: group.instance.id, value: member.id]
+  private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
@@ -236,11 +244,44 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       leaderId = members.keys.headOption
   }
 
+  /**
+    * Replace the old member id with the new one, keep everything else unchanged and return the
+    * updated member.
+    */
+  def replace(oldMemberId: String,
+              newMemberId: String,
+              groupInstanceId: String): MemberMetadata = {
+    val oldMember = members(oldMemberId)
+    members.remove(oldMemberId)
+
+    oldMember.memberId = newMemberId
+    members.put(newMemberId, oldMember)
+
+    if (isLeader(oldMemberId))
+      leaderId = Some(newMemberId)
+    addStaticMember(groupInstanceId, newMemberId)
+    oldMember
+  }
+
   def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
 
   def addPendingMember(memberId: String) = pendingMembers.add(memberId)
 
   def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
+
+  def hasStaticMember(groupInstanceId: String) = staticMembers.contains(groupInstanceId)
+
+  def getStaticMemberId(groupInstanceId: String) = staticMembers(groupInstanceId)
+
+  /**
+    * Add new static member mapping. Empty group.instance.id is not allowed.
+    */
+  def addStaticMember(groupInstanceId: String, newMemberId: String) = {
+    assert(groupInstanceId != JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
+    staticMembers.put(groupInstanceId, newMemberId)
+  }
+
+  def removeStaticMember(groupInstanceId: String) = staticMembers.remove(groupInstanceId)
 
   def currentState = state
 

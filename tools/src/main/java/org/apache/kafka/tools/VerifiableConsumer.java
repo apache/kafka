@@ -40,6 +40,7 @@ import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -524,6 +525,14 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
                 .dest("groupId")
                 .help("The groupId shared among members of the consumer group");
 
+        parser.addArgument("--group-instance-id")
+                .action(store())
+                .required(true)
+                .type(String.class)
+                .metavar("GROUP_INSTANCE_ID")
+                .dest("groupInstanceId")
+                .help("A unique identifier of the consumer instance");
+
         parser.addArgument("--max-messages")
                 .action(store())
                 .required(false)
@@ -600,6 +609,12 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         }
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
+
+        String groupInstanceId = res.getString("groupInstanceId");
+        if (groupInstanceId.equals("empty_group_instance_id")) {
+            groupInstanceId = JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID;
+        }
+        consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, useAutoCommit);
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, res.getString("resetPolicy"));

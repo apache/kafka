@@ -60,6 +60,7 @@ import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.MemberIdMismatchException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
@@ -302,7 +303,11 @@ public enum Errors {
             MemberIdRequiredException::new),
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new);
+    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.",
+            GroupMaxSizeReachedException::new),
+    MEMBER_ID_MISMATCH(82, "The group.instance.id is already in the consumer group, " +
+            "however the corresponding member.id is not matching the record on coordinator",
+            MemberIdMismatchException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

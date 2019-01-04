@@ -783,6 +783,7 @@ public class RequestResponseTest {
                             .setGroupId("group1")
                             .setSessionTimeoutMs(30000)
                             .setMemberId("consumer1")
+                            .setGroupInstanceId(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
                             .setProtocolType("consumer")
                             .setProtocols(protocols))
                     .build((short) version);
@@ -792,6 +793,7 @@ public class RequestResponseTest {
                             .setGroupId("group1")
                             .setSessionTimeoutMs(30000)
                             .setMemberId("consumer1")
+                            .setGroupInstanceId(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
                             .setProtocolType("consumer")
                             .setProtocols(protocols)
                             .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout

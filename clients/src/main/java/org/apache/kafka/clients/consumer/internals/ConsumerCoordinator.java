@@ -118,6 +118,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public ConsumerCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
+                               String groupInstanceId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                Heartbeat heartbeat,
@@ -130,19 +131,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                long retryBackoffMs,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors,
-                               final boolean leaveGroupOnClose) {
+                               ConsumerInterceptors<?, ?> interceptors) {
+        
         super(logContext,
               client,
               groupId,
+              groupInstanceId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
               heartbeat,
               metrics,
               metricGrpPrefix,
               time,
-              retryBackoffMs,
-              leaveGroupOnClose);
+              retryBackoffMs);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
