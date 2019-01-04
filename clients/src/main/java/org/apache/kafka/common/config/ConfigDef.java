@@ -702,6 +702,21 @@ public class ConfigDef {
                             return Arrays.asList(COMMA_WITH_WHITESPACE.split(trimmed, -1));
                     else
                         throw new ConfigException(name, value, "Expected a comma separated list.");
+                case SET:
+                    if (value instanceof List)
+                        return value;
+                    else if (value instanceof String)
+                        if (trimmed.isEmpty())
+                            return Collections.emptyList();
+                        else {
+                            String[] actualValue = COMMA_WITH_WHITESPACE.split(trimmed, -1);
+                            if (actualValue.length != Arrays.asList(actualValue).stream().distinct().count()) {
+                                throw new ConfigException(name, value, "Contains duplicate values.");
+                            } else
+                                return Arrays.asList(actualValue);
+                        }
+                    else
+                        throw new ConfigException(name, value, "Expected a comma separated set.");
                 case CLASS:
                     if (value instanceof Class)
                         return value;
@@ -740,6 +755,9 @@ public class ConfigDef {
             case LIST:
                 List<?> valueList = (List<?>) parsedValue;
                 return Utils.join(valueList, ",");
+            case SET:
+                List<?> setValueList = (List<?>) parsedValue;
+                return Utils.join(setValueList, ",");
             case CLASS:
                 Class<?> clazz = (Class<?>) parsedValue;
                 return clazz.getName();
@@ -776,7 +794,7 @@ public class ConfigDef {
      * The config types
      */
     public enum Type {
-        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD
+        BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD, SET
     }
 
     /**

@@ -269,6 +269,31 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     } catch {
       case _: ConfigException => // topic creation should fail due to the invalid config value
     }
+
+    // try to create the topic with duplicate config values
+    try {
+      val createOpts = new TopicCommandOptions(
+        Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+          "--config", "cleanup.policy=compact,delete,compact"))
+      TopicCommand.createTopic(zkClient, createOpts)
+      fail("Expected exception on invalid topic-level config.")
+    } catch {
+      case _: ConfigException => // topic creation should fail due to the invalid config value
+    }
+
+    // create and modify the topic to update with invalid configs
+    val topic = "test"
+    val createOpts = new TopicCommandOptions(
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", topic,
+        "--config", "cleanup.policy=compact"))
+    TopicCommand.createTopic(zkClient, createOpts)
+    try {
+      val alterOpts = new TopicCommandOptions(Array("--config", "cleanup.policy=compact,delete,compact", "--topic", topic))
+      TopicCommand.alterTopic(zkClient, alterOpts)
+    } catch {
+      case _: ConfigException => // alter topic should fail, due to the invalid config value
+    }
+
   }
 
   @Test
