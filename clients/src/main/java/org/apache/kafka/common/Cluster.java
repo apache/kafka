@@ -29,7 +29,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * A representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
+ * An immutable representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
  */
 public final class Cluster {
 
@@ -99,16 +99,19 @@ public final class Cluster {
         List<Node> copy = new ArrayList<>(nodes);
         Collections.shuffle(copy);
         this.nodes = Collections.unmodifiableList(copy);
-        this.nodesById = new HashMap<>();
-        for (Node node : nodes)
-            this.nodesById.put(node.id(), node);
 
+        // Index the nodes for quick lookup
+        Map<Integer, Node> tmpNodesById = new HashMap<>();
+        for (Node node : nodes)
+            tmpNodesById.put(node.id(), node);
+        this.nodesById = Collections.unmodifiableMap(tmpNodesById);
 
         // index the partitions by topic/partition for quick lookup
-        this.partitionsByTopicPartition = new HashMap<>(partitions.size());
+        Map<TopicPartition, PartitionInfo> tmpPartitionsByTopicPartition = new HashMap<>(partitions.size());
         for (PartitionInfo p : partitions) {
-            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+            tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
         }
+        this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
@@ -228,15 +231,6 @@ public final class Cluster {
         return partitionsByTopicPartition.values().stream()
                 .filter(info -> Objects.nonNull(info.leader()) && info.leader().id() == nodeId)
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * Remove a partition from this cache.
-     * @param topicPartition
-     * @return
-     */
-    public boolean removePartition(TopicPartition topicPartition) {
-        return partitionsByTopicPartition.remove(topicPartition) != null;
     }
 
     /**

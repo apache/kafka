@@ -18,11 +18,13 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,6 +59,79 @@ import java.util.function.Predicate;
  */
 public class Metadata implements Closeable {
 
+    /**
+     * A mutable cache of nodes, topics, and partitions in the Kafka cluster
+     */
+    static class ClusterMetadataCache {
+        final boolean bootstrapped;
+        final String clusterId;
+        final List<Node> nodes;
+        final Set<String> unauthorizedTopics;
+        final Set<String> invalidTopics;
+        final Set<String> internalTopics;
+        final Node controller;
+        final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+        final Map<Integer, Node> nodesById;
+
+        ClusterMetadataCache(boolean bootstrapped,
+                             String clusterId,
+                             List<Node> nodes,
+                             Collection<PartitionInfo> partitions,
+                             Set<String> unauthorizedTopics,
+                             Set<String> invalidTopics,
+                             Set<String> internalTopics,
+                             Node controller) {
+            this.bootstrapped = bootstrapped;
+            this.clusterId = clusterId;
+            this.nodes = nodes;
+            this.unauthorizedTopics = unauthorizedTopics;
+            this.invalidTopics = invalidTopics;
+            this.internalTopics = internalTopics;
+            this.controller = controller;
+            this.nodesById = new HashMap<>();
+            for (Node node : nodes) {
+                this.nodesById.put(node.id(), node);
+            }
+            // index the partitions by topic/partition for quick lookup
+            this.partitionsByTopicPartition = new HashMap<>(partitions.size());
+            for (PartitionInfo p : partitions) {
+                this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+            }
+        }
+
+        /**
+         * Remove a partition from this cache.
+         * @param topicPartition
+         * @return
+         */
+        boolean removePartition(TopicPartition topicPartition) {
+            return partitionsByTopicPartition.remove(topicPartition) != null;
+        }
+
+        /**
+         * Convert this to a Cluster instance
+         * @return
+         */
+        Cluster toCluster() {
+            return new Cluster(clusterId, nodes, partitionsByTopicPartition.values(), unauthorizedTopics,
+                    internalTopics, internalTopics, controller);
+        }
+
+        static ClusterMetadataCache bootstrap(Collection<InetSocketAddress> addresses) {
+            List<Node> nodes = new ArrayList<>();
+            int nodeId = -1;
+            for (InetSocketAddress address : addresses)
+                nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
+            return new ClusterMetadataCache(true, null, nodes, new ArrayList<>(0),
+                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
+        }
+
+        static ClusterMetadataCache empty() {
+            return new ClusterMetadataCache(false, null, new ArrayList<>(0), new ArrayList<>(0),
+                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
+        }
+    }
+
     private static final Logger log = LoggerFactory.getLogger(Metadata.class);
 
     public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
@@ -68,7 +143,7 @@ public class Metadata implements Closeable {
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
-    private Cluster cluster;
+    private ClusterMetadataCache cache = ClusterMetadataCache.empty();
     private Set<String> unavailableTopics = Collections.emptySet();
     private boolean needUpdate;
     /* Topics with expiry time */
@@ -109,7 +184,6 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
-        this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
@@ -123,7 +197,7 @@ public class Metadata implements Closeable {
      * Get the current cluster info without blocking
      */
     public synchronized Cluster fetch() {
-        return this.cluster;
+        return cache.toCluster();
     }
 
     /**
@@ -201,7 +275,7 @@ public class Metadata implements Closeable {
     public synchronized void resetLastSeenEpoch(TopicPartition topicPartition) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
         if (lastSeenLeaderEpochs.remove(topicPartition) != null) {
-            cluster.removePartition(topicPartition);
+            cache.removePartition(topicPartition);
         }
     }
 
@@ -219,7 +293,7 @@ public class Metadata implements Closeable {
         if (oldEpoch == null || epochTest.test(oldEpoch)) {
             log.debug("Setting last seen epoch to {} for partition {}", epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
-            cluster.removePartition(topicPartition);
+            cache.removePartition(topicPartition);
             return epoch;
         } else {
             return oldEpoch;
@@ -307,7 +381,7 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
-        this.cluster = Cluster.bootstrap(addresses);
+        this.cache = ClusterMetadataCache.bootstrap(addresses);
     }
 
     /**
@@ -341,38 +415,64 @@ public class Metadata implements Closeable {
             }
         }
 
-        String previousClusterId = cluster.clusterResource().clusterId();
+        String previousClusterId = cache.clusterId;
 
-        this.cluster = metadataResponse.cluster(topic -> true, partitionUpdater);
+        this.cache = handleMetadataResponse(metadataResponse, topic -> true);
         this.unavailableTopics = metadataResponse.unavailableTopics();
-
-        fireListeners(cluster, unavailableTopics);
+        Cluster clusterForListeners = this.cache.toCluster();
+        fireListeners(clusterForListeners, unavailableTopics);
 
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = metadataResponse.cluster(topics.keySet()::contains, partitionUpdater);
+            this.cache = handleMetadataResponse(metadataResponse, topics.keySet()::contains);
         }
 
-        String newClusterId = cluster.clusterResource().clusterId();
+        String newClusterId = cache.clusterId;
         if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
             log.info("Cluster ID: {}", newClusterId);
-        clusterResourceListeners.onUpdate(cluster.clusterResource());
+        clusterResourceListeners.onUpdate(clusterForListeners.clusterResource());
 
         notifyAll();
-        log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
-    }
-
-    @FunctionalInterface
-    public interface PartitionUpdater {
-        void update(String topic, MetadataResponse.PartitionMetadata partitionMetadata, Consumer<PartitionInfo> partitionInfoConsumer);
+        log.debug("Updated cluster metadata version {} to {}", this.version, this.cache);
     }
 
     /**
-     * Accept a topic + metadata, transform the metadata to PartitionInfo, and (possibly) hand it off to the consumer
+     * Transform a MetadataResponse into a new MetadataCache instance.
+     * @param metadataResponse
+     * @param topicsToRetain
+     * @return
      */
-    private PartitionUpdater partitionUpdater = (topic, partitionMetadata, partitionInfoConsumer) -> {
+    private ClusterMetadataCache handleMetadataResponse(MetadataResponse metadataResponse, Predicate<String> topicsToRetain) {
+        Set<String> internalTopics = new HashSet<>();
+        List<PartitionInfo> partitions = new ArrayList<>();
+        for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
+            if (!topicsToRetain.test(metadata.topic()))
+                continue;
+
+            if (metadata.error() == Errors.NONE) {
+                if (metadata.isInternal())
+                    internalTopics.add(metadata.topic());
+                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitions::add);
+                }
+            }
+        }
+
+        return new ClusterMetadataCache(false, metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
+                metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
+                metadataResponse.topicsByError(Errors.INVALID_TOPIC_EXCEPTION),
+                internalTopics, metadataResponse.controller());
+    }
+
+    /**
+     * Compute the correct PartitionInfo to cache for a topic+partition.
+     * @param topic
+     * @param partitionMetadata
+     * @param partitionInfoConsumer
+     */
+    private void updatePartitionInfo(String topic, MetadataResponse.PartitionMetadata partitionMetadata, Consumer<PartitionInfo> partitionInfoConsumer) {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
         if (partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
@@ -381,7 +481,7 @@ public class Metadata implements Closeable {
                 partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
-                PartitionInfo previousInfo = cluster.partition(tp);
+                PartitionInfo previousInfo = cache.partitionsByTopicPartition.get(tp);
                 if (previousInfo != null) {
                     partitionInfoConsumer.accept(previousInfo);
                 } else {
@@ -392,7 +492,7 @@ public class Metadata implements Closeable {
         } else {
             partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
-    };
+    }
 
     private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {
         for (Listener listener: listeners)
