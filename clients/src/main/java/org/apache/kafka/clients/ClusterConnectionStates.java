@@ -345,7 +345,7 @@ final class ClusterConnectionStates {
         long throttleUntilTimeMs;
         private List<InetAddress> addresses;
         private int index = 0;
-        private final String host;
+        private String host;
         private final ClientDnsLookup clientDnsLookup;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
@@ -377,5 +377,15 @@ final class ClusterConnectionStates {
         public String toString() {
             return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
         }
+
+        /* Visible for testing */
+        private void setHost(String host) {
+            this.host = host;
+        }
+    }
+
+    /* Visible for testing */
+    protected void changeHostForNode(String nodeId, String host) {
+        nodeState.get(nodeId).setHost(host);
     }
 }
