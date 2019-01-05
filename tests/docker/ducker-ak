@@ -267,7 +267,7 @@ ducker_up() {
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
-	    -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
+            -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
