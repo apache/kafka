@@ -24,8 +24,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -278,12 +279,20 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testHostResolveChange() throws UnknownHostException {
+    public void testHostResolveChange() throws UnknownHostException, ReflectiveOperationException {
         assertEquals(2, ClientUtils.resolve(hostTwoIps, ClientDnsLookup.USE_ALL_DNS_IPS).size());
 
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress addr1 = connectionStates.currentAddress(nodeId1);
-        connectionStates.changeHostForNode(nodeId1, "localhost"); // simulate the host in DNS lookup changed
+
+        // reflection to simulate host change in DNS lookup
+        Method nodeStateMethod = connectionStates.getClass().getDeclaredMethod("nodeState", String.class);
+        nodeStateMethod.setAccessible(true);
+        Object nodeState = nodeStateMethod.invoke(connectionStates, nodeId1);
+        Field hostField = nodeState.getClass().getDeclaredField("host");
+        hostField.setAccessible(true);
+        hostField.set(nodeState, "localhost");
+
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
         assertNotSame(addr1, addr2);
