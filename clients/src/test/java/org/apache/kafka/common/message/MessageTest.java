@@ -42,6 +42,8 @@ import org.junit.Test;
 import org.junit.rules.Timeout;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public final class MessageTest {
     @Rule
@@ -128,21 +130,19 @@ public final class MessageTest {
             try {
                 message = MessageFactory.newRequest(apiKey.id);
             } catch (UnsupportedVersionException e) {
-                Assert.fail("No request message spec found for API " + apiKey);
+                fail("No request message spec found for API " + apiKey);
             }
-            if (apiKey.latestVersion() > message.highestSupportedVersion()) {
-                Assert.fail("Request message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion());
-            }
+            assertTrue("Request message spec for " + apiKey + " only " +
+                    "supports versions up to " + message.highestSupportedVersion(),
+                apiKey.latestVersion() <= message.highestSupportedVersion());
             try {
                 message = MessageFactory.newResponse(apiKey.id);
             } catch (UnsupportedVersionException e) {
-                Assert.fail("No response message spec found for API " + apiKey);
+                fail("No response message spec found for API " + apiKey);
             }
-            if (apiKey.latestVersion() > message.highestSupportedVersion()) {
-                Assert.fail("Response message spec for " + apiKey + " only " +
-                    "supports versions up to " + message.highestSupportedVersion());
-            }
+            assertTrue("Response message spec for " + apiKey + " only " +
+                    "supports versions up to " + message.highestSupportedVersion(),
+                apiKey.latestVersion() <= message.highestSupportedVersion());
         }
     }
 
@@ -293,10 +293,10 @@ public final class MessageTest {
                                      Message message) throws Exception {
         try {
             message.size(version);
-            Assert.fail("Expected to see an UnsupportedVersionException when writing " +
+            fail("Expected to see an UnsupportedVersionException when writing " +
                 message + " at version " + version);
         } catch (UnsupportedVersionException e) {
-            Assert.assertTrue("Expected to get an error message about " + problemFieldName,
+            assertTrue("Expected to get an error message about " + problemFieldName,
                 e.getMessage().contains(problemFieldName));
         }
     }
