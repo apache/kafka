@@ -600,6 +600,5 @@ class StreamsUpgradeTest(Test):
         count = 0
         for node in self.kafka.nodes:
             topic_list = self.kafka.list_topics("placeholder", node)
-            for topic in topic_list:
-                count += 1
+            count += len(topic_list)
         return count
