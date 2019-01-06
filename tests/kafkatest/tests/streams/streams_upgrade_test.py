@@ -116,34 +116,34 @@ class StreamsUpgradeTest(Test):
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
 
         processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
-        
-        self.driver.start()
-        with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.start()
-            monitor.wait_until(self.processed_msg,
-                               timeout_sec=60,
-                               err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node))
 
-        connected_message = "Discovered group coordinator"
-        with processor.node.account.monitor_log(processor.LOG_FILE) as log_monitor:
-            with processor.node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+        with self.driver.node.account.monitor_log(self.driver.STDOUT_FILE) as driver_monitor:
+            self.driver.start()
+            with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+                processor.start()
+                monitor.wait_until(self.processed_msg,
+                                   timeout_sec=60,
+                                   err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node))
 
-                self.perform_broker_upgrade(to_version)
+            connected_message = "Discovered group coordinator"
+            with processor.node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+                with processor.node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                    self.perform_broker_upgrade(to_version)
 
-                log_monitor.wait_until(connected_message,
-                                       timeout_sec=120,
-                                       err_msg=("Never saw output '%s' on " % connected_message) + str(processor.node.account))
+                    log_monitor.wait_until(connected_message,
+                                           timeout_sec=120,
+                                           err_msg=("Never saw output '%s' on " % connected_message) + str(processor.node.account))
 
-                stdout_monitor.wait_until(self.processed_msg,
-                                          timeout_sec=60,
-                                          err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
-        self.driver.wait()
+                    stdout_monitor.wait_until(self.processed_msg,
+                                              timeout_sec=60,
+                                              err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
+
+            driver_monitor.wait_until('ALL-RECORDS-DELIVERED\|PROCESSED-MORE-THAN-GENERATED',
+                                      timeout_sec=180,
+                                      err_msg="Never saw output '%s' on" % 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' + str(self.driver.node.account))
+
         self.driver.stop()
-
         processor.stop()
-
-        node = self.driver.node
-        node.account.ssh("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
         processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
