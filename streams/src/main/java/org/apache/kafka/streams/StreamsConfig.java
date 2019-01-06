@@ -382,6 +382,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String NUM_STREAM_THREADS_CONFIG = "num.stream.threads";
     private static final String NUM_STREAM_THREADS_DOC = "The number of threads to execute stream processing.";
 
+    /** {@code num.threads.per.task} */ 
+    @SuppressWarnings("WeakerAccess")
+    public static final String NUM_THREADS_PER_TASK_CONFIG = "num.threads.per.task";
+    private static final String NUM_THREADS_PER_TASK_DOC = "The number of threads per task that a user allows Kafka Streams to process.";
+    
     /** {@code partition.grouper} */
     @SuppressWarnings("WeakerAccess")
     public static final String PARTITION_GROUPER_CLASS_CONFIG = "partition.grouper";
@@ -544,6 +549,11 @@ public class StreamsConfig extends AbstractConfig {
                     1,
                     Importance.MEDIUM,
                     NUM_STREAM_THREADS_DOC)
+            .define(NUM_THREADS_PER_TASK_CONFIG,
+            		Type.INT,
+            		1,
+            		Importance.MEDIUM,
+            		NUM_THREADS_PER_TASK_DOC)
             .define(MAX_TASK_IDLE_MS_CONFIG,
                     Type.LONG,
                     0L,
