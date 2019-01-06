@@ -137,6 +137,7 @@ class StreamsUpgradeTest(Test):
                 stdout_monitor.wait_until(self.processed_msg,
                                           timeout_sec=60,
                                           err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
+        self.driver.wait()
         self.driver.stop()
 
         processor.stop()
@@ -340,7 +341,7 @@ class StreamsUpgradeTest(Test):
                 log_monitor.wait_until(kafka_version_str,
                                        timeout_sec=60,
                                        err_msg="Could not detect Kafka Streams version " + version + " " + str(node1.account))
-                monitor.wait_until("processed 100 records from topic",
+                monitor.wait_until("processed [0-9]* records from topic",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
 
@@ -354,10 +355,10 @@ class StreamsUpgradeTest(Test):
                     log_monitor.wait_until(kafka_version_str,
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + version + " " + str(node2.account))
-                    first_monitor.wait_until("processed 100 records from topic",
+                    first_monitor.wait_until("processed [0-9]* records from topic",
                                              timeout_sec=60,
                                              err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
-                    second_monitor.wait_until("processed 100 records from topic",
+                    second_monitor.wait_until("processed [0-9]* records from topic",
                                               timeout_sec=60,
                                               err_msg="Never saw output 'processed 100 records from topic' on" + str(node2.account))
 
@@ -372,13 +373,13 @@ class StreamsUpgradeTest(Test):
                         log_monitor.wait_until(kafka_version_str,
                                                timeout_sec=60,
                                                err_msg="Could not detect Kafka Streams version " + version + " " + str(node3.account))
-                        first_monitor.wait_until("processed 100 records from topic",
+                        first_monitor.wait_until("processed [0-9]* records from topic",
                                                  timeout_sec=60,
                                                  err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
-                        second_monitor.wait_until("processed 100 records from topic",
+                        second_monitor.wait_until("processed [0-9]* records from topic",
                                                   timeout_sec=60,
                                                   err_msg="Never saw output 'processed 100 records from topic' on" + str(node2.account))
-                        third_monitor.wait_until("processed 100 records from topic",
+                        third_monitor.wait_until("processed [0-9]* records from topic",
                                                   timeout_sec=60,
                                                   err_msg="Never saw output 'processed 100 records from topic' on" + str(node3.account))
 
