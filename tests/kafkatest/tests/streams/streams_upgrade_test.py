@@ -119,6 +119,7 @@ class StreamsUpgradeTest(Test):
 
         with self.driver.node.account.monitor_log(self.driver.STDOUT_FILE) as driver_monitor:
             self.driver.start()
+
             with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
                 processor.start()
                 monitor.wait_until(self.processed_msg,
