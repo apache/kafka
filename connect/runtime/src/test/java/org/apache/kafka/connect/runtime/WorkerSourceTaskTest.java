@@ -39,6 +39,7 @@ import org.apache.kafka.connect.storage.OffsetStorageReader;
 import org.apache.kafka.connect.storage.OffsetStorageWriter;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.TestFuture;
 import org.apache.kafka.connect.util.ThreadedTest;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -72,6 +73,8 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThat;
+import static org.hamcrest.CoreMatchers.equalTo;
 
 @PowerMockIgnore({"javax.management.*",
                   "org.apache.kafka.connect.runtime.isolation.*"})
@@ -80,6 +83,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
+    private static final Map<String, Integer> OFFSET2 = Collections.singletonMap("key", 13);
 
     // Connect-format data
     private static final Schema KEY_SCHEMA = Schema.INT32_SCHEMA;
@@ -120,6 +124,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
     private static final List<SourceRecord> RECORDS = Arrays.asList(
             new SourceRecord(PARTITION, OFFSET, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
+    );
+    private static final List<SourceRecord> RECORDS2 = Arrays.asList(
+            new SourceRecord(PARTITION, OFFSET2, "topic", null, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD)
     );
 
     @Override
@@ -212,7 +219,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap = expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -243,6 +250,114 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         taskFuture.get();
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap.getValue();
+        assertEquals(concatWithSelf(RECORDS, count.get()), offsetsFlushed);
+    }
+
+    /*
+    Unfortunately it is (probably) not feasible (throughput-wise) to guarantee that everything polled will be included
+    in a offsets flush. Currently it is possible that recently polled records will not have their offsets included in
+    a flush of offsets. But the records that have had their offsets flushed should be correctly reported to the source
+    task (offsetsFlushedAndAcked).
+    This test thoroughly provokes a scenario where the last polled records are not included in a offsets flush, and
+    verifies that only the records that actually had their offsets flushed are reported as such.
+     */
+    @Test
+    public void testOffsetsFlushedNotIncludingLatestPoll() throws Exception {
+        createWorkerTask();
+
+        sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
+        EasyMock.expectLastCall();
+        sourceTask.start(TASK_PROPS);
+        EasyMock.expectLastCall();
+        statusListener.onStartup(taskId);
+        EasyMock.expectLastCall();
+
+        final CountDownLatch offsetFlushLatch = new CountDownLatch(1);
+        final CountDownLatch allPolledLatch = new CountDownLatch(1);
+        final PolledRecordsAndOffsetCaptures polledRecordsAndOffsetCaptures = expectPolls(2, offsetFlushLatch, allPolledLatch, RECORDS, RECORDS2);
+
+        final Map<Map<String, Object>, Map<String, Object>> writtenAndFlushedOffsets = new HashMap<>();
+        offsetWriter.beginFlush();
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Boolean>() {
+            @Override
+            public Boolean answer() throws Throwable {
+                writtenAndFlushedOffsets.putAll(polledRecordsAndOffsetCaptures.writtenOffsetsSinceLast());
+                return true;
+            }
+        });
+        offsetWriter.doFlush(EasyMock.anyObject(Callback.class));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Future<Void>>() {
+            @Override
+            public Future<Void> answer() throws Throwable {
+                TestFuture<Void> future = new TestFuture<Void>();
+                future.resolveOnGet((Void) null);
+                return future;
+            }
+        });
+        final List<List<SourceRecord>> polledRecordsAtTimeOfOffsetsFlushed = new ArrayList<>();
+        final Map<Map<String, Object>, Map<String, Object>> writtenAndFlushedOffsetsAtTimeOfOffsetsFlushed = new HashMap<>();
+        Capture<List<SourceRecord>> recordsReportedHavingOffsetsFlushed = EasyMock.newCapture();
+        sourceTask.offsetsFlushedAndAcked(EasyMock.capture(recordsReportedHavingOffsetsFlushed));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() throws Throwable {
+                polledRecordsAtTimeOfOffsetsFlushed.addAll(polledRecordsAndOffsetCaptures.polledRecordsSinceLast());
+                writtenAndFlushedOffsetsAtTimeOfOffsetsFlushed.putAll(writtenAndFlushedOffsets);
+                offsetFlushLatch.countDown();
+                return null;
+            }
+        });
+
+        sourceTask.stop();
+        EasyMock.expectLastCall();
+        expectOffsetFlush(true);
+
+        statusListener.onShutdown(taskId);
+        EasyMock.expectLastCall();
+
+        producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
+        EasyMock.expectLastCall();
+
+        transformationChain.close();
+        EasyMock.expectLastCall();
+
+        PowerMock.replayAll();
+
+        workerTask.initialize(TASK_CONFIG);
+        Future<?> taskFuture = executor.submit(workerTask);
+
+        assertTrue(awaitLatch(allPolledLatch));
+        // To make test green, move offsetFlushLatch.countDown() here (see above)
+        // offsetFlushLatch.countDown();
+
+        // Simulating SourceTaskOffsetCommitter calling flushOffsets at will
+        workerTask.commitOffsets();
+
+        assertTrue(awaitLatch(offsetFlushLatch));
+        workerTask.stop();
+        assertTrue(workerTask.awaitStop(1000));
+
+        taskFuture.get();
+
+        PowerMock.verifyAll();
+
+        // We wanted to trigger that RECORDS was polled, and then RECORDS2 was polled
+        List<List<SourceRecord>> wantedPolledRecordListsAtTimeOfOffsetsFlushed = new ArrayList<>();
+        wantedPolledRecordListsAtTimeOfOffsetsFlushed.add(RECORDS);
+        wantedPolledRecordListsAtTimeOfOffsetsFlushed.add(RECORDS2);
+
+        // We wanted to trigger that, only RECORDS (not RECORDS2) made it to the offsets flush
+        List<List<SourceRecord>> wantedRecordListsWithOffsetsIncludedInOffsetsFlush = new ArrayList<>();
+        wantedRecordListsWithOffsetsIncludedInOffsetsFlush.add(RECORDS);
+
+        // Just checking that we triggered what we wanted to trigger, or the test does not test want it wants to test
+        assertThat(polledRecordsAtTimeOfOffsetsFlushed, equalTo(wantedPolledRecordListsAtTimeOfOffsetsFlushed));
+        assertThat(writtenAndFlushedOffsetsAtTimeOfOffsetsFlushed, equalTo(extractOffsets(wantedRecordListsWithOffsetsIncludedInOffsetsFlush)));
+
+        // Now verify that the correct list of records (RECORDS) were reported as having had their offsets flushed
+        assertThat(recordsReportedHavingOffsetsFlushed.getValues(), equalTo(wantedRecordListsWithOffsetsIncludedInOffsetsFlush));
     }
 
     @Test
@@ -256,12 +371,13 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         statusListener.onStartup(taskId);
         EasyMock.expectLastCall();
 
-        final CountDownLatch pollLatch = expectPolls(10);
+        AtomicInteger count = new AtomicInteger();
+        final CountDownLatch pollLatch = expectPolls(10, count);
         // In this test, we don't flush, so nothing goes any further than the offset writer
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap = expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -285,6 +401,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertPollMetrics(10);
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap.getValue();
+        assertEquals(concatWithSelf(RECORDS, count.get()), offsetsFlushed);
     }
 
     @Test
@@ -313,7 +432,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap = expectOffsetFlush(true);
 
         producer.close(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class));
         EasyMock.expectLastCall();
@@ -334,11 +453,14 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertPollMetrics(0);
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap.getValue();
+        assertEquals(new ArrayList<>(), offsetsFlushed);
     }
 
     @Test
-    public void testCommit() throws Exception {
-        // Test that the task commits properly when prompted
+    public void testOffsetFlush() throws Exception {
+        // Test that the task flushes offsets properly when prompted
         createWorkerTask();
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
@@ -350,11 +472,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap1 = expectOffsetFlush(true);
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap2 = expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -379,11 +501,16 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertPollMetrics(1);
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap1.getValue();
+        List<SourceRecord> offsetsFlushed2 = offsetsFlushedCap2.getValue();
+        offsetsFlushed.addAll(offsetsFlushed2);
+        assertEquals(RECORDS, offsetsFlushed);
     }
 
     @Test
-    public void testCommitFailure() throws Exception {
-        // Test that the task commits properly when prompted
+    public void testOffsetFlushFailure() throws Exception {
+        // Test that the task flushes offsets properly when prompted
         createWorkerTask();
 
         sourceTask.initialize(EasyMock.anyObject(SourceTaskContext.class));
@@ -395,7 +522,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         // We'll wait for some data, then trigger a flush
         final CountDownLatch pollLatch = expectPolls(1);
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap = expectOffsetFlush(true);
 
         sourceTask.stop();
         EasyMock.expectLastCall();
@@ -424,6 +551,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         assertPollMetrics(1);
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap.getValue();
+        assertEquals(new ArrayList<>(), offsetsFlushed);
     }
 
     @Test
@@ -542,7 +672,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @Test
-    public void testSendRecordsTaskCommitRecordFail() throws Exception {
+    public void testSendRecordsTaskRecordAcknowledgedFail() throws Exception {
         createWorkerTask();
 
         // Differentiate only by Kafka partition so we can reuse conversion expectations
@@ -550,9 +680,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         SourceRecord record2 = new SourceRecord(PARTITION, OFFSET, "topic", 2, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
         SourceRecord record3 = new SourceRecord(PARTITION, OFFSET, "topic", 3, KEY_SCHEMA, KEY, RECORD_SCHEMA, RECORD);
 
-        // Source task commit record failure will not cause the task to abort
+        // Source task record acknowledged failure will not cause the task to abort
         expectSendRecordOnce(false);
-        expectSendRecordTaskCommitRecordFail(false, false);
+        expectSendRecordTaskRecordAcknowledgedFail(false, false);
         expectSendRecordOnce(false);
 
         PowerMock.replayAll();
@@ -589,7 +719,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
 
         sourceTask.stop();
         EasyMock.expectLastCall();
-        expectOffsetFlush(true);
+        Capture<List<SourceRecord>> offsetsFlushedCap = expectOffsetFlush(true);
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -616,6 +746,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         workerTaskFuture.get();
 
         PowerMock.verifyAll();
+
+        List<SourceRecord> offsetsFlushed = offsetsFlushedCap.getValue();
+        assertEquals(new ArrayList<>(), offsetsFlushed);
     }
 
     @Test
@@ -684,13 +817,64 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         return latch;
     }
 
-    private CountDownLatch expectPolls(int count) throws InterruptedException {
-        return expectPolls(count, new AtomicInteger());
+    private CountDownLatch expectPolls(int minimum) throws InterruptedException {
+        return expectPolls(minimum, new AtomicInteger());
+    }
+
+    private static class PolledRecordsAndOffsetCaptures {
+        List<List<SourceRecord>> polledRecords;
+        Capture<Map<String, ?>> offsetPartitionsWritten;
+        Capture<Map<String, ?>> offsetOffsetsWritten;
+
+        PolledRecordsAndOffsetCaptures() {
+            polledRecords = new ArrayList<>();
+            offsetPartitionsWritten = EasyMock.newCapture();
+            offsetOffsetsWritten = EasyMock.newCapture();
+        }
+
+        List<List<SourceRecord>> polledRecordsSinceLast() {
+            List<List<SourceRecord>> result = new ArrayList<>(polledRecords);
+            polledRecords.clear();
+            return result;
+        }
+
+        Map<Map<String, Object>, Map<String, Object>> writtenOffsetsSinceLast() {
+            Map<Map<String, Object>, Map<String, Object>> result = new HashMap<>();
+            for (int i = 0; i < offsetPartitionsWritten.getValues().size(); i++) {
+                result.put((Map<String, Object>) offsetPartitionsWritten.getValues().get(i), (Map<String, Object>) offsetOffsetsWritten.getValues().get(i));
+            }
+            offsetPartitionsWritten.reset();
+            offsetOffsetsWritten.reset();
+            return result;
+        }
+
+    }
+    private PolledRecordsAndOffsetCaptures expectPolls(int waitForConvertValueLatchOnConvertNo, CountDownLatch convertValueLatch, final CountDownLatch allPolledLatch, final List<SourceRecord>... recordss) throws InterruptedException {
+        final AtomicInteger count = new AtomicInteger();
+        final PolledRecordsAndOffsetCaptures polledRecordsAndOffsetCaptures = new PolledRecordsAndOffsetCaptures();
+        // Note that we stub these to allow any number of calls because the thread will continue to
+        // run. The count passed in + latch returned just makes sure we get *at least* that number of
+        // calls
+        EasyMock.expect(sourceTask.poll())
+                .andAnswer(new IAnswer<List<SourceRecord>>() {
+                    @Override
+                    public List<SourceRecord> answer() throws Throwable {
+                        int recordsToAnswer = count.getAndIncrement();
+                        List<SourceRecord> response = (recordsToAnswer < recordss.length) ? recordss[recordsToAnswer] : new ArrayList();
+                        polledRecordsAndOffsetCaptures.polledRecords.add(response);
+                        if (recordsToAnswer == recordss.length - 1) allPolledLatch.countDown();
+                        return response;
+                    }
+                })
+                .anyTimes();
+        // Fallout of the poll() call
+        expectSendRecord(waitForConvertValueLatchOnConvertNo, convertValueLatch, polledRecordsAndOffsetCaptures.offsetPartitionsWritten, polledRecordsAndOffsetCaptures.offsetOffsetsWritten);
+        return polledRecordsAndOffsetCaptures;
     }
 
     @SuppressWarnings("unchecked")
     private void expectSendRecordSyncFailure(Throwable error) throws InterruptedException {
-        expectConvertKeyValue(false);
+        expectConvertKeyValue(false, Integer.MAX_VALUE, null);
         expectApplyTransformationChain(false);
 
         offsetWriter.offset(PARTITION, OFFSET);
@@ -703,24 +887,24 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordAnyTimes() throws InterruptedException {
-        return expectSendRecordTaskCommitRecordSucceed(true, false);
+        return expectSendRecordTaskRecordAcknowledgedSucceed(true, false);
     }
 
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordOnce(boolean isRetry) throws InterruptedException {
-        return expectSendRecordTaskCommitRecordSucceed(false, isRetry);
+        return expectSendRecordTaskRecordAcknowledgedSucceed(false, isRetry);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskRecordAcknowledgedSucceed(boolean anyTimes, boolean isRetry) throws InterruptedException {
         return expectSendRecord(anyTimes, isRetry, true);
     }
 
-    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskCommitRecordFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecordTaskRecordAcknowledgedFail(boolean anyTimes, boolean isRetry) throws InterruptedException {
         return expectSendRecord(anyTimes, isRetry, false);
     }
 
     @SuppressWarnings("unchecked")
     private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(boolean anyTimes, boolean isRetry, boolean succeed) throws InterruptedException {
-        expectConvertKeyValue(anyTimes);
+        expectConvertKeyValue(anyTimes, Integer.MAX_VALUE, null);
         expectApplyTransformationChain(anyTimes);
 
         Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
@@ -756,13 +940,48 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         else
             expect.andAnswer(expectResponse);
 
-        // 3. As a result of a successful producer send callback, we'll notify the source task of the record commit
-        expectTaskCommitRecord(anyTimes, succeed);
+        // 3. As a result of a successful producer send callback, we'll notify the source task of the record acknowledgement
+        expectTaskRecordAcknowledged(anyTimes, succeed);
 
         return sent;
     }
 
-    private void expectConvertKeyValue(boolean anyTimes) {
+    private Capture<ProducerRecord<byte[], byte[]>> expectSendRecord(int waitForConvertValueLatchOnConvertNo, CountDownLatch convertValueLatch, Capture<Map<String, ?>> offsetPartitions, Capture<Map<String, ?>> offsetOffsets) throws InterruptedException {
+        expectConvertKeyValue(true, waitForConvertValueLatchOnConvertNo, convertValueLatch);
+        expectApplyTransformationChain(true);
+
+        Capture<ProducerRecord<byte[], byte[]>> sent = EasyMock.newCapture();
+
+        // 1. Offset data is passed to the offset storage.
+        offsetWriter.offset(EasyMock.capture(offsetPartitions), EasyMock.capture(offsetOffsets));
+        PowerMock.expectLastCall().anyTimes();
+
+        // 2. Converted data passed to the producer, which will need callbacks invoked for flush to work
+        IExpectationSetters<Future<RecordMetadata>> expect = EasyMock.expect(
+                producer.send(EasyMock.capture(sent),
+                        EasyMock.capture(producerCallbacks)));
+        IAnswer<Future<RecordMetadata>> expectResponse = new IAnswer<Future<RecordMetadata>>() {
+            @Override
+            public Future<RecordMetadata> answer() throws Throwable {
+                synchronized (producerCallbacks) {
+                    for (org.apache.kafka.clients.producer.Callback cb : producerCallbacks.getValues()) {
+                        cb.onCompletion(new RecordMetadata(new TopicPartition("foo", 0), 0, 0,
+                                0L, 0L, 0, 0), null);
+                    }
+                    producerCallbacks.reset();
+                }
+                return sendFuture;
+            }
+        };
+        expect.andStubAnswer(expectResponse);
+
+        // 3. As a result of a successful producer send callback, we'll notify the source task of the record acknowledgement
+        expectTaskRecordAcknowledged(true, true);
+
+        return sent;
+    }
+
+    private void expectConvertKeyValue(boolean anyTimes, final int waitForConvertValueLatchOnConvertNo, final CountDownLatch convertValueLatch) {
         IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, KEY_SCHEMA, KEY));
         if (anyTimes)
             convertKeyExpect.andStubReturn(SERIALIZED_KEY);
@@ -770,7 +989,16 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             convertKeyExpect.andReturn(SERIALIZED_KEY);
         IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, RECORD_SCHEMA, RECORD));
         if (anyTimes)
-            convertValueExpect.andStubReturn(SERIALIZED_RECORD);
+            convertValueExpect.andStubAnswer(new IAnswer<byte[]>() {
+                final AtomicInteger count = new AtomicInteger();
+                @Override
+                public byte[] answer() throws Throwable {
+                    if (waitForConvertValueLatchOnConvertNo == count.incrementAndGet()) {
+                        convertValueLatch.await();
+                    }
+                    return SERIALIZED_RECORD;
+                }
+            });
         else
             convertValueExpect.andReturn(SERIALIZED_RECORD);
     }
@@ -794,11 +1022,11 @@ public class WorkerSourceTaskTest extends ThreadedTest {
             });
     }
 
-    private void expectTaskCommitRecord(boolean anyTimes, boolean succeed) throws InterruptedException {
-        sourceTask.commitRecord(EasyMock.anyObject(SourceRecord.class));
+    private void expectTaskRecordAcknowledged(boolean anyTimes, boolean succeed) throws InterruptedException {
+        sourceTask.recordSentAndAcked(EasyMock.anyObject(SourceRecord.class));
         IExpectationSetters<Void> expect = EasyMock.expectLastCall();
         if (!succeed) {
-            expect = expect.andThrow(new RuntimeException("Error committing record in source task"));
+            expect = expect.andThrow(new RuntimeException("Error acknowledging record in source task"));
         }
         if (anyTimes) {
             expect.anyTimes();
@@ -815,7 +1043,7 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     @SuppressWarnings("unchecked")
-    private void expectOffsetFlush(boolean succeed) throws Exception {
+    private Capture<List<SourceRecord>> expectOffsetFlush(boolean succeed) throws Exception {
         EasyMock.expect(offsetWriter.beginFlush()).andReturn(true);
         Future<Void> flushFuture = PowerMock.createMock(Future.class);
         EasyMock.expect(offsetWriter.doFlush(EasyMock.anyObject(Callback.class))).andReturn(flushFuture);
@@ -823,14 +1051,35 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         IExpectationSetters<Void> futureGetExpect = EasyMock.expect(
                 flushFuture.get(EasyMock.anyLong(), EasyMock.anyObject(TimeUnit.class)));
         if (succeed) {
-            sourceTask.commit();
+            Capture<List<SourceRecord>> offsetsFlushed = EasyMock.newCapture();
+            sourceTask.offsetsFlushedAndAcked(EasyMock.capture(offsetsFlushed));
             EasyMock.expectLastCall();
             futureGetExpect.andReturn(null);
+            return offsetsFlushed;
         } else {
             futureGetExpect.andThrow(new TimeoutException());
             offsetWriter.cancelFlush();
             PowerMock.expectLastCall();
+            return null;
         }
+    }
+
+    private Map<Map<String, Object>, Map<String, Object>> extractOffsets(List<List<SourceRecord>> recordLists) {
+        Map<Map<String, Object>, Map<String, Object>> extractedOffsets = new HashMap<>();
+        for (List<SourceRecord> records : recordLists) {
+            for (SourceRecord record : records) {
+                extractedOffsets.put((Map<String, Object>) record.sourcePartition(), (Map<String, Object>) record.sourceOffset());
+            }
+        }
+        return extractedOffsets;
+    }
+
+    private List<SourceRecord> concatWithSelf(List<SourceRecord> listToConcat, int noConcats) {
+        List<SourceRecord> result = new ArrayList<>(noConcats * listToConcat.size());
+        for (int i = 0; i < noConcats; i++) {
+            result.addAll(listToConcat);
+        }
+        return result;
     }
 
     private void assertPollMetrics(int minimumPollCountExpected) {

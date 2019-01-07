@@ -48,6 +48,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +80,8 @@ class WorkerSourceTask extends WorkerTask {
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
 
     private List<SourceRecord> toSend;
+    private List<SourceRecord> offsetsWrittenButNotFlushed;
+    private List<SourceRecord> offsetsFlushing;
     private boolean lastSendFailed; // Whether the last send failed *synchronously*, i.e. never made it into the producer's RecordAccumulator
     // Use IdentityHashMap to ensure correctness with duplicate records. This is a HashMap because
     // there is no IdentityHashSet.
@@ -126,6 +129,8 @@ class WorkerSourceTask extends WorkerTask {
         this.time = time;
 
         this.toSend = null;
+        this.offsetsWrittenButNotFlushed = new ArrayList<>();
+        this.offsetsFlushing = null;
         this.lastSendFailed = false;
         this.outstandingMessages = new IdentityHashMap<>();
         this.outstandingMessagesBacklog = new IdentityHashMap<>();
@@ -293,7 +298,7 @@ class WorkerSourceTask extends WorkerTask {
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
             if (producerRecord == null || retryWithToleranceOperator.failed()) {
                 counter.skipRecord();
-                commitTaskRecord(preTransformRecord);
+                taskAcknowledgeRecord(preTransformRecord);
                 continue;
             }
 
@@ -311,6 +316,7 @@ class WorkerSourceTask extends WorkerTask {
                     }
                     // Offsets are converted & serialized in the OffsetWriter
                     offsetWriter.offset(record.sourcePartition(), record.sourceOffset());
+                    offsetsWrittenButNotFlushed.add(preTransformRecord);
                 }
             }
             try {
@@ -333,7 +339,7 @@ class WorkerSourceTask extends WorkerTask {
                                             WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
-                                    commitTaskRecord(preTransformRecord);
+                                    taskAcknowledgeRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
                                 counter.completeRecord();
@@ -369,11 +375,11 @@ class WorkerSourceTask extends WorkerTask {
         return result;
     }
 
-    private void commitTaskRecord(SourceRecord record) {
+    private void taskAcknowledgeRecord(SourceRecord record) {
         try {
-            task.commitRecord(record);
+            task.recordSentAndAcked(record);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.commitRecord()", this, t);
+            log.error("{} Exception thrown while calling task.recordSentAndAcked()", this, t);
         }
     }
 
@@ -444,9 +450,12 @@ class WorkerSourceTask extends WorkerTask {
                 log.debug("{} Finished offset commitOffsets successfully in {} ms",
                         this, durationMillis);
 
-                commitSourceTask();
+                taskAcknowledgeOffsets();
                 return true;
             }
+
+            offsetsFlushing = offsetsWrittenButNotFlushed;
+            offsetsWrittenButNotFlushed = new ArrayList<>();
         }
 
         // Now we can actually flush the offsets to user storage.
@@ -496,16 +505,18 @@ class WorkerSourceTask extends WorkerTask {
         log.info("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
-        commitSourceTask();
+        taskAcknowledgeOffsets();
 
         return true;
     }
 
-    private void commitSourceTask() {
+    private void taskAcknowledgeOffsets() {
         try {
-            this.task.commit();
+            this.task.offsetsFlushedAndAcked(offsetsFlushing);
         } catch (Throwable t) {
-            log.error("{} Exception thrown while calling task.commit()", this, t);
+            log.error("{} Exception thrown while calling task.offsetsFlushedAndAcked()", this, t);
+        } finally {
+            offsetsFlushing = null;
         }
     }
 
@@ -513,6 +524,10 @@ class WorkerSourceTask extends WorkerTask {
         offsetWriter.cancelFlush();
         outstandingMessages.putAll(outstandingMessagesBacklog);
         outstandingMessagesBacklog.clear();
+        // Doing offsetsFlushing.addAll(offsetsWrittenButNotFlushed) instead of offsetsWrittenButNotFlushed.addAll(offsetsFlushing) preserves order of records from poll
+        offsetsFlushing.addAll(offsetsWrittenButNotFlushed);
+        offsetsWrittenButNotFlushed = offsetsFlushing;
+        offsetsFlushing = null;
         flushing = false;
     }
 

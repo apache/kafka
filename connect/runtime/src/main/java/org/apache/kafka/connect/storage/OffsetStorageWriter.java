@@ -126,7 +126,7 @@ public class OffsetStorageWriter {
      * writes the data to the backing store. If no offsets need to be written, the callback is
      * still invoked, but no Future is returned.
      *
-     * @return a Future, or null if there are no offsets to commitOffsets
+     * @return a Future, or null if there are no offsets to flush
      */
     public Future<Void> doFlush(final Callback<Void> callback) {
 

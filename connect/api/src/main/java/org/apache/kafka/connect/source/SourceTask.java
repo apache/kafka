@@ -59,25 +59,41 @@ public abstract class SourceTask implements Task {
     public abstract List<SourceRecord> poll() throws InterruptedException;
 
     /**
-     * <p>
-     * Commit the offsets, up to the offsets that have been returned by {@link #poll()}. This
-     * method should block until the commit is complete.
-     * </p>
-     * <p>
-     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
-     * automatically. This hook is provided for systems that also need to store offsets internally
-     * in their own system.
-     * </p>
+     * See {@link #offsetsFlushedAndAcked(List)}
+     *
+     * Deprecated. Use {@link #offsetsFlushedAndAcked(List)} instead
      */
+    @Deprecated
     public void commit() throws InterruptedException {
         // This space intentionally left blank.
+    }
+
+    /**
+     * <p>
+     * Notification that offsets on {@link SourceRecord}s returned by {@link #poll()} has just been flushed and
+     * acknowledged. No additional flushing of offsets go on before returning from this method.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this method. This hook is provided for systems that
+     * needs to react somehow to the fact that offsets flushed
+     * </p>
+     * <p>
+     * By default this method will call {@link #commit()} for backwards compatibility
+     * </p>
+     *
+     * @param offsetsFlushed The list of {@link SourceRecord}s that just had their offsets flushed. It may NOT include
+     *                       records recently returned by {@link #poll()}
+     * @throws InterruptedException
+     */
+    public void offsetsFlushedAndAcked(List<SourceRecord> offsetsFlushed) throws InterruptedException {
+        commit();
     }
 
     /**
      * Signal this SourceTask to stop. In SourceTasks, this method only needs to signal to the task that it should stop
      * trying to poll for new data and interrupt any outstanding poll() requests. It is not required that the task has
      * fully stopped. Note that this method necessarily may be invoked from a different thread than {@link #poll()} and
-     * {@link #commit()}.
+     * {@link #offsetsFlushedAndAcked(List)}.
      *
      * For example, if a task uses a {@link java.nio.channels.Selector} to receive data over the network, this method
      * could set a flag that will force {@link #poll()} to exit immediately and invoke
@@ -87,19 +103,32 @@ public abstract class SourceTask implements Task {
     public abstract void stop();
 
     /**
-     * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
-     * </p>
-     * <p>
-     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
-     * automatically. This hook is provided for systems that also need to store offsets internally
-     * in their own system.
-     * </p>
+     * See {@link #recordSentAndAcked(SourceRecord)}
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer.
-     * @throws InterruptedException
+     * Deprecated. Use {@link #recordSentAndAcked(SourceRecord)} instead
      */
+    @Deprecated
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
+    }
+
+    /**
+     * <p>
+     * Notification that a {@link SourceRecord} returned by {@link #poll()} was just acknowledged by
+     * the receiving Kafka, or that it was filtered by a transformation.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this method. This hook is provided for systems that
+     * needs to react somehow to the fact that {@link SourceRecord} was successfully forwarded
+     * </p>
+     * <p>
+     * By default this method will call {@link #commitRecord(SourceRecord)} for backwards compatibility
+     * </p>
+     *
+     * @param record {@link SourceRecord} that was successfully sent and acknowledged via the producer.
+     * @throws InterruptedException
+     */
+    public void recordSentAndAcked(SourceRecord record) throws InterruptedException {
+        commitRecord(record);
     }
 }
