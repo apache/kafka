@@ -321,7 +321,7 @@ public class WorkerConfig extends AbstractConfig {
         if (defaultValue != null && defaultValue.equalsIgnoreCase(propValue)) {
             log.info(
                 "Worker configuration property '{}'{} is deprecated and may be removed in an upcoming release. "
-                    + "The specified value matches the default, so this property can be safely removed from the worker configuration.",
+                    + "The specified value '{}' matches the default, so this property can be safely removed from the worker configuration.",
                 propName,
                 prefixNotice,
                 propValue
