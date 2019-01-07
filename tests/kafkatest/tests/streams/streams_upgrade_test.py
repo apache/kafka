@@ -41,7 +41,7 @@ class StreamsUpgradeTest(Test):
     Test upgrading Kafka Streams (all version combination)
     If metadata was changes, upgrade is more difficult
     Metadata version was bumped in 0.10.1.0 and
-    subsequently dropped in 2.0.0
+    subsequently bumped in 2.0.0
     """
 
     def __init__(self, test_context):
