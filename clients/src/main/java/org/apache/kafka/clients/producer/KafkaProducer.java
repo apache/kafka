@@ -608,13 +608,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
-        transactionManager.awaitResultOrThrowTimeoutException(maxBlockTimeMs,
-            TransactionManager.State.INITIALIZING,
-            true,
-            () -> "Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.",
-            () -> "Initialize transactions interrupted.");
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -692,13 +688,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
-        transactionManager.beginCommit();
+        TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        transactionManager.awaitResultOrThrowTimeoutException(maxBlockTimeMs,
-            TransactionManager.State.COMMITTING_TRANSACTION,
-            true,
-            () -> "Timeout expired while committing transaction in " + maxBlockTimeMs + "ms.",
-            () -> "Commit transactions interrupted.");
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -723,13 +715,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
-        transactionManager.beginAbort();
+        TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        transactionManager.awaitResultOrThrowTimeoutException(maxBlockTimeMs,
-            TransactionManager.State.ABORTING_TRANSACTION,
-            false,
-            () -> "Timeout expired while aborting transaction in " + maxBlockTimeMs + "ms.",
-            () -> "Abort transactions interrupted.");
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**
