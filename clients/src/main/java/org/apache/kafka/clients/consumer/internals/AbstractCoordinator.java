@@ -739,7 +739,7 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Return generation info regardless of the group state.
+     * Return generation info regardless of the group state. Only using in unit tests.
      * @return the current generation info
      */
     protected synchronized Generation generation() {

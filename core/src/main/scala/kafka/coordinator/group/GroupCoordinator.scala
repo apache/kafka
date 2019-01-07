@@ -716,7 +716,7 @@ class GroupCoordinator(val brokerId: Int,
 
     // reschedule the next heartbeat expiration deadline
     val deadline = member.latestHeartbeat + timeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, member.memberId, deadline, timeoutMs)
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, member.memberId, isPending = false, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
   }
 
@@ -726,7 +726,7 @@ class GroupCoordinator(val brokerId: Int,
   private def addPendingMemberExpiration(group: GroupMetadata, pendingMemberId: String, timeoutMs: Long) {
     val pendingMemberKey = MemberKey(group.groupId, pendingMemberId)
     val deadline = time.milliseconds() + timeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, deadline, timeoutMs)
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, isPending = true, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(pendingMemberKey))
   }
 
@@ -764,7 +764,7 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    maybePrepareRebalance(group, s"Adding new member ${memberId}")
+    maybePrepareRebalance(group, s"Adding new member $memberId")
     group.removePendingMember(memberId)
     member
   }
@@ -886,22 +886,27 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
+  def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      val member = group.get(memberId)
-      if (!group.isPendingMember(memberId) &&
-        (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving)) {
-        forceComplete()
-        true
-      } else false
+      if (isPending || !group.has(memberId))
+        false
+      else {
+        val member = group.get(memberId)
+        if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving) {
+          forceComplete()
+        } else false
+      }
     }
   }
 
-  def onExpireHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long) {
+  def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long) {
     group.inLock {
-      if (group.isPendingMember(memberId)) {
-        // Clean out pending member from purgatory through the member given session timeout.
+      if (isPending) {
+        debug(s"Pending member $memberId gets cleaned out from purgatory after the member given session timeout.")
         group.removePendingMember(memberId)
+        return
+      } else if (!group.has(memberId)) {
+        debug(s"Member $memberId has already been cleaned out from the group.")
         return
       }
 
