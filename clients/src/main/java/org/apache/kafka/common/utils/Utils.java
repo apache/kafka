@@ -993,4 +993,22 @@ public final class Utils {
         return res;
     }
 
+    /**
+     * Returns a list of duplicated items
+     *
+     * @param list list for which checking duplicate values
+     * @return a list contains the duplicates from the provided one
+     */
+    public static <T> List<T> duplicates(List<T> list) {
+
+        Set<T> set = new HashSet<>();
+        List<T> duplicates = new ArrayList<>();
+        for (T e: list) {
+            if (!set.add(e)) {
+                duplicates.add(e);
+            }
+        }
+        return duplicates;
+    }
+
 }
