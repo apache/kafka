@@ -44,9 +44,10 @@ class BaseStreamsTest(KafkaTest):
                                   self.kafka,
                                   topic,
                                   max_messages=num_messages,
-                                  acks=1,
+                                  acks=-1,
                                   throughput=throughput,
-                                  repeating_keys=repeating_keys)
+                                  repeating_keys=repeating_keys,
+                                  retries=10)
 
     def assert_produce_consume(self,
                                streams_source_topic,
