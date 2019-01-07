@@ -19,6 +19,7 @@ package kafka.server
 
 import java.util.Optional
 
+import kafka.api
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
@@ -80,7 +81,8 @@ class ReplicaFetcherThread(name: String,
 
   // Visible for testing
   private[server] val listOffsetRequestVersion: Short =
-    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
+    if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_2_IV1) 5
+    else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_1_IV1) 4
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1) 3
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV0) 2
     else if (brokerConfig.interBrokerProtocolVersion >= KAFKA_0_10_1_IV2) 1
@@ -115,21 +117,30 @@ class ReplicaFetcherThread(name: String,
   override def initiateShutdown(): Boolean = {
     val justShutdown = super.initiateShutdown()
     if (justShutdown) {
-      // leaderEndpoint.close() can throw an exception when the replica fetcher thread is still
-      // actively fetching because the selector can close the channel while sending the request
-      // after we initiate leaderEndpoint.close() and the leaderEndpoint.close() itself may also close
-      // the channel again. When this race condition happens, an exception will be thrown.
-      // Throwing the exception to the caller may fail the ReplicaManager shutdown. It is safe to catch
-      // the exception without here causing correctness issue because we are going to shutdown the thread
-      // and will not re-use the leaderEndpoint anyway.
+      // This is thread-safe, so we don't expect any exceptions, but catch and log any errors
+      // to avoid failing the caller, especially during shutdown. We will attempt to close
+      // leaderEndpoint after the thread terminates.
       try {
-        leaderEndpoint.close()
+        leaderEndpoint.initiateClose()
       } catch {
         case t: Throwable =>
-          debug(s"Fail to close leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
+          error(s"Failed to initiate shutdown of leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
       }
     }
     justShutdown
+  }
+
+  override def awaitShutdown(): Unit = {
+    super.awaitShutdown()
+    // We don't expect any exceptions here, but catch and log any errors to avoid failing the caller,
+    // especially during shutdown. It is safe to catch the exception here without causing correctness
+    // issue because we are going to shutdown the thread and will not re-use the leaderEndpoint anyway.
+    try {
+      leaderEndpoint.close()
+    } catch {
+      case t: Throwable =>
+        error(s"Failed to close leader endpoint $leaderEndpoint after shutting down replica fetcher thread", t)
+    }
   }
 
   // process fetched data

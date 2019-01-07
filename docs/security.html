@@ -1135,6 +1135,18 @@
             <td>ResourcePattern</td>
         </tr>
         <tr>
+            <td>--transactional-id [transactional-id]</td>
+            <td>The transactionalId to which ACLs should be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--delegation-token [delegation-token]</td>
+            <td>Delegation token to which ACLs should be added or removed. A value of * indicates ACL should apply to all tokens.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
             <td>--resource-pattern-type [pattern-type]</td>
             <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
                 When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
@@ -1179,7 +1191,21 @@
         <tr>
             <td>--operation</td>
             <td>Operation that will be allowed or denied.<br>
-                Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+                Valid values are:
+                <ul>
+                    <li>Read</li>
+                    <li>Write</li>
+                    <li>Create</li>
+                    <li>Delete</li>
+                    <li>Alter</li>
+                    <li>Describe</li>
+                    <li>ClusterAction</li>
+                    <li>DescribeConfigs</li>
+                    <li>AlterConfigs</li>
+                    <li>IdempotentWrite</li>
+                    <li>All</li>
+                </ul>
+            </td>
             <td>All</td>
             <td>Operation</td>
         </tr>
@@ -1194,6 +1220,14 @@
             <td>--consumer</td>
             <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
                 DESCRIBE on topic and READ on consumer-group.</td>
+            <td></td>
+            <td>Convenience</td>
+        </tr>
+        <tr>
+            <td>--idempotent</td>
+            <td>Enable idempotence for the producer. This should be used in combination with the --producer option.<br>
+                Note that idempotence is enabled automatically if the producer is authorized to a particular transactional-id.
+            </td>
             <td></td>
             <td>Convenience</td>
         </tr>
@@ -1257,6 +1291,450 @@
             bin/kafka-acls.sh --bootstrap-server localhost:9092 --command-config /tmp/adminclient-configs.conf --list --topic Test-topic</pre></li>
 
     </ul>
+
+    <h4><a id="security_authz_primitives" href="#security_authz_primitives">Authorization Primitives</a></h4>
+    <p>Protocol calls are usually performing some operations on certain resources in Kafka. It is required to know the
+        operations and resources to set up effective protection. In this section we'll list these operations and
+        resources, then list the combination of these with the protocols to see the valid scenarios.</p>
+    <h5><a id="operations_in_kafka" href="#operations_in_kafka">Operations in Kafka</a></h5>
+    <p>There are a few operation primitives that can be used to build up privileges. These can be matched up with
+        certain resources to allow specific protocol calls for a given user. These are:</p>
+    <ul>
+        <li>Read</li>
+        <li>Write</li>
+        <li>Create</li>
+        <li>Delete</li>
+        <li>Alter</li>
+        <li>Describe</li>
+        <li>ClusterAction</li>
+        <li>DescribeConfigs</li>
+        <li>AlterConfigs</li>
+        <li>IdempotentWrite</li>
+        <li>All</li>
+    </ul>
+    <h5><a id="resources_in_kafka" href="#resources_in_kafka">Resources in Kafka</a></h5>
+    <p>The operations above can be applied on certain resources which are described below.</p>
+    <ul>
+        <li><b>Topic:</b> this simply represents a Topic. All protocol calls that are acting on topics (such as reading,
+            writing them) require the corresponding privilege to be added. If there is an authorization error with a
+            topic resource, then a TOPIC_AUTHORIZATION_FAILED (error code: 29) will be returned.</li>
+        <li><b>Group:</b> this represents the consumer groups in the brokers. All protocol calls that are working with
+            consumer groups, like joining a group must have privileges with the group in subject. If the privilege is not
+            given then a GROUP_AUTHORIZATION_FAILED (error code: 30) will be returned in the protocol response.</li>
+        <li><b>Cluster:</b> this resource represents the cluster. Operations that are affecting the whole cluster, like
+            controlled shutdown are protected by privileges on the Cluster resource. If there is an authorization problem
+            on a cluster resource, then a CLUSTER_AUTHORIZATION_FAILED (error code: 31) will be returned.</li>
+        <li><b>TransactionalId:</b> this resource represents actions related to transactions, such as committing.
+            If any error occurs, then a TRANSACTIONAL_ID_AUTHORIZATION_FAILED (error code: 53) will be returned by brokers.</li>
+        <li><b>DelegationToken:</b> this represents the delegation tokens in the cluster. Actions, such as describing
+            delegation tokens could be protected by a privilege on the DelegationToken resource. Since these objects have
+            a little special behavior in Kafka it is recommended to read
+            <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-48+Delegation+token+support+for+Kafka#KIP-48DelegationtokensupportforKafka-DescribeDelegationTokenRequest">KIP-48</a>
+            and the related upstream documentation at <a href="#security_delegation_token">Authentication using Delegation Tokens</a>.</li>
+    </ul>
+    <h5><a id="operations_resources_and_protocols" href="#operations_resources_and_protocols">Operations and Resources on Protocols</a></h5>
+    <p>In the below table we'll list the valid operations on resources that are executed by the Kafka API protocols.</p>
+    <table class="data-table">
+        <thead>
+        <tr>
+            <th>Protocol (API key)</th>
+            <th>Operation</th>
+            <th>Resource</th>
+            <th>Note</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>An transactional producer which has its transactional.id set requires this privilege.</td>
+        </tr>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>IdempotentWrite</td>
+            <td>Cluster</td>
+            <td>An idempotent produce action requires this privilege.</td>
+        </tr>
+        <tr>
+            <td>PRODUCE (0)</td>
+            <td>Write</td>
+            <td>Topic</td>
+            <td>This applies to a normal produce action.</td>
+        </tr>
+        <tr>
+            <td>FETCH (1)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td>A follower must have ClusterAction on the Cluster resource in order to fetch partition data.</td>
+        </tr>
+        <tr>
+            <td>FETCH (1)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td>Regular Kafka consumers need READ permission on each partition they are fetching.</td>
+        </tr>
+        <tr>
+            <td>LIST_OFFSETS (2)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Create</td>
+            <td>Cluster</td>
+            <td>If topic auto-creation is enabled, then the broker-side API will check for the existence of a Cluster
+            level privilege. If it's found then it'll allow creating the topic, otherwise it'll iterate through the
+            Topic level privileges (see the next one).</td>
+        </tr>
+        <tr>
+            <td>METADATA (3)</td>
+            <td>Create</td>
+            <td>Topic</td>
+            <td>This authorizes auto topic creation if enabled but the given user doesn't have a cluster level
+                permission (above).</td>
+        </tr>
+        <tr>
+            <td>LEADER_AND_ISR (4)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>STOP_REPLICA (5)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>UPDATE_METADATA (6)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CONTROLLED_SHUTDOWN (7)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_COMMIT (8)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td>An offset can only be committed if it's authorized to the given group and the topic too (see below).
+                Group access is checked first, then Topic access.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_COMMIT (8)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td>Since offset commit is part of the consuming process, it needs privileges for the read action.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FETCH (9)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>Similarly to OFFSET_COMMIT, the application must have privileges on group and topic level too to be able
+                to fetch. However in this case it requires describe access instead of read. Group access is checked first,
+                then Topic access.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FETCH (9)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>FIND_COORDINATOR (10)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>The FIND_COORDINATOR request can be of "Group" type in which case it is looking for consumergroup
+                coordinators. This privilege would represent the Group mode.</td>
+        </tr>
+        <tr>
+            <td>FIND_COORDINATOR (10)</td>
+            <td>Describe</td>
+            <td>TransactionalId</td>
+            <td>This applies only on transactional producers and checked when a producer tries to find the transaction
+                coordinator.</td>
+        </tr>
+        <tr>
+            <td>JOIN_GROUP (11)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>HEARTBEAT (12)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LEAVE_GROUP (13)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>SYNC_GROUP (14)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_GROUPS (15)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>LIST_GROUPS (16)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td>When the broker checks to authorize a list_groups request it first checks for this cluster
+                level authorization. If none found then it proceeds to check the groups individually. This operation
+                doesn't return CLUSTER_AUTHORIZATION_FAILED.</td>
+        </tr>
+        <tr>
+            <td>LIST_GROUPS (16)</td>
+            <td>Describe</td>
+            <td>Group</td>
+            <td>If none of the groups are authorized, then just an empty response will be sent back instead
+                of an error. This operation doesn't return CLUSTER_AUTHORIZATION_FAILED. This is applicable from the
+                2.1 release.</td>
+        </tr>
+        <tr>
+            <td>SASL_HANDSHAKE (17)</td>
+            <td></td>
+            <td></td>
+            <td>The SASL handshake is part of the authentication process and therefore it's not possible to
+                apply any kind of authorization here.</td>
+        </tr>
+        <tr>
+            <td>API_VERSIONS (18)</td>
+            <td></td>
+            <td></td>
+            <td>The API_VERSIONS request is part of the Kafka protocol handshake and happens on connection
+                and before any authentication. Therefore it's not possible to control this with authorization.</td>
+        </tr>
+        <tr>
+            <td>CREATE_TOPICS (19)</td>
+            <td>Create</td>
+            <td>Cluster</td>
+            <td>If there is no cluster level authorization then it won't return CLUSTER_AUTHORIZATION_FAILED but
+                fall back to use topic level, which is just below. That'll throw error if there is a problem.</td>
+        </tr>
+        <tr>
+            <td>CREATE_TOPICS (19)</td>
+            <td>Create</td>
+            <td>Topic</td>
+            <td>This is applicable from the 2.0 release.</td>
+        </tr>
+        <tr>
+            <td>DELETE_TOPICS (20)</td>
+            <td>Delete</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DELETE_RECORDS (21)</td>
+            <td>Delete</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INIT_PRODUCER_ID (22)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>INIT_PRODUCER_ID (22)</td>
+            <td>IdempotentWrite</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>OFFSET_FOR_LEADER_EPOCH (23)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td>If there is no cluster level privilege for this operation, then it'll check for topic level one.</td>
+        </tr>
+        <tr>
+            <td>OFFSET_FOR_LEADER_EPOCH (23)</td>
+            <td>Describe</td>
+            <td>Topic</td>
+            <td>This is applicable from the 2.1 release.</td>
+        </tr>
+        <tr>
+            <td>ADD_PARTITIONS_TO_TXN (24)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>This API is only applicable to transactional requests. It first checks for the Write action on the
+                TransactionalId resource, then it checks the Topic in subject (below).</td>
+        </tr>
+        <tr>
+            <td>ADD_PARTITIONS_TO_TXN (24)</td>
+            <td>Write</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>ADD_OFFSETS_TO_TXN (25)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td>Similarly to ADD_PARTITIONS_TO_TXN this is only applicable to transactional request. It first checks
+                for Write action on the TransactionalId resource, then it checks whether it can Read on the given group
+                (below).</td>
+        </tr>
+        <tr>
+            <td>ADD_OFFSETS_TO_TXN (25)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>END_TXN (26)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>WRITE_TXN_MARKERS (27)</td>
+            <td>ClusterAction</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Write</td>
+            <td>TransactionalId</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Read</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>TXN_OFFSET_COMMIT (28)</td>
+            <td>Read</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_ACLS (29)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CREATE_ACLS (30)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DELETE_ACLS (31)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_CONFIGS (32)</td>
+            <td>DescribeConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are requested, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_CONFIGS (32)</td>
+            <td>DescribeConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are requested, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_CONFIGS (33)</td>
+            <td>AlterConfigs</td>
+            <td>Cluster</td>
+            <td>If broker configs are altered, then the broker will check cluster level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_CONFIGS (33)</td>
+            <td>AlterConfigs</td>
+            <td>Topic</td>
+            <td>If topic configs are altered, then the broker will check topic level privileges.</td>
+        </tr>
+        <tr>
+            <td>ALTER_REPLICA_LOG_DIRS (34)</td>
+            <td>Alter</td>
+            <td>Cluster</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_LOG_DIRS (35)</td>
+            <td>Describe</td>
+            <td>Cluster</td>
+            <td>An empty response will be returned on authorization failure.</td>
+        </tr>
+        <tr>
+            <td>SASL_AUTHENTICATE (36)</td>
+            <td></td>
+            <td></td>
+            <td>SASL_AUTHENTICATE is part of the authentication process and therefore it's not possible to
+                apply any kind of authorization here.</td>
+        </tr>
+        <tr>
+            <td>CREATE_PARTITIONS (37)</td>
+            <td>Alter</td>
+            <td>Topic</td>
+            <td></td>
+        </tr>
+        <tr>
+            <td>CREATE_DELEGATION_TOKEN (38)</td>
+            <td></td>
+            <td></td>
+            <td>Creating delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>RENEW_DELEGATION_TOKEN (39)</td>
+            <td></td>
+            <td></td>
+            <td>Renewing delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>EXPIRE_DELEGATION_TOKEN (40)</td>
+            <td></td>
+            <td></td>
+            <td>Expiring delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DESCRIBE_DELEGATION_TOKEN (41)</td>
+            <td>Describe</td>
+            <td>DelegationToken</td>
+            <td>Describing delegation tokens has special rules, for this please see the
+                <a id="security_delegation_token" href="#security_delegation_token">Authentication using Delegation Tokens</a> section.</td>
+        </tr>
+        <tr>
+            <td>DELETE_GROUPS (42)</td>
+            <td>Delete</td>
+            <td>Group</td>
+            <td></td>
+        </tr>
+        </tbody>
+    </table>
 
     <h3><a id="security_rolling_upgrade" href="#security_rolling_upgrade">7.5 Incorporating Security Features in a Running Cluster</a></h3>
         You can secure a running cluster via one or more of the supported protocols discussed previously. This is done in phases:

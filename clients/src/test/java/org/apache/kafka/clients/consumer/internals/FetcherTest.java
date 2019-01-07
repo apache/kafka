@@ -1126,6 +1126,45 @@ public class FetcherTest {
         assertEquals(5, subscriptions.position(tp0).longValue());
     }
 
+    /**
+     * Make sure the client behaves appropriately when receiving an exception for unavailable offsets
+     */
+    @Test
+    public void testFetchOffsetErrors() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Fail with OFFSET_NOT_AVAILABLE
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.OFFSET_NOT_AVAILABLE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+
+        // Fail with LEADER_NOT_AVAILABLE
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.LEADER_NOT_AVAILABLE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.hasValidPosition(tp0));
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+
+        // Back to normal
+        time.sleep(retryBackoffMs);
+        client.prepareResponse(listOffsetRequestMatcher(ListOffsetRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L), false);
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertTrue(subscriptions.hasValidPosition(tp0));
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(subscriptions.position(tp0).longValue(), 5L);
+    }
+
     @Test
     public void testListOffsetsSendsIsolationLevel() {
         for (final IsolationLevel isolationLevel : IsolationLevel.values()) {
@@ -1600,8 +1639,8 @@ public class FetcherTest {
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
-        // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        // recordsFetchLagMax should be initialized to NaN
+        assertEquals(Double.NaN, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be hw - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 0);
@@ -1638,8 +1677,8 @@ public class FetcherTest {
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLeadMin = allMetrics.get(minLeadMetric);
 
-        // recordsFetchLeadMin should be initialized to MAX_VALUE
-        assertEquals(Double.MAX_VALUE, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
+        // recordsFetchLeadMin should be initialized to NaN
+        assertEquals(Double.NaN, (Double) recordsFetchLeadMin.metricValue(), EPSILON);
 
         // recordsFetchLeadMin should be position - logStartOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, -1L, 0L, 0);
@@ -1682,8 +1721,8 @@ public class FetcherTest {
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
         KafkaMetric recordsFetchLagMax = allMetrics.get(maxLagMetric);
 
-        // recordsFetchLagMax should be initialized to negative infinity
-        assertEquals(Double.NEGATIVE_INFINITY, (Double) recordsFetchLagMax.metricValue(), EPSILON);
+        // recordsFetchLagMax should be initialized to NaN
+        assertEquals(Double.NaN, (Double) recordsFetchLagMax.metricValue(), EPSILON);
 
         // recordsFetchLagMax should be lso - fetchOffset after receiving an empty FetchResponse
         fetchRecords(tp0, MemoryRecords.EMPTY, Errors.NONE, 100L, 50L, 0);
@@ -2575,9 +2614,9 @@ public class FetcherTest {
                             try {
                                 Field field = FetchSessionHandler.class.getDeclaredField("sessionPartitions");
                                 field.setAccessible(true);
-                                LinkedHashMap<TopicPartition, FetchRequest.PartitionData> sessionPartitions =
-                                        (LinkedHashMap<TopicPartition, FetchRequest.PartitionData>) field.get(handler);
-                                for (Map.Entry<TopicPartition, FetchRequest.PartitionData> entry : sessionPartitions.entrySet()) {
+                                LinkedHashMap<?, ?> sessionPartitions =
+                                        (LinkedHashMap<?, ?>) field.get(handler);
+                                for (Map.Entry<?, ?> entry : sessionPartitions.entrySet()) {
                                     // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
                                     // possibility of ConcurrentModificationException if appropriate synchronization is not used.
                                     Thread.yield();

@@ -365,7 +365,7 @@ public interface KStream<K, V> {
      * @param printed options for printing
      */
     void print(final Printed<K, V> printed);
-    
+
     /**
      * Perform an action on each record of {@code KStream}.
      * This is a stateless record-by-record operation (cf. {@link #process(ProcessorSupplier, String...)}).
@@ -387,6 +387,7 @@ public interface KStream<K, V> {
      *
      * @param action an action to perform on each record
      * @see #process(ProcessorSupplier, String...)
+     * @return itself
      */
     KStream<K, V> peek(final ForeachAction<? super K, ? super V> action);
 
@@ -530,7 +531,7 @@ public interface KStream<K, V> {
      *                 this.state = context.getStateStore("myTransformState");
      *                 // punctuate each 1000ms; can access this.state
      *                 // can emit as many new KeyValue pairs as required via this.context#forward()
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
@@ -602,7 +603,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(V value) {
@@ -671,7 +672,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             NewValueType transform(K readOnlyKey, V value) {
@@ -737,7 +738,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 context.schedule(1000, PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
      *             }
      *
      *             void process(K key, V value) {
@@ -772,8 +773,8 @@ public interface KStream<K, V> {
      * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later
      * operator depends on the newly selected key.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -802,8 +803,8 @@ public interface KStream<K, V> {
      * {@link #transform(TransformerSupplier, String...)}), and no data redistribution happened afterwards (e.g., via
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka
      * if a later operator depends on the newly selected key.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -863,8 +864,8 @@ public interface KStream<K, V> {
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -874,7 +875,7 @@ public interface KStream<K, V> {
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
      * <p>
      * This operation is equivalent to calling {@link #selectKey(KeyValueMapper)} followed by {@link #groupByKey()}.
-     * If the key type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Serialized)} instead.
+     * If the key type is changed, it is recommended to use {@link #groupBy(KeyValueMapper, Grouped)} instead.
      *
      * @param selector a {@link KeyValueMapper} that computes a new key for grouping
      * @param <KR>     the key type of the result {@link KGroupedStream}
@@ -892,8 +893,8 @@ public interface KStream<K, V> {
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
-     * This topic will be as "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -924,8 +925,8 @@ public interface KStream<K, V> {
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a later
      * operator depends on the newly selected key.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -990,9 +991,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      *
      * <p>
@@ -1068,9 +1069,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1151,9 +1152,9 @@ public interface KStream<K, V> {
      * Furthermore, both input streams need to be co-partitioned on the join key (i.e., use the same partitioner).
      * If this requirement is not met, Kafka Streams will automatically repartition the data, i.e., it will create an
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
-     * The repartitioning topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is
+     * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is an internally generated name, and
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
@@ -1301,7 +1302,7 @@ public interface KStream<K, V> {
      * <tr>
      * <td>&lt;K2:B&gt;</td>
      * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br />&lt;K2:ValueJoiner(B,b)&gt;</td>
+     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br></br>&lt;K2:ValueJoiner(B,b)&gt;</td>
      * </tr>
      * <tr>
      * <td></td>
@@ -1383,7 +1384,7 @@ public interface KStream<K, V> {
      * <tr>
      * <td>&lt;K2:B&gt;</td>
      * <td>&lt;K2:b&gt;</td>
-     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br />&lt;K2:ValueJoiner(B,b)&gt;</td>
+     * <td>&lt;K2:ValueJoiner(null,b)&gt;<br></br>&lt;K2:ValueJoiner(B,b)&gt;</td>
      * </tr>
      * <tr>
      * <td></td>
@@ -1419,6 +1420,8 @@ public interface KStream<K, V> {
      * @param otherStream the {@code KStream} to be joined with this stream
      * @param joiner      a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param windows     the specification of the {@link JoinWindows}
+     * @param joined      a {@link Joined} instance that defines the serdes to
+     *                    be used to serialize/deserialize inputs and outputs of the joined streams
      * @param <VO>        the value type of the other stream
      * @param <VR>        the value type of the result stream
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
@@ -1733,10 +1736,12 @@ public interface KStream<K, V> {
      * records to it, and rereading all records from it, such that the join input {@code KStream} is partitioned
      * correctly on its key.
      *
-     * @param table  the {@link KTable} to be joined with this stream
-     * @param joiner a {@link ValueJoiner} that computes the join result for a pair of matching records
-     * @param <VT>   the value type of the table
-     * @param <VR>   the value type of the result stream
+     * @param table   the {@link KTable} to be joined with this stream
+     * @param joiner  a {@link ValueJoiner} that computes the join result for a pair of matching records
+     * @param joined  a {@link Joined} instance that defines the serdes to
+     *                be used to serialize/deserialize inputs and outputs of the joined streams
+     * @param <VT>    the value type of the table
+     * @param <VR>    the value type of the result stream
      * @return a {@code KStream} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one output for each input {@code KStream} record
      * @see #join(KTable, ValueJoiner, Joined)

@@ -31,6 +31,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -76,7 +77,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -87,6 +87,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -112,7 +113,7 @@ public class StreamThreadTest {
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(new InternalTopologyBuilder());
     private final StreamsConfig config = new StreamsConfig(configProps(false));
     private final String stateDir = TestUtils.tempDirectory().getPath();
-    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime);
+    private final StateDirectory stateDirectory = new StateDirectory(config, mockTime, true);
     private final ConsumedInternal<Object, Object> consumed = new ConsumedInternal<>();
 
     private UUID processId = UUID.randomUUID();
@@ -162,12 +163,12 @@ public class StreamThreadTest {
         assertEquals(thread.state(), StreamThread.State.CREATED);
 
         final ConsumerRebalanceListener rebalanceListener = thread.rebalanceListener;
-        thread.setState(StreamThread.State.RUNNING);
 
         final List<TopicPartition> revokedPartitions;
         final List<TopicPartition> assignedPartitions;
 
         // revoke nothing
+        thread.setState(StreamThread.State.STARTING);
         revokedPartitions = Collections.emptyList();
         rebalanceListener.onPartitionsRevoked(revokedPartitions);
 
@@ -201,7 +202,7 @@ public class StreamThreadTest {
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                return thread.state() == StreamThread.State.RUNNING;
+                return thread.state() == StreamThread.State.STARTING;
             }
         }, 10 * 1000, "Thread never started.");
 
@@ -281,6 +282,11 @@ public class StreamThreadTest {
         assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
         assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
+
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
+                defaultGroupName, thread.getName())));
     }
 
 
@@ -336,7 +342,7 @@ public class StreamThreadTest {
             properties));
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
@@ -499,8 +505,8 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
@@ -536,7 +542,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -571,7 +577,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(configProps(true)), true);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -606,8 +612,6 @@ public class StreamThreadTest {
     public void shouldShutdownTaskManagerOnClose() {
         final Consumer<byte[], byte[]> consumer = EasyMock.createNiceMock(Consumer.class);
         final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        EasyMock.expect(taskManager.activeTasks()).andReturn(Collections.<TaskId, StreamTask>emptyMap());
-        EasyMock.expect(taskManager.standbyTasks()).andReturn(Collections.<TaskId, StandbyTask>emptyMap());
         taskManager.shutdown(true);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager, consumer);
@@ -631,7 +635,7 @@ public class StreamThreadTest {
             new StreamThread.StateListener() {
                 @Override
                 public void onChange(final Thread t, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState) {
-                    if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.RUNNING) {
+                    if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
                         thread.shutdown();
                     }
                 }
@@ -705,8 +709,8 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-        thread.rebalanceListener.onPartitionsRevoked(Collections.<TopicPartition>emptyList());
+        thread.setState(StreamThread.State.STARTING);
+        thread.rebalanceListener.onPartitionsRevoked(Collections.emptyList());
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
 
@@ -730,7 +734,7 @@ public class StreamThreadTest {
 
         consumer.updatePartitions(topic1, singletonList(new PartitionInfo(topic1, 1, null, null, null)));
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -798,7 +802,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -834,7 +838,7 @@ public class StreamThreadTest {
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -890,8 +894,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -940,8 +943,7 @@ public class StreamThreadTest {
         restoreConsumer.updateEndOffsets(offsets);
         restoreConsumer.updateBeginningOffsets(offsets);
 
-        thread.setState(StreamThread.State.RUNNING);
-
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
@@ -972,8 +974,7 @@ public class StreamThreadTest {
         final TopicPartition partition2 = new TopicPartition(changelogName2, 1);
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
             .groupByKey().count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as(storeName1));
-        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2));
-        materialized.generateStoreNameIfNeeded(internalStreamsBuilder, "");
+        final MaterializedInternal materialized = new MaterializedInternal(Materialized.as(storeName2), internalStreamsBuilder, "");
         internalStreamsBuilder.table(topic2, new ConsumedInternal(), materialized);
 
         internalStreamsBuilder.buildAndOptimizeTopology();
@@ -1005,8 +1006,7 @@ public class StreamThreadTest {
             restoreConsumer.addRecord(new ConsumerRecord<>(changelogName2, 1, i, ("K" + i).getBytes(), ("V" + i).getBytes()));
         }
 
-        thread.setState(StreamThread.State.RUNNING);
-
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
 
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
@@ -1069,8 +1069,7 @@ public class StreamThreadTest {
 
         final StreamThread thread = createStreamThread(clientId, config, false);
 
-        thread.setState(StreamThread.State.RUNNING);
-
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(null);
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
@@ -1116,6 +1115,9 @@ public class StreamThreadTest {
         ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.CREATED.name(), metadata.threadState());
 
+        thread.setState(StreamThread.State.STARTING);
+        thread.setState(StreamThread.State.PARTITIONS_REVOKED);
+        thread.setState(StreamThread.State.PARTITIONS_ASSIGNED);
         thread.setState(StreamThread.State.RUNNING);
         metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.RUNNING.name(), metadata.threadState());
@@ -1130,7 +1132,7 @@ public class StreamThreadTest {
         final StreamThread thread = createStreamThread(clientId, config, false);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
         restoreConsumer.updatePartitions("stream-thread-test-count-one-changelog",
-            Utils.mkList(
+            asList(
                 new PartitionInfo("stream-thread-test-count-one-changelog",
                     0,
                     null,
@@ -1150,10 +1152,9 @@ public class StreamThreadTest {
 
         clientSupplier.consumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
 
-        thread.setState(StreamThread.State.RUNNING);
-
         final List<TopicPartition> assignedPartitions = new ArrayList<>();
 
+        thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener.onPartitionsRevoked(assignedPartitions);
         assertThreadMetadataHasEmptyTasksWithState(thread.threadMetadata(), StreamThread.State.PARTITIONS_REVOKED);
 
@@ -1282,7 +1283,7 @@ public class StreamThreadTest {
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass().getName());
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(config), false);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
@@ -1326,7 +1327,7 @@ public class StreamThreadTest {
         config.setProperty(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, LogAndSkipOnInvalidTimestamp.class.getName());
         final StreamThread thread = createStreamThread(clientId, new StreamsConfig(config), false);
 
-        thread.setState(StreamThread.State.RUNNING);
+        thread.setState(StreamThread.State.STARTING);
         thread.setState(StreamThread.State.PARTITIONS_REVOKED);
 
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
@@ -1452,7 +1453,7 @@ public class StreamThreadTest {
     public void adminClientMetricsVerification() {
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
-        final List<Node> cluster = Arrays.asList(broker1, broker2);
+        final List<Node> cluster = asList(broker1, broker2);
 
         final MockAdminClient adminClient = new MockAdminClient(cluster, broker1, null);
 

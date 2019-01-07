@@ -20,7 +20,7 @@ package kafka.server.epoch
 import java.io.{File, RandomAccessFile}
 import java.util.Properties
 
-import kafka.api.KAFKA_0_11_0_IV1
+import kafka.api.ApiVersion
 import kafka.log.Log
 import kafka.server.KafkaConfig._
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -32,7 +32,7 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.serialization.Deserializer
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
 
@@ -42,7 +42,7 @@ import scala.collection.Seq
 
 /**
   * These tests were written to assert the addition of leader epochs to the replication protocol fix the problems
-  * described in KIP-101. There is a boolean KIP_101_ENABLED which can be toggled to demonstrate the tests failing in the pre-KIP-101 case
+  * described in KIP-101.
   *
   * https://cwiki.apache.org/confluence/display/KAFKA/KIP-101+-+Alter+Replication+Protocol+to+use+Leader+Epoch+rather+than+High+Watermark+for+Truncation
   *
@@ -50,14 +50,14 @@ import scala.collection.Seq
   */
 class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness with Logging {
 
+  // Set this to KAFKA_0_11_0_IV1 to demonstrate the tests failing in the pre-KIP-101 case
+  val apiVersion = ApiVersion.latestVersion
   val topic = "topic1"
   val msg = new Array[Byte](1000)
   val msgBigger = new Array[Byte](10000)
   var brokers: Seq[KafkaServer] = null
   var producer: KafkaProducer[Array[Byte], Array[Byte]] = null
   var consumer: KafkaConsumer[Array[Byte], Array[Byte]] = null
-
-  val KIP_101_ENABLED = true
 
   @Before
   override def setUp() {
@@ -239,7 +239,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
     //Search to see if we have non-monotonic offsets in the log
     startConsumer()
-    val records = consumer.poll(1000).asScala
+    val records = TestUtils.pollUntilAtLeastNumRecords(consumer, 100)
     var prevOffset = -1L
     records.foreach { r =>
       assertTrue(s"Offset $prevOffset came before ${r.offset} ", r.offset > prevOffset)
@@ -397,7 +397,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     consumerConfig.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, getBrokerListStrFromServers(brokers))
     consumerConfig.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
     consumerConfig.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, String.valueOf(getLogFile(brokers(1), 0).length() * 2))
-    consumer = new KafkaConsumer(consumerConfig, new StubDeserializer, new StubDeserializer)
+    consumer = new KafkaConsumer(consumerConfig, new ByteArrayDeserializer, new ByteArrayDeserializer)
     consumer.assign(List(new TopicPartition(topic, 0)).asJava)
     consumer.seek(new TopicPartition(topic, 0), 0)
     consumer
@@ -435,9 +435,7 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
     producer = createProducer //TODO not sure why we need to recreate the producer, but it doesn't reconnect if we don't
   }
 
-  private def epochCache(broker: KafkaServer): LeaderEpochFileCache = {
-    getLog(broker, 0).leaderEpochCache.asInstanceOf[LeaderEpochFileCache]
-  }
+  private def epochCache(broker: KafkaServer): LeaderEpochFileCache = getLog(broker, 0).leaderEpochCache
 
   private def latestRecord(leader: KafkaServer, offset: Int = -1, partition: Int = 0): RecordBatch = {
     getLog(leader, partition).activeSegment.read(0, None, Integer.MAX_VALUE)
@@ -468,19 +466,9 @@ class EpochDrivenReplicationProtocolAcceptanceTest extends ZooKeeperTestHarness 
 
   private def createBroker(id: Int, enableUncleanLeaderElection: Boolean = false): KafkaServer = {
     val config = createBrokerConfig(id, zkConnect)
-    if(!KIP_101_ENABLED) {
-      config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, KAFKA_0_11_0_IV1.version)
-      config.setProperty(KafkaConfig.LogMessageFormatVersionProp, KAFKA_0_11_0_IV1.version)
-    }
+    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, apiVersion.version)
+    config.setProperty(KafkaConfig.LogMessageFormatVersionProp, apiVersion.version)
     config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, enableUncleanLeaderElection.toString)
     createServer(fromProps(config))
-  }
-
-  private class StubDeserializer extends Deserializer[Array[Byte]] {
-    override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {}
-
-    override def deserialize(topic: String, data: Array[Byte]): Array[Byte] = { data }
-
-    override def close(): Unit = {}
   }
 }

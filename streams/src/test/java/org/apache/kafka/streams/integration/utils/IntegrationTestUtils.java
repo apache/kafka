@@ -68,22 +68,21 @@ import java.util.stream.Collectors;
  */
 public class IntegrationTestUtils {
 
-    public static final long DEFAULT_TIMEOUT = 30 * 1000L;
-    private static final long DEFAULT_COMMIT_INTERVAL = 100L;
+    public static final long DEFAULT_TIMEOUT = 60 * 1000L;
     public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /*
      * Records state transition for StreamThread
      */
     public static class StateListenerStub implements StreamThread.StateListener {
-        boolean runningToRevokedSeen = false;
+        boolean startingToRevokedSeen = false;
         boolean revokedToPendingShutdownSeen = false;
         @Override
         public void onChange(final Thread thread,
                              final ThreadStateTransitionValidator newState,
                              final ThreadStateTransitionValidator oldState) {
-            if (oldState == StreamThread.State.RUNNING && newState == StreamThread.State.PARTITIONS_REVOKED) {
-                runningToRevokedSeen = true;
+            if (oldState == StreamThread.State.STARTING && newState == StreamThread.State.PARTITIONS_REVOKED) {
+                startingToRevokedSeen = true;
             } else if (oldState == StreamThread.State.PARTITIONS_REVOKED && newState == StreamThread.State.PENDING_SHUTDOWN) {
                 revokedToPendingShutdownSeen = true;
             }
@@ -93,8 +92,8 @@ public class IntegrationTestUtils {
             return revokedToPendingShutdownSeen;
         }
 
-        public boolean runningToRevokedSeen() {
-            return runningToRevokedSeen;
+        public boolean createdToRevokedSeen() {
+            return startingToRevokedSeen;
         }
     }
 

@@ -75,9 +75,6 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
    *   for each log directory */
   private val uncleanablePartitions = mutable.HashMap[String, mutable.Set[TopicPartition]]()
 
-  /* the set of directories marked as uncleanable and therefore offline */
-  private val uncleanableDirs = mutable.HashSet[String]()
-
   /* a global lock used to control all access to the in-progress set and the offset checkpoints */
   private val lock = new ReentrantLock
 

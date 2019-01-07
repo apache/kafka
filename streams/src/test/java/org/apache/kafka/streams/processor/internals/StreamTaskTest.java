@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -62,12 +63,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -114,7 +115,7 @@ public class StreamTaskTest {
     private final Long offset = 543L;
 
     private final ProcessorTopology topology = ProcessorTopology.withSources(
-        Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
+        asList(source1, source2, processorStreamTime, processorSystemTime),
         mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
     );
 
@@ -166,8 +167,8 @@ public class StreamTaskTest {
 
     @Before
     public void setup() {
-        consumer.assign(Arrays.asList(partition1, partition2));
-        stateDirectory = new StateDirectory(createConfig(false), new MockTime());
+        consumer.assign(asList(partition1, partition2));
+        stateDirectory = new StateDirectory(createConfig(false), new MockTime(), true);
     }
 
     @After
@@ -190,13 +191,13 @@ public class StreamTaskTest {
     public void testProcessOrder() {
         task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 30)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45)
@@ -245,6 +246,11 @@ public class StreamTaskTest {
         assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
+
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-task-metrics,client-id=test,task-id=%s", task.id.toString())));
+        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=test,task-id=all"));
     }
 
     private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
@@ -261,12 +267,12 @@ public class StreamTaskTest {
     public void testPauseResume() {
         task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45),
             getConsumerRecord(partition2, 55),
@@ -280,7 +286,7 @@ public class StreamTaskTest {
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 30),
             getConsumerRecord(partition1, 40),
             getConsumerRecord(partition1, 50)
@@ -318,14 +324,14 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 142),
             getConsumerRecord(partition1, 155),
             getConsumerRecord(partition1, 160)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 145),
             getConsumerRecord(partition2, 159),
@@ -403,13 +409,13 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 30),
             getConsumerRecord(partition1, 40)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45)
@@ -968,7 +974,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionForBeginTransaction() {
+    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionForBeginTransaction() {
         task = createStatelessTask(createConfig(true));
         producer.fenceProducer();
 
@@ -1215,11 +1221,11 @@ public class StreamTaskTest {
         final TopicPartition repartition = new TopicPartition("repartition", 1);
 
         final ProcessorTopology topology = ProcessorTopology.withRepartitionTopics(
-            Utils.mkList(source1, source2),
+            asList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
             Collections.singleton(repartition.topic())
         );
-        consumer.assign(Arrays.asList(partition1, repartition));
+        consumer.assign(asList(partition1, repartition));
 
         task = new StreamTask(
             taskId00,
@@ -1287,7 +1293,7 @@ public class StreamTaskTest {
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
         final ProcessorTopology topology = ProcessorTopology.with(
-            Utils.mkList(source1, source2),
+            asList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
             singletonList(stateStore),
             logged ? Collections.singletonMap(storeName, storeName + "-changelog") : Collections.emptyMap());
@@ -1309,7 +1315,7 @@ public class StreamTaskTest {
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
         final ProcessorTopology topology = ProcessorTopology.with(
-            Utils.mkList(source1, source3),
+            asList(source1, source3),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
             Collections.emptyMap());
@@ -1331,7 +1337,7 @@ public class StreamTaskTest {
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-            Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
+            asList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
@@ -1358,7 +1364,7 @@ public class StreamTaskTest {
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
     private StreamTask createTaskThatThrowsException(final boolean enableEos) {
         final ProcessorTopology topology = ProcessorTopology.withSources(
-            Utils.mkList(source1, source3, processorStreamTime, processorSystemTime),
+            asList(source1, source3, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3))
         );
 

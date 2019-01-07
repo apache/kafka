@@ -63,7 +63,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(PowerMockRunner.class)
 @PrepareForTest(KafkaConfigBackingStore.class)
 @PowerMockIgnore("javax.management.*")
-@SuppressWarnings("unchecked")
+@SuppressWarnings({"unchecked", "deprecation"})
 public class KafkaConfigBackingStoreTest {
     private static final String TOPIC = "connect-configs";
     private static final short TOPIC_REPLICATION_FACTOR = 5;
@@ -154,7 +154,7 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testStartStop() throws Exception {
         expectConfigure();
-        expectStart(Collections.EMPTY_LIST, Collections.EMPTY_MAP);
+        expectStart(Collections.emptyList(), Collections.emptyMap());
         expectStop();
 
         PowerMock.replayAll();
@@ -179,7 +179,7 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testPutConnectorConfig() throws Exception {
         expectConfigure();
-        expectStart(Collections.EMPTY_LIST, Collections.EMPTY_MAP);
+        expectStart(Collections.emptyList(), Collections.emptyMap());
 
         expectConvertWriteAndRead(
                 CONNECTOR_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
@@ -241,10 +241,10 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testPutTaskConfigs() throws Exception {
         expectConfigure();
-        expectStart(Collections.EMPTY_LIST, Collections.EMPTY_MAP);
+        expectStart(Collections.emptyList(), Collections.emptyMap());
 
         // Task configs should read to end, write to the log, read to end, write root, then read to end again
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
+        expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
                 TASK_CONFIG_KEYS.get(0), KafkaConfigBackingStore.TASK_CONFIGURATION_V0, CONFIGS_SERIALIZED.get(0),
                 "properties", SAMPLE_CONFIGS.get(0));
@@ -274,7 +274,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
-        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.EMPTY_LIST);
+        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
@@ -305,10 +305,10 @@ public class KafkaConfigBackingStoreTest {
     @Test
     public void testPutTaskConfigsZeroTasks() throws Exception {
         expectConfigure();
-        expectStart(Collections.EMPTY_LIST, Collections.EMPTY_MAP);
+        expectStart(Collections.emptyList(), Collections.emptyMap());
 
         // Task configs should read to end, write to the log, read to end, write root.
-        expectReadToEnd(new LinkedHashMap<String, byte[]>());
+        expectReadToEnd(new LinkedHashMap<>());
         expectConvertWriteRead(
             COMMIT_TASKS_CONFIG_KEYS.get(0), KafkaConfigBackingStore.CONNECTOR_TASKS_COMMIT_V0, CONFIGS_SERIALIZED.get(0),
             "tasks", 0); // We have 0 tasks
@@ -329,7 +329,7 @@ public class KafkaConfigBackingStoreTest {
         configStorage.start();
 
         // Bootstrap as if we had already added the connector, but no tasks had been added yet
-        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.EMPTY_LIST);
+        whiteboxAddConnector(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), Collections.emptyList());
 
         // Null before writing
         ClusterConfigState configState = configStorage.snapshot();
@@ -727,7 +727,7 @@ public class KafkaConfigBackingStoreTest {
         assertEquals(6, configState.offset()); // Should always be next to be read, not last committed
         assertEquals(Arrays.asList(CONNECTOR_IDS.get(0)), new ArrayList<>(configState.connectors()));
         // Inconsistent data should leave us with no tasks listed for the connector and an entry in the inconsistent list
-        assertEquals(Collections.EMPTY_LIST, configState.tasks(CONNECTOR_IDS.get(0)));
+        assertEquals(Collections.emptyList(), configState.tasks(CONNECTOR_IDS.get(0)));
         // Both TASK_CONFIG_STRUCTS[0] -> SAMPLE_CONFIGS[0]
         assertNull(configState.taskConfig(TASK_IDS.get(0)));
         assertNull(configState.taskConfig(TASK_IDS.get(1)));

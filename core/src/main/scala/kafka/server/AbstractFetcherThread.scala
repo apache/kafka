@@ -35,6 +35,7 @@ import scala.collection.{Map, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
@@ -42,7 +43,6 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
-
 
 import scala.math._
 
@@ -142,21 +142,23 @@ abstract class AbstractFetcherThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   private def buildLeaderEpochRequest(): ResultWithPartitions[Map[TopicPartition, EpochData]] = inLock(partitionMapLock) {
-    var partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
-    var partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
+    val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
+    val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
 
-    partitionStates.partitionStates.asScala.foreach { state =>
-      val tp = state.topicPartition
-      if (state.value.isTruncating) {
-        latestEpoch(tp) match {
-          case Some(latestEpoch) =>
-            val partitionData = new EpochData(Optional.of(state.value.currentLeaderEpoch), latestEpoch)
-            partitionsWithEpochs += tp -> partitionData
-          case None =>
-            partitionsWithoutEpochs += tp
+    partitionStates.stream().forEach(new Consumer[PartitionStates.PartitionState[PartitionFetchState]] {
+      override def accept(state: PartitionStates.PartitionState[PartitionFetchState]): Unit = {
+        val tp = state.topicPartition
+        if (state.value.isTruncating) {
+          latestEpoch(tp) match {
+            case Some(latestEpoch) =>
+              val partitionData = new EpochData(Optional.of(state.value.currentLeaderEpoch), latestEpoch)
+              partitionsWithEpochs += tp -> partitionData
+            case None =>
+              partitionsWithoutEpochs += tp
+          }
         }
       }
-    }
+    })
 
     debug(s"Build leaderEpoch request $partitionsWithEpochs")
     ResultWithPartitions(partitionsWithEpochs, partitionsWithoutEpochs)
@@ -272,10 +274,10 @@ abstract class AbstractFetcherThread(name: String,
                       partitionData)
 
                     logAppendInfoOpt.foreach { logAppendInfo =>
-                      val nextOffset = logAppendInfo.lastOffset + 1
+                      val validBytes = logAppendInfo.validBytes
+                      val nextOffset = if (validBytes > 0) logAppendInfo.lastOffset + 1 else currentFetchState.fetchOffset
                       fetcherLagStats.getAndMaybePut(topicPartition).lag = Math.max(0L, partitionData.highWatermark - nextOffset)
 
-                      val validBytes = logAppendInfo.validBytes
                       // ReplicaDirAlterThread may have removed topicPartition from the partitionStates after processing the partition data
                       if (validBytes > 0 && partitionStates.contains(topicPartition)) {
                         // Update partitionStates only if there is no exception during processPartitionData

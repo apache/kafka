@@ -22,11 +22,21 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
+    private final Map<TaskId, StreamTask> restoring = new HashMap<>();
+    private final Set<TopicPartition> restoredPartitions = new HashSet<>();
+    private final Map<TopicPartition, StreamTask> restoringByPartition = new HashMap<>();
+
     AssignedStreamsTasks(final LogContext logContext) {
         super(logContext, "stream task");
     }
@@ -34,6 +44,60 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     public StreamTask restoringTaskFor(final TopicPartition partition) {
         return restoringByPartition.get(partition);
+    }
+
+    void updateRestored(final Collection<TopicPartition> restored) {
+        if (restored.isEmpty()) {
+            return;
+        }
+        log.trace("Stream task changelog partitions that have completed restoring so far: {}", restored);
+        restoredPartitions.addAll(restored);
+        for (final Iterator<Map.Entry<TaskId, StreamTask>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
+            final Map.Entry<TaskId, StreamTask> entry = it.next();
+            final StreamTask task = entry.getValue();
+            if (restoredPartitions.containsAll(task.changelogPartitions())) {
+                transitionToRunning(task);
+                it.remove();
+                log.trace("Stream task {} completed restoration as all its changelog partitions {} have been applied to restore state",
+                    task.id(),
+                    task.changelogPartitions());
+            } else {
+                if (log.isTraceEnabled()) {
+                    final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
+                    outstandingPartitions.removeAll(restoredPartitions);
+                    log.trace("Stream task {} cannot resume processing yet since some of its changelog partitions have not completed restoring: {}",
+                        task.id(),
+                        outstandingPartitions);
+                }
+            }
+        }
+        if (allTasksRunning()) {
+            restoredPartitions.clear();
+        }
+    }
+
+    void addToRestoring(final StreamTask task) {
+        restoring.put(task.id(), task);
+        for (final TopicPartition topicPartition : task.partitions()) {
+            restoringByPartition.put(topicPartition, task);
+        }
+        for (final TopicPartition topicPartition : task.changelogPartitions()) {
+            restoringByPartition.put(topicPartition, task);
+        }
+    }
+
+    @Override
+    boolean allTasksRunning() {
+        return super.allTasksRunning() && restoring.isEmpty();
+    }
+
+    RuntimeException suspend() {
+        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(super.suspend());
+        log.trace("Close restoring stream task {}", restoring.keySet());
+        firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
+        restoring.clear();
+        restoringByPartition.clear();
+        return firstException.get();
     }
 
     /**
@@ -152,6 +216,40 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
             }
         }
         return punctuated;
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(super.toString(indent));
+        describe(builder, restoring.values(), indent, "Restoring:");
+        return builder.toString();
+    }
+
+    @Override
+    List<StreamTask> allTasks() {
+        final List<StreamTask> tasks = super.allTasks();
+        tasks.addAll(restoring.values());
+        return tasks;
+    }
+
+    @Override
+    Set<TaskId> allAssignedTaskIds() {
+        final Set<TaskId> taskIds = super.allAssignedTaskIds();
+        taskIds.addAll(restoring.keySet());
+        return taskIds;
+    }
+
+    void clear() {
+        super.clear();
+        restoring.clear();
+        restoringByPartition.clear();
+        restoredPartitions.clear();
+    }
+
+    // for testing only
+
+    Collection<StreamTask> restoringTasks() {
+        return Collections.unmodifiableCollection(restoring.values());
     }
 
 }

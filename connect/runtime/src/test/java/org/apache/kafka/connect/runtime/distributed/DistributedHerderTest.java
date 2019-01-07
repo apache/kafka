@@ -80,6 +80,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("deprecation")
 @RunWith(PowerMockRunner.class)
 @PrepareForTest({DistributedHerder.class, Plugins.class})
 @PowerMockIgnore("javax.management.*")
@@ -492,6 +493,7 @@ public class DistributedHerderTest {
         PowerMock.verifyAll();
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testConnectorNameConflictsWithWorkerGroupId() throws Exception {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
@@ -1504,8 +1506,8 @@ public class DistributedHerderTest {
         assertEquals(isRebalancing ? 1.0d : 0.0d, rebalancing, 0.0001d);
         assertEquals(millisSinceLastRebalance, rebalanceTimeSinceLast, 0.0001d);
         if (rebalanceTime <= 0L) {
-            assertEquals(Double.NEGATIVE_INFINITY, rebalanceTimeMax, 0.0001d);
-            assertEquals(0.0d, rebalanceTimeAvg, 0.0001d);
+            assertEquals(Double.NaN, rebalanceTimeMax, 0.0001d);
+            assertEquals(Double.NaN, rebalanceTimeAvg, 0.0001d);
         } else {
             assertEquals(rebalanceTime, rebalanceTimeMax, 0.0001d);
             assertEquals(rebalanceTime, rebalanceTimeAvg, 0.0001d);

@@ -50,6 +50,7 @@ class LogOffsetTest extends BaseRequestTest {
     props.put("log.segment.bytes", "140")
   }
 
+  @deprecated("ListOffsetsRequest V0", since = "")
   @Test
   def testGetOffsetsForUnknownTopic() {
     val topicPartition = new TopicPartition("foo", 0)
@@ -60,6 +61,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.responseData.get(topicPartition).error)
   }
 
+  @deprecated("ListOffsetsRequest V0", since = "")
   @Test
   def testGetOffsetsAfterDeleteRecords() {
     val topic = "kafka-"
@@ -151,6 +153,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(offsetChanged)
   }
 
+  @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
   def testGetOffsetsBeforeNow() {
     val random = new Random
@@ -180,6 +183,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Seq(20L, 18L, 16L, 14L, 12L, 10L, 8L, 6L, 4L, 2L, 0L), consumerOffsets)
   }
 
+  @deprecated("legacyFetchOffsetsBefore", since = "")
   @Test
   def testGetOffsetsBeforeEarliestTime() {
     val random = new Random

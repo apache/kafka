@@ -37,6 +37,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.junit.Assert.assertNotNull;
 
@@ -54,7 +55,7 @@ public class JsonSerializationTest {
         verify(new WorkerRunning(null, null, 0, null));
         verify(new WorkerStopping(null, null, 0, null));
         verify(new ProduceBenchSpec(0, 0, null, null,
-            0, 0, null, null, null, null, null, null, null));
+            0, 0, null, null, Optional.empty(), null, null, null, null, null));
         verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,
             0, null, null, 0));
         verify(new TopicsSpec());
@@ -68,6 +69,7 @@ public class JsonSerializationTest {
 
     private <T> void verify(T val1) throws Exception {
         byte[] bytes = JsonUtil.JSON_SERDE.writeValueAsBytes(val1);
+        @SuppressWarnings("unchecked")
         Class<T> clazz = (Class<T>) val1.getClass();
         T val2 = JsonUtil.JSON_SERDE.readValue(bytes, clazz);
         for (Field field : clazz.getDeclaredFields()) {

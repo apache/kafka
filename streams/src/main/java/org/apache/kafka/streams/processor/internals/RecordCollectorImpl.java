@@ -55,8 +55,9 @@ public class RecordCollectorImpl implements RecordCollector {
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
 
-    private final static String LOG_MESSAGE = "Error sending record (key {} value {} timestamp {}) to topic {} due to {}; " +
-        "No more records will be sent and no more offsets will be recorded for this task.";
+    private final static String LOG_MESSAGE = "Error sending record to topic {} due to {}; " +
+        "No more records will be sent and no more offsets will be recorded for this task. " +
+        "Enable TRACE logging to view failed record key and value.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (key %s value %s timestamp %d) to topic %s due to %s";
     private final static String PARAMETER_HINT = "\nYou can increase producer parameter `retries` and `retry.backoff.ms` to avoid this error.";
     private volatile KafkaException sendException;
@@ -128,7 +129,11 @@ public class RecordCollectorImpl implements RecordCollector {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
         }
-        log.error(errorLogMessage, key, value, timestamp, topic, exception.toString());
+        log.error(errorLogMessage, topic, exception.getMessage(), exception);
+
+        // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
+        log.trace("Failed message: key {} value {} timestamp {}", key, value, timestamp);
+
         sendException = new StreamsException(
             String.format(
                 errorMessage,
@@ -172,7 +177,11 @@ public class RecordCollectorImpl implements RecordCollector {
                     } else {
                         if (sendException == null) {
                             if (exception instanceof ProducerFencedException) {
-                                log.warn(LOG_MESSAGE, key, value, timestamp, topic, exception.toString());
+                                log.warn(LOG_MESSAGE, topic, exception.getMessage(), exception);
+
+                                // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
+                                log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
+
                                 sendException = new ProducerFencedException(
                                     String.format(
                                         EXCEPTION_MESSAGE,
@@ -192,10 +201,15 @@ public class RecordCollectorImpl implements RecordCollector {
                                     recordSendError(key, value, timestamp, topic, exception);
                                 } else {
                                     log.warn(
-                                        "Error sending records (key=[{}] value=[{}] timestamp=[{}]) to topic=[{}] and partition=[{}]; " +
-                                            "The exception handler chose to CONTINUE processing in spite of this error.",
-                                        key, value, timestamp, topic, partition, exception
+                                        "Error sending records topic=[{}] and partition=[{}]; " +
+                                            "The exception handler chose to CONTINUE processing in spite of this error. " +
+                                            "Enable TRACE logging to view failed messages key and value.",
+                                        topic, partition, exception
                                     );
+
+                                    // KAFKA-7510 put message key and value in TRACE level log so we don't leak data by default
+                                    log.trace("Failed message: (key {} value {} timestamp {}) topic=[{}] partition=[{}]", key, value, timestamp, topic, partition);
+
                                     skippedRecordsSensor.record();
                                 }
                             }
@@ -249,8 +263,10 @@ public class RecordCollectorImpl implements RecordCollector {
     @Override
     public void close() {
         log.debug("Closing producer");
-        producer.close();
-        producer = null;
+        if (producer != null) {
+            producer.close();
+            producer = null;
+        }
         checkForException();
     }
 

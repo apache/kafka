@@ -99,6 +99,10 @@ public class Struct {
         return getString(field.name);
     }
 
+    public Boolean get(Field.Bool field) {
+        return getBoolean(field.name);
+    }
+
     public Object[] get(Field.Array field) {
         return getArray(field.name);
     }
@@ -330,6 +334,10 @@ public class Struct {
         return set(def.name, value);
     }
 
+    public Struct set(Field.Bool def, boolean value) {
+        return set(def.name, value);
+    }
+
     public Struct set(Field.Array def, Object[] value) {
         return set(def.name, value);
     }
@@ -339,11 +347,11 @@ public class Struct {
     }
 
     public Struct setIfExists(Field.Array def, Object[] value) {
-        return set(def.name, value);
+        return setIfExists(def.name, value);
     }
 
     public Struct setIfExists(Field.ComplexArray def, Object[] value) {
-        return set(def.name, value);
+        return setIfExists(def.name, value);
     }
 
     public Struct setIfExists(Field def, Object value) {

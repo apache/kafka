@@ -56,7 +56,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  * If logging is left enabled, log output on stdout can be easily ignored by checking
  * whether a given line is valid JSON.
  */
-public class VerifiableProducer {
+public class VerifiableProducer implements AutoCloseable {
 
     private final ObjectMapper mapper = new ObjectMapper();
     private final String topic;
@@ -517,22 +517,19 @@ public class VerifiableProducer {
             final long startMs = System.currentTimeMillis();
             ThroughputThrottler throttler = new ThroughputThrottler(producer.throughput, startMs);
 
-            Runtime.getRuntime().addShutdownHook(new Thread() {
-                @Override
-                public void run() {
-                    // Trigger main thread to stop producing messages
-                    producer.stopProducing = true;
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+                // Trigger main thread to stop producing messages
+                producer.stopProducing = true;
 
-                    // Flush any remaining messages
-                    producer.close();
+                // Flush any remaining messages
+                producer.close();
 
-                    // Print a summary
-                    long stopMs = System.currentTimeMillis();
-                    double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
+                // Print a summary
+                long stopMs = System.currentTimeMillis();
+                double avgThroughput = 1000 * ((producer.numAcked) / (double) (stopMs - startMs));
 
-                    producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
-                }
-            });
+                producer.printJson(new ToolData(producer.numSent, producer.numAcked, producer.throughput, avgThroughput));
+            }));
 
             producer.run(throttler);
         } catch (ArgumentParserException e) {
