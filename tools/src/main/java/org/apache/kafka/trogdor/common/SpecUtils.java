@@ -18,32 +18,39 @@
 package org.apache.kafka.trogdor.common;
 
 import java.io.BufferedReader;
-import java.io.FileInputStream;
-import java.io.FileReader;
 import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.FileInputStream;
+import java.nio.charset.StandardCharsets;
 
 public class SpecUtils {
     /**
-     * @param argument: a JSON string or a path starting with @
-
+     * @param argument: a JSON string or a path starting with '@'
+     * @return String: the JSON SPEC string
      */
     public static String readSpec(String argument) throws IOException {
         if (argument.startsWith("@")) {
-            String specPath = argument.substring(1);
-            BufferedReader br = new BufferedReader(new FileReader(specPath));
-            String line;
-            String spec = "";
-            while ((line = br.readLine()) != null)
-            {
-                if (line.startsWith("#"))
-                    continue;
-                spec += line;
+            BufferedReader br = null;
+            try {
+                String specPath = argument.substring(1);
+                br = new BufferedReader(
+                        new InputStreamReader(new FileInputStream(specPath), StandardCharsets.UTF_8));
+                String line;
+                StringBuffer spec = new StringBuffer();
+                while ((line = br.readLine()) != null) {
+                    if (line.startsWith("#"))
+                        continue;
+                    spec.append(line);
+                }
+                String specString = spec.toString();
+                if (specString.isEmpty()) {
+                    throw new IOException("Empty SPEC in the file " + spec);
+                }
+                return specString;
+            } finally {
+                if (br != null)
+                    br.close();
             }
-            if (spec.isEmpty())
-            {
-                throw new IOException("Empty SPEC in the file " + spec);
-            }
-            return spec;
         } else {
             return argument;
         }

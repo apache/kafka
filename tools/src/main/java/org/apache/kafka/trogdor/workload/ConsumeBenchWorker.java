@@ -311,7 +311,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
         }
 

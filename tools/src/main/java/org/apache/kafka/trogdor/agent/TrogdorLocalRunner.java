@@ -37,7 +37,7 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
 public class TrogdorLocalRunner {
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-                .newArgumentParser("TrogdorLocalRunner").defaultHelp(true).description("Run Trogdor Spec locally.");
+                .newArgumentParser("TrogdorLocalRunner").defaultHelp(true).description("Execute a Trogdor task directly.");
         parser.addArgument("--spec")
                 .action(store())
                 .required(true)
@@ -60,8 +60,8 @@ public class TrogdorLocalRunner {
         String specString = null;
         try {
             specString = SpecUtils.readSpec(res.getString("spec"));
-        } catch (IOException e){
-            System.err.print("Failed to read Trogdor SPEC argument, exception: " + e);
+        } catch (IOException e) {
+            System.err.println("Failed to read Trogdor SPEC argument, exception: " + e);
             parser.printHelp();
             Exit.exit(1);
         }
@@ -71,7 +71,7 @@ public class TrogdorLocalRunner {
         runSpec(req);
     }
 
-    private static void runSpec(CreateWorkerRequest request){
+    private static void runSpec(CreateWorkerRequest request) {
         final TaskSpec spec = request.spec();
         final TaskWorker worker = spec.newTaskWorker("0");
         final AgentWorkerStatusTracker status = new AgentWorkerStatusTracker();
