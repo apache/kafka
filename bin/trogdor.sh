@@ -23,7 +23,7 @@ Usage:
 
 Actions:
   agent: Run the trogdor agent.
-  local: Run the trogdor spec locality.
+  exec: Execute the trogdor SPEC directly.
   coordinator: Run the trogdor coordinator.
   client: Run the client which communicates with the trogdor coordinator.
   agent-client: Run the client which communicates with the trogdor agent.
@@ -43,7 +43,7 @@ case ${action} in
     coordinator) CLASS="org.apache.kafka.trogdor.coordinator.Coordinator";;
     client) CLASS="org.apache.kafka.trogdor.coordinator.CoordinatorClient";;
     agent-client) CLASS="org.apache.kafka.trogdor.agent.AgentClient";;
-    local) CLASS="org.apache.kafka.trogdor.agent.TrogdorLocalRunner";;
+    exec) CLASS="org.apache.kafka.trogdor.agent.TrogdorLocalRunner";;
     help) usage; exit 0;;
     *)  echo "Unknown action '${action}'.  Type '$0 help' for help."; exit 1;;
 esac

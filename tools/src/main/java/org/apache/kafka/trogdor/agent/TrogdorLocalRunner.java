@@ -24,10 +24,14 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.SpecUtils;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.task.AgentWorkerStatusTracker;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
+
+import java.io.IOException;
+
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 
 public class TrogdorLocalRunner {
@@ -39,7 +43,7 @@ public class TrogdorLocalRunner {
                 .required(true)
                 .dest("spec")
                 .metavar("SPEC_JSON")
-                .help("Trogdor SPEC (JSON format).");
+                .help("Trogdor SPEC JSON string or a SPEC file path starting with @ (@/spec/file/path)");
         Namespace res = null;
         try {
             res = parser.parseArgs(args);
@@ -52,7 +56,17 @@ public class TrogdorLocalRunner {
                 Exit.exit(1);
             }
         }
-        CreateWorkerRequest req = JsonUtil.JSON_SERDE.readValue(res.getString("spec"), CreateWorkerRequest.class);
+
+        String specString = null;
+        try {
+            specString = SpecUtils.readSpec(res.getString("spec"));
+        } catch (IOException e){
+            System.err.print("Failed to read Trogdor SPEC argument, exception: " + e);
+            parser.printHelp();
+            Exit.exit(1);
+        }
+
+        CreateWorkerRequest req = JsonUtil.JSON_SERDE.readValue(specString, CreateWorkerRequest.class);
         System.out.println("Start a task " + req.taskId() + " with SPEC: " + req.spec());
         runSpec(req);
     }
