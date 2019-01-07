@@ -42,6 +42,7 @@ import org.scalatest.junit.JUnitSuite
 import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
+import scala.util.Random
 
 class GroupCoordinatorTest extends JUnitSuite {
   type JoinGroupCallback = JoinGroupResult => Unit
@@ -221,6 +222,14 @@ class GroupCoordinatorTest extends JUnitSuite {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
     val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols)
+    assertEquals(Errors.INVALID_GROUP_ID, joinGroupResult.error)
+  }
+
+  @Test
+  def testGroupIdTooLong() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+
+    val joinGroupResult = joinGroup(groupIdOfLength(257), memberId, protocolType, protocols)
     assertEquals(Errors.INVALID_GROUP_ID, joinGroupResult.error)
   }
 
@@ -1803,6 +1812,15 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
     OffsetAndMetadata(offset, "", timer.time.milliseconds())
+  }
+
+  private def groupIdOfLength(length: Int): String = {
+    val alpha = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
+    val size = alpha.length
+    val random = new Random
+    val buffer = new Array[Char](length)
+    for (i <- 0 until length) buffer(i) = alpha.charAt(random.nextInt(size))
+    new String(buffer)
   }
 
 }
