@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import java.util.Objects;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -489,10 +488,7 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs(config);
-            String clientId = Objects.toString(producerProps.get(ProducerConfig.CLIENT_ID_CONFIG), "");
-            if (clientId.isEmpty())
-                producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "connect-producer-" + id);
+            Map<String, Object> producerProps = producerConfigs(id, config);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -506,9 +502,6 @@ public class Worker {
             retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
 
             Map<String, Object> consumerProps = consumerConfigs(id, config);
-            String clientId = Objects.toString(consumerProps.get(ConsumerConfig.CLIENT_ID_CONFIG), "");
-            if (clientId.isEmpty())
-                consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connect-consumer-" + id);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -520,7 +513,7 @@ public class Worker {
         }
     }
 
-    static Map<String, Object> producerConfigs(WorkerConfig config) {
+    static Map<String, Object> producerConfigs(ConnectorTaskId id, WorkerConfig config) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -532,6 +525,7 @@ public class Worker {
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "connect-producer-" + id);
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
         return producerProps;
@@ -544,6 +538,7 @@ public class Worker {
         Map<String, Object> consumerProps = new HashMap<>();
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connect-consumer-" + id);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                   Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
@@ -568,7 +563,7 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs(config);
+            Map<String, Object> producerProps = producerConfigs(id, config);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
