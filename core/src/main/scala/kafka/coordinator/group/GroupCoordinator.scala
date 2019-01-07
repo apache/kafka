@@ -716,7 +716,7 @@ class GroupCoordinator(val brokerId: Int,
 
     // reschedule the next heartbeat expiration deadline
     val deadline = member.latestHeartbeat + timeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, JoinGroupRequest.UNKNOWN_MEMBER_ID, member, deadline, timeoutMs)
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, member.memberId, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
   }
 
@@ -726,7 +726,7 @@ class GroupCoordinator(val brokerId: Int,
   private def addPendingMemberExpiration(group: GroupMetadata, pendingMemberId: String, timeoutMs: Long) {
     val pendingMemberKey = MemberKey(group.groupId, pendingMemberId)
     val deadline = time.milliseconds() + timeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, null, deadline, timeoutMs)
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, pendingMemberId, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(pendingMemberKey))
   }
 
@@ -886,21 +886,27 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  def tryCompleteHeartbeat(group: GroupMetadata, pendingMemberId: String, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
+  def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (pendingMemberId == JoinGroupRequest.UNKNOWN_MEMBER_ID &&
-        (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving))
+      val member = group.get(memberId)
+      if (!group.isPendingMember(memberId) &&
+        (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving)) {
         forceComplete()
-      else false
+        true
+      } else false
     }
   }
 
-  def onExpireHeartbeat(group: GroupMetadata, pendingMemberId: String, member: MemberMetadata, heartbeatDeadline: Long) {
+  def onExpireHeartbeat(group: GroupMetadata, memberId: String, heartbeatDeadline: Long) {
     group.inLock {
-      if (pendingMemberId != JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+      if (group.isPendingMember(memberId)) {
         // Clean out pending member from purgatory through the member given session timeout.
-        group.removePendingMember(pendingMemberId)
-      } else if (!member.shouldKeepAlive(heartbeatDeadline)) {
+        group.removePendingMember(memberId)
+        return
+      }
+
+      val member = group.get(memberId)
+      if (!member.shouldKeepAlive(heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
       }

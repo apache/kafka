@@ -25,13 +25,12 @@ import kafka.server.DelayedOperation
  */
 private[group] class DelayedHeartbeat(coordinator: GroupCoordinator,
                                       group: GroupMetadata,
-                                      pendingMemberId: String,
-                                      member: MemberMetadata,
+                                      memberId: String,
                                       deadline: Long,
                                       timeoutMs: Long)
   extends DelayedOperation(timeoutMs, Some(group.lock)) {
 
-  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, pendingMemberId, member, deadline, forceComplete _)
-  override def onExpiration() = coordinator.onExpireHeartbeat(group, pendingMemberId, member, deadline)
+  override def tryComplete(): Boolean = coordinator.tryCompleteHeartbeat(group, memberId, deadline, forceComplete _)
+  override def onExpiration() = coordinator.onExpireHeartbeat(group, memberId, deadline)
   override def onComplete() = coordinator.onCompleteHeartbeat()
 }
