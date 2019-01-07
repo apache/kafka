@@ -117,7 +117,7 @@ final class ClusterConnectionStates {
             connectionState.moveToNextAddress();
         } else {
             nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                this.reconnectBackoffInitMs, ClientUtils.resolve(host, clientDnsLookup)));
+                this.reconnectBackoffInitMs, host, clientDnsLookup));
         }
     }
 
@@ -343,18 +343,22 @@ final class ClusterConnectionStates {
         long reconnectBackoffMs;
         // Connection is being throttled if current time < throttleUntilTimeMs.
         long throttleUntilTimeMs;
-        private final List<InetAddress> addresses;
+        private List<InetAddress> addresses;
         private int index = 0;
+        private final String host;
+        private final ClientDnsLookup clientDnsLookup;
 
         public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
-                List<InetAddress> addresses) {
+                String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
             this.state = state;
-            this.addresses = addresses;
+            this.addresses = ClientUtils.resolve(host, clientDnsLookup);
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
             this.reconnectBackoffMs = reconnectBackoffMs;
             this.throttleUntilTimeMs = 0;
+            this.host = host;
+            this.clientDnsLookup = clientDnsLookup;
         }
 
         public InetAddress currentAddress() {
@@ -364,8 +368,10 @@ final class ClusterConnectionStates {
         /*
          * implementing a ring buffer with the addresses
          */
-        public void moveToNextAddress() {
+        public void moveToNextAddress() throws UnknownHostException {
             index = (index + 1) % addresses.size();
+            if (index == 0)
+                addresses = ClientUtils.resolve(host, clientDnsLookup);
         }
 
         public String toString() {
