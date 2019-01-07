@@ -160,8 +160,11 @@ def validate_delivery(acked, consumed, idempotence_enabled=False, check_lost_dat
     # Are there duplicates?
     if len(set(consumed)) != len(consumed):
         num_duplicates = abs(len(set(consumed)) - len(consumed))
-        msg += "(There are also %s duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
+
         if idempotence_enabled:
-            return False, "Detected %s duplicates even though idempotence was enabled." % num_duplicates
+            success = False
+            msg += "Detected %d duplicates even though idempotence was enabled.\n" % num_duplicates
+        else:
+            msg += "(There are also %d duplicate messages in the log - but that is an acceptable outcome)\n" % num_duplicates
 
     return success, msg

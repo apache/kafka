@@ -230,7 +230,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     elif name == "records_consumed":
                         handler.handle_records_consumed(event)
                         self._update_global_position(event, node)
-                    elif name == "record_data":
+                    elif name == "record_data" and self.on_record_consumed:
                         self.on_record_consumed(event, node)
                     elif name == "partitions_revoked":
                         handler.handle_partitions_revoked(event)
