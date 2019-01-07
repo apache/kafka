@@ -19,6 +19,7 @@ package kafka.admin
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
+import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -29,7 +30,6 @@ import collection.JavaConverters._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
-
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
 import collection._
@@ -52,7 +52,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
                                                 " The preferred replica is the first one in the replica assignment (see kafka-reassign-partitions.sh)." +
                                                 " Using this command is not necessary when the broker is configured with \"auto.leader.rebalance.enable=true\".")
 
-    CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options, commandOpts.zkConnectOpt)
+    CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options)
 
     if (commandOpts.options.has(commandOpts.bootstrapServerOpt) == commandOpts.options.has(commandOpts.zkConnectOpt)) {
       CommandLineUtils.printUsageAndDie(commandOpts.parser, s"Exactly one of '${commandOpts.bootstrapServerOpt}' or '${commandOpts.zkConnectOpt}' must be provided")
@@ -123,17 +123,22 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
-    val zkConnectOpt = parser.accepts("zookeeper", "REQUIRED: The connection string for the zookeeper connection in the " +
-      "form host:port. Multiple URLS can be given to allow fail-over.")
-      .withRequiredArg
-      .describedAs("urls")
-      .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "A hostname and port for the broker to connect to, " +
+
+    private val zookeeperOptBuilder: OptionSpecBuilder = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the " +
+      "form host:port. Multiple URLS can be given to allow fail-over. " +
+      "DEPRECATED, replaced by --bootstrap-server, REQUIRED unless --bootstrap-server is given.")
+    private val bootstrapOptBuilder: OptionSpecBuilder = parser
+      .accepts("bootstrap-server", "A hostname and port for the broker to connect to, " +
       "in the form host:port. Multiple comma-separated URLs can be given. REQUIRED unless --zookeeper is given.")
+    parser.mutuallyExclusive(zookeeperOptBuilder, bootstrapOptBuilder)
+    val bootstrapServerOpt = bootstrapOptBuilder
       .withRequiredArg
       .describedAs("host:port")
       .ofType(classOf[String])
-
+    val zkConnectOpt = zookeeperOptBuilder
+      .withRequiredArg
+      .describedAs("urls")
+      .ofType(classOf[String])
     options = parser.parse(args: _*)
   }
 
