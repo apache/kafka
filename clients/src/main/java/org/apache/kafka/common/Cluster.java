@@ -273,4 +273,25 @@ public final class Cluster {
             ", partitions = " + this.partitionsByTopicPartition.values() + ", controller = " + controller + ")";
     }
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Cluster cluster = (Cluster) o;
+        return isBootstrapConfigured == cluster.isBootstrapConfigured &&
+                Objects.equals(nodes, cluster.nodes) &&
+                Objects.equals(unauthorizedTopics, cluster.unauthorizedTopics) &&
+                Objects.equals(invalidTopics, cluster.invalidTopics) &&
+                Objects.equals(internalTopics, cluster.internalTopics) &&
+                Objects.equals(controller, cluster.controller) &&
+                Objects.equals(partitionsByTopicPartition, cluster.partitionsByTopicPartition) &&
+                Objects.equals(nodesById, cluster.nodesById) &&
+                Objects.equals(clusterResource, cluster.clusterResource);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(isBootstrapConfigured, nodes, unauthorizedTopics, invalidTopics, internalTopics, controller,
+                partitionsByTopicPartition, nodesById, clusterResource);
+    }
 }

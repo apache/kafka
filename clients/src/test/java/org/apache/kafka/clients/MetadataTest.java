@@ -21,6 +21,8 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.test.MockClusterResourceListener;
 import org.apache.kafka.test.TestUtils;
@@ -567,6 +569,44 @@ public class MetadataTest {
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 102);
 
+    }
+
+    @Test
+    public void testClusterCopy() {
+        Map<String, Integer> counts = new HashMap<>();
+        Map<String, Errors> errors = new HashMap<>();
+        counts.put("topic1", 2);
+        counts.put("topic2", 3);
+        counts.put(Topic.GROUP_METADATA_TOPIC_NAME, 3);
+        errors.put("topic3", Errors.INVALID_TOPIC_EXCEPTION);
+        errors.put("topic4", Errors.TOPIC_AUTHORIZATION_FAILED);
+
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 4, errors, counts);
+        metadata.update(metadataResponse, 0L);
+
+        Cluster cluster = metadata.fetch();
+        assertEquals(cluster.clusterResource().clusterId(), "dummy");
+        assertEquals(cluster.nodes().size(), 4);
+
+        // topic counts
+        assertEquals(cluster.invalidTopics(), Collections.singleton("topic3"));
+        assertEquals(cluster.unauthorizedTopics(), Collections.singleton("topic4"));
+        assertEquals(cluster.topics().size(), 3);
+        assertEquals(cluster.internalTopics(), Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME));
+
+        // partition counts
+        assertEquals(cluster.partitionsForTopic("topic1").size(), 2);
+        assertEquals(cluster.partitionsForTopic("topic2").size(), 3);
+
+        // Sentinel instances
+        InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 0);
+        Cluster fromMetadata = Metadata.ClusterMetadataCache.bootstrap(Collections.singletonList(address)).toCluster();
+        Cluster fromCluster = Cluster.bootstrap(Collections.singletonList(address));
+        assertEquals(fromMetadata, fromCluster);
+
+        Cluster fromMetadataEmpty = Metadata.ClusterMetadataCache.empty().toCluster();
+        Cluster fromClusterEmpty = Cluster.empty();
+        assertEquals(fromMetadataEmpty, fromClusterEmpty);
     }
 
     private void clearBackgroundError() {

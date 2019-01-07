@@ -63,7 +63,6 @@ public class Metadata implements Closeable {
      * A mutable cache of nodes, topics, and partitions in the Kafka cluster
      */
     static class ClusterMetadataCache {
-        final boolean bootstrapped;
         final String clusterId;
         final List<Node> nodes;
         final Set<String> unauthorizedTopics;
@@ -72,16 +71,26 @@ public class Metadata implements Closeable {
         final Node controller;
         final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
         final Map<Integer, Node> nodesById;
+        final Optional<Cluster> overrideInstance;
 
-        ClusterMetadataCache(boolean bootstrapped,
-                             String clusterId,
+        ClusterMetadataCache(String clusterId,
                              List<Node> nodes,
                              Collection<PartitionInfo> partitions,
                              Set<String> unauthorizedTopics,
                              Set<String> invalidTopics,
                              Set<String> internalTopics,
                              Node controller) {
-            this.bootstrapped = bootstrapped;
+            this(clusterId, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller, Optional.empty());
+        }
+
+        private ClusterMetadataCache(String clusterId,
+                             List<Node> nodes,
+                             Collection<PartitionInfo> partitions,
+                             Set<String> unauthorizedTopics,
+                             Set<String> invalidTopics,
+                             Set<String> internalTopics,
+                             Node controller,
+                             Optional<Cluster> overrideInstance) {
             this.clusterId = clusterId;
             this.nodes = nodes;
             this.unauthorizedTopics = unauthorizedTopics;
@@ -97,6 +106,8 @@ public class Metadata implements Closeable {
             for (PartitionInfo p : partitions) {
                 this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
             }
+            // Used by the special "bootstrap" factory method
+            this.overrideInstance = overrideInstance;
         }
 
         /**
@@ -113,22 +124,22 @@ public class Metadata implements Closeable {
          * @return
          */
         Cluster toCluster() {
-            return new Cluster(clusterId, nodes, partitionsByTopicPartition.values(), unauthorizedTopics,
-                    internalTopics, internalTopics, controller);
+            return overrideInstance.orElse(
+                    new Cluster(clusterId, nodes, partitionsByTopicPartition.values(), unauthorizedTopics, invalidTopics, internalTopics, controller));
         }
 
-        static ClusterMetadataCache bootstrap(Collection<InetSocketAddress> addresses) {
+        static ClusterMetadataCache bootstrap(List<InetSocketAddress> addresses) {
             List<Node> nodes = new ArrayList<>();
             int nodeId = -1;
             for (InetSocketAddress address : addresses)
                 nodes.add(new Node(nodeId--, address.getHostString(), address.getPort()));
-            return new ClusterMetadataCache(true, null, nodes, new ArrayList<>(0),
-                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
+            return new ClusterMetadataCache(null, nodes, new ArrayList<>(0),
+                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Optional.of(Cluster.bootstrap(addresses)));
         }
 
         static ClusterMetadataCache empty() {
-            return new ClusterMetadataCache(false, null, new ArrayList<>(0), new ArrayList<>(0),
-                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null);
+            return new ClusterMetadataCache(null, new ArrayList<>(0), new ArrayList<>(0),
+                    Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Optional.empty());
         }
     }
 
@@ -436,7 +447,7 @@ public class Metadata implements Closeable {
             }
         }
 
-        return new ClusterMetadataCache(false, metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
+        return new ClusterMetadataCache(metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
                 metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
                 metadataResponse.topicsByError(Errors.INVALID_TOPIC_EXCEPTION),
                 internalTopics, metadataResponse.controller());
