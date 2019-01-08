@@ -26,7 +26,6 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
-import kafka.server.PartitionFetchState
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
@@ -502,8 +501,27 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testLeaderEpochChangeDuringFencedFetchingEpochsFromLeader(): Unit = {
+  def testLeaderEpochChangeDuringFencedFetchEpochsFromLeader(): Unit = {
+    // The leader is on the new epoch when the OffsetsForLeaderEpoch with old epoch is sent, so it
+    // returns the fence error. Validate that response is ignored if the leader epoch changes on
+    // the follower while OffsetsForLeaderEpoch request is in flight, but able to truncate and fetch
+    // in the next of round of "doWork"
+    testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader = 1)
+  }
+
+  @Test
+  def testLeaderEpochChangeDuringSuccessfulFetchEpochsFromLeader(): Unit = {
+    // The leader is on the old epoch when the OffsetsForLeaderEpoch with old epoch is sent
+    // and returns the valid response. Validate that response is ignored if the leader epoch changes
+    // on the follower while OffsetsForLeaderEpoch request is in flight, but able to truncate and
+    // fetch once the leader is on the newer epoch (same as follower)
+    testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader = 0)
+  }
+
+  private def testLeaderEpochChangeDuringFetchEpochsFromLeader(leaderEpochOnLeader: Int): Unit = {
     val partition = new TopicPartition("topic", 0)
+    val initialLeaderEpochOnFollower = 0
+    val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
 
     val fetcher = new MockFetcherThread {
       var fetchEpochsFromLeaderOnce = false
@@ -512,31 +530,36 @@ class AbstractFetcherThreadTest {
         if (!fetchEpochsFromLeaderOnce) {
           // leader epoch changes while fetching epochs from leader
           removePartitions(Set(partition))
-          setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 1))
-          addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 1)))
+          setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
+          addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = nextLeaderEpochOnFollower)))
           fetchEpochsFromLeaderOnce = true
         }
         fetchedEpochs
       }
     }
 
-    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = initialLeaderEpochOnFollower)))
 
     val leaderLog = Seq(
-      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)))
-    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 1, highWatermark = 0L)
+      mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
     fetcher.setLeaderState(partition, leaderState)
 
     // first round of truncation
     fetcher.doWork()
 
-    // Since leader epoch changed, fence error is ignored due to partition being in truncating
-    // state with the updated leader epoch
+    // Since leader epoch changed, fetch epochs response is ignored due to partition being in
+    // truncating state with the updated leader epoch
     assertEquals(Option(Truncating), fetcher.fetchState(partition).map(_.state))
-    assertEquals(Option(1), fetcher.fetchState(partition).map(_.currentLeaderEpoch))
+    assertEquals(Option(nextLeaderEpochOnFollower), fetcher.fetchState(partition).map(_.currentLeaderEpoch))
 
-    // next round of truncation and fetch should fetch the record from leader
+    if (leaderEpochOnLeader < nextLeaderEpochOnFollower) {
+      fetcher.setLeaderState(
+        partition, MockFetcherThread.PartitionState(leaderLog, nextLeaderEpochOnFollower, highWatermark = 0L))
+    }
+
+    // make sure the fetcher is now able to truncate and fetch
     fetcher.doWork()
     assertEquals(fetcher.leaderPartitionState(partition).log, fetcher.replicaPartitionState(partition).log)
   }
