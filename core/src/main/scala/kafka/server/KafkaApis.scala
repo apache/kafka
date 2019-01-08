@@ -2246,7 +2246,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         new ElectPreferredLeadersResponse(requestThrottleMs, result.asJava))
     }
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
-      sendResponseCallback(partitions.map(partition => partition -> new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)).toMap)
+      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
+      val partitionErrors =
+      if (electionRequest.topicPartitions() == null) {
+        // Don't leak the set of partitions if the client lack authz
+        Map(new TopicPartition(null, -1) -> error)
+      } else {
+        partitions.map(partition => partition -> error).toMap
+      }
+      sendResponseCallback(partitionErrors)
     } else {
       replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.timeout)
     }
