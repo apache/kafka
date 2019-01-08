@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import org.apache.kafka.common.utils.Utils;
+
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -40,6 +42,8 @@ public final class Cluster {
     private final Set<String> internalTopics;
     private final Node controller;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
 
@@ -106,12 +110,20 @@ public final class Cluster {
             tmpNodesById.put(node.id(), node);
         this.nodesById = Collections.unmodifiableMap(tmpNodesById);
 
-        // index the partitions by topic/partition for quick lookup
+        // index the partition infos by topic, topic+partition, and node
         Map<TopicPartition, PartitionInfo> tmpPartitionsByTopicPartition = new HashMap<>(partitions.size());
+        Map<String, List<PartitionInfo>> tmpPartitionsByTopic = new HashMap<>();
+        Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+            tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
+            if (p.leader() != null) {
+                tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
+            }
         }
         this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
+        this.partitionsByTopic = Collections.unmodifiableMap(tmpPartitionsByTopic);
+        this.partitionsByNode = Collections.unmodifiableMap(tmpPartitionsByNode);
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
         this.invalidTopics = Collections.unmodifiableSet(invalidTopics);
@@ -196,9 +208,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
-        return partitionsByTopicPartition.values().stream()
-                .filter(info -> info.topic().equals(topic))
-                .collect(Collectors.toList());
+        return partitionsByTopic.get(topic);
     }
 
     /**
@@ -206,8 +216,8 @@ public final class Cluster {
      * @param topic The topic to get the number of partitions for
      * @return The number of partitions or null if there is no corresponding metadata
      */
-    public int partitionCountForTopic(String topic) {
-        return partitionsForTopic(topic).size();
+    public Integer partitionCountForTopic(String topic) {
+        return partitionsByTopic.get(topic).size();
     }
 
     /**
@@ -216,8 +226,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
-        return partitionsByTopicPartition.values().stream()
-                .filter(info -> info.topic().equals(topic))
+        return partitionsByTopic.get(topic).stream()
                 .filter(info -> Objects.nonNull(info.leader()))
                 .collect(Collectors.toList());
     }
@@ -228,9 +237,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
-        return partitionsByTopicPartition.values().stream()
-                .filter(info -> Objects.nonNull(info.leader()) && info.leader().id() == nodeId)
-                .collect(Collectors.toList());
+        return partitionsByNode.get(nodeId);
     }
 
     /**
@@ -238,9 +245,7 @@ public final class Cluster {
      * @return a set of all topics
      */
     public Set<String> topics() {
-        return this.partitionsByTopicPartition.keySet().stream()
-                .map(TopicPartition::topic)
-                .collect(Collectors.toSet());
+        return partitionsByTopic.keySet();
     }
 
     public Set<String> unauthorizedTopics() {

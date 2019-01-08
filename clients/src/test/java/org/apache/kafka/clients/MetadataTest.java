@@ -600,13 +600,36 @@ public class MetadataTest {
 
         // Sentinel instances
         InetSocketAddress address = InetSocketAddress.createUnresolved("localhost", 0);
-        Cluster fromMetadata = Metadata.ClusterMetadataCache.bootstrap(Collections.singletonList(address)).toCluster();
+        Cluster fromMetadata = MetadataCache.bootstrap(Collections.singletonList(address)).cluster();
         Cluster fromCluster = Cluster.bootstrap(Collections.singletonList(address));
         assertEquals(fromMetadata, fromCluster);
 
-        Cluster fromMetadataEmpty = Metadata.ClusterMetadataCache.empty().toCluster();
+        Cluster fromMetadataEmpty = MetadataCache.empty().cluster();
         Cluster fromClusterEmpty = Cluster.empty();
         assertEquals(fromMetadataEmpty, fromClusterEmpty);
+    }
+
+    @Test
+    public void test() {
+        System.err.println(".");
+        Map<String, Integer> counts = new HashMap<>();
+        for (int i = 0; i < 10000; i++) {
+            counts.put(String.format("topic%d", i), 100);
+        }
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 4, Collections.emptyMap(), counts);
+        metadata.update(metadataResponse, 0L);
+
+        Cluster cluster = metadata.fetch();
+
+        System.err.println(".");
+        long t0 = System.currentTimeMillis();
+        int acc = 0;
+        for (int i = 0; i < 10000; i++) {
+            acc += cluster.availablePartitionsForTopic(String.format("topic%d", i % 13)).size();
+        }
+        long t1 = System.currentTimeMillis();
+        System.err.println(String.format("Overhead: %f ms/msg", (t1 - t0) / 10000.0));
+        System.err.println(acc);
     }
 
     private void clearBackgroundError() {

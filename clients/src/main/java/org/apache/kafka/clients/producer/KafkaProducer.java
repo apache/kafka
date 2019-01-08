@@ -956,7 +956,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new InvalidTopicException(topic);
 
         metadata.add(topic);
-
         int partitionsCount = cluster.partitionCountForTopic(topic);
         // Return cached metadata if we have it, and if the record's partition is either undefined
         // or within the known partition range

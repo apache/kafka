@@ -59,6 +59,8 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public final class Utils {
 
@@ -991,6 +993,11 @@ public final class Utils {
         while (iterator.hasNext())
             res.add(iterator.next());
         return res;
+    }
+
+    public static <T> List<T> mergeUnmodifiableLists(List<T> left, List<T> right) {
+        return Collections.unmodifiableList(
+                Stream.concat(left.stream(), right.stream()).collect(Collectors.toList()));
     }
 
 }
