@@ -117,27 +117,26 @@ class GroupCoordinator(val brokerId: Int,
     if (sessionTimeoutMs < groupConfig.groupMinSessionTimeoutMs ||
       sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
       responseCallback(joinError(memberId, Errors.INVALID_SESSION_TIMEOUT))
-      return
-    }
+    } else {
+      groupManager.getGroup(groupId) match {
+        case None =>
+          // only try to create the group if the group is UNKNOWN AND
+          // the member id is UNKNOWN, if member is specified but group does not
+          // exist we should reject the request.
+          if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+            val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
+            doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          } else {
+            responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+          }
 
-    groupManager.getGroup(groupId) match {
-      case None =>
-        // only try to create the group if the group is UNKNOWN AND
-        // the member id is UNKNOWN, if member is specified but group does not
-        // exist we should reject the request.
-        if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-          val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-          doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-        } else {
-          responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-        }
-
-      case Some(group) =>
-        if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-          doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-        } else {
-          doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-        }
+        case Some(group) =>
+          if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+            doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          } else {
+            doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          }
+      }
     }
   }
 
@@ -153,7 +152,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.is(Dead)) {
         // if the group is marked as dead, it means some other thread has just removed the group
-        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // joining without the specified member id.
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
@@ -351,7 +350,7 @@ class GroupCoordinator(val brokerId: Int,
     groupManager.getGroup(groupId) match {
       case None =>
         // if the group is marked as dead, it means some other thread has just removed the group
-        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
         // joining without specified consumer id,
         responseCallback(Errors.UNKNOWN_MEMBER_ID)
@@ -433,7 +432,7 @@ class GroupCoordinator(val brokerId: Int,
         group.currentState match {
           case Dead =>
             // if the group is marked as dead, it means some other thread has just removed the group
-            // from the coordinator metadata; this is likely that the group has migrated to some other
+            // from the coordinator metadata; it is likely that the group has migrated to some other
             // coordinator OR the group is in a transient unstable phase. Let the member retry
             // joining without the specified member id.
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
@@ -904,16 +903,14 @@ class GroupCoordinator(val brokerId: Int,
       if (isPending) {
         debug(s"Pending member $memberId gets cleaned out from purgatory after the member given session timeout.")
         group.removePendingMember(memberId)
-        return
       } else if (!group.has(memberId)) {
         debug(s"Member $memberId has already been cleaned out from the group.")
-        return
-      }
-
-      val member = group.get(memberId)
-      if (!member.shouldKeepAlive(heartbeatDeadline)) {
-        info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
-        removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
+      } else {
+        val member = group.get(memberId)
+        if (!member.shouldKeepAlive(heartbeatDeadline)) {
+          info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
+          removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
+        }
       }
     }
   }

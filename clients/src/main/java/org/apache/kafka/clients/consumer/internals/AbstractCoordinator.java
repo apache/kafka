@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
+
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -739,11 +741,24 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Return generation info regardless of the group state. Only using in unit tests.
-     * @return the current generation info
+     * Get member id in the current generation. Only using in unit tests.
+     * @return member id
      */
-    protected synchronized Generation generation() {
-        return generation;
+    protected synchronized String memberId() {
+        if (generation == null) {
+            return UNKNOWN_MEMBER_ID;
+        }
+        return generation.memberId;
+    }
+
+    /**
+     * Check whether given generation id is matching the record within current generation.
+     * Only using in unit tests.
+     * @param generationId generation id
+     * @return true if the two ids are matching.
+     */
+    protected synchronized boolean hasValidGenerationId(int generationId) {
+        return generation.generationId == generationId;
     }
 
     /**
@@ -1095,7 +1110,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected static class Generation {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                UNKNOWN_MEMBER_ID,
                 null);
 
         public final int generationId;
