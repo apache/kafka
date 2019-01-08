@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -44,7 +45,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      */
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
-        return assign(partitionsPerTopic, subscriptions, 0);
+        return assign(partitionsPerTopic, subscriptions, Optional.of(0));
     }
 
     /**
@@ -57,7 +58,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      */
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions,
-                                                    int generation) {
+                                                    Optional<Integer> generation) {
         return assign(partitionsPerTopic, subscriptions);
     }
 
@@ -86,7 +87,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions, generation);
+        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions, Optional.ofNullable(generation));
 
         return getAssignments(rawAssignments);
     }

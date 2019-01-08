@@ -390,7 +390,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
-                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
+                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
+                                                        int generation) {
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
@@ -411,7 +412,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions, latestGeneration().generationId);
+        Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions, generation);
 
         // user-customized assignor may have created some topics that are not in the subscription list
         // and assign their partitions to the members; in this case we would like to update the leader's
