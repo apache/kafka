@@ -21,6 +21,7 @@ import java.text.{ParseException, SimpleDateFormat}
 import java.util
 import java.util.{Date, Properties}
 
+import com.fasterxml.jackson.databind.{ObjectReader, ObjectWriter}
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
@@ -37,6 +38,7 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, Set, mutable}
+import scala.reflect.ClassTag
 import scala.util.{Failure, Success, Try}
 
 object ConsumerGroupCommand extends Logging {
@@ -123,15 +125,34 @@ object ConsumerGroupCommand extends Logging {
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
-  private[admin] case class CsvRecord(group: String, topic: String, partition: Int, offset: Long)
-
-  private[admin] lazy val (csvReader, csvWriter) = {
-    val mapper = new CsvMapper with ScalaObjectMapper
-    mapper.registerModule(DefaultScalaModule)
-    val schema = mapper.schemaFor(classOf[CsvRecord]).sortedBy("group", "topic", "partition", "offset")
-    val reader = mapper.readerFor(classOf[CsvRecord]).`with`(schema)
-    val writer = mapper.writerFor(classOf[CsvRecord]).`with`(schema)
-    (reader, writer)
+  private[admin] sealed trait CsvRecord {
+    def fields: Array[String]
+  }
+  private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord {
+    override def fields = Array("group", "topic", "partition", "offset")
+    def this() = this("", "", -1, -1L)
+  }
+  private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord {
+    override def fields = Array("topic", "partition", "offset")
+    def this() = this("", -1, -1L)
+  }
+  // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
+  private[admin] case class CsvUtils() {
+    def readerFor[T <: CsvRecord: ClassTag]: ObjectReader = load[T]._1
+    def writerFor[T <: CsvRecord: ClassTag]: ObjectWriter = load[T]._2
+    private def load[T <: CsvRecord: ClassTag] = {
+      val mapper = new CsvMapper with ScalaObjectMapper
+      mapper.registerModule(DefaultScalaModule)
+      val csvRecord = implicitly[ClassTag[T]].runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[T]
+      val csvRecordClass = csvRecord match {
+        case _: CsvRecordWithGroup => classOf[CsvRecordWithGroup]
+        case _: CsvRecordNoGroup   => classOf[CsvRecordNoGroup]
+      }
+      val schema = mapper.schemaFor(csvRecordClass).sortedBy(csvRecord.fields: _*)
+      val reader = mapper.readerFor(csvRecordClass).`with`(schema)
+      val writer = mapper.writerFor(csvRecordClass).`with`(schema)
+      (reader, writer)
+    }
   }
 
   class ConsumerGroupService(val opts: ConsumerGroupCommandOptions) {
@@ -541,14 +562,33 @@ object ConsumerGroupCommand extends Logging {
     }
 
     private def parseResetPlan(resetPlanCsv: String): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
-      resetPlanCsv.split("\n")
-        .foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
-          val CsvRecord(group, topic, partition, offset) = csvReader.readValue[CsvRecord](line)
+      val csvReader = CsvUtils().readerFor[CsvRecordNoGroup]
+      val lines = resetPlanCsv.split("\n")
+      val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
+      val isOldCsvFormat = lines.headOption.flatMap(line =>
+        Try(csvReader.readValue[CsvRecordNoGroup](line)).toOption).exists(_ => true)
+      // Single group CSV format: "topic,partition,offset"
+      val dataMap = if (isSingleGroupQuery && isOldCsvFormat) {
+        val group = opts.options.valueOf(opts.groupOpt)
+        lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+          val CsvRecordNoGroup(topic, partition, offset) = csvReader.readValue[CsvRecordNoGroup](line)
           val topicPartition = new TopicPartition(topic, partition)
           val offsetAndMetadata = new OffsetAndMetadata(offset)
           val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
           acc.updated(group, dataMap)
         }
+        // Multiple group CSV format: "group,topic,partition,offset"
+      } else {
+        val csvReader = CsvUtils().readerFor[CsvRecordWithGroup]
+        lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
+          val CsvRecordWithGroup(group, topic, partition, offset) = csvReader.readValue[CsvRecordWithGroup](line)
+          val topicPartition = new TopicPartition(topic, partition)
+          val offsetAndMetadata = new OffsetAndMetadata(offset)
+          val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
+          acc.updated(group, dataMap)
+        }
+      }
+      dataMap
     }
 
     private def prepareOffsetsToReset(groupId: String,
@@ -670,9 +710,16 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def exportOffsetsToReset(assignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): String = {
+      val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
+      val csvWriter =
+        if (isSingleGroupQuery) CsvUtils().writerFor[CsvRecordNoGroup]
+        else CsvUtils().writerFor[CsvRecordWithGroup]
       val rows = assignmentsToReset.flatMap { case (groupId, partitionInfo) =>
         partitionInfo.map { case (k: TopicPartition, v: OffsetAndMetadata) =>
-          csvWriter.writeValueAsString(CsvRecord(groupId, k.topic, k.partition, v.offset))
+          val csvRecord =
+            if (isSingleGroupQuery) CsvRecordNoGroup(k.topic, k.partition, v.offset)
+            else CsvRecordWithGroup(groupId, k.topic, k.partition, v.offset)
+          csvWriter.writeValueAsString(csvRecord)
         }(collection.breakOut): List[String]
       }
       val csv = rows.foldRight("")(_ + _)

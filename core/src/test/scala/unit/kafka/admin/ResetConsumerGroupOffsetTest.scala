@@ -361,7 +361,8 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
   }
 
   @Test
-  def testResetOffsetsExportImportPlan() {
+  // This one deals with old CSV export/import format for a single --group arg: "topic,partition,offset" to support old behavior
+  def testResetOffsetsExportImportPlanSingleGroupArg() {
     val topic = "bar"
     val tp0 = new TopicPartition(topic, 0)
     val tp1 = new TopicPartition(topic, 1)
@@ -387,6 +388,56 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec)
     val importedOffsets = consumerGroupCommandExec.resetOffsets()
     assertEquals(Map(tp0 -> 2L, tp1 -> 2L), importedOffsets(group).mapValues(_.offset))
+
+    adminZkClient.deleteTopic(topic)
+  }
+
+  @Test
+  // This one deals with universal CSV export/import file format "group,topic,partition,offset",
+  // supporting multiple --group args or --all-groups arg
+  def testResetOffsetsExportImportPlan() {
+    val group1 = group + "1"
+    val group2 = group + "2"
+    val topic1 = "bar1"
+    val topic2 = "bar2"
+    val t1p0 = new TopicPartition(topic1, 0)
+    val t1p1 = new TopicPartition(topic1, 1)
+    val t2p0 = new TopicPartition(topic2, 0)
+    val t2p1 = new TopicPartition(topic2, 1)
+    createTopic(topic1, 2, 1)
+    createTopic(topic2, 2, 1)
+
+    val cgcArgs = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group1, "--group", group2, "--all-topics",
+      "--to-offset", "2", "--export")
+    val consumerGroupCommand = getConsumerGroupService(cgcArgs)
+
+    produceConsumeAndShutdown(topic = topic1, group = group1, totalMessages = 100, numConsumers = 2)
+    produceConsumeAndShutdown(topic = topic2, group = group2, totalMessages = 100, numConsumers = 5)
+
+    val file = File.createTempFile("reset", ".csv")
+    file.deleteOnExit()
+
+    val exportedOffsets = consumerGroupCommand.resetOffsets()
+    val bw = new BufferedWriter(new FileWriter(file))
+    bw.write(consumerGroupCommand.exportOffsetsToReset(exportedOffsets))
+    bw.close()
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), exportedOffsets(group1).mapValues(_.offset))
+    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), exportedOffsets(group2).mapValues(_.offset))
+
+    // Multiple --group's offset import
+    val cgcArgsExec = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group1, "--group", group2, "--all-topics",
+      "--from-file", file.getCanonicalPath, "--dry-run")
+    val consumerGroupCommandExec = getConsumerGroupService(cgcArgsExec)
+    val importedOffsets = consumerGroupCommandExec.resetOffsets()
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets(group1).mapValues(_.offset))
+    assertEquals(Map(t2p0 -> 2L, t2p1 -> 2L), importedOffsets(group2).mapValues(_.offset))
+
+    // Single --group offset import using "group,topic,partition,offset" csv format
+    val cgcArgsExec2 = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group1, "--all-topics",
+      "--from-file", file.getCanonicalPath, "--dry-run")
+    val consumerGroupCommandExec2 = getConsumerGroupService(cgcArgsExec2)
+    val importedOffsets2 = consumerGroupCommandExec2.resetOffsets()
+    assertEquals(Map(t1p0 -> 2L, t1p1 -> 2L), importedOffsets2(group1).mapValues(_.offset))
 
     adminZkClient.deleteTopic(topic)
   }
