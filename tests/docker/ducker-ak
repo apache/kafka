@@ -83,7 +83,7 @@ ssh [node-name|user-name@node-name] [command]
     is specified, we will run that command.  Otherwise, we will provide a login
     shell.
 
-down [-q|--quiet]
+down [-q|--quiet] [-f|--force]
     Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
     only error messages are printed.
 
@@ -476,9 +476,11 @@ echo_running_container_names() {
 ducker_down() {
     require_commands docker
     local verbose=1
+    local force_str=""
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -q|--quiet) verbose=0; shift;;
+            -f|--force) force_str="-f"; shift;;
             *) die "ducker_down: unexpected command-line argument ${1}";;
         esac
     done
@@ -499,7 +501,7 @@ ducker_down() {
     if [[ -n "${running_containers}" ]]; then
         must_do ${verbose_flag} docker kill "${running_containers}"
     fi
-    must_do ${verbose_flag} docker rm "${all_containers}"
+    must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
     must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
     if docker network inspect ducknet &>/dev/null; then
         must_do -v docker network rm ducknet
