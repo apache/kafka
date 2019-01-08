@@ -551,20 +551,49 @@ public final class Utils {
     }
 
     /**
-     * Read a properties file from the given path
+     * Read a properties file from the given path. Log an error if duplicates are found.
      * @param filename The path of the file to read
      */
     public static Properties loadProps(String filename) throws IOException {
-        Properties props = new Properties();
+        Map<Object, List<Object>> overwritten = new HashMap<>();
+
+        Properties duplicateCheckingProps = new Properties() {
+            @Override
+            public synchronized Object put(Object key, Object value) {
+                Object previous = super.put(key, value);
+                if (previous != null) {
+                    overwritten.merge(key, new ArrayList<>(Collections.singletonList(previous)), (left, right) -> {
+                        left.addAll(right);
+                        return left;
+                    });
+                }
+                return previous;
+            }
+        };
 
         if (filename != null) {
             try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
-                props.load(propStream);
+                duplicateCheckingProps.load(propStream);
             }
         } else {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
+        if(!overwritten.isEmpty()) {
+            StringBuilder msg = new StringBuilder("Duplicate config entries detected!");
+            overwritten.forEach((key, values) -> {
+                values.forEach(value -> {
+                    msg.append("\n\tIgnoring ")
+                            .append(key)
+                            .append(" ")
+                            .append(value);
+                });
+            });
+            msg.append("\n");
+            log.error(msg.toString());
+        }
+        Properties props = new Properties();
+        props.putAll(duplicateCheckingProps);
         return props;
     }
 
