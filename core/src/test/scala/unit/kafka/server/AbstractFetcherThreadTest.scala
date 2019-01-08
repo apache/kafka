@@ -26,6 +26,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.PartitionFetchState
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
@@ -39,6 +40,7 @@ import org.junit.{Before, Test}
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Set, mutable}
 import scala.util.Random
+import org.scalatest.Assertions.assertThrows
 
 class AbstractFetcherThreadTest {
 
@@ -497,6 +499,66 @@ class AbstractFetcherThreadTest {
 
     val replicaState = fetcher.replicaPartitionState(partition)
     assertEquals(2L, replicaState.logEndOffset)
+  }
+
+  @Test
+  def testLeaderEpochChangeDuringFencedFetchingEpochsFromLeader(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+
+    val fetcher = new MockFetcherThread {
+      var fetchEpochsFromLeaderOnce = false
+      override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        val fetchedEpochs = super.fetchEpochsFromLeader(partitions)
+        if (!fetchEpochsFromLeaderOnce) {
+          // leader epoch changes while fetching epochs from leader
+          removePartitions(Set(partition))
+          setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 1))
+          addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 1)))
+          fetchEpochsFromLeaderOnce = true
+        }
+        fetchedEpochs
+      }
+    }
+
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
+
+    val leaderLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("c".getBytes)))
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 1, highWatermark = 0L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    // first round of truncation
+    fetcher.doWork()
+
+    // Since leader epoch changed, fence error is ignored due to partition being in truncating
+    // state with the updated leader epoch
+    assertEquals(Option(Truncating), fetcher.fetchState(partition).map(_.state))
+    assertEquals(Option(1), fetcher.fetchState(partition).map(_.currentLeaderEpoch))
+
+    // next round of truncation and fetch should fetch the record from leader
+    fetcher.doWork()
+    assertEquals(fetcher.leaderPartitionState(partition).log, fetcher.replicaPartitionState(partition).log)
+  }
+
+  @Test
+  def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new MockFetcherThread {
+      override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        val unrequestedTp = new TopicPartition("topic2", 0)
+        super.fetchEpochsFromLeader(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
+      }
+    }
+
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    // first round of truncation should throw an exception
+    assertThrows[IllegalStateException] {
+      fetcher.doWork()
+    }
   }
 
   object MockFetcherThread {
