@@ -185,21 +185,21 @@ public class EosIntegrationTest {
                     CLUSTER.time
                 );
 
-                final List<KeyValue<Long, Long>> committedRecords
-                    = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                    TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        CONSUMER_GROUP_ID,
-                        LongDeserializer.class,
-                        LongDeserializer.class,
-                        new Properties() {
-                            {
-                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                            }
-                        }),
-                    outputTopic,
-                    inputData.size()
-                );
+                final List<KeyValue<Long, Long>> committedRecords =
+                    IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                        TestUtils.consumerConfig(
+                            CLUSTER.bootstrapServers(),
+                            CONSUMER_GROUP_ID,
+                            LongDeserializer.class,
+                            LongDeserializer.class,
+                            new Properties() {
+                                {
+                                    put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                                }
+                            }),
+                        outputTopic,
+                        inputData.size()
+                    );
 
                 checkResultPerKey(committedRecords, inputData);
             } finally {
@@ -273,21 +273,21 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> firstCommittedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                firstBurstOfData.size()
-            );
+            final List<KeyValue<Long, Long>> firstCommittedRecords =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                    TestUtils.consumerConfig(
+                        CLUSTER.bootstrapServers(),
+                        CONSUMER_GROUP_ID,
+                        LongDeserializer.class,
+                        LongDeserializer.class,
+                        new Properties() {
+                            {
+                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                            }
+                        }),
+                    SINGLE_PARTITION_OUTPUT_TOPIC,
+                    firstBurstOfData.size()
+                );
 
             assertThat(firstCommittedRecords, equalTo(firstBurstOfData));
 
@@ -298,21 +298,21 @@ public class EosIntegrationTest {
                 CLUSTER.time
             );
 
-            final List<KeyValue<Long, Long>> secondCommittedRecords
-                = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                TestUtils.consumerConfig(
-                    CLUSTER.bootstrapServers(),
-                    CONSUMER_GROUP_ID,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                        }
-                    }),
-                SINGLE_PARTITION_OUTPUT_TOPIC,
-                secondBurstOfData.size()
-            );
+            final List<KeyValue<Long, Long>> secondCommittedRecords =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                    TestUtils.consumerConfig(
+                        CLUSTER.bootstrapServers(),
+                        CONSUMER_GROUP_ID,
+                        LongDeserializer.class,
+                        LongDeserializer.class,
+                        new Properties() {
+                            {
+                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+                            }
+                        }),
+                    SINGLE_PARTITION_OUTPUT_TOPIC,
+                    secondBurstOfData.size()
+                );
 
             assertThat(secondCommittedRecords, equalTo(secondBurstOfData));
         } finally {
@@ -593,9 +593,9 @@ public class EosIntegrationTest {
         String[] storeNames = null;
         if (withState) {
             storeNames = new String[] {storeName};
-            final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder
-                    = Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
-                    .withCachingEnabled();
+            final StoreBuilder<KeyValueStore<Long, Long>> storeBuilder = Stores
+                .keyValueStoreBuilder(Stores.persistentKeyValueStore(storeName), Serdes.Long(), Serdes.Long())
+                .withCachingEnabled();
 
             builder.addStateStore(storeBuilder);
         }

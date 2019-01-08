@@ -628,8 +628,8 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
         latch.await(30, TimeUnit.SECONDS);
-        final ReadOnlySessionStore<String, String> sessionStore
-                = kafkaStreams.store(userSessionsStore, QueryableStoreTypes.sessionStore());
+        final ReadOnlySessionStore<String, String> sessionStore =
+            kafkaStreams.store(userSessionsStore, QueryableStoreTypes.sessionStore());
 
         // verify correct data received
         assertThat(results.get(new Windowed<>("bob", new SessionWindow(t1, t1))), equalTo("start"));
