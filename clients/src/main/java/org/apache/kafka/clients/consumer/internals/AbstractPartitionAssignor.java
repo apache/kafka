@@ -43,24 +43,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      * @param subscriptions Map from the memberId to their respective topic subscription
      * @return Map from each member to the list of partitions assigned to them.
      */
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions) {
-        return assign(partitionsPerTopic, subscriptions, Optional.of(0));
-    }
-
-    /**
-     * Perform the group assignment given the partition counts, member subscriptions, and consumer group generation
-     * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
-     *                           from this map.
-     * @param subscriptions Map from the memberId to their respective topic subscription
-     * @param generation Consumer group generation id
-     * @return Map from each member to the list of partitions assigned to them.
-     */
-    public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions,
-                                                    Optional<Integer> generation) {
-        return assign(partitionsPerTopic, subscriptions);
-    }
+    public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
+                                                             Map<String, Subscription> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
@@ -69,11 +53,6 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
 
     @Override
     public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions) {
-        return assign(metadata, subscriptions, 0);
-    }
-
-    @Override
-    public Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions, int generation) {
         Set<String> allSubscribedTopics = new HashSet<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet())
             allSubscribedTopics.addAll(subscriptionEntry.getValue().topics());
@@ -87,12 +66,8 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
                 log.debug("Skipping assignment for topic {} since no metadata is available", topic);
         }
 
-        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions, Optional.ofNullable(generation));
+        Map<String, List<TopicPartition>> rawAssignments = assign(partitionsPerTopic, subscriptions);
 
-        return getAssignments(rawAssignments);
-    }
-
-    protected Map<String, Assignment> getAssignments(Map<String, List<TopicPartition>> rawAssignments) {
         // this class maintains no user data, so just wrap the results
         Map<String, Assignment> assignments = new HashMap<>();
         for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
@@ -101,7 +76,7 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment) {
+    public void onAssignment(Assignment assignment, Optional<Integer> generation) {
         // this assignor maintains no internal state, so nothing to do
     }
 

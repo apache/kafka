@@ -203,7 +203,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
     private List<TopicPartition> memberAssignment = null;
     private PartitionMovements partitionMovements;
-    private int generation; // consumer group generation
+    private int generation = DEFAULT_GENERATION; // consumer group generation
 
     static final class ConsumerUserData {
         final List<TopicPartition> partitions;
@@ -223,11 +223,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         }
     }
 
-    @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                    Map<String, Subscription> subscriptions,
-                                                    Optional<Integer> generation) {
-        this.generation = generation.orElse(DEFAULT_GENERATION);
+                                                    Map<String, Subscription> subscriptions) {
         Map<String, List<TopicPartition>> currentAssignment = new HashMap<>();
         Map<TopicPartition, ConsumerGenerationPair> prevAssignment = new HashMap<>();
         partitionMovements = new PartitionMovements();
@@ -367,9 +364,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment) {
+    public void onAssignment(Assignment assignment, Optional<Integer> generation) {
         memberAssignment = assignment.partitions();
-        generation = deserializeTopicPartitionAssignment(assignment.userData()).generation;
+        this.generation = generation.orElse(DEFAULT_GENERATION);
+        System.out.println("Got " + memberAssignment + " of gen " + this.generation);
     }
 
     @Override
@@ -377,6 +375,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (memberAssignment == null)
             return new Subscription(new ArrayList<>(topics));
 
+        System.out.println("Sending " + memberAssignment + " from gen " + this.generation);
         return new Subscription(new ArrayList<>(topics),
                 serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, generation)));
     }
@@ -385,15 +384,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     public String name() {
         return "sticky";
     }
-
-//    @Override
-//    protected Map<String, Assignment> getAssignments(Map<String, List<TopicPartition>> rawAssignments) {
-//        Map<String, Assignment> assignments = new HashMap<>();
-//        for (Map.Entry<String, List<TopicPartition>> assignmentEntry : rawAssignments.entrySet())
-//            assignments.put(assignmentEntry.getKey(), new Assignment(assignmentEntry.getValue(),
-//                    serializeTopicPartitionAssignment(new ConsumerUserData(assignmentEntry.getValue(), generation))));
-//        return assignments;
-//    }
 
     int generation() {
         return generation;

@@ -86,7 +86,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
- * by the leader in {@link #performAssignment(String, String, List, int)} and becomes available to members in
+ * by the leader in {@link #performAssignment(String, String, List)} and becomes available to members in
  * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
  *
  * Note on locking: this class shares state between the caller and a background thread which is
@@ -198,13 +198,11 @@ public abstract class AbstractCoordinator implements Closeable {
      * of the group (e.g. to push partition assignments in the case of the new consumer)
      * @param leaderId The id of the leader (which is this member)
      * @param allMemberMetadata Metadata from all members of the group
-     * @param generation Generation of the group
      * @return A map from each member to their state assignment
      */
     protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
                                                                  String protocol,
                                                                  List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);
-                                                                 int generation);
 
     /**
      * Invoked when a group member has successfully joined a group. If this call fails with an exception,
@@ -584,7 +582,7 @@ public abstract class AbstractCoordinator implements Closeable {
         // send follower's sync group with an empty assignment
         SyncGroupRequest.Builder requestBuilder =
                 new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId,
-                        Collections.emptyMap());
+                        Collections.<String, ByteBuffer>emptyMap());
         log.debug("Sending follower SyncGroup to coordinator {}: {}", this.coordinator, requestBuilder);
         return sendSyncGroupRequest(requestBuilder);
     }
@@ -751,10 +749,6 @@ public abstract class AbstractCoordinator implements Closeable {
     protected synchronized Generation generation() {
         if (this.state != MemberState.STABLE)
             return null;
-        return generation;
-    }
-
-    protected Generation latestGeneration() {
         return generation;
     }
 

@@ -51,6 +51,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
@@ -141,9 +142,9 @@ public class StreamsUpgradeTest {
         }
 
         @Override
-        public void onAssignment(final PartitionAssignor.Assignment assignment) {
+        public void onAssignment(final PartitionAssignor.Assignment assignment, final Optional<Integer> generation) {
             try {
-                super.onAssignment(assignment);
+                super.onAssignment(assignment, generation);
                 return;
             } catch (final TaskAssignmentException cannotProcessFutureVersion) {
                 // continue
