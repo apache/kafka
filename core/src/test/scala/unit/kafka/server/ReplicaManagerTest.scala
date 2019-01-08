@@ -548,12 +548,13 @@ class ReplicaManagerTest {
     val controllerId = 0
     val controllerEpoch = 0
     var leaderEpoch = 1
+    val leaderEpochIncrement = 2
     val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
     // Prepare the mocked components for the test
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
-      topicPartition, followerBrokerId, leaderBrokerId, countDownLatch, expectTruncation = true)
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId, leaderBrokerId, countDownLatch, expectTruncation = true)
 
     // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
     val partition = replicaManager.getOrCreatePartition(new TopicPartition(topic, topicPartition))
@@ -564,7 +565,7 @@ class ReplicaManagerTest {
 
     // Make local partition a follower - because epoch increased by more than 1, truncation should
     // trigger even though leader does not change
-    leaderEpoch += 2
+    leaderEpoch += leaderEpochIncrement
     val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
       controllerId, controllerEpoch, brokerEpoch,
       collection.immutable.Map(new TopicPartition(topic, topicPartition) ->
@@ -579,7 +580,13 @@ class ReplicaManagerTest {
     EasyMock.verify(mockLogMgr)
   }
 
+  /**
+   * This method assumes that the test using created ReplicaManager calls
+   * ReplicaManager.becomeLeaderOrFollower() once with LeaderAndIsrRequest containing
+   * 'leaderEpochInLeaderAndIsr' leader epoch for partition 'topicPartition'.
+   */
   private def prepareReplicaManagerAndLogManager(topicPartition: Int,
+                                                 leaderEpochInLeaderAndIsr: Int,
                                                  followerBrokerId: Int,
                                                  leaderBrokerId: Int,
                                                  countDownLatch: CountDownLatch,
@@ -673,7 +680,7 @@ class ReplicaManagerTest {
               override def doWork() = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,
                 // add it here (it's a no-op if already added)
-                val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = 1)
+                val initialOffset = OffsetAndEpoch(offset = 0L, leaderEpoch = leaderEpochInLeaderAndIsr)
                 addPartitions(Map(new TopicPartition(topic, topicPartition) -> initialOffset))
                 super.doWork()
 
