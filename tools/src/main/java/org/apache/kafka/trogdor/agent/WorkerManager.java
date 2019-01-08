@@ -250,6 +250,10 @@ public final class WorkerManager {
             this.reference = shutdownManager.takeReference();
         }
 
+        boolean hasExpired() {
+            return spec.hasExpired(time, startedMs);
+        }
+
         long workerId() {
             return workerId;
         }
@@ -314,6 +318,12 @@ public final class WorkerManager {
             if (worker == null) {
                 log.info("{}: Ignoring request to create worker {}, because there is already " +
                     "a worker with that id.", nodeName, workerId);
+                return;
+            }
+            if (worker.hasExpired()) {
+                log.info("{}: Will not run worker {} as it has expired.", nodeName, worker);
+                stateChangeExecutor.submit(new HandleWorkerHalting(worker,
+                    "worker expired", true));
                 return;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();

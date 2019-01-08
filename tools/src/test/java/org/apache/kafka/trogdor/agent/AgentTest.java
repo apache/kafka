@@ -110,6 +110,37 @@ public class AgentTest {
     }
 
     @Test
+    public void testCreateExpiredWorkerIsNotScheduled() throws Exception {
+        final boolean[] toSleep = {true};
+        MockTime time = new MockTime(15, 100, 0) {
+            /**
+             * Modify sleep() to call super.sleep() only some times
+             * in order to avoid the endless loop in the tick() calls to the MockScheduler listener
+             */
+            @Override
+            public void sleep(long ms) {
+                toSleep[0] = !toSleep[0];
+                if (toSleep[0])
+                    super.sleep(ms);
+            }
+        };
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+        AgentStatusResponse status = client.status();
+        assertEquals(Collections.emptyMap(), status.workers());
+        new ExpectedTasks().waitFor(client);
+
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 10);
+        client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
+        new ExpectedTasks().addTask(new ExpectedTaskBuilder("foo").
+            workerState(new WorkerDone("foo", fooSpec, 115, 145, null, "worker expired")).
+            build()).
+            waitFor(client);
+    }
+
+    @Test
     public void testAgentCreateWorkers() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);

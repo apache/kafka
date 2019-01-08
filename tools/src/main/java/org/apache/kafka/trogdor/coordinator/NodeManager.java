@@ -43,12 +43,14 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.rest.WorkerStarting;
@@ -82,6 +84,7 @@ public final class NodeManager {
         private final long workerId;
         private final String taskId;
         private final TaskSpec spec;
+        private long startedMs = -1;
         private boolean shouldRun;
         private WorkerState state;
 
@@ -94,9 +97,15 @@ public final class NodeManager {
             this.state = state;
         }
 
+        boolean hasExpired() {
+            return spec.hasExpired(time, startedMs);
+        }
+
         void tryCreate() {
             try {
                 client.createWorker(new CreateWorkerRequest(workerId, taskId, spec));
+                if (startedMs == -1)
+                    startedMs = time.milliseconds();
             } catch (Throwable e) {
                 log.error("{}: error creating worker {}.", node.name(), this, e);
             }
@@ -146,14 +155,17 @@ public final class NodeManager {
      */
     private final NodeHeartbeat heartbeat;
 
+    private final Time time;
+
     /**
      * A future which can be used to cancel the periodic hearbeat task.
      */
     private ScheduledFuture<?> heartbeatFuture;
 
-    NodeManager(Node node, TaskManager taskManager) {
+    NodeManager(Node node, TaskManager taskManager, Time time) {
         this.node = node;
         this.taskManager = taskManager;
+        this.time = time;
         this.client = new AgentClient.Builder().
             maxTries(1).
             target(node.hostname(), Node.Util.getTrogdorAgentPort(node)).
@@ -206,11 +218,19 @@ public final class NodeManager {
                 // in the agent's response.  We need to send startWorker requests for these.
                 for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
                     Long workerId = entry.getKey();
-                    if (!agentStatus.workers().containsKey(workerId)) {
-                        ManagedWorker worker = entry.getValue();
-                        if (worker.shouldRun) {
-                            worker.tryCreate();
-                        }
+                    if (agentStatus.workers().containsKey(workerId))
+                        continue;
+                    ManagedWorker worker = entry.getValue();
+                    if (!worker.shouldRun)
+                        continue;
+
+                    if (!worker.hasExpired()) {
+                        worker.tryCreate();
+                    } else {
+                        log.info("{}: Will not create worker state {} as it has expired. ", node.name(), worker.state);
+                        worker.shouldRun = false;
+                        taskManager.updateWorkerState(node.name(), worker.workerId,
+                            new WorkerDone(worker.taskId, worker.spec, worker.startedMs, -1, null, "worker expired"));
                     }
                 }
                 for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {

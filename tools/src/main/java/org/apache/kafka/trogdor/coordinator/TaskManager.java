@@ -136,7 +136,7 @@ public final class TaskManager {
         this.nextWorkerId = firstWorkerId;
         for (Node node : platform.topology().nodes().values()) {
             if (Node.Util.getTrogdorAgentPort(node) > 0) {
-                this.nodeManagers.put(node.name(), new NodeManager(node, this));
+                this.nodeManagers.put(node.name(), new NodeManager(node, this, this.time));
             }
         }
         log.info("Created TaskManager for agent(s) on: {}",
@@ -336,6 +336,9 @@ public final class TaskManager {
             } catch (Throwable t) {
                 failure = "Failed to create TaskController: " + t.getMessage();
             }
+            if (spec.hasExpired(time, -1))
+                failure = "worker expired";
+
             if (failure != null) {
                 log.info("Failed to create a new task {} with spec {}: {}",
                     id, spec, failure);
