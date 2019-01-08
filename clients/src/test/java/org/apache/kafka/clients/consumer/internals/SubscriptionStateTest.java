@@ -26,6 +26,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
@@ -53,7 +54,7 @@ public class SubscriptionStateTest {
         assertFalse(state.hasAllFetchPositions());
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         state.assignFromUser(Collections.<TopicPartition>emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -168,7 +169,7 @@ public class SubscriptionStateTest {
     public void partitionReset() {
         state.assignFromUser(singleton(tp0));
         state.seek(tp0, 5);
-        assertEquals(5L, (long) state.position(tp0));
+        assertEquals(5L, state.position(tp0).offset);
         state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
@@ -189,7 +190,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         state.assignFromSubscribed(singleton(tp0));
         state.seek(tp0, 1);
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         state.assignFromSubscribed(singleton(tp1));
         assertTrue(state.isAssigned(tp1));
         assertFalse(state.isAssigned(tp0));
@@ -213,7 +214,7 @@ public class SubscriptionStateTest {
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         state.assignFromSubscribed(singleton(tp0));
-        state.position(tp0, 0);
+        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty()));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -231,7 +232,7 @@ public class SubscriptionStateTest {
 
     @Test(expected = IllegalStateException.class)
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, 1);
+        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty()));
     }
 
     @Test(expected = IllegalStateException.class)

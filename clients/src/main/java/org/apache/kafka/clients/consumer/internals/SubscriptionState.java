@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -31,6 +32,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
@@ -43,7 +46,7 @@ import java.util.stream.Collectors;
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
+ * been set with {@link #seek(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
  * position which is used to set the offset of the next fetch, and a consumed position
  * which is the last offset that has been returned to the user. You can suspend fetching
  * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
@@ -257,8 +260,12 @@ public class SubscriptionState {
         return state;
     }
 
+    public void seek(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seek(position);
+    }
+
     public void seek(TopicPartition tp, long offset) {
-        assignedState(tp).seek(offset);
+        seek(tp, new FetchPosition(offset, Optional.empty()));
     }
 
     /**
@@ -276,33 +283,40 @@ public class SubscriptionState {
         return this.assignment.size();
     }
 
-    public List<TopicPartition> fetchablePartitions() {
-        return collectPartitions(TopicPartitionState::isFetchable, Collectors.toList());
+    public List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+        return assignment.stream()
+                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
+                .map(PartitionStates.PartitionState::topicPartition)
+                .collect(Collectors.toList());
     }
 
     public boolean partitionsAutoAssigned() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
-    public void position(TopicPartition tp, long offset) {
-        assignedState(tp).position(offset);
+    public void position(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).position(position);
     }
 
-    public Long position(TopicPartition tp) {
+    public void validate(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+        assignedState(tp).validate(leaderAndEpoch);
+    }
+
+    public FetchPosition position(TopicPartition tp) {
         return assignedState(tp).position;
     }
 
     public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (isolationLevel == IsolationLevel.READ_COMMITTED)
-            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position;
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
         else
-            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position.offset;
     }
 
     public Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position - topicPartitionState.logStartOffset;
+        return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
     }
 
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
@@ -320,8 +334,10 @@ public class SubscriptionState {
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         assignment.stream().forEach(state -> {
-            if (state.value().hasValidPosition())
-                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(state.value().position));
+            TopicPartitionState partitionState = state.value();
+            if (partitionState.hasValidPosition())
+                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
+                        partitionState.position.lastEpoch, ""));
         });
         return allConsumed;
     }
@@ -336,7 +352,7 @@ public class SubscriptionState {
 
     public void setResetPending(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
         for (TopicPartition partition : partitions) {
-            assignedState(partition).setResetPending(nextAllowResetTimeMs);
+            assignedState(partition).setNextAllowedRetry(nextAllowResetTimeMs);
         }
     }
 
@@ -357,7 +373,7 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> missingFetchPositions() {
-        return collectPartitions(TopicPartitionState::isMissingPosition, Collectors.toSet());
+        return collectPartitions(state -> !state.hasPosition(), Collectors.toSet());
     }
 
     private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
@@ -367,12 +383,13 @@ public class SubscriptionState {
                 .collect(collector);
     }
 
+
     public void resetMissingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
             TopicPartitionState partitionState = state.value();
-            if (partitionState.isMissingPosition()) {
+            if (!partitionState.hasPosition()) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -385,7 +402,7 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> partitionsNeedingReset(long nowMs) {
-        return collectPartitions(state -> state.awaitingReset() && state.isResetAllowed(nowMs),
+        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
                 Collectors.toSet());
     }
 
@@ -443,68 +460,94 @@ public class SubscriptionState {
     }
 
     private static class TopicPartitionState {
-        private Long position; // last consumed position
+
+        private enum FetchState {
+            INITIALIZING,
+            FETCHING,
+            RESETTING,
+            VALIDATING
+        }
+
+        private FetchState state;
+        private FetchPosition position; // last consumed position
+        private Metadata.LeaderAndEpoch leaderAndEpoch;
         private Long highWatermark; // the high watermark from last fetch
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
-        private Long nextAllowedRetryTimeMs;
+        private Long nextRetryTimeMs;
 
         TopicPartitionState() {
             this.paused = false;
+            this.state = FetchState.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
             this.logStartOffset = null;
             this.lastStableOffset = null;
             this.resetStrategy = null;
-            this.nextAllowedRetryTimeMs = null;
+            this.nextRetryTimeMs = null;
         }
 
         private void reset(OffsetResetStrategy strategy) {
+            this.state = FetchState.RESETTING;
             this.resetStrategy = strategy;
             this.position = null;
-            this.nextAllowedRetryTimeMs = null;
+            this.nextRetryTimeMs = null;
         }
 
-        private boolean isResetAllowed(long nowMs) {
-            return nextAllowedRetryTimeMs == null || nowMs >= nextAllowedRetryTimeMs;
+        private void validate(Metadata.LeaderAndEpoch currentLeader) {
+            if (!hasPosition())
+                throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
+
+            // If we have no epoch information for the current position, then we can skip validation.
+            this.position = new FetchPosition(position.offset, position.lastEpoch, currentLeader);
+            this.state = position.lastEpoch.isPresent() ? FetchState.VALIDATING : FetchState.FETCHING;
+        }
+
+        private boolean awaitingRetryBackoff(long nowMs) {
+            return nextRetryTimeMs != null && nowMs < nextRetryTimeMs;
         }
 
         private boolean awaitingReset() {
-            return resetStrategy != null;
+            return state == FetchState.RESETTING;
         }
 
-        private void setResetPending(long nextAllowedRetryTimeMs) {
-            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+        private boolean awaitingValidation() {
+            return state == FetchState.VALIDATING;
+        }
+
+        private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
         private void resetFailed(long nextAllowedRetryTimeMs) {
-            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
         private boolean hasValidPosition() {
-            return position != null;
+            return state == FetchState.FETCHING;
         }
 
-        private boolean isMissingPosition() {
-            return !hasValidPosition() && !awaitingReset();
+        private boolean hasPosition() {
+            return state == FetchState.FETCHING || state == FetchState.VALIDATING;
         }
 
         private boolean isPaused() {
             return paused;
         }
 
-        private void seek(long offset) {
-            this.position = offset;
+        private void seek(FetchPosition position) {
+            this.state = FetchState.FETCHING;
+            this.position = position;
             this.resetStrategy = null;
-            this.nextAllowedRetryTimeMs = null;
+            this.nextRetryTimeMs = null;
         }
 
-        private void position(long offset) {
+        private void position(FetchPosition position) {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
-            this.position = offset;
+            this.position = position;
         }
 
         private void pause() {
@@ -531,4 +574,51 @@ public class SubscriptionState {
         void onAssignment(Set<TopicPartition> assignment);
     }
 
+    public static class FetchPosition {
+        public final long offset;
+        public final Optional<Integer> lastEpoch;
+        public final Metadata.LeaderAndEpoch currentLeader;
+
+        public FetchPosition(long offset, Optional<Integer> lastEpoch, Metadata.LeaderAndEpoch currentLeader) {
+            this.offset = offset;
+            this.lastEpoch = Objects.requireNonNull(lastEpoch);
+            this.currentLeader = Objects.requireNonNull(currentLeader);
+        }
+
+        public boolean safeToFetchFrom(Metadata.LeaderAndEpoch leaderAndEpoch) {
+            // Should we check the if the epoch is present or do we get a benefit
+            // for leader changes on older versions of the broker?
+
+            // I think the answer is 'no' because the OffsetsForLeaderEpoch API was
+            // not exposed in older versions anyway.
+
+            return currentLeader.equals(leaderAndEpoch);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            FetchPosition that = (FetchPosition) o;
+
+            if (offset != that.offset) return false;
+            return lastEpoch.equals(that.lastEpoch);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = (int) (offset ^ (offset >>> 32));
+            result = 31 * result + lastEpoch.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "FetchPosition(" +
+                    "offset=" + offset +
+                    ", lastEpoch=" + lastEpoch +
+                    ')';
+        }
+    }
 }

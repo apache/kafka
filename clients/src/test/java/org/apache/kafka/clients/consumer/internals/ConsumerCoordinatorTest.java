@@ -1592,7 +1592,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test
@@ -1626,7 +1626,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test
@@ -1667,7 +1667,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test
@@ -1695,7 +1695,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(500L, subscriptions.position(t1p).longValue());
+        assertEquals(500L, subscriptions.position(t1p).offset);
         assertTrue(coordinator.coordinatorUnknown());
     }
 
@@ -1917,7 +1917,7 @@ public class ConsumerCoordinatorTest {
         time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
         coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
         assertFalse(coordinator.coordinatorUnknown());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,

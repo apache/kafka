@@ -203,7 +203,7 @@ public class FetcherTest {
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
         assertEquals(3, records.size());
-        assertEquals(4L, subscriptions.position(tp0).longValue()); // this is the next fetching position
+        assertEquals(4L, subscriptions.position(tp0).offset); // this is the next fetching position
         long offset = 1;
         for (ConsumerRecord<byte[], byte[]> record : records) {
             assertEquals(offset, record.offset());
@@ -355,7 +355,7 @@ public class FetcherTest {
 
         List<ConsumerRecord<byte[], byte[]>> records = partitionRecords.get(tp0);
         assertEquals(1, records.size());
-        assertEquals(2L, subscriptions.position(tp0).longValue());
+        assertEquals(2L, subscriptions.position(tp0).offset);
 
         ConsumerRecord<byte[], byte[]> record = records.get(0);
         assertArrayEquals("key".getBytes(), record.key());
@@ -421,7 +421,7 @@ public class FetcherTest {
                 fail("fetchedRecords should have raised");
             } catch (SerializationException e) {
                 // the position should not advance since no data has been returned
-                assertEquals(1, subscriptions.position(tp0).longValue());
+                assertEquals(1, subscriptions.position(tp0).offset);
             }
         }
     }
@@ -477,7 +477,7 @@ public class FetcherTest {
 
         // the first fetchedRecords() should return the first valid message
         assertEquals(1, fetcher.fetchedRecords().get(tp0).size());
-        assertEquals(1, subscriptions.position(tp0).longValue());
+        assertEquals(1, subscriptions.position(tp0).offset);
 
         ensureBlockOnRecord(1L);
         seekAndConsumeRecord(buffer, 2L);
@@ -499,7 +499,7 @@ public class FetcherTest {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
-                assertEquals(blockedOffset, subscriptions.position(tp0).longValue());
+                assertEquals(blockedOffset, subscriptions.position(tp0).offset);
             }
         }
     }
@@ -516,7 +516,7 @@ public class FetcherTest {
         List<ConsumerRecord<byte[], byte[]>> records = fetcher.fetchedRecords().get(tp0);
         assertEquals(1, records.size());
         assertEquals(toOffset, records.get(0).offset());
-        assertEquals(toOffset + 1, subscriptions.position(tp0).longValue());
+        assertEquals(toOffset + 1, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -552,7 +552,7 @@ public class FetcherTest {
                 fetcher.fetchedRecords();
                 fail("fetchedRecords should have raised KafkaException");
             } catch (KafkaException e) {
-                assertEquals(0, subscriptions.position(tp0).longValue());
+                assertEquals(0, subscriptions.position(tp0).offset);
             }
         }
     }
@@ -581,7 +581,7 @@ public class FetcherTest {
             fail("fetchedRecords should have raised");
         } catch (KafkaException e) {
             // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).longValue());
+            assertEquals(0, subscriptions.position(tp0).offset);
         }
     }
 
@@ -644,7 +644,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         records = fetcher.fetchedRecords().get(tp0);
         assertEquals(2, records.size());
-        assertEquals(3L, subscriptions.position(tp0).longValue());
+        assertEquals(3L, subscriptions.position(tp0).offset);
         assertEquals(1, records.get(0).offset());
         assertEquals(2, records.get(1).offset());
 
@@ -652,14 +652,14 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         records = fetcher.fetchedRecords().get(tp0);
         assertEquals(1, records.size());
-        assertEquals(4L, subscriptions.position(tp0).longValue());
+        assertEquals(4L, subscriptions.position(tp0).offset);
         assertEquals(3, records.get(0).offset());
 
         assertTrue(fetcher.sendFetches() > 0);
         consumerClient.poll(time.timer(0));
         records = fetcher.fetchedRecords().get(tp0);
         assertEquals(2, records.size());
-        assertEquals(6L, subscriptions.position(tp0).longValue());
+        assertEquals(6L, subscriptions.position(tp0).offset);
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
     }
@@ -684,7 +684,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         records = fetcher.fetchedRecords().get(tp0);
         assertEquals(2, records.size());
-        assertEquals(3L, subscriptions.position(tp0).longValue());
+        assertEquals(3L, subscriptions.position(tp0).offset);
         assertEquals(1, records.get(0).offset());
         assertEquals(2, records.get(1).offset());
 
@@ -698,7 +698,7 @@ public class FetcherTest {
         assertNull(fetchedRecords.get(tp0));
         records = fetchedRecords.get(tp1);
         assertEquals(2, records.size());
-        assertEquals(6L, subscriptions.position(tp1).longValue());
+        assertEquals(6L, subscriptions.position(tp1).offset);
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
     }
@@ -725,7 +725,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         consumerRecords = fetcher.fetchedRecords().get(tp0);
         assertEquals(3, consumerRecords.size());
-        assertEquals(31L, subscriptions.position(tp0).longValue()); // this is the next fetching position
+        assertEquals(31L, subscriptions.position(tp0).offset); // this is the next fetching position
 
         assertEquals(15L, consumerRecords.get(0).offset());
         assertEquals(20L, consumerRecords.get(1).offset());
@@ -748,7 +748,7 @@ public class FetcherTest {
             } catch (RecordTooLargeException e) {
                 assertTrue(e.getMessage().startsWith("There are some messages at [Partition=Offset]: "));
                 // the position should not advance since no data has been returned
-                assertEquals(0, subscriptions.position(tp0).longValue());
+                assertEquals(0, subscriptions.position(tp0).offset);
             }
         } finally {
             client.setNodeApiVersions(NodeApiVersions.create());
@@ -770,7 +770,7 @@ public class FetcherTest {
         } catch (KafkaException e) {
             assertTrue(e.getMessage().startsWith("Failed to make progress reading messages"));
             // the position should not advance since no data has been returned
-            assertEquals(0, subscriptions.position(tp0).longValue());
+            assertEquals(0, subscriptions.position(tp0).offset);
         }
     }
 
@@ -893,7 +893,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(1, subscriptions.position(tp0).longValue());
+        assertEquals(1, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -955,7 +955,7 @@ public class FetcherTest {
         for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
             fetchedRecords.addAll(records);
 
-        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1).offset - 1);
 
         try {
             for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
@@ -964,7 +964,7 @@ public class FetcherTest {
             exceptions.add(e);
         }
 
-        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
+        assertEquals(4, subscriptionsNoAutoReset.position(tp1).offset);
         assertEquals(3, fetchedRecords.size());
 
         // Should have received one OffsetOutOfRangeException for partition tp1
@@ -1002,8 +1002,8 @@ public class FetcherTest {
         for (List<ConsumerRecord<byte[], byte[]>> records: fetcherNoAutoReset.fetchedRecords().values())
             fetchedRecords.addAll(records);
 
-        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1) - 1);
-        assertEquals(4, subscriptionsNoAutoReset.position(tp1).longValue());
+        assertEquals(fetchedRecords.size(), subscriptionsNoAutoReset.position(tp1).offset - 1);
+        assertEquals(4, subscriptionsNoAutoReset.position(tp1).offset);
         assertEquals(3, fetchedRecords.size());
 
         List<OffsetOutOfRangeException> oorExceptions = new ArrayList<>();
@@ -1024,7 +1024,7 @@ public class FetcherTest {
             fetchedRecords.addAll(records);
 
         // Should not have received an Exception for tp2.
-        assertEquals(6, subscriptionsNoAutoReset.position(tp2).longValue());
+        assertEquals(6, subscriptionsNoAutoReset.position(tp2).offset);
         assertEquals(5, fetchedRecords.size());
 
         int numExceptionsExpected = 3;
@@ -1084,7 +1084,7 @@ public class FetcherTest {
         // disconnects should have no affect on subscription state
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(0, subscriptions.position(tp0).longValue());
+        assertEquals(0, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1095,7 +1095,7 @@ public class FetcherTest {
         fetcher.resetOffsetsIfNeeded();
         assertFalse(client.hasInFlightRequests());
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1109,7 +1109,7 @@ public class FetcherTest {
         consumerClient.pollNoWakeup();
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1123,7 +1123,7 @@ public class FetcherTest {
         consumerClient.pollNoWakeup();
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     /**
@@ -1162,7 +1162,7 @@ public class FetcherTest {
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(subscriptions.position(tp0).longValue(), 5L);
+        assertEquals(subscriptions.position(tp0).offset, 5L);
     }
 
     @Test
@@ -1186,7 +1186,7 @@ public class FetcherTest {
 
             assertFalse(subscriptions.isOffsetResetNeeded(tp0));
             assertTrue(subscriptions.isFetchable(tp0));
-            assertEquals(5, subscriptions.position(tp0).longValue());
+            assertEquals(5, subscriptions.position(tp0).offset);
         }
     }
 
@@ -1211,7 +1211,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1226,7 +1226,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1255,7 +1255,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1290,7 +1290,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1336,7 +1336,7 @@ public class FetcherTest {
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
-        assertEquals(237L, subscriptions.position(tp0).longValue());
+        assertEquals(237L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1382,7 +1382,7 @@ public class FetcherTest {
 
         assertFalse(client.hasInFlightRequests());
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(5L, subscriptions.position(tp0).longValue());
+        assertEquals(5L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1419,7 +1419,7 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(5, subscriptions.position(tp0).longValue());
+        assertEquals(5, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1436,7 +1436,7 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
         assertTrue(subscriptions.hasValidPosition(tp0));
-        assertEquals(10, subscriptions.position(tp0).longValue());
+        assertEquals(10, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -1464,7 +1464,7 @@ public class FetcherTest {
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0)); // because tp is paused
         assertTrue(subscriptions.hasValidPosition(tp0));
-        assertEquals(10, subscriptions.position(tp0).longValue());
+        assertEquals(10, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -2320,7 +2320,7 @@ public class FetcherTest {
         }
 
         // The next offset should point to the next batch
-        assertEquals(4L, subscriptions.position(tp0).longValue());
+        assertEquals(4L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -2349,7 +2349,7 @@ public class FetcherTest {
         assertTrue(allFetchedRecords.isEmpty());
 
         // The next offset should point to the next batch
-        assertEquals(lastOffset + 1, subscriptions.position(tp0).longValue());
+        assertEquals(lastOffset + 1, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -2481,7 +2481,7 @@ public class FetcherTest {
 
         // Ensure that we don't return any of the aborted records, but yet advance the consumer position.
         assertFalse(fetchedRecords.containsKey(tp0));
-        assertEquals(currentOffset, (long) subscriptions.position(tp0));
+        assertEquals(currentOffset, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -2509,8 +2509,8 @@ public class FetcherTest {
         assertFalse(fetchedRecords.containsKey(tp1));
         records = fetchedRecords.get(tp0);
         assertEquals(2, records.size());
-        assertEquals(3L, subscriptions.position(tp0).longValue());
-        assertEquals(1L, subscriptions.position(tp1).longValue());
+        assertEquals(3L, subscriptions.position(tp0).offset);
+        assertEquals(1L, subscriptions.position(tp1).offset);
         assertEquals(1, records.get(0).offset());
         assertEquals(2, records.get(1).offset());
 
@@ -2521,7 +2521,7 @@ public class FetcherTest {
         records = fetchedRecords.get(tp0);
         assertEquals(1, records.size());
         assertEquals(3, records.get(0).offset());
-        assertEquals(4L, subscriptions.position(tp0).longValue());
+        assertEquals(4L, subscriptions.position(tp0).offset);
 
         // The second response contains no new records.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions2 = new LinkedHashMap<>();
@@ -2531,8 +2531,8 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         fetchedRecords = fetcher.fetchedRecords();
         assertTrue(fetchedRecords.isEmpty());
-        assertEquals(4L, subscriptions.position(tp0).longValue());
-        assertEquals(1L, subscriptions.position(tp1).longValue());
+        assertEquals(4L, subscriptions.position(tp0).offset);
+        assertEquals(1L, subscriptions.position(tp1).offset);
 
         // The third response contains some new records for tp0.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions3 = new LinkedHashMap<>();
@@ -2546,8 +2546,8 @@ public class FetcherTest {
         assertFalse(fetchedRecords.containsKey(tp1));
         records = fetchedRecords.get(tp0);
         assertEquals(2, records.size());
-        assertEquals(6L, subscriptions.position(tp0).longValue());
-        assertEquals(1L, subscriptions.position(tp1).longValue());
+        assertEquals(6L, subscriptions.position(tp0).offset);
+        assertEquals(1L, subscriptions.position(tp1).offset);
         assertEquals(4, records.get(0).offset());
         assertEquals(5, records.get(1).offset());
     }

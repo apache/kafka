@@ -188,13 +188,17 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             if (!subscriptions.isPaused(entry.getKey())) {
                 final List<ConsumerRecord<K, V>> recs = entry.getValue();
                 for (final ConsumerRecord<K, V> rec : recs) {
-                    if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > subscriptions.position(entry.getKey())) {
-                        throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), subscriptions.position(entry.getKey())));
+                    long position = subscriptions.position(entry.getKey()).offset;
+
+                    if (beginningOffsets.get(entry.getKey()) != null && beginningOffsets.get(entry.getKey()) > position) {
+                        throw new OffsetOutOfRangeException(Collections.singletonMap(entry.getKey(), position));
                     }
 
-                    if (assignment().contains(entry.getKey()) && rec.offset() >= subscriptions.position(entry.getKey())) {
+                    if (assignment().contains(entry.getKey()) && rec.offset() >= position) {
                         results.computeIfAbsent(entry.getKey(), partition -> new ArrayList<>()).add(rec);
-                        subscriptions.position(entry.getKey(), rec.offset() + 1);
+                        SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                                rec.offset() + 1, rec.leaderEpoch());
+                        subscriptions.position(entry.getKey(), newPosition);
                     }
                 }
             }
@@ -283,12 +287,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         ensureNotClosed();
         if (!this.subscriptions.isAssigned(partition))
             throw new IllegalArgumentException("You can only check the position for partitions assigned to this consumer.");
-        Long offset = this.subscriptions.position(partition);
-        if (offset == null) {
+        SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+        if (position == null) {
             updateFetchPosition(partition);
-            offset = this.subscriptions.position(partition);
+            position = this.subscriptions.position(partition);
         }
-        return offset;
+        return position.offset;
     }
 
     @Override

@@ -18,6 +18,8 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -29,13 +31,13 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -64,7 +66,6 @@ public class Metadata implements Closeable {
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
     private Cluster cluster;
-    private Set<String> unavailableTopics = Collections.emptySet();
     private boolean needUpdate;
     /* Topics with expiry time */
     private final Map<String, Long> topics;
@@ -279,9 +280,8 @@ public class Metadata implements Closeable {
         String previousClusterId = cluster.clusterResource().clusterId();
 
         this.cluster = metadataResponse.cluster();
-        this.unavailableTopics = metadataResponse.unavailableTopics();
 
-        fireListeners(cluster, unavailableTopics);
+        fireListeners(cluster, metadataResponse.unavailableTopics());
 
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
@@ -402,6 +402,51 @@ public class Metadata implements Closeable {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
         requestUpdate();
+    }
+
+    public LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
+        Node leader = fetch().leaderFor(tp);
+        if (leader == null)
+            return null;
+        return new LeaderAndEpoch(leader, Optional.empty());
+    }
+
+    public static class LeaderAndEpoch {
+        public final Node leader;
+        public final Optional<Integer> epoch;
+
+        public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
+            this.leader = Objects.requireNonNull(leader);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        public boolean isObsoletedBy(LeaderAndEpoch update) {
+            // If epoch information is missing from the update, we always accept it. This allows
+            // for graceful downgrades of the brokers.
+            if (!update.epoch.isPresent())
+                return true;
+
+            // Otherwise, if the new epoch is larger, then
+            return epoch.isPresent() && update.epoch.get() >= epoch.get();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            LeaderAndEpoch that = (LeaderAndEpoch) o;
+
+            if (!leader.equals(that.leader)) return false;
+            return epoch.equals(that.epoch);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = leader.hashCode();
+            result = 31 * result + epoch.hashCode();
+            return result;
+        }
     }
 
 }

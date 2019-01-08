@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -1510,7 +1511,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
-            this.subscriptions.seek(partition, offset);
+            this.subscriptions.seek(partition, new SubscriptionState.FetchPosition(offset, Optional.empty()));
         } finally {
             release();
         }
@@ -1632,9 +1633,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                Long offset = this.subscriptions.position(partition);
-                if (offset != null)
-                    return offset;
+                SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+                if (position != null)
+                    return position.offset;
 
                 updateFetchPositions(timer);
                 client.poll(timer);
