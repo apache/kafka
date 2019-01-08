@@ -334,7 +334,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // higher generations overwrite lower generations in case of a conflict
         // note that a conflict could exists only if user data is for different generations
 
-        Map<TopicPartition, ConsumerGenerationPair> partitionConsumer = new HashMap<>();
+        // currentPartitionConsumer will hold the latest ConsumerGenerationPair associated with a partition
+        // while prevAssignment holds the prior ConsumerGenerationPair (before current) of each parition
+        Map<TopicPartition, ConsumerGenerationPair> currentPartitionConsumer = new HashMap<>();
         for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
@@ -342,10 +344,10 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             ConsumerUserData consumerUserData = deserializeTopicPartitionAssignment(userData);
 
             for (TopicPartition partition: consumerUserData.partitions) {
-                if (!partitionConsumer.containsKey(partition))
-                    partitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
+                if (!currentPartitionConsumer.containsKey(partition))
+                    currentPartitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
                 else {
-                    ConsumerGenerationPair existingRecord = partitionConsumer.get(partition);
+                    ConsumerGenerationPair existingRecord = currentPartitionConsumer.get(partition);
                     if (consumerUserData.generation == existingRecord.generation) {
                         // same partition is assigned to two consumers during the same rebalance.
                         // log an error and skip this record
@@ -355,7 +357,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         // same partition is assigned to two consumers in different rebalances.
                         // the assignment being processed has higher generation than the one already processed, and takes priority
                         updatePrevAssignment(prevAssignment, partition, existingRecord);
-                        partitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
+                        currentPartitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
                     } else {
                         // else if (consumerUserData.generation < existingRecord.generation)
                         // if the same partition is assigned to two consumers in different rebalances and
@@ -367,7 +369,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
 
-        for (Map.Entry<TopicPartition, ConsumerGenerationPair> partitionAssignment: partitionConsumer.entrySet()) {
+        for (Map.Entry<TopicPartition, ConsumerGenerationPair> partitionAssignment: currentPartitionConsumer.entrySet()) {
             TopicPartition partition = partitionAssignment.getKey();
             String consumer = partitionAssignment.getValue().consumer;
             if (currentAssignment.containsKey(consumer))
@@ -377,8 +379,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 currentAssignment.put(consumer, partitions);
             }
         }
-
-        ++generation;
     }
 
     @Override
