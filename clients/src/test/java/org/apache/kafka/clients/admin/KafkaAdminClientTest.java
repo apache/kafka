@@ -642,7 +642,6 @@ public class KafkaAdminClientTest {
         TopicPartition topic2 = new TopicPartition("topic", 2);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
-            //env.kafkaClient().prepareMetadataUpdate(env.cluster(), Collections.<String>emptySet());
 
             // Test a call where one partition has an error.
             HashMap<TopicPartition, ApiError> map = new HashMap<>();

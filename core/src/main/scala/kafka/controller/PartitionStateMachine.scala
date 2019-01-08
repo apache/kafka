@@ -317,9 +317,11 @@ class PartitionStateMachine(config: KafkaConfig,
    * Repeatedly attempt to elect leaders for multiple partitions until there are no more remaining partitions to retry.
    * @param partitions The partitions that we're trying to elect leaders for.
    * @param partitionLeaderElectionStrategy The election strategy to use.
-   * @return The partitions that successfully had a leader elected.
+   * @return A pair with first element of which is the partitions that successfully had a leader elected
+    *        and the second element a map of failed partition to the corresponding thrown exception.
    */
-  private def electLeaderForPartitions(partitions: Seq[TopicPartition], partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy): (Seq[TopicPartition], Map[TopicPartition, Throwable]) = {
+  private def electLeaderForPartitions(partitions: Seq[TopicPartition],
+                                       partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy): (Seq[TopicPartition], Map[TopicPartition, Throwable]) = {
     val successfulElections = mutable.Buffer.empty[TopicPartition]
     var remaining = partitions
     var failures = Map.empty[TopicPartition, Throwable]

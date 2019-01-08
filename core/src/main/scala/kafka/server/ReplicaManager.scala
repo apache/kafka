@@ -1521,16 +1521,16 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   def electPreferredLeaders(controller: KafkaController,
-                                  partitions: Set[TopicPartition],
-                                  responseCallback: Map[TopicPartition, ApiError] => Unit,
-                                  requestTimeout: Long): Unit = {
+                            partitions: Set[TopicPartition],
+                            responseCallback: Map[TopicPartition, ApiError] => Unit,
+                            requestTimeout: Long): Unit = {
 
     val (validPartitions, invalidPartitions) = partitions.partition(tp => metadataCache.contains(tp))
 
     val invalidPartitionsResults = invalidPartitions.map { p =>
       val msg = s"Skipping preferred replica leader election for partition ${p} since it doesn't exist."
       logger.info(msg)
-      p -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition '$p' does not exist.")
+      p -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
     }.toMap
 
     def electionCallback(waiting: Set[TopicPartition], results: Map[TopicPartition, ApiError]) = {

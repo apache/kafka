@@ -49,7 +49,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     if(args.length == 0)
       CommandLineUtils.printUsageAndDie(commandOpts.parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
                                                 " it can be used to balance leadership among the servers." +
-                                                " The preferred replica is the first one in the replica assignment (see kafka-reassign-partitions.sh)." +
+                                                " The preferred replica is the first one in the replica assignment (see the output from kafka-topics.sh with the --describe option)." +
                                                 " Using this command is not necessary when the broker is configured with \"auto.leader.rebalance.enable=true\".")
 
     CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options)
@@ -65,8 +65,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       None
 
     val preferredReplicaElectionCommand = if (commandOpts.options.has(commandOpts.zkConnectOpt)) {
-      Console.err.println(s"$commandOpts.zkConnectOpt is deprecated and will be removed in a future version of Kafka.")
-      Console.err.println(s"Use $commandOpts.bootstrapServerOpt instead to specify a broker to connect to.")
+      println(s"Warning: $commandOpts.zkConnectOpt is deprecated and will be removed in a future version of Kafka.")
+      println(s"Use $commandOpts.bootstrapServerOpt instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
               JaasUtils.isZkSecurityEnabled,
               timeout)
@@ -153,7 +153,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
   class ZkCommand(zkConnect: String, isSecure: Boolean, timeout: Int)
     extends Command {
-    //val zkConnect = options.valueOf(zkConnectOpt)
     var zkClient: KafkaZkClient = null
 
     val time = Time.SYSTEM

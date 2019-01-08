@@ -62,11 +62,6 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    //zkClient.createPartitionReassignment(partitionsAndAssignments)
-//    partitionsAndAssignments.foreach { partitionAndAssignment =>
-//      zkClient.createPartitionReassignment()OrUpdateTopicPartitionAssignmentPathInZK(partitionAndAssignment._1.topic(),
-//        Map(partitionAndAssignment._1.partition -> partitionAndAssignment._2))
-//    }
     partitionsAndAssignments.foreach { partitionAndAssignment =>
       zkClient.createTopicAssignment(partitionAndAssignment._1.topic(),
       Map(partitionAndAssignment._1 -> partitionAndAssignment._2))

@@ -92,12 +92,10 @@ public class ElectPreferredLeadersRequest extends AbstractRequest {
                 Struct topicPartitionStruct = (Struct) topicPartitionObj;
                 String topicName = topicPartitionStruct.get(TOPIC_NAME);
                 Object[] partitionsArray = topicPartitionStruct.getArray(PARTITIONS_KEY_NAME);
-                if (partitionsArray != null) {
-                    for (Object partitionObj : partitionsArray) {
-                        Integer partition = (Integer) partitionObj;
-                        TopicPartition topicPartition = new TopicPartition(topicName, partition);
-                        topicPartitions.add(topicPartition);
-                    }
+                for (Object partitionObj : partitionsArray) {
+                    Integer partition = (Integer) partitionObj;
+                    TopicPartition topicPartition = new TopicPartition(topicName, partition);
+                    topicPartitions.add(topicPartition);
                 }
             }
         } else {

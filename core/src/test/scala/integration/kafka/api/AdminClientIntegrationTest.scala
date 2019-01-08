@@ -1302,7 +1302,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       case e: Exception =>
         val cause = e.getCause
         assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition 'topic-does-not-exist-0' does not exist.",
+        assertEquals("The partition does not exist.",
           cause.getMessage)
         assertEquals(1, currentLeader(partition1))
         assertEquals(1, currentLeader(partition2))
@@ -1322,7 +1322,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       case e: Exception =>
         val cause = e.getCause
         assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition 'topic-does-not-exist-0' does not exist.",
+        assertEquals("The partition does not exist.",
           cause.getMessage)
     }
 

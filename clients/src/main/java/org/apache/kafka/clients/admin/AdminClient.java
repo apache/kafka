@@ -818,7 +818,7 @@ public abstract class AdminClient implements AutoCloseable {
      * During this time, {@link AdminClient#describeTopics(Collection)}
      * may not return information about the partitions' new leaders.
      *
-     * This operation is supported by brokers with version 1.1.0 or higher.
+     * This operation is supported by brokers with version 2.2.0 or higher.
      *
      * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
      * the returned {@code ElectPreferredLeadersResult}:</p>

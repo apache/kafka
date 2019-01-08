@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.controller.ControllerContext
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
