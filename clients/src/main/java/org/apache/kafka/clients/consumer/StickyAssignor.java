@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.TreeMap;
 import java.util.TreeSet;
 
 /**
@@ -310,23 +311,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         return currentAssignment;
     }
 
-    private void updatePrevAssignment(Map<TopicPartition, ConsumerGenerationPair> prevAssignment,
-                                      TopicPartition partition, ConsumerGenerationPair consumerGeneration) {
-        if (!prevAssignment.containsKey(partition))
-            prevAssignment.put(partition, consumerGeneration);
-        else {
-            ConsumerGenerationPair existingPair = prevAssignment.get(partition);
-            if (consumerGeneration.generation > existingPair.generation)
-                prevAssignment.put(partition, consumerGeneration);
-            else if (consumerGeneration.generation == existingPair.generation) {
-                // same partition is assigned to two consumers during the same rebalance.
-                // log an error and skip this record
-                log.error("Partition '" + partition + "' had been assigned to multiple consumers " +
-                        "following sticky assignment generation " + consumerGeneration.generation + ".");
-            }
-        }
-    }
-
     private void prepopulateCurrentAssignments(Map<String, Subscription> subscriptions,
                                                Map<String, List<TopicPartition>> currentAssignment,
                                                Map<TopicPartition, ConsumerGenerationPair> prevAssignment) {
@@ -334,50 +318,54 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // higher generations overwrite lower generations in case of a conflict
         // note that a conflict could exists only if user data is for different generations
 
-        // currentPartitionConsumer will hold the latest ConsumerGenerationPair associated with a partition
-        // while prevAssignment holds the prior ConsumerGenerationPair (before current) of each parition
-        Map<TopicPartition, ConsumerGenerationPair> currentPartitionConsumer = new HashMap<>();
-        for (Map.Entry<String, Subscription> subscriptionEntry : subscriptions.entrySet()) {
+        // for each partition we create a sorted map of its consumers by generation
+        Map<TopicPartition, Map<Integer, String>> sortedPartitionConsumersByGeneration = new HashMap<>();
+        for (Map.Entry<String, Subscription> subscriptionEntry: subscriptions.entrySet()) {
             String consumer = subscriptionEntry.getKey();
             ByteBuffer userData = subscriptionEntry.getValue().userData();
             if (userData == null || !userData.hasRemaining()) continue;
             ConsumerUserData consumerUserData = deserializeTopicPartitionAssignment(userData);
 
             for (TopicPartition partition: consumerUserData.partitions) {
-                if (!currentPartitionConsumer.containsKey(partition))
-                    currentPartitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
-                else {
-                    ConsumerGenerationPair existingRecord = currentPartitionConsumer.get(partition);
-                    if (consumerUserData.generation == existingRecord.generation) {
+                if (sortedPartitionConsumersByGeneration.containsKey(partition)) {
+                    Map<Integer, String> consumers = sortedPartitionConsumersByGeneration.get(partition);
+                    if (consumers.containsKey(consumerUserData.generation)) {
                         // same partition is assigned to two consumers during the same rebalance.
-                        // log an error and skip this record
-                        log.error("Partition '" + partition + "' is assigned to multiple consumers " +
-                                  "following sticky assignment generation " + consumerUserData.generation + ".");
-                    } else if (consumerUserData.generation > existingRecord.generation) {
-                        // same partition is assigned to two consumers in different rebalances.
-                        // the assignment being processed has higher generation than the one already processed, and takes priority
-                        updatePrevAssignment(prevAssignment, partition, existingRecord);
-                        currentPartitionConsumer.put(partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
-                    } else {
-                        // else if (consumerUserData.generation < existingRecord.generation)
-                        // if the same partition is assigned to two consumers in different rebalances and
-                        // the assignment being processed has lower generation than the one already processed,
-                        // it is only considered for updating the previous assignment of the involved topic partition
-                        updatePrevAssignment(prevAssignment, partition, new ConsumerGenerationPair(consumer, consumerUserData.generation));
-                    }
+                        // log a warning and skip this record
+                        log.warn("Partition '{}' is assigned to multiple consumers following sticky assignment generation {}.",
+                                partition, consumerUserData.generation);
+                    } else
+                        consumers.put(consumerUserData.generation, consumer);
+                } else {
+                    Map<Integer, String> sortedConsumers = new TreeMap<>();
+                    sortedConsumers.put(consumerUserData.generation, consumer);
+                    sortedPartitionConsumersByGeneration.put(partition, sortedConsumers);
                 }
             }
         }
 
-        for (Map.Entry<TopicPartition, ConsumerGenerationPair> partitionAssignment: currentPartitionConsumer.entrySet()) {
-            TopicPartition partition = partitionAssignment.getKey();
-            String consumer = partitionAssignment.getValue().consumer;
+        // prevAssignment holds the prior ConsumerGenerationPair (before current) of each partition
+        // current and previous consumers are the last two consumers of each partition in the above sorted map
+        for (Map.Entry<TopicPartition, Map<Integer, String>> partitionConsumersEntry: sortedPartitionConsumersByGeneration.entrySet()) {
+            TopicPartition partition = partitionConsumersEntry.getKey();
+            TreeMap<Integer, String> consumers = (TreeMap<Integer, String>) partitionConsumersEntry.getValue();
+            Iterator<Integer> it = consumers.descendingKeySet().iterator();
+
+            // let's process the current (most recent) consumer first
+            String consumer = consumers.get(it.next());
             if (currentAssignment.containsKey(consumer))
                 currentAssignment.get(consumer).add(partition);
             else {
                 List<TopicPartition> partitions = new ArrayList<>(Collections.singletonList(partition));
                 currentAssignment.put(consumer, partitions);
             }
+
+            // now update previous assignment if any
+            if (it.hasNext()) {
+                int generation = it.next();
+                prevAssignment.put(partition, new ConsumerGenerationPair(consumers.get(generation), generation));
+            }
+            it.remove();
         }
     }
 
