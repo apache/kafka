@@ -633,7 +633,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
                                          newPath: Boolean = false): Map[TopicPartition, Throwable] = {
     info(s"Starting preferred replica leader election for partitions ${partitions.mkString(",")}")
     try {
-      val results = partitionStateMachine.handleStateChangesWithResults(partitions.toSeq, OnlinePartition,
+      val results = partitionStateMachine.handleStateChanges(partitions.toSeq, OnlinePartition,
         Option(PreferredReplicaPartitionLeaderElectionStrategy))
       if (!newPath) {
         results.foreach(entry =>

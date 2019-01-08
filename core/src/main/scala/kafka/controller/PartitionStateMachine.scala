@@ -126,48 +126,26 @@ class PartitionStateMachine(config: KafkaConfig,
   }
 
   def handleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState,
-                         partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Unit = {
-    if (partitions.nonEmpty) {
+                         partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Map[TopicPartition, Throwable] = {
+    return if (partitions.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
+        val errors = doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+        errors
       } catch {
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some partitions to $targetState state", e)
           throw e
-        case e: Throwable => error(s"Error while moving some partitions to $targetState state", e)
+        case e: Throwable =>
+          error(s"Error while moving some partitions to $targetState state", e)
+          partitions.map { _ -> e }.toMap
       }
+    } else {
+      Map.empty[TopicPartition, Throwable]
     }
   }
 
-  /**
-    * Attempt to put each of the given partitions into the given targetState, returning
-    * a map of partition to exception for those partitions where the attempt failed with an exception.
-    * @param partitions   The list of partitions that need to be transitioned to the target state
-    * @param targetState  The state that the partitions should be moved to
-    */
-  def handleStateChangesWithResults(partitions: Seq[TopicPartition], targetState: PartitionState,
-                                    partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
-    info(s"Invoking state change to $targetState for partitions ${partitions.mkString(",")}")
-    var result = Map.empty[TopicPartition, Throwable]
-    if (partitions.nonEmpty) {
-      try {
-        controllerBrokerRequestBatch.newBatch()
-        partitions.foreach { partition =>
-          result ++= doHandleStateChanges(Seq(partition), targetState, partitionLeaderElectionStrategyOpt)
-        }
-        controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
-      } catch {
-        case e: Throwable =>
-          error(s"Error changing state of some partitions to $targetState state", e)
-          result ++= (partitions.toSet -- result.keySet).map {
-            _ -> e
-          }
-      }
-    }
-    result
-  }
 
   def partitionsInState(state: PartitionState): Set[TopicPartition] = {
     partitionState.filter { case (_, s) => s == state }.keySet.toSet
