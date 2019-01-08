@@ -161,7 +161,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def __init__(self, context, num_nodes, kafka, topic, group_id,
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
-                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None):
+                 version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
+                 on_record_consumed=None):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
@@ -177,6 +178,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.assignment_strategy = assignment_strategy
         self.prop_file = ""
         self.stop_timeout_sec = stop_timeout_sec
+        self.on_record_consumed = on_record_consumed
 
         self.event_handlers = {}
         self.global_position = {}
@@ -228,6 +230,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                     elif name == "records_consumed":
                         handler.handle_records_consumed(event)
                         self._update_global_position(event, node)
+                    elif name == "record_data" and self.on_record_consumed:
+                        self.on_record_consumed(event, node)
                     elif name == "partitions_revoked":
                         handler.handle_partitions_revoked(event)
                     elif name == "partitions_assigned":
@@ -268,6 +272,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += " export KAFKA_OPTS=%s;" % self.security_config.kafka_opts
         cmd += " export KAFKA_LOG4J_OPTS=\"-Dlog4j.configuration=file:%s\"; " % VerifiableConsumer.LOG4J_CONFIG
         cmd += self.impl.exec_cmd(node)
+        if self.on_record_consumed:
+            cmd += " --verbose"
         cmd += " --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
                (self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
