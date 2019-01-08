@@ -184,12 +184,11 @@ abstract class AbstractFetcherThread(name: String,
         //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
         val leaderEpochs = fetchedEpochs.filter { case (tp, _) =>
           val curPartitionState = partitionStates.stateValue(tp)
-          val leaderEpochInRequest = epochRequests.get(tp) match {
-            case Some(request) => request.currentLeaderEpoch.get
-            case _ =>
-              throw new IllegalStateException(
-                s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
+          val partitionEpochRequest = epochRequests.get(tp).getOrElse {
+            throw new IllegalStateException(
+              s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
           }
+          val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
           curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
         }
 
