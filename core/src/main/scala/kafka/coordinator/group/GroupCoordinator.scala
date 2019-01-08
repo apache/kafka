@@ -162,7 +162,7 @@ class GroupCoordinator(val brokerId: Int,
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
 
         if (requireKnownMemberId) {
-          // If member id required, register the member with unknown metadata
+          // If member id required, register the member in the pending member list
           // and send back a response to call for another join group request with allocated member id.
           group.addPendingMember(newMemberId)
           addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
@@ -249,7 +249,7 @@ class GroupCoordinator(val brokerId: Int,
             }
 
           case Empty | Dead =>
-            // Group reaches unexpected state. Let the joining member reset the info and rejoin.
+            // Group reaches unexpected state. Let the joining member reset their generation and rejoin.
             warn(s"Attempt to add rejoining member ${memberId} of group ${group.groupId} in " +
               s"unexpected group state ${group.currentState}")
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
@@ -694,7 +694,7 @@ class GroupCoordinator(val brokerId: Int,
     JoinGroupResult(
       members = Map.empty,
       memberId = memberId,
-      generationId = 0,
+      generationId = GroupCoordinator.NoGeneration,
       subProtocol = GroupCoordinator.NoProtocol,
       leaderId = GroupCoordinator.NoLeader,
       error = error)

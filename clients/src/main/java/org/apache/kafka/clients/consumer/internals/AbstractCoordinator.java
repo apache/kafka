@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
-
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -734,7 +732,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Get the current generation state if the group is stable.
      * @return the current generation or null if the group is unjoined/rebalancing
      */
-    protected synchronized Generation generationOnGroupStable() {
+    protected synchronized Generation generation() {
         if (this.state != MemberState.STABLE)
             return null;
         return generation;
@@ -744,9 +742,9 @@ public abstract class AbstractCoordinator implements Closeable {
      * Get member id in the current generation. Only using in unit tests.
      * @return member id
      */
-    protected synchronized String memberId() {
+    final synchronized String memberId() {
         if (generation == null) {
-            return UNKNOWN_MEMBER_ID;
+            return JoinGroupResponse.UNKNOWN_MEMBER_ID;
         }
         return generation.memberId;
     }
@@ -757,7 +755,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * @param generationId generation id
      * @return true if the two ids are matching.
      */
-    protected synchronized boolean hasValidGenerationId(int generationId) {
+    final synchronized boolean hasValidGenerationId(int generationId) {
         return generation.generationId == generationId;
     }
 
@@ -809,7 +807,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation != Generation.NO_GENERATION) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.isValid()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Sending LeaveGroup request to coordinator {}", coordinator);
@@ -1110,7 +1108,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected static class Generation {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                UNKNOWN_MEMBER_ID,
+                JoinGroupResponse.UNKNOWN_MEMBER_ID,
                 null);
 
         public final int generationId;
@@ -1121,6 +1119,10 @@ public abstract class AbstractCoordinator implements Closeable {
             this.generationId = generationId;
             this.memberId = memberId;
             this.protocol = protocol;
+        }
+
+        public boolean isValid() {
+            return generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID;
         }
 
         @Override

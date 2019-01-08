@@ -295,7 +295,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public String memberId() {
-        Generation generation = generationOnGroupStable();
+        Generation generation = generation();
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;

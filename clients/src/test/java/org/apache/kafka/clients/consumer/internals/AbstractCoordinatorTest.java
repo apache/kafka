@@ -183,9 +183,9 @@ public class AbstractCoordinatorTest {
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
         final String memberId = "memberId";
-        final int generation = 10;
+        final int generation = -1;
 
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, "leaderId", Errors.MEMBER_ID_REQUIRED));
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.MEMBER_ID_REQUIRED));
 
         mockClient.prepareResponse(new MockClient.RequestMatcher() {
             @Override

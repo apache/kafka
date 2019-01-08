@@ -739,7 +739,7 @@ public class ConsumerCoordinatorTest {
         coordinator.maybeLeaveGroup();
         assertTrue(received.get());
 
-        AbstractCoordinator.Generation generation = coordinator.generationOnGroupStable();
+        AbstractCoordinator.Generation generation = coordinator.generation();
         assertNull(generation);
     }
 
