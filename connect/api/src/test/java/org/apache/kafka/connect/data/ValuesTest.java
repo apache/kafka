@@ -351,7 +351,6 @@ public class ValuesTest {
     public void shouldConvertTimeValues() {
         java.util.Date current = new java.util.Date();
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
-        Long currentMillisL = new Long(currentMillis);
 
         // java.util.Date - just copy
         java.util.Date t1 = Values.convertToTime(Time.SCHEMA, current);
@@ -364,20 +363,19 @@ public class ValuesTest {
         // ISO8601 strings - currently broken because tokenization breaks at colon
 
         // Millis as string
-        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, currentMillisL.toString());
-        assertEquals(currentMillisL, new Long(t3.getTime()));
+        java.util.Date t3 = Values.convertToTime(Time.SCHEMA, Long.toString(currentMillis));
+        assertEquals(currentMillis, t3.getTime());
 
         // Millis as long
-        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillisL.longValue());
-        assertEquals(currentMillisL, new Long(t4.getTime()));
+        java.util.Date t4 = Values.convertToTime(Time.SCHEMA, currentMillis);
+        assertEquals(currentMillis, t4.getTime());
     }
 
     @Test
     public void shouldConvertDateValues() {
         java.util.Date current = new java.util.Date();
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
-        Long currentDateL = new Long(current.getTime() - currentMillis);
-        Long days = new Long(current.getTime() / MILLIS_PER_DAY);
+        long days = current.getTime() / MILLIS_PER_DAY;
 
         // java.util.Date - just copy
         java.util.Date d1 = Values.convertToDate(Date.SCHEMA, current);
@@ -391,19 +389,18 @@ public class ValuesTest {
         // ISO8601 strings - currently broken because tokenization breaks at colon
 
         // Days as string
-        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, days.toString());
-        assertEquals(currentDateL, new Long(d3.getTime()));
+        java.util.Date d3 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
+        assertEquals(currentDate, d3);
 
         // Days as long
-        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days.longValue());
-        assertEquals(currentDateL, new Long(d4.getTime()));
+        java.util.Date d4 = Values.convertToDate(Date.SCHEMA, days);
+        assertEquals(currentDate, d4);
     }
 
     @Test
     public void shouldConvertTimestampValues() {
         java.util.Date current = new java.util.Date();
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
-        Long currentL = new Long(current.getTime());
 
         // java.util.Date - just copy
         java.util.Date ts1 = Values.convertToTimestamp(Timestamp.SCHEMA, current);
@@ -421,12 +418,12 @@ public class ValuesTest {
         // ISO8601 strings - currently broken because tokenization breaks at colon
 
         // Millis as string
-        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, currentL.toString());
-        assertEquals(currentL, new Long(ts3.getTime()));
+        java.util.Date ts3 = Values.convertToTimestamp(Timestamp.SCHEMA, Long.toString(current.getTime()));
+        assertEquals(current, ts3);
 
         // Millis as long
-        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, currentL.longValue());
-        assertEquals(currentL, new Long(ts4.getTime()));
+        java.util.Date ts4 = Values.convertToTimestamp(Timestamp.SCHEMA, current.getTime());
+        assertEquals(current, ts4);
     }
 
     @Test
