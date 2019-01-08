@@ -500,8 +500,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final TopicPartition tp = entry.getKey();
             final long offset = entry.getValue().offset();
             log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), entry.getValue());
             this.subscriptions.seek(tp, offset);
-            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(tp, epoch));
         }
         return true;
     }
@@ -622,8 +622,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onSuccess(Void value) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                offsets.forEach((tp, offsetMeta) ->
-                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(tp, epoch)));
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
             }
 
@@ -633,7 +631,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 if (e instanceof RetriableException)
                     commitException = new RetriableCommitFailedException(e);
-
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
             }
         });
@@ -671,8 +668,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.succeeded()) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-                offsets.forEach((tp, offsetMeta) ->
-                        offsetMeta.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(tp, epoch)));
                 return true;
             }
 

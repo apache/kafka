@@ -1417,6 +1417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
+            offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
@@ -1488,6 +1489,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             maybeThrowInvalidGroupIdException();
             log.debug("Committing offsets: {}", offsets);
+            offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
             release();
@@ -1525,6 +1527,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws IllegalArgumentException if the provided offset is negative
      * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
      */
+    @Override
     public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
         long offset = offsetAndMetadata.offset();
         if (offset < 0) {
@@ -1534,7 +1537,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
-            offsetAndMetadata.leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(partition, epoch));
+            this.metadata.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, offset);
         } finally {
             release();
@@ -1729,8 +1732,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
+            } else {
+                offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
+                return offsets.get(partition);
             }
-            return offsets.get(partition);
         } finally {
             release();
         }

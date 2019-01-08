@@ -582,8 +582,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", partition);
         } else {
             log.info("Resetting offset for partition {} to offset {}.", partition, offsetData.offset);
-            subscriptions.seek(partition, offsetData.offset);
             offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
+            subscriptions.seek(partition, offsetData.offset);
         }
     }
 

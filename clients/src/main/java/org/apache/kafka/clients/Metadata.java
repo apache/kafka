@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -181,6 +182,15 @@ public class Metadata implements Closeable {
         }
     }
 
+    /**
+     * Convenience method for updating leader epochs
+     *
+     * @see #updateLastSeenEpochIfNewer
+     */
+    public synchronized void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
+        offsetAndMetadata.leaderEpoch().ifPresent(epoch -> updateLastSeenEpochIfNewer(topicPartition, epoch));
+    }
+
     // Visible for testing
     Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
         return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition));
@@ -192,12 +202,14 @@ public class Metadata implements Closeable {
      */
     private int updateLastSeenEpoch(TopicPartition topicPartition, int epoch, Predicate<Integer> epochTest) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
+        log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, epoch);
         if (oldEpoch == null || epochTest.test(oldEpoch)) {
-            log.debug("Setting last seen epoch to {} for partition {}", epoch, topicPartition);
+            log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
             cache.removePartition(topicPartition);
             return epoch;
         } else {
+            log.debug("Not replacing existing epoch {} with new epoch {}", oldEpoch, epoch);
             return oldEpoch;
         }
     }
