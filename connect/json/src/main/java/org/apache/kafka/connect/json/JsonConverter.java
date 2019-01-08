@@ -317,6 +317,10 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     @Override
     public byte[] fromConnectData(String topic, Schema schema, Object value) {
+        if (schema == null && value == null) {
+            return null;
+        }
+
         JsonNode jsonValue = enableSchemas ? convertToJsonWithEnvelope(schema, value) : convertToJsonWithoutEnvelope(schema, value);
         try {
             return serializer.serialize(topic, jsonValue);
@@ -328,13 +332,19 @@ public class JsonConverter implements Converter, HeaderConverter {
     @Override
     public SchemaAndValue toConnectData(String topic, byte[] value) {
         JsonNode jsonValue;
+
+        // This handles a tombstone message
+        if (value == null) {
+            return SchemaAndValue.NULL;
+        }
+
         try {
             jsonValue = deserializer.deserialize(topic, value);
         } catch (SerializationException e) {
             throw new DataException("Converting byte[] to Kafka Connect data failed due to serialization error: ", e);
         }
 
-        if (enableSchemas && (jsonValue == null || !jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has("schema") || !jsonValue.has("payload")))
+        if (enableSchemas && (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)))
             throw new DataException("JsonConverter with schemas.enable requires \"schema\" and \"payload\" fields and may not contain additional fields." +
                     " If you are trying to deserialize plain JSON data, set schemas.enable=false in your converter configuration.");
 
@@ -342,23 +352,16 @@ public class JsonConverter implements Converter, HeaderConverter {
         // was stripped during serialization and we need to fill in an all-encompassing schema.
         if (!enableSchemas) {
             ObjectNode envelope = JsonNodeFactory.instance.objectNode();
-            envelope.set("schema", null);
-            envelope.set("payload", jsonValue);
+            envelope.set(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME, null);
+            envelope.set(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME, jsonValue);
             jsonValue = envelope;
         }
 
-        return jsonToConnect(jsonValue);
-    }
-
-    private SchemaAndValue jsonToConnect(JsonNode jsonValue) {
-        if (jsonValue == null)
-            return SchemaAndValue.NULL;
-
-        if (!jsonValue.isObject() || jsonValue.size() != 2 || !jsonValue.has(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME) || !jsonValue.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
-            throw new DataException("JSON value converted to Kafka Connect must be in envelope containing schema");
-
         Schema schema = asConnectSchema(jsonValue.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
-        return new SchemaAndValue(schema, convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME)));
+        return new SchemaAndValue(
+                schema,
+                convertToConnect(schema, jsonValue.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME))
+        );
     }
 
     public ObjectNode asJsonSchema(Schema schema) {
