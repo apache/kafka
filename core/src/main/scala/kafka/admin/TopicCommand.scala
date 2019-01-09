@@ -509,11 +509,13 @@ object TopicCommand extends Logging {
     private val nl = System.getProperty("line.separator")
     private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
                                              "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
-                                             "See the Kafka documentation for full details on the topic configs.")
+                                             "See the Kafka documentation for full details on the topic configs." +
+                                             "Not supported with the --bootstrap-server option.")
                            .withRequiredArg
                            .describedAs("name=value")
                            .ofType(classOf[String])
-    private val deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option).")
+    private val deleteConfigOpt = parser.accepts("delete-config", "A topic configuration override to be removed for an existing topic (see the list of configurations under the --config option). " +
+      "Not supported with the --bootstrap-server option.")
                            .withRequiredArg
                            .describedAs("name")
                            .ofType(classOf[String])
