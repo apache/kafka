@@ -174,12 +174,7 @@ public class Metadata implements Closeable {
      */
     public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
         Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
-        if (updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch) == leaderEpoch) {
-            this.needUpdate = true;
-            return true;
-        } else {
-            return false;
-        }
+        return updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch, true);
     }
 
 
@@ -192,17 +187,21 @@ public class Metadata implements Closeable {
      * Update the leader epoch for a partition if the given predicate passes. If updated, remove the stale metadata
      * record from {@link Cluster}.
      */
-    private int updateLastSeenEpoch(TopicPartition topicPartition, int epoch, Predicate<Integer> epochTest) {
+    private synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition, int epoch, Predicate<Integer> epochTest,
+                                        boolean setRequestUpdateFlag) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
         log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, epoch);
         if (oldEpoch == null || epochTest.test(oldEpoch)) {
             log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
             cache.removePartition(topicPartition);
-            return epoch;
+            if (setRequestUpdateFlag) {
+                this.needUpdate = true;
+            }
+            return true;
         } else {
             log.debug("Not replacing existing epoch {} with new epoch {}", oldEpoch, epoch);
-            return oldEpoch;
+            return false;
         }
     }
 
@@ -388,7 +387,7 @@ public class Metadata implements Closeable {
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
         if (partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
-            if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch) == newEpoch) {
+            if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
                 // If the received leader epoch is at least the same as the previous one, use the new partition info
                 partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
             } else {
