@@ -590,7 +590,7 @@ public final class Utils {
                 });
             });
             msg.append("\n");
-            log.error(msg.toString());
+            log.warn(msg.toString());
         }
         Properties props = new Properties();
         props.putAll(duplicateCheckingProps);
