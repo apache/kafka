@@ -65,12 +65,14 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         //noinspection unchecked
-        this.serdes = new StateSerdes<>(ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-                                        keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-                                        valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-        this.metrics = (StreamsMetricsImpl) context.metrics();
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
         final String metricsGroup = "stream-" + metricScope + "-metrics";
@@ -88,7 +90,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         try {
             inner.init(context, root);
         } finally {
-            this.metrics.recordLatency(
+            metrics.recordLatency(
                 restoreTime,
                 startNs,
                 time.nanoseconds()
@@ -109,13 +111,15 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                                                          final long latestSessionStartTime) {
         Objects.requireNonNull(key, "key cannot be null");
         final Bytes bytesKey = keyBytes(key);
-        return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKey,
-                                                                        earliestSessionEndTime,
-                                                                        latestSessionStartTime),
-                                                     fetchTime,
-                                                     metrics,
-                                                     serdes,
-                                                     time);
+        return new MeteredWindowedKeyValueIterator<>(
+            inner.findSessions(
+                bytesKey,
+                earliestSessionEndTime,
+                latestSessionStartTime),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override
@@ -127,14 +131,16 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         Objects.requireNonNull(keyTo, "keyTo cannot be null");
         final Bytes bytesKeyFrom = keyBytes(keyFrom);
         final Bytes bytesKeyTo = keyBytes(keyTo);
-        return new MeteredWindowedKeyValueIterator<>(inner.findSessions(bytesKeyFrom,
-                                                                        bytesKeyTo,
-                                                                        earliestSessionEndTime,
-                                                                        latestSessionStartTime),
-                                                     fetchTime,
-                                                     metrics,
-                                                     serdes,
-                                                     time);
+        return new MeteredWindowedKeyValueIterator<>(
+            inner.findSessions(
+                bytesKeyFrom,
+                bytesKeyTo,
+                earliestSessionEndTime,
+                latestSessionStartTime),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override
@@ -148,22 +154,23 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
         } finally {
-            this.metrics.recordLatency(removeTime, startNs, time.nanoseconds());
+            metrics.recordLatency(removeTime, startNs, time.nanoseconds());
         }
     }
 
     @Override
-    public void put(final Windowed<K> sessionKey, final V aggregate) {
+    public void put(final Windowed<K> sessionKey,
+                    final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
         final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
-            this.inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
         } finally {
-            this.metrics.recordLatency(this.putTime, startNs, time.nanoseconds());
+            metrics.recordLatency(putTime, startNs, time.nanoseconds());
         }
     }
 
@@ -178,7 +185,8 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
-    public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to) {
+    public KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                  final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);
@@ -188,9 +196,9 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     public void flush() {
         final long startNs = time.nanoseconds();
         try {
-            this.inner.flush();
+            inner.flush();
         } finally {
-            this.metrics.recordLatency(this.flushTime, startNs, time.nanoseconds());
+            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }
     }
 }
