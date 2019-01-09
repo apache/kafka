@@ -123,12 +123,16 @@ public class ThreadMetadata {
         return Objects.equals(threadName, that.threadName) &&
                Objects.equals(threadState, that.threadState) &&
                Objects.equals(activeTasks, that.activeTasks) &&
-               Objects.equals(standbyTasks, that.standbyTasks);
+               Objects.equals(standbyTasks, that.standbyTasks) &&
+               mainConsumerClientId.equals(that.mainConsumerClientId) &&
+               restoreConsumerClientId.equals(that.restoreConsumerClientId) &&
+               Objects.equals(producerClientIds, that.producerClientIds) &&
+               adminClientId.equals(that.adminClientId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(threadName, threadState, activeTasks, standbyTasks);
+        return Objects.hash(threadName, threadState, activeTasks, standbyTasks, mainConsumerClientId, restoreConsumerClientId, producerClientIds, adminClientId);
     }
 
     @Override
@@ -138,6 +142,10 @@ public class ThreadMetadata {
                 ", threadState=" + threadState +
                 ", activeTasks=" + activeTasks +
                 ", standbyTasks=" + standbyTasks +
+                ", consumerClientId=" + mainConsumerClientId +
+                ", restoreConsumerClientId=" + restoreConsumerClientId +
+                ", producerClientIds=" + producerClientIds +
+                ", adminClientId=" + adminClientId +
                 '}';
     }
 }
