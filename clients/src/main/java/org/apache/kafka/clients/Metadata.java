@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -44,6 +43,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -182,14 +182,6 @@ public class Metadata implements Closeable {
         }
     }
 
-    /**
-     * Convenience method for updating leader epochs
-     *
-     * @see #updateLastSeenEpochIfNewer
-     */
-    public synchronized void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
-        offsetAndMetadata.leaderEpoch().ifPresent(epoch -> updateLastSeenEpochIfNewer(topicPartition, epoch));
-    }
 
     // Visible for testing
     Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
@@ -266,6 +258,12 @@ public class Metadata implements Closeable {
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
+        Set<TopicPartition> toRemove = lastSeenLeaderEpochs.keySet()
+                .stream()
+                .filter(tp -> topics.contains(tp.topic()))
+                .collect(Collectors.toSet());
+        toRemove.forEach(lastSeenLeaderEpochs::remove);
+
         if (!this.topics.keySet().containsAll(topics)) {
             requestUpdateForNewTopics();
         }
@@ -399,8 +397,13 @@ public class Metadata implements Closeable {
                 if (previousInfo != null) {
                     partitionInfoConsumer.accept(previousInfo);
                 } else {
-                    log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
-                            "info to use. Refusing to update metadata", tp);
+                    if (containsTopic(topic)) {
+                        log.debug("Got an older epoch in partition metadata response for {}, but we are not tracking this topic. " +
+                                "Ignoring metadata update for this partition", tp);
+                    } else {
+                        log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
+                                "info to use. Refusing to update metadata for this partition", tp);
+                    }
                 }
             }
         } else {

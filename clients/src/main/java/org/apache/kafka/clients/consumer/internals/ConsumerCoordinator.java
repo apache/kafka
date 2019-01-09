@@ -500,7 +500,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final TopicPartition tp = entry.getKey();
             final long offset = entry.getValue().offset();
             log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
-            this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), entry.getValue());
+            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
             this.subscriptions.seek(tp, offset);
         }
         return true;

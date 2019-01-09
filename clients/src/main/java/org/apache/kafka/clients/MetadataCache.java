@@ -116,4 +116,11 @@ class MetadataCache {
         return new MetadataCache(null, Collections.emptyList(), Collections.emptyList(),
                 Collections.emptySet(), Collections.emptySet(), Collections.emptySet(), null, Cluster.empty());
     }
+
+    @Override
+    public String toString() {
+        return "MetadataCache{" +
+                "cluster=" + cluster() +
+                '}';
+    }
 }

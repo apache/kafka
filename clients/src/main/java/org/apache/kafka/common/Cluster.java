@@ -28,7 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * An immutable representation of a subset of the nodes, topics, and partitions in the Kafka cluster.
@@ -43,6 +42,7 @@ public final class Cluster {
     private final Node controller;
     private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
     private final Map<String, List<PartitionInfo>> partitionsByTopic;
+    private final Map<String, List<PartitionInfo>> availablePartitionsByTopic;
     private final Map<Integer, List<PartitionInfo>> partitionsByNode;
     private final Map<Integer, Node> nodesById;
     private final ClusterResource clusterResource;
@@ -113,16 +113,19 @@ public final class Cluster {
         // index the partition infos by topic, topic+partition, and node
         Map<TopicPartition, PartitionInfo> tmpPartitionsByTopicPartition = new HashMap<>(partitions.size());
         Map<String, List<PartitionInfo>> tmpPartitionsByTopic = new HashMap<>();
+        Map<String, List<PartitionInfo>> tmpAvailablePartitionsByTopic = new HashMap<>();
         Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
             tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
             if (p.leader() != null) {
+                tmpAvailablePartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
                 tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
             }
         }
         this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
         this.partitionsByTopic = Collections.unmodifiableMap(tmpPartitionsByTopic);
+        this.availablePartitionsByTopic = Collections.unmodifiableMap(tmpAvailablePartitionsByTopic);
         this.partitionsByNode = Collections.unmodifiableMap(tmpPartitionsByNode);
 
         this.unauthorizedTopics = Collections.unmodifiableSet(unauthorizedTopics);
@@ -208,7 +211,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForTopic(String topic) {
-        return partitionsByTopic.get(topic);
+        return partitionsByTopic.getOrDefault(topic, Collections.emptyList());
     }
 
     /**
@@ -217,7 +220,7 @@ public final class Cluster {
      * @return The number of partitions or null if there is no corresponding metadata
      */
     public Integer partitionCountForTopic(String topic) {
-        return partitionsByTopic.get(topic).size();
+        return partitionsForTopic(topic).size();
     }
 
     /**
@@ -226,9 +229,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> availablePartitionsForTopic(String topic) {
-        return partitionsByTopic.get(topic).stream()
-                .filter(info -> Objects.nonNull(info.leader()))
-                .collect(Collectors.toList());
+        return availablePartitionsByTopic.getOrDefault(topic, Collections.emptyList());
     }
 
     /**
@@ -290,13 +291,12 @@ public final class Cluster {
                 Objects.equals(internalTopics, cluster.internalTopics) &&
                 Objects.equals(controller, cluster.controller) &&
                 Objects.equals(partitionsByTopicPartition, cluster.partitionsByTopicPartition) &&
-                Objects.equals(nodesById, cluster.nodesById) &&
                 Objects.equals(clusterResource, cluster.clusterResource);
     }
 
     @Override
     public int hashCode() {
         return Objects.hash(isBootstrapConfigured, nodes, unauthorizedTopics, invalidTopics, internalTopics, controller,
-                partitionsByTopicPartition, nodesById, clusterResource);
+                partitionsByTopicPartition, clusterResource);
     }
 }

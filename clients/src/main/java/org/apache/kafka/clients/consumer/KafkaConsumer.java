@@ -1417,7 +1417,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
-            offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
+            offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
@@ -1489,7 +1489,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             maybeThrowInvalidGroupIdException();
             log.debug("Committing offsets: {}", offsets);
-            offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
+            offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
             release();
@@ -1506,16 +1506,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        if (offset < 0)
-            throw new IllegalArgumentException("seek offset must not be a negative number");
-
-        acquireAndEnsureOpen();
-        try {
-            log.debug("Seeking to offset {} for partition {}", offset, partition);
-            this.subscriptions.seek(partition, offset);
-        } finally {
-            release();
-        }
+        seek(partition, new OffsetAndMetadata(offset, null));
     }
 
     /**
@@ -1536,8 +1527,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            log.debug("Seeking to offset {} for partition {}", offset, partition);
-            this.metadata.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
+            log.debug("Seeking to offset {} for partition {} with metadata {}",
+                    offsetAndMetadata.offset(), partition, offsetAndMetadata);
+            this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, offset);
         } finally {
             release();
@@ -1733,7 +1725,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
             } else {
-                offsets.forEach(this.metadata::updateLastSeenEpochIfNewer);
+                offsets.forEach(this::updateLastSeenEpochIfNewer);
                 return offsets.get(partition);
             }
         } finally {
@@ -2263,6 +2255,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (groupId == null)
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+    }
+
+    private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
+        offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
     // Visible for testing

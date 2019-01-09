@@ -609,29 +609,6 @@ public class MetadataTest {
         assertEquals(fromMetadataEmpty, fromClusterEmpty);
     }
 
-    @Test
-    public void test() {
-        System.err.println(".");
-        Map<String, Integer> counts = new HashMap<>();
-        for (int i = 0; i < 10000; i++) {
-            counts.put(String.format("topic%d", i), 100);
-        }
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 4, Collections.emptyMap(), counts);
-        metadata.update(metadataResponse, 0L);
-
-        Cluster cluster = metadata.fetch();
-
-        System.err.println(".");
-        long t0 = System.currentTimeMillis();
-        int acc = 0;
-        for (int i = 0; i < 10000; i++) {
-            acc += cluster.availablePartitionsForTopic(String.format("topic%d", i % 13)).size();
-        }
-        long t1 = System.currentTimeMillis();
-        System.err.println(String.format("Overhead: %f ms/msg", (t1 - t0) / 10000.0));
-        System.err.println(acc);
-    }
-
     private void clearBackgroundError() {
         backgroundError.set(null);
     }
