@@ -35,10 +35,44 @@ public class ThreadMetadata {
 
     private final Set<TaskMetadata> standbyTasks;
 
+    private final String mainConsumerClientId;
+
+    private final String restoreConsumerClientId;
+
+    private final Set<String> producerClientIds;
+
+    // the admin client should be shared among all threads, so the client id should be the same;
+    // we keep it at the thread-level for user's convenience and possible extensions in the future
+    private final String adminClientId;
+
     public ThreadMetadata(final String threadName,
                           final String threadState,
+                          final String mainConsumerClientId,
+                          final String restoreConsumerClientId,
+                          final Set<String> producerClientIds,
+                          final String adminClientId) {
+        this(threadName,
+            threadState,
+            mainConsumerClientId,
+            restoreConsumerClientId,
+            producerClientIds,
+            adminClientId,
+            Collections.emptySet(),
+            Collections.emptySet());
+    }
+
+    public ThreadMetadata(final String threadName,
+                          final String threadState,
+                          final String mainConsumerClientId,
+                          final String restoreConsumerClientId,
+                          final Set<String> producerClientIds,
+                          final String adminClientId,
                           final Set<TaskMetadata> activeTasks,
                           final Set<TaskMetadata> standbyTasks) {
+        this.mainConsumerClientId = mainConsumerClientId;
+        this.restoreConsumerClientId = restoreConsumerClientId;
+        this.producerClientIds = producerClientIds;
+        this.adminClientId = adminClientId;
         this.threadName = threadName;
         this.threadState = threadState;
         this.activeTasks = Collections.unmodifiableSet(activeTasks);
@@ -59,6 +93,22 @@ public class ThreadMetadata {
 
     public Set<TaskMetadata> standbyTasks() {
         return standbyTasks;
+    }
+
+    public String consumerClientId() {
+        return mainConsumerClientId;
+    }
+
+    public String restoreConsumerClientId() {
+        return restoreConsumerClientId;
+    }
+
+    public Set<String> producerClientIds() {
+        return producerClientIds;
+    }
+
+    public String adminClientId() {
+        return adminClientId;
     }
 
     @Override
