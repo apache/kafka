@@ -65,13 +65,20 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       None
 
     val preferredReplicaElectionCommand = if (commandOpts.options.has(commandOpts.zkConnectOpt)) {
-      println(s"Warning: $commandOpts.zkConnectOpt is deprecated and will be removed in a future version of Kafka.")
-      println(s"Use $commandOpts.bootstrapServerOpt instead to specify a broker to connect to.")
+      println(s"Warning: --zookeeper is deprecated and will be removed in a future version of Kafka.")
+      println(s"Use --bootstrap-server instead to specify a broker to connect to.")
       new ZkCommand(commandOpts.options.valueOf(commandOpts.zkConnectOpt),
               JaasUtils.isZkSecurityEnabled,
               timeout)
     } else {
-        new AdminClientCommand(commandOpts.options.valueOf(commandOpts.bootstrapServerOpt), timeout)
+        val adminProps = if (commandOpts.options.has(commandOpts.adminClientConfigOpt))
+          Utils.loadProps(commandOpts.options.valueOf(commandOpts.adminClientConfigOpt))
+        else
+          new Properties()
+        adminProps.putAll(CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala))
+        adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
+        adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
+        new AdminClientCommand(adminProps)
     }
 
     try {
@@ -124,11 +131,12 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .describedAs("list of partitions for which preferred replica leader election needs to be triggered")
       .ofType(classOf[String])
 
-    private val zookeeperOptBuilder: OptionSpecBuilder = parser.accepts("zookeeper", "The connection string for the zookeeper connection in the " +
+    private val zookeeperOptBuilder: OptionSpecBuilder = parser.accepts("zookeeper",
+      "DEPRECATED. The connection string for the zookeeper connection in the " +
       "form host:port. Multiple URLS can be given to allow fail-over. " +
-      "DEPRECATED, replaced by --bootstrap-server, REQUIRED unless --bootstrap-server is given.")
-    private val bootstrapOptBuilder: OptionSpecBuilder = parser
-      .accepts("bootstrap-server", "A hostname and port for the broker to connect to, " +
+      "Replaced by --bootstrap-server, REQUIRED unless --bootstrap-server is given.")
+    private val bootstrapOptBuilder: OptionSpecBuilder = parser.accepts("bootstrap-server",
+      "A hostname and port for the broker to connect to, " +
       "in the form host:port. Multiple comma-separated URLs can be given. REQUIRED unless --zookeeper is given.")
     parser.mutuallyExclusive(zookeeperOptBuilder, bootstrapOptBuilder)
     val bootstrapServerOpt = bootstrapOptBuilder
@@ -139,6 +147,22 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
+
+    val adminClientPropertyOpt = parser.accepts("admin-property",
+      "User-defined properties in the form key=value to pass to the admin client when --bootstrap-server is given")
+      .availableIf(bootstrapServerOpt)
+      .withRequiredArg
+      .describedAs("consumer_prop")
+      .ofType(classOf[String])
+    val adminClientConfigOpt = parser.accepts("admin.config",
+      "Admin client config properties file to pass to the admin client when --bootstrap-server is given. " +
+        "Note that --admin-property takes precedence over this config.")
+      .availableIf(bootstrapServerOpt)
+      .withRequiredArg
+      .describedAs("config file")
+      .ofType(classOf[String])
+
+    parser.accepts("")
     options = parser.parse(args: _*)
   }
 
@@ -195,13 +219,10 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
   }
 
   /** Election via AdminClient.electPreferredLeaders() */
-  class AdminClientCommand(bootstrapServers: String, timeout: Int)
+  class AdminClientCommand(adminClientProps: Properties)
     extends Command with Logging {
-    val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers)
-    props.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
 
-    val adminClient = org.apache.kafka.clients.admin.AdminClient.create(props)
+    val adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminClientProps)
 
     /**
       * Wait until the given future has completed, then return whether it completed exceptionally.
