@@ -533,10 +533,10 @@ public class Selector implements Selectable, AutoCloseable {
                         channel.prepare();
                     } catch (AuthenticationException e) {
                         boolean isReauthentication = channel.successfulAuthentications() > 0;
-                        if (!isReauthentication)
-                            sensors.failedAuthentication.record();
-                        else
+                        if (isReauthentication)
                             sensors.failedReauthentication.record();
+                        else
+                            sensors.failedAuthentication.record();
                         log.info("Address {} failed {}authentication ({})",
                             channel.socketDescription(),
                             isReauthentication ? "re-" : "",
@@ -546,18 +546,18 @@ public class Selector implements Selectable, AutoCloseable {
                     if (channel.ready()) {
                         long readyTimeMs = time.milliseconds();
                         boolean isReauthentication = channel.successfulAuthentications() > 1;
-                        if (!isReauthentication) {
-                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
-                            if (!channel.connectedClientSupportsReauthentication())
-                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
-                        } else {
+                        if (isReauthentication) {
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
-                                        "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
+                                    "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
                             else
                                 sensors.reauthenticationLatency
-                                        .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                                    .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                        } else {
+                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
+                            if (!channel.connectedClientSupportsReauthentication())
+                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
                         }
                         log.debug("Address {} successfully {}authenticated",
                             channel.socketDescription(), isReauthentication ? "re-" : "");
