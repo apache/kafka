@@ -1328,6 +1328,13 @@ public class StreamThread extends Thread {
         return result;
     }
 
+    public Map<MetricName, Metric> adminClientMetrics() {
+        final Map<MetricName, ? extends Metric> adminClientMetrics = taskManager.getAdminClient().metrics();
+        final LinkedHashMap<MetricName, Metric> result = new LinkedHashMap<>();
+        result.putAll(adminClientMetrics);
+        return result;
+    }
+
     // the following are for testing only
     void setNow(final long now) {
         this.now = now;

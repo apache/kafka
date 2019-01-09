@@ -378,9 +378,11 @@ public class KafkaStreams implements AutoCloseable {
         for (final StreamThread thread : threads) {
             result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
+            // admin client is shared, so we can actually move it
+            // to result.putAll(adminClient.metrics()).
+            // we did it intentionally just for flexibility.
+            result.putAll(thread.adminClientMetrics());
         }
-        // admin client is shared
-        result.putAll(adminClient.metrics());
         // global thread's consumer client
         if (globalStreamThread != null) {
             result.putAll(globalStreamThread.consumerMetrics());
