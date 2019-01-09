@@ -279,6 +279,23 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
+  def testAlterConfigs() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    topicService.createTopic(new TopicCommandOptions(
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", "testTopic")))
+
+    topicService.alterTopic(new TopicCommandOptions(
+      Array("--topic", "testTopic", "--config", "cleanup.policy=compact")))
+
+    val output = TestUtils.grabConsoleOutput(
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", "testTopic"))))
+    assertTrue("The output should contain the modified config", output.contains("Configs:cleanup.policy=compact"))
+  }
+
+  @Test
   def testConfigPreservationAcrossPartitionAlteration() {
     val topic = "test"
     val numPartitionsOriginal = 1
