@@ -141,7 +141,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testCreateIfNotExists(): Unit = {
+  def testCreateIfItAlreadyExists(): Unit = {
     val numPartitions = 1
 
     // create the topic
@@ -150,23 +150,10 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val topicService = AdminClientTopicService(adminClient)
     topicService.createTopic(createOpts)
 
-    // try to re-create the topic without --if-not-exists
-    intercept[ExecutionException] {
+    // try to re-create the topic
+    intercept[IllegalArgumentException] {
       topicService.createTopic(createOpts)
     }
-
-    // try to re-create the topic with --if-not-exists
-    val createNotExistsOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName, "--if-not-exists"))
-    topicService.createTopic(createNotExistsOpts)
-
-    // try to create a new topic with --if-not-exists
-    val otherTopic = testTopicName + "2"
-    val createNewNotExistsOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", otherTopic, "--if-not-exists"))
-    topicService.createTopic(createNewNotExistsOpts)
-
-    adminClient.listTopics().names().get().contains(otherTopic)
   }
 
   @Test
@@ -361,17 +348,20 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testAlterIfExists(): Unit = {
+  def testAlterWhenTopicDoesntExist(): Unit = {
     // alter a topic that does not exist without --if-exists
     val alterOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1"))
     val topicService = AdminClientTopicService(adminClient)
     intercept[IllegalArgumentException] {
       topicService.alterTopic(alterOpts)
     }
+  }
 
-    // alter a topic that does not exist with --if-exists
-    val alterExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1", "--if-exists"))
-    topicService.alterTopic(alterExistsOpts)
+  @Test
+  def testIfExistsAndIfNotExistsOptionsInvalidWithBootstrapServers(): Unit = {
+    // alter a topic that does not exist without --if-exists
+    assertCheckArgsExitCode(1, new TopicCommandOptions(Array("--bootstrap-server", "server1:9092", "--alter", "--if-exists", "--topic", testTopicName, "--partitions", "1")))
+    assertCheckArgsExitCode(1, new TopicCommandOptions(Array("--bootstrap-server", "server1:9092", "--create", "--if-not-exists", "--topic", testTopicName, "--partitions", "1", "--replication-factor", "1")))
   }
 
   @Test
@@ -469,23 +459,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDeleteIfExists(): Unit = {
-    // delete a topic that does not exist without --if-exists
+    // delete a topic that does not exist
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
     intercept[IllegalArgumentException] {
       topicService.deleteTopic(deleteOpts)
     }
-
-    // delete a topic that does not exist with --if-exists
-    val deleteExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))
-    topicService.deleteTopic(deleteExistsOpts)
-
-    // delete a topic that is already marked for deletion
-    val numPartitionsOriginal = 1
-    val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
-      "--replication-factor", "1",
-      "--topic", testTopicName))
-    topicService.createTopic(createOpts)
-    topicService.deleteTopic(deleteOpts)
   }
 
   @Test

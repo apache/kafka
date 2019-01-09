@@ -160,7 +160,7 @@ object TopicCommand extends Logging {
       if (topic.replicationFactor > Short.MaxValue)
         throw new IllegalArgumentException(s"The replication factor's maximum value must be smaller or equal to ${Short.MaxValue}")
 
-      if (!(topic.ifTopicDoesntExist() && adminClient.listTopics().names().get().contains(topic.name))) {
+      if (!adminClient.listTopics().names().get().contains(topic.name)) {
         val newTopic = if (topic.hasReplicaAssignment)
           new NewTopic(topic.name, asJavaReplicaReassignment(topic.replicaAssignment.get))
         else
@@ -174,6 +174,8 @@ object TopicCommand extends Logging {
           val configResult = adminClient.alterConfigs(Map(topicConfigResource -> config).asJava)
           configResult.all().get()
         }
+      } else {
+        throw new IllegalArgumentException(s"Topic ${topic.name} already exists")
       }
     }
 
@@ -184,7 +186,7 @@ object TopicCommand extends Logging {
     override def alterTopic(opts: TopicCommandOptions): Unit = {
       val topic = new CommandTopicPartition(opts)
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(opts, topics, opts.ifExists)
+      ensureTopicExists(topics)
       val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
       adminClient.createPartitions(topics.map {topicName =>
         if (topic.hasReplicaAssignment) {
@@ -240,7 +242,7 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(opts, topics, opts.ifExists)
+      ensureTopicExists(topics)
       adminClient.deleteTopics(topics.asJavaCollection).all().get()
     }
 
@@ -290,7 +292,7 @@ object TopicCommand extends Logging {
     override def alterTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val tp = new CommandTopicPartition(opts)
-      ensureTopicExists(opts, topics, opts.ifExists)
+      ensureTopicExists(topics, opts.ifExists)
       val adminZkClient = new AdminZkClient(zkClient)
       topics.foreach { topic =>
         val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
@@ -328,7 +330,7 @@ object TopicCommand extends Logging {
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val topicOptWithExits = opts.topic.isDefined && opts.ifExists
-      ensureTopicExists(opts, topics, topicOptWithExits)
+      ensureTopicExists(topics, topicOptWithExits)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
@@ -373,7 +375,7 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(opts, topics, opts.ifExists)
+      ensureTopicExists(topics, opts.ifExists)
       topics.foreach { topic =>
         try {
           if (Topic.isInternal(topic)) {
@@ -402,9 +404,23 @@ object TopicCommand extends Logging {
     override def close(): Unit = zkClient.close()
   }
 
+  /**
+    * ensures topic existence and throws exception if topic doesn't exist
+    *
+    * @param opts
+    * @param topics
+    * @param topicOptWithExists
+    */
+  private def ensureTopicExists(topics: Seq[String], topicOptWithExists: Boolean = false) = {
+    if (topics.isEmpty && !topicOptWithExists) {
+      // If given topic doesn't exist then throw exception
+      throw new IllegalArgumentException(s"Topics in [${topics.mkString(",")}] does not exist")
+    }
+  }
+
   private def printPartition(tp: PartitionDescription): Unit = {
     val markedForDeletionString =
-      if (tp.markedForDeletion && !tp.describeConfigs) "\tMarkedForDeletion: true" else ""
+    if (tp.markedForDeletion && !tp.describeConfigs) "\tMarkedForDeletion: true" else ""
     print("\tTopic: " + tp.topic)
     print("\tPartition: " + tp.partition)
     print("\tLeader: " + (if(tp.leader.isDefined) tp.leader.get else "none"))
@@ -419,22 +435,9 @@ object TopicCommand extends Logging {
       val topicsFilter = Whitelist(topicWhitelist.get)
       allTopics.filter(topicsFilter.isTopicAllowed(_, excludeInternalTopics))
     } else
-      allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
+    allTopics.filterNot(Topic.isInternal(_) && excludeInternalTopics)
   }
 
-  /**
-    * ensures topic existence and throws exception if topic doesn't exist
-    *
-    * @param opts
-    * @param topics
-    * @param topicOptWithExists
-    */
-  private def ensureTopicExists(opts: TopicCommandOptions, topics: Seq[String], topicOptWithExists: Boolean) = {
-    if (topics.isEmpty && !topicOptWithExists) {
-      // If given topic doesn't exist then throw exception
-      throw new IllegalArgumentException("Topic %s does not exist on ZK path %s".format(opts.topic.getOrElse("[no topic specified]"), opts.zkConnect.get))
-    }
-  }
 
   def parseTopicConfigsToBeAdded(opts: TopicCommandOptions): Properties = {
     val configsToBeAdded = opts.topicConfig.getOrElse(Collections.emptyList()).asScala.map(_.split("""\s*=\s*"""))
@@ -535,9 +538,9 @@ object TopicCommand extends Logging {
     private val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     private val ifExistsOpt = parser.accepts("if-exists",
-                                     "if set when altering or deleting or describing topics, the action will only execute if the topic exists")
+                                     "if set when altering or deleting or describing topics, the action will only execute if the topic exists. Not supported with the --bootstrap-server option.")
     private val ifNotExistsOpt = parser.accepts("if-not-exists",
-                                        "if set when creating topics, the action will only execute if the topic does not already exist")
+                                        "if set when creating topics, the action will only execute if the topic does not already exist. Not supported with the --bootstrap-server option.")
 
     private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
@@ -620,8 +623,8 @@ object TopicCommand extends Logging {
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
         allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
-      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt, describeOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt, describeOpt) ++ Set(bootstrapServerOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt) ++ Set(bootstrapServerOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
     }
   }
