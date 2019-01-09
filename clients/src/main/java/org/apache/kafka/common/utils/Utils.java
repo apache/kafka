@@ -579,7 +579,7 @@ public final class Utils {
             System.out.println("Did not load any properties since the property file is not specified");
         }
 
-        if(!overwritten.isEmpty()) {
+        if (!overwritten.isEmpty()) {
             StringBuilder msg = new StringBuilder("Duplicate config entries detected!");
             overwritten.forEach((key, values) -> {
                 values.forEach(value -> {
