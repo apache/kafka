@@ -2250,7 +2250,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       val partitionErrors =
       if (electionRequest.topicPartitions() == null) {
         // Don't leak the set of partitions if the client lack authz
-        Map(new TopicPartition(null, -1) -> error)
+        Map.empty[TopicPartition, ApiError]
       } else {
         partitions.map(partition => partition -> error).toMap
       }

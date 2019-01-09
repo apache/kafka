@@ -23,6 +23,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 
 import java.util.Collection;
@@ -62,6 +63,9 @@ public class ElectPreferredLeadersResult {
                             "Preferred leader election for partition \"" + partition +
                                     "\" was not attempted"));
                 } else {
+                    if (partitions == null && topicPartitions.isEmpty()) {
+                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                    }
                     ApiException exception = topicPartitions.get(partition).exception();
                     if (exception == null) {
                         result.complete(null);
@@ -93,6 +97,8 @@ public class ElectPreferredLeadersResult {
                 public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
                     if (throwable != null) {
                         result.completeExceptionally(throwable);
+                    } else if (topicPartitions.isEmpty()) {
+                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
                     } else {
                         for (ApiError apiError : topicPartitions.values()) {
                             if (apiError.isFailure()) {
