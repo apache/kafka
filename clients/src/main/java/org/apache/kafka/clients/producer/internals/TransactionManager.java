@@ -101,7 +101,7 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
-    private TransactionalRequestResult transactionalRequestResult;
+    private TransactionalRequestResult pendingResult;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
@@ -786,9 +786,8 @@ public class TransactionManager {
     }
 
     private void maybeFailWithError() {
-        if (hasError()) {
-            throw new KafkaException("Cannot execute transactional method because we are in an error state: " + currentState, lastError);
-        }
+        if (hasError())
+            throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
     }
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
@@ -860,17 +859,15 @@ public class TransactionManager {
             State targetState) {
         ensureTransactional();
 
-        // null it out if the cached result was already completed
-        if (transactionalRequestResult != null && transactionalRequestResult.isCompleted()) {
-            transactionalRequestResult = null;
+        if (pendingResult != null && currentState == targetState) {
+            TransactionalRequestResult result = pendingResult;
+            if (result.isCompleted())
+                pendingResult = null;
+            return result;
         }
 
-        if (transactionalRequestResult != null && currentState == targetState) {
-            return transactionalRequestResult;
-        }
-
-        transactionalRequestResult = transactionalRequestResultSupplier.get();
-        return transactionalRequestResult;
+        pendingResult = transactionalRequestResultSupplier.get();
+        return pendingResult;
     }
 
     abstract class TxnRequestHandler implements RequestCompletionHandler {
@@ -1167,7 +1164,7 @@ public class TransactionManager {
                 abortableError(new GroupAuthorizationException(builder.coordinatorKey()));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
-                                "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
+                        "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
                         findCoordinatorResponse.error().message())));
             }
         }
@@ -1177,7 +1174,7 @@ public class TransactionManager {
         private final EndTxnRequest.Builder builder;
 
         private EndTxnHandler(EndTxnRequest.Builder builder) {
-            super("EndTxn");
+            super("EndTxn(" + builder.result() + ")");
             this.builder = builder;
         }
 
@@ -1218,7 +1215,6 @@ public class TransactionManager {
             } else {
                 fatalError(new KafkaException("Unhandled error in EndTxnResponse: " + error.message()));
             }
-
         }
     }
 
