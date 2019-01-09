@@ -29,6 +29,7 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
@@ -37,6 +38,7 @@ import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractRespons
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.collection.{mutable, _}
 import scala.util.{Failure, Try}
 
@@ -489,12 +491,15 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions).toSeq, OnlineReplica)
   }
 
+  private def getMinIsrSize(topic: String): Int = {
+    Option(zkClient.getEntityConfigs(ConfigType.Topic, topic).getProperty(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)).getOrElse("1").toInt
+  }
 
-  def calculateReassignmentStep(topicPartition: TopicPartition, reassignedReplicas: Seq[Int]) = {
+  def calculateReassignmentStep(topicPartition: TopicPartition, reassignedReplicas: Seq[Int]): ReassignmentStep = {
     val replicas = getCurrentReplicas(topicPartition)
     val leader = controllerContext.partitionLeadershipInfo(topicPartition).leaderAndIsr.leader
     debug(s"Triggering reassignment step calculation. CurrentReplicas: ${replicas.mkString(",")}, leader: $leader, $reassignedReplicas")
-    ReassignmentHelper.calculateReassignmentStep(reassignedReplicas, replicas, leader)
+    ReassignmentHelper.calculateReassignmentStep(reassignedReplicas, replicas, leader, controllerContext.liveBrokerIds, getMinIsrSize(topicPartition.topic()))
   }
 
   private def getCurrentReplicas(topicPartition: TopicPartition) = {
@@ -546,8 +551,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         val currentAndAddedReplicas = currentReplicas ++ Seq(reassignmentStep.add).flatten
         updateLeaderEpochAndSendRequest(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
         // 6. Replicas in NR -> NewReplica
-        if (reassignmentStep.add.isDefined) {
-          startNewReplicasForReassignedPartition(topicPartition, Set(reassignmentStep.add).flatten)
+        if (reassignmentStep.add.nonEmpty) {
+          startNewReplicasForReassignedPartition(topicPartition, reassignmentStep.add.toSet)
           info(s"Starting new replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being " +
           "reassigned to catch up with the leader")
         }
@@ -1683,25 +1688,14 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
 }
 
-case class ReassignmentStep(currentReplicas: Seq[Int], drop: Seq[Int], add: Option[Int], targetReplicas: Seq[Int]) {
-  override def toString: String = {
-    val currentFragment = currentReplicas.mkString("current replicas=", ","," ")
-    val dropFragment = if (drop.isEmpty) "" else drop.mkString("-", ","," ")
-    val addFragment = if (add.isEmpty) "" else s"+${add.get} "
-    val targetFragment = targetReplicas.mkString("target replicas=", ",", "")
-    s"$currentFragment$dropFragment$addFragment$targetFragment"
-  }
-}
-
-private[controller] object ReassignmentHelper {
+object ReassignmentHelper {
 
   // Rules
-  // - keep current leader as long as possible to avoid unnecessary leader elections.
   // - in the last step order should match the requested order
-  def calculateReassignmentStep(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int) = {
+  def calculateReassignmentStep(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int, liveBrokerIds: Set[Int], minIsrSize: Int): ReassignmentStep = {
     val drop: Seq[Int] = calculateExcessISRs(finalTargetReplicas, currentReplicas, leader)
-    val add = finalTargetReplicas.filterNot(currentReplicas.contains).headOption
-    val targetReplicasInThisStep = currentReplicas.filterNot(drop.contains) ++ add.toSeq
+    val add = calculateReplicasToAdd(finalTargetReplicas, currentReplicas, liveBrokerIds, minIsrSize)
+    val targetReplicasInThisStep = currentReplicas.filterNot(drop.contains) ++ add
     val isLastStep = targetReplicasInThisStep.toSet == finalTargetReplicas.toSet
     val targetReplicasInThisStepInOrder = if (isLastStep) finalTargetReplicas else targetReplicasInThisStep
     ReassignmentStep(currentReplicas, drop, add, targetReplicasInThisStepInOrder)
@@ -1718,6 +1712,29 @@ private[controller] object ReassignmentHelper {
     notInReassignedPreferredOrder.take(numberOfExcessISRs)
   }
 
+  // Selects the final leader first if the broker is alive and if it's not yet reassigned, otherwise the next few replica that is
+  // missing for the min ISR, or at least one (if there's any left to add)
+  private def calculateReplicasToAdd(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], liveBrokerIds: Set[Int], minIsrSize: Int): Seq[Int] = {
+    val notYetReassigned = finalTargetReplicas.filterNot(currentReplicas.contains)
+    val finalLeader = finalTargetReplicas.headOption
+    if (finalLeader.exists(notYetReassigned.contains) && finalLeader.exists(liveBrokerIds.contains)) {
+      Seq(finalLeader).flatten
+    } else {
+      val minIsrDeficit = minIsrSize - (currentReplicas.toSet -- liveBrokerIds).size
+      val addSize = Math.max(minIsrDeficit, 1)
+      notYetReassigned.filter(liveBrokerIds.contains).take(addSize)
+    }
+  }
+}
+
+case class ReassignmentStep(currentReplicas: Seq[Int], drop: Seq[Int], add: Seq[Int], targetReplicas: Seq[Int]) {
+  override def toString: String = {
+    val currentFragment = currentReplicas.mkString("current replicas=", ","," ")
+    val dropFragment = if (drop.isEmpty) "" else drop.mkString("-", ","," ")
+    val addFragment = if (add.isEmpty) "" else s"+${add.mkString(",+")} "
+    val targetFragment = targetReplicas.mkString("target replicas=", ",", "")
+    s"$currentFragment$dropFragment$addFragment$targetFragment"
+  }
 }
 
 class BrokerChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChildChangeHandler {
