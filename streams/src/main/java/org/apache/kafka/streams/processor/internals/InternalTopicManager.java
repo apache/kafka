@@ -206,10 +206,6 @@ public class InternalTopicManager {
                     cause instanceof LeaderNotAvailableException) {
                     // This topic didn't exist or leader is not known yet, proceed to try to create it
                     log.debug("Topic {} is unknown, hence not existed yet.", topicName);
-                } else {
-                    log.error("Unexpected error during topic description for {}.\n" +
-                        "Error message was: {}", topicName, cause.toString());
-                    throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
                 }
             }
         }

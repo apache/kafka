@@ -24,7 +24,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -176,20 +175,6 @@ public class InternalTopicManagerTest {
     @Test
     public void shouldNotThrowExceptionForEmptyTopicMap() {
         internalTopicManager.makeReady(Collections.emptyMap());
-    }
-
-    @Test
-    public void shouldExhaustRetriesOnTimeoutExceptionForMakeReady() {
-        mockAdminClient.timeoutNextRequest(1);
-
-        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
-        internalTopicConfig.setNumberOfPartitions(1);
-        try {
-            internalTopicManager.makeReady(Collections.singletonMap(topic, internalTopicConfig));
-            fail("Should have thrown StreamsException.");
-        } catch (final StreamsException expected) {
-            assertEquals(TimeoutException.class, expected.getCause().getClass());
-        }
     }
 
     @Test
