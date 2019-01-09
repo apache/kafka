@@ -25,15 +25,23 @@ import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
-import org.junit.{After, Before, Test}
+import org.junit.rules.TestName
+import org.junit.{After, Before, Rule, Test}
+
+import scala.util.Random
 
 class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
 
   private var topicService: ZookeeperTopicService = _
+  private var testTopicName: String = _
+
+  private val _testName = new TestName
+  @Rule def testName = _testName
 
   @Before
   def setup(): Unit = {
     topicService = ZookeeperTopicService(zkClient)
+    testTopicName = s"${testName.getMethodName}-${Random.alphanumeric.take(10).mkString}"
   }
 
   @After
@@ -44,15 +52,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
   @Test
   def testCreate(): Unit = {
-    val topic = "test"
-
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     topicService.createTopic(new TopicCommandOptions(
-      Array("--partitions", "2", "--replication-factor", "1", "--topic", topic)))
+      Array("--partitions", "2", "--replication-factor", "1", "--topic", testTopicName)))
 
-    assertTrue(zkClient.getAllTopicsInCluster.contains(topic))
+    assertTrue(zkClient.getAllTopicsInCluster.contains(testTopicName))
   }
 
   @Test
@@ -60,11 +66,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, "testTopic")
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
     topicService.createTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "2", "--topic", configResource.name(), "--config", "delete.retention.ms=1000")))
 
-    val configs = zkClient.getEntityConfigs(ConfigType.Topic, "testTopic")
+    val configs = zkClient.getEntityConfigs(ConfigType.Topic, testTopicName)
     assertEquals(1000, Integer.valueOf(configs.getProperty("delete.retention.ms")))
   }
 
@@ -74,12 +80,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic = "test"
     val numPartitions = 1
 
     // create the topic
     val createOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic))
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName))
     topicService.createTopic(createOpts)
 
     // try to re-create the topic without --if-not-exists
@@ -89,24 +94,22 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // try to re-create the topic with --if-not-exists
     val createNotExistsOpts = new TopicCommandOptions(
-      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", topic, "--if-not-exists"))
+      Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName, "--if-not-exists"))
     topicService.createTopic(createNotExistsOpts)
   }
 
   @Test
   def testCreateWithReplicaAssignment(): Unit = {
-    val topic = "test"
-
     // create the topic
     val createOpts = new TopicCommandOptions(
-      Array("--replica-assignment", "5:4,3:2,1:0", "--topic", topic))
+      Array("--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName))
     topicService.createTopic(createOpts)
 
-    val replicas0 = zkClient.getReplicasForPartition(new TopicPartition(topic, 0))
+    val replicas0 = zkClient.getReplicasForPartition(new TopicPartition(testTopicName, 0))
     assertEquals(List(5, 4), replicas0)
-    val replicas1 = zkClient.getReplicasForPartition(new TopicPartition(topic, 1))
+    val replicas1 = zkClient.getReplicasForPartition(new TopicPartition(testTopicName, 1))
     assertEquals(List(3, 2), replicas1)
-    val replicas2 = zkClient.getReplicasForPartition(new TopicPartition(topic, 2))
+    val replicas2 = zkClient.getReplicasForPartition(new TopicPartition(testTopicName, 2))
     assertEquals(List(1, 0), replicas2)
   }
 
@@ -117,7 +120,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     intercept[InvalidReplicationFactorException] {
       topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", "testTopic")))
+        Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
     }
   }
 
@@ -128,7 +131,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     intercept[InvalidReplicationFactorException] {
       topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "2", "--replication-factor", "-1", "--topic", "testTopic")))
+        Array("--partitions", "2", "--replication-factor", "-1", "--topic", testTopicName)))
     }
   }
 
@@ -139,7 +142,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     intercept[InvalidPartitionsException] {
       topicService.createTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--replication-factor", "1", "--topic", "testTopic")))
+        Array("--partitions", "-1", "--replication-factor", "1", "--topic", testTopicName)))
     }
   }
 
@@ -149,7 +152,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     val createOpts = new TopicCommandOptions(
-      Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.timestamp.type=boom"))
     intercept[ConfigException] {
       topicService.createTopic(createOpts)
@@ -157,7 +160,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // try to create the topic with another invalid config
     val createOpts2 = new TopicCommandOptions(
-      Array("--partitions", "1", "--replication-factor", "1", "--topic", "test",
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName,
         "--config", "message.format.version=boom"))
     intercept[ConfigException] {
       topicService.createTopic(createOpts2)
@@ -171,12 +174,12 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     val topic = "testTopic"
     topicService.createTopic(new TopicCommandOptions(
-      Array("--partitions", "1", "--replication-factor", "1", "--topic", topic)))
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array())))
 
-    assertTrue(output.contains(topic))
+    assertTrue(output.contains(testTopicName))
   }
 
   @Test
@@ -204,14 +207,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic1 = "kafka.testTopic1"
-    adminZkClient.createTopic(topic1, 2, 2)
+    adminZkClient.createTopic(testTopicName, 2, 2)
     adminZkClient.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 2, 2)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array("--exclude-internal"))))
 
-    assertTrue(output.contains(topic1))
+    assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
@@ -220,14 +222,12 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic1 = "testTopic1"
-
-    adminZkClient.createTopic(topic1, 2, 2)
+    adminZkClient.createTopic(testTopicName, 2, 2)
 
     topicService.alterTopic(new TopicCommandOptions(
-      Array("--topic", topic1, "--partitions", "3")))
+      Array("--topic", testTopicName, "--partitions", "3")))
 
-    assertEquals(3, zkClient.getPartitionsForTopics(Set(topic1))(topic1).size)
+    assertEquals(3, zkClient.getPartitionsForTopics(Set(testTopicName))(testTopicName).size)
   }
 
   @Test
@@ -235,15 +235,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2, 3, 4, 5)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic1 = "testTopic1"
-
-    adminZkClient.createTopic(topic1, 2, 2)
+    adminZkClient.createTopic(testTopicName, 2, 2)
 
     topicService.alterTopic(new TopicCommandOptions(
-      Array("--topic", topic1, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
+      Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
 
-    val replicas0 = zkClient.getReplicasForPartition(new TopicPartition(topic1, 2))
-    assertEquals(3, zkClient.getPartitionsForTopics(Set(topic1))(topic1).size)
+    val replicas0 = zkClient.getReplicasForPartition(new TopicPartition(testTopicName, 2))
+    assertEquals(3, zkClient.getPartitionsForTopics(Set(testTopicName))(testTopicName).size)
     assertEquals(List(4,2), replicas0)
   }
 
@@ -253,11 +251,11 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     topicService.createTopic(new TopicCommandOptions(
-      Array("--partitions", "1", "--replication-factor", "1", "--topic", "testTopic")))
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     intercept[InvalidPartitionsException] {
       topicService.alterTopic(new TopicCommandOptions(
-        Array("--partitions", "-1", "--topic", "testTopic")))
+        Array("--partitions", "-1", "--topic", testTopicName)))
     }
   }
 
@@ -268,13 +266,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // alter a topic that does not exist without --if-exists
-    val alterOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1"))
+    val alterOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1"))
     intercept[IllegalArgumentException] {
       topicService.alterTopic(alterOpts)
     }
 
     // alter a topic that does not exist with --if-exists
-    val alterExistsOpts = new TopicCommandOptions(Array("--topic", "test", "--partitions", "1", "--if-exists"))
+    val alterExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--partitions", "1", "--if-exists"))
     topicService.alterTopic(alterExistsOpts)
   }
 
@@ -285,19 +283,18 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     topicService.createTopic(new TopicCommandOptions(
-      Array("--partitions", "1", "--replication-factor", "1", "--topic", "testTopic")))
+      Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     topicService.alterTopic(new TopicCommandOptions(
-      Array("--topic", "testTopic", "--config", "cleanup.policy=compact")))
+      Array("--topic", testTopicName, "--config", "cleanup.policy=compact")))
 
     val output = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(Array("--topic", "testTopic"))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     assertTrue("The output should contain the modified config", output.contains("Configs:cleanup.policy=compact"))
   }
 
   @Test
   def testConfigPreservationAcrossPartitionAlteration() {
-    val topic = "test"
     val numPartitionsOriginal = 1
     val cleanupKey = "cleanup.policy"
     val cleanupVal = "compact"
@@ -308,9 +305,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
       "--replication-factor", "1",
       "--config", cleanupKey + "=" + cleanupVal,
-      "--topic", topic))
+      "--topic", testTopicName))
     topicService.createTopic(createOpts)
-    val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+    val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
     assertTrue("Properties after creation don't contain " + cleanupKey, props.containsKey(cleanupKey))
     assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
 
@@ -319,17 +316,15 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     // modify the topic to add new partitions
     val numPartitionsModified = 3
-    val alterOpts = new TopicCommandOptions(Array("--partitions", numPartitionsModified.toString, "--topic", topic))
+    val alterOpts = new TopicCommandOptions(Array("--partitions", numPartitionsModified.toString, "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
-    val newProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+    val newProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
     assertTrue("Updated properties do not contain " + cleanupKey, newProps.containsKey(cleanupKey))
     assertTrue("Updated properties have incorrect value", newProps.getProperty(cleanupKey).equals(cleanupVal))
   }
 
   @Test
   def testTopicDeletion() {
-
-    val normalTopic = "test"
 
     val numPartitionsOriginal = 1
 
@@ -340,12 +335,12 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // create the NormalTopic
     val createOpts = new TopicCommandOptions(Array("--partitions", numPartitionsOriginal.toString,
       "--replication-factor", "1",
-      "--topic", normalTopic))
+      "--topic", testTopicName))
     topicService.createTopic(createOpts)
 
     // delete the NormalTopic
-    val deleteOpts = new TopicCommandOptions(Array("--topic", normalTopic))
-    val deletePath = DeleteTopicsTopicZNode.path(normalTopic)
+    val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
+    val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
     assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
@@ -373,13 +368,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // delete a topic that does not exist without --if-exists
-    val deleteOpts = new TopicCommandOptions(Array("--topic", "test"))
+    val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
     intercept[IllegalArgumentException] {
       topicService.deleteTopic(deleteOpts)
     }
 
     // delete a topic that does not exist with --if-exists
-    val deleteExistsOpts = new TopicCommandOptions(Array("--topic", "test", "--if-exists"))
+    val deleteExistsOpts = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))
     topicService.deleteTopic(deleteExistsOpts)
   }
 
@@ -409,13 +404,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     // describe topic that does not exist
-    val describeOpts = new TopicCommandOptions(Array("--topic", "test"))
+    val describeOpts = new TopicCommandOptions(Array("--topic", testTopicName))
     intercept[IllegalArgumentException] {
       topicService.describeTopic(describeOpts)
     }
 
     // describe topic that does not exist with --if-exists
-    val describeOptsWithExists = new TopicCommandOptions(Array("--topic", "test", "--if-exists"))
+    val describeOptsWithExists = new TopicCommandOptions(Array("--topic", testTopicName, "--if-exists"))
     // should not throw any error
     topicService.describeTopic(describeOptsWithExists)
   }
@@ -430,10 +425,10 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val createOpts = new TopicCommandOptions(Array(
       "--partitions", numPartitions.toString,
       "--replication-factor", replicationFactor.toString,
-      "--topic", "foo"))
+      "--topic", testTopicName))
     topicService.createTopic(createOpts)
 
-    var assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+    var assignment = zkClient.getReplicaAssignmentForTopics(Set(testTopicName)).map { case (tp, replicas) =>
       tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, numPartitions, replicationFactor)
@@ -442,9 +437,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // verify that adding partitions will also be rack aware
     val alterOpts = new TopicCommandOptions(Array(
       "--partitions", alteredNumPartitions.toString,
-      "--topic", "foo"))
+      "--topic", testTopicName))
     topicService.alterTopic(alterOpts)
-    assignment = zkClient.getReplicaAssignmentForTopics(Set("foo")).map { case (tp, replicas) =>
+    assignment = zkClient.getReplicaAssignmentForTopics(Set(testTopicName)).map { case (tp, replicas) =>
       tp.partition -> replicas
     }
     checkReplicaDistribution(assignment, rackInfo, rackInfo.size, alteredNumPartitions, replicationFactor)
@@ -455,10 +450,9 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0, 1, 2)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic = "testTopic"
-    adminZkClient.createTopic(topic, 2, 2)
+    adminZkClient.createTopic(testTopicName, 2, 2)
     val output = TestUtils.grabConsoleOutput(
-      topicService.describeTopic(new TopicCommandOptions(Array("--topic", topic))))
+      topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val rows = output.split("\n")
     assertEquals(3, rows.size)
     rows(0).startsWith("Topic:testTopic\tPartitionCount:2")
@@ -470,7 +464,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     val config = "file.delete.delay.ms=1000"
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, "testTopic")
+    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
     topicService.createTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "2", "--topic", configResource.name(), "--config", config)))
     val output = TestUtils.grabConsoleOutput(
@@ -481,47 +475,45 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   @Test
   def testDescribeAndListTopicsMarkedForDeletion() {
     val brokers = List(0)
-    val topic = "testtopic"
     val markedForDeletionDescribe = "MarkedForDeletion"
     val markedForDeletionList = "marked for deletion"
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val createOpts = new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic))
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName))
     topicService.createTopic(createOpts)
 
     // delete the broker first, so when we attempt to delete the topic it gets into "marked for deletion"
     TestUtils.deleteBrokersInZk(zkClient, brokers)
-    topicService.deleteTopic(new TopicCommandOptions(Array("--topic", topic)))
+    topicService.deleteTopic(new TopicCommandOptions(Array("--topic", testTopicName)))
 
     // Test describe topics
     def describeTopicsWithConfig() {
       topicService.describeTopic(new TopicCommandOptions(Array("--describe")))
     }
     val outputWithConfig = TestUtils.grabConsoleOutput(describeTopicsWithConfig())
-    assertTrue(outputWithConfig.contains(topic) && outputWithConfig.contains(markedForDeletionDescribe))
+    assertTrue(outputWithConfig.contains(testTopicName) && outputWithConfig.contains(markedForDeletionDescribe))
 
     def describeTopicsNoConfig() {
       topicService.describeTopic(new TopicCommandOptions(Array("--describe", "--unavailable-partitions")))
     }
     val outputNoConfig = TestUtils.grabConsoleOutput(describeTopicsNoConfig())
-    assertTrue(outputNoConfig.contains(topic) && outputNoConfig.contains(markedForDeletionDescribe))
+    assertTrue(outputNoConfig.contains(testTopicName) && outputNoConfig.contains(markedForDeletionDescribe))
 
     // Test list topics
     def listTopics() {
       topicService.listTopics(new TopicCommandOptions(Array("--list")))
     }
     val output = TestUtils.grabConsoleOutput(listTopics())
-    assertTrue(output.contains(topic) && output.contains(markedForDeletionList))
+    assertTrue(output.contains(testTopicName) && output.contains(markedForDeletionList))
   }
 
   @Test
   def testDescribeAndListTopicsWithoutInternalTopics() {
     val brokers = List(0)
-    val topic = "testDescribeAndListTopicsWithoutInternalTopics"
     TestUtils.createBrokersInZk(zkClient, brokers)
 
     topicService.createTopic(
-      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", topic)))
+      new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
     // create a internal topic
     topicService.createTopic(
       new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
@@ -529,13 +521,13 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     // test describe
     var output = TestUtils.grabConsoleOutput(topicService.describeTopic(
       new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
-    assertTrue(output.contains(topic))
+    assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
 
     // test list
     output = TestUtils.grabConsoleOutput(topicService.listTopics(
       new TopicCommandOptions(Array("--list", "--exclude-internal"))))
-    assertTrue(output.contains(topic))
+    assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
   }
 
