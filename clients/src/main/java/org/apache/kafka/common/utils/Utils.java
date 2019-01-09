@@ -585,7 +585,7 @@ public final class Utils {
                 values.forEach(value -> {
                     msg.append("\n\tIgnoring ")
                             .append(key)
-                            .append(" ")
+                            .append(" = ")
                             .append(value);
                 });
             });
