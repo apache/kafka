@@ -34,7 +34,7 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 # once 0.10.1.2 is available backward_compatible_metadata_2_versions
 # can be replaced with metadata_2_versions
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(DEV_VERSION)]
+metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
 
 class StreamsUpgradeTest(Test):
     """
