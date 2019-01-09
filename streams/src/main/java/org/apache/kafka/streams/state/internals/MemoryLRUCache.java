@@ -43,18 +43,17 @@ import java.util.Objects;
 public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     public interface EldestEntryRemovalListener<K, V> {
-
         void apply(K key, V value);
     }
-    private final Serde<K> keySerde;
 
+    private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final String name;
     protected final Map<K, V> map;
 
     private StateSerdes<K, V> serdes;
-    private boolean restoring = false;      // TODO: this is a sub-optimal solution to avoid logging during restoration.
-                                            // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
+    private boolean restoring = false; // TODO: this is a sub-optimal solution to avoid logging during restoration.
+                                       // in the future we should augment the StateRestoreCallback with onComplete etc to better resolve this.
     private volatile boolean open = true;
 
     private EldestEntryRemovalListener<K, V> listener;
@@ -82,14 +81,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
         };
     }
 
-    KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
-    }
-
-    MemoryLRUCache<K, V> whenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
+    void setWhenEldestRemoved(final EldestEntryRemovalListener<K, V> listener) {
         this.listener = listener;
-
-        return this;
     }
 
     @Override
@@ -99,7 +92,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
 
     @Override
     @SuppressWarnings("unchecked")
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         // construct the serde
         this.serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
@@ -137,7 +131,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void put(final K key, final V value) {
+    public synchronized void put(final K key,
+                                 final V value) {
         Objects.requireNonNull(key);
         if (value == null) {
             this.map.remove(key);
@@ -147,7 +142,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V putIfAbsent(final K key, final V value) {
+    public synchronized V putIfAbsent(final K key,
+                                      final V value) {
         Objects.requireNonNull(key);
         final V originalValue = get(key);
         if (originalValue == null) {
@@ -173,7 +169,8 @@ public class MemoryLRUCache<K, V> implements KeyValueStore<K, V> {
      * @throws UnsupportedOperationException at every invocation
      */
     @Override
-    public KeyValueIterator<K, V> range(final K from, final K to) {
+    public KeyValueIterator<K, V> range(final K from,
+                                        final K to) {
         throw new UnsupportedOperationException("MemoryLRUCache does not support range() function.");
     }
 

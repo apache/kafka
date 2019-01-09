@@ -956,21 +956,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             throw new InvalidTopicException(topic);
 
         metadata.add(topic);
-        int partitionsCount = cluster.partitionCountForTopic(topic);
+
+        Integer partitionsCount = cluster.partitionCountForTopic(topic);
         // Return cached metadata if we have it, and if the record's partition is either undefined
         // or within the known partition range
-        if (partitionsCount > 0 && (partition == null || partition < partitionsCount))
+        if (partitionsCount != null && (partition == null || partition < partitionsCount))
             return new ClusterAndWaitTime(cluster, 0);
 
         long begin = time.milliseconds();
         long remainingWaitMs = maxWaitMs;
         long elapsed;
-        // Issue metadata requests until we have metadata for the topic or maxWaitTimeMs is exceeded.
-        // In case we already have cached metadata for the topic, but the requested partition is greater
-        // than expected, issue an update request only once. This is necessary in case the metadata
+        // Issue metadata requests until we have metadata for the topic and the requested partition,
+        // or until maxWaitTimeMs is exceeded. This is necessary in case the metadata
         // is stale and the number of partitions for this topic has increased in the meantime.
         do {
-            log.trace("Requesting metadata update for topic {}.", topic);
+            if (partition != null) {
+                log.trace("Requesting metadata update for partition {} of topic {}.", partition, topic);
+            } else {
+                log.trace("Requesting metadata update for topic {}.", topic);
+            }
             metadata.add(topic);
             int version = metadata.requestUpdate();
             sender.wakeup();
@@ -978,24 +982,26 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+                throw new TimeoutException(
+                        String.format("Topic %s not present in metadata after %d ms.",
+                                topic, maxWaitMs));
             }
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - begin;
-            if (elapsed >= maxWaitMs)
-                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
+            if (elapsed >= maxWaitMs) {
+                throw new TimeoutException(partitionsCount == null ?
+                        String.format("Topic %s not present in metadata after %d ms.",
+                                topic, maxWaitMs) :
+                        String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
+                                partition, topic, partitionsCount, maxWaitMs));
+            }
             if (cluster.unauthorizedTopics().contains(topic))
                 throw new TopicAuthorizationException(topic);
             if (cluster.invalidTopics().contains(topic))
                 throw new InvalidTopicException(topic);
             remainingWaitMs = maxWaitMs - elapsed;
             partitionsCount = cluster.partitionCountForTopic(topic);
-        } while (partitionsCount == 0);
-
-        if (partition != null && partition >= partitionsCount) {
-            throw new KafkaException(
-                    String.format("Invalid partition given with record: %d is not in the range [0...%d).", partition, partitionsCount));
-        }
+        } while (partitionsCount == null || (partition != null && partition >= partitionsCount));
 
         return new ClusterAndWaitTime(cluster, elapsed);
     }

@@ -38,9 +38,10 @@ public class KeyValueStoreMaterializer<K, V> {
             final String name = materialized.storeName();
             supplier = Stores.persistentKeyValueStore(name);
         }
-        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(supplier,
-                                                                                      materialized.keySerde(),
-                                                                                      materialized.valueSerde());
+        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(
+            supplier,
+            materialized.keySerde(),
+            materialized.valueSerde());
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());

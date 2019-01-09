@@ -536,27 +536,35 @@ public class Selector implements Selectable, AutoCloseable {
                     try {
                         channel.prepare();
                     } catch (AuthenticationException e) {
-                        if (channel.successfulAuthentications() == 0)
-                            sensors.failedAuthentication.record();
-                        else
+                        boolean isReauthentication = channel.successfulAuthentications() > 0;
+                        if (isReauthentication)
                             sensors.failedReauthentication.record();
+                        else
+                            sensors.failedAuthentication.record();
+                        log.info("Address {} failed {}authentication ({})",
+                            channel.socketDescription(),
+                            isReauthentication ? "re-" : "",
+                            e.getClass().getName());
                         throw e;
                     }
                     if (channel.ready()) {
                         long readyTimeMs = time.milliseconds();
-                        if (channel.successfulAuthentications() == 1) {
-                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
-                            if (!channel.connectedClientSupportsReauthentication())
-                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
-                        } else {
+                        boolean isReauthentication = channel.successfulAuthentications() > 1;
+                        if (isReauthentication) {
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
-                                        "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
+                                    "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
                             else
                                 sensors.reauthenticationLatency
-                                        .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                                    .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                        } else {
+                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
+                            if (!channel.connectedClientSupportsReauthentication())
+                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
                         }
+                        log.debug("Address {} successfully {}authenticated",
+                            channel.socketDescription(), isReauthentication ? "re-" : "");
                     }
                     List<NetworkReceive> responsesReceivedDuringReauthentication = channel
                             .getAndClearResponsesReceivedDuringReauthentication();

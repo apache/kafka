@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
 
     private final WindowBytesStoreSupplier storeSupplier;
@@ -37,22 +36,24 @@ public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowS
 
     @Override
     public WindowStore<K, V> build() {
-        return new MeteredWindowStore<>(maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-                                        storeSupplier.metricsScope(),
-                                        time,
-                                        keySerde,
-                                        valueSerde);
+        return new MeteredWindowStore<>(
+            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
+            storeSupplier.metricsScope(),
+            time,
+            keySerde,
+            valueSerde);
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapCaching(final WindowStore<Bytes, byte[]> inner) {
         if (!enableCaching) {
             return inner;
         }
-        return new CachingWindowStore<>(inner,
-                                        keySerde,
-                                        valueSerde,
-                                        storeSupplier.windowSize(),
-                                        storeSupplier.segmentIntervalMs());
+        return new CachingWindowStore<>(
+            inner,
+            keySerde,
+            valueSerde,
+            storeSupplier.windowSize(),
+            storeSupplier.segmentIntervalMs());
     }
 
     private WindowStore<Bytes, byte[]> maybeWrapLogging(final WindowStore<Bytes, byte[]> inner) {

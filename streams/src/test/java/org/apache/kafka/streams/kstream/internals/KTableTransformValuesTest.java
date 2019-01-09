@@ -62,8 +62,8 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
@@ -75,8 +75,8 @@ public class KTableTransformValuesTest {
 
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
-    private final ConsumerRecordFactory<String, String> recordFactory
-        = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
 
     private TopologyTestDriver driver;
     private MockProcessorSupplier<String, String> capture;
@@ -140,7 +140,8 @@ public class KTableTransformValuesTest {
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
-        final KTableTransformValues<String, String, String> transformValues = new KTableTransformValues<>(parent, transformer, null);
+        final KTableTransformValues<String, String, String> transformValues =
+            new KTableTransformValues<>(parent, transformer, null);
         final Processor<String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
@@ -329,7 +330,7 @@ public class KTableTransformValuesTest {
         driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null, 0L));
 
         assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:D->null!"));
-        assertThat("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME), is(nullValue()));
+        assertNull("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME));
     }
 
     @Test
@@ -412,21 +413,11 @@ public class KTableTransformValuesTest {
     }
 
     private static KeyValueMapper<String, Integer, KeyValue<String, Integer>> toForceSendingOfOldValues() {
-        return new KeyValueMapper<String, Integer, KeyValue<String, Integer>>() {
-            @Override
-            public KeyValue<String, Integer> apply(final String key, final Integer value) {
-                return new KeyValue<>(key, value);
-            }
-        };
+        return KeyValue::new;
     }
 
     private static ValueMapper<Integer, String> mapBackToStrings() {
-        return new ValueMapper<Integer, String>() {
-            @Override
-            public String apply(final Integer value) {
-                return value.toString();
-            }
-        };
+        return Object::toString;
     }
 
     private static StoreBuilder<KeyValueStore<Long, Long>> storeBuilder(final String storeName) {

@@ -38,19 +38,17 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         inner.init(context, root);
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), inner.name());
         this.changeLogger = new StoreChangeLogger<>(inner.name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (inner instanceof MemoryLRUCache) {
-            ((MemoryLRUCache<Bytes, byte[]>) inner).whenEldestRemoved(new MemoryLRUCache.EldestEntryRemovalListener<Bytes, byte[]>() {
-                @Override
-                public void apply(final Bytes key, final byte[] value) {
-                    // pass null to indicate removal
-                    changeLogger.logChange(key, null);
-                }
+            ((MemoryLRUCache<Bytes, byte[]>) inner).setWhenEldestRemoved((key, value) -> {
+                // pass null to indicate removal
+                changeLogger.logChange(key, null);
             });
         }
     }
@@ -61,13 +59,15 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key,
+                    final byte[] value) {
         inner.put(key, value);
         changeLogger.logChange(key, value);
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key,
+                              final byte[] value) {
         final byte[] previous = get(key);
         if (previous == null) {
             put(key, value);
@@ -96,7 +96,8 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                 final Bytes to) {
         return inner.range(from, to);
     }
 

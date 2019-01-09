@@ -82,14 +82,14 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        this.metrics = (StreamsMetricsImpl) context.metrics();
+        metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
         final String metricsGroup = "stream-" + metricScope + "-metrics";
         final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
         final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
 
-        this.serdes = new StateSerdes<>(
+        serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
@@ -132,9 +132,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public V get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.get(Bytes.wrap(serdes.rawKey(key)))), getTime);
+                return measureLatency(() -> outerValue(inner.get(keyBytes(key))), getTime);
             } else {
-                return outerValue(inner.get(Bytes.wrap(serdes.rawKey(key))));
+                return outerValue(inner.get(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -148,11 +148,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         try {
             if (putTime.shouldRecord()) {
                 measureLatency(() -> {
-                    inner.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
+                    inner.put(keyBytes(key), serdes.rawValue(value));
                     return null;
                 }, putTime);
             } else {
-                inner.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
+                inner.put(keyBytes(key), serdes.rawValue(value));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -165,10 +165,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
                          final V value) {
         if (putIfAbsentTime.shouldRecord()) {
             return measureLatency(
-                () -> outerValue(inner.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value))),
+                () -> outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value))),
                 putIfAbsentTime);
         } else {
-            return outerValue(inner.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value)));
+            return outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value)));
         }
     }
 
@@ -190,9 +190,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public V delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.delete(Bytes.wrap(serdes.rawKey(key)))), deleteTime);
+                return measureLatency(() -> outerValue(inner.delete(keyBytes(key))), deleteTime);
             } else {
-                return outerValue(inner.delete(Bytes.wrap(serdes.rawKey(key))));
+                return outerValue(inner.delete(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -204,13 +204,13 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public KeyValueIterator<K, V> range(final K from,
                                         final K to) {
         return new MeteredKeyValueIterator(
-            this.inner.range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
-            this.rangeTime);
+            inner.range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
+            rangeTime);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(this.inner.all(), this.allTime);
+        return new MeteredKeyValueIterator(inner.all(), allTime);
     }
 
     @Override
@@ -243,6 +243,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
 
     private V outerValue(final byte[] value) {
         return value == null ? null : serdes.valueFrom(value);
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
     }
 
     private List<KeyValue<Bytes, byte[]>> innerEntries(final List<KeyValue<K, V>> from) {
@@ -289,7 +293,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+                metrics.recordLatency(sensor, startNs, time.nanoseconds());
             }
         }
 
