@@ -597,23 +597,23 @@ object TopicCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --describe, --create, --alter or --delete")
 
       // check required args
-      if (options.has(bootstrapServerOpt) == options.has(zkConnectOpt))
+      if (has(bootstrapServerOpt) == has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
 
-      if (!options.has(bootstrapServerOpt))
+      if (!has(bootstrapServerOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt)
-      if(options.has(describeOpt) && options.has(ifExistsOpt))
+      if(has(describeOpt) && has(ifExistsOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
-      if (!options.has(listOpt) && !options.has(describeOpt))
+      if (!has(listOpt) && !has(describeOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (has(createOpt) && !has(replicaAssignmentOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
-      if (has(alterOpt))
+      if (has(bootstrapServerOpt) && has(alterOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
 
       // check invalid args
-      CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt, allTopicLevelOpts -- Set(alterOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt) ++ Set(bootstrapServerOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt, allTopicLevelOpts -- Set(alterOpt) ++ Set(bootstrapServerOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, allTopicLevelOpts -- Set(createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, allTopicLevelOpts -- Set(createOpt,alterOpt))
