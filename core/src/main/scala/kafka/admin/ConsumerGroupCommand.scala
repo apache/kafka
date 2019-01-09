@@ -125,33 +125,38 @@ object ConsumerGroupCommand extends Logging {
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
-  private[admin] sealed trait CsvRecord {
-    def fields: Array[String]
+  private[admin] sealed trait CsvRecord
+  private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
+  private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord
+  object CsvRecordWithGroup {
+    val fields = Array("group", "topic", "partition", "offset")
   }
-  private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord {
-    override def fields = Array("group", "topic", "partition", "offset")
-    def this() = this("", "", -1, -1L)
-  }
-  private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord {
-    override def fields = Array("topic", "partition", "offset")
-    def this() = this("", -1, -1L)
+  object CsvRecordNoGroup {
+    val fields = Array("topic", "partition", "offset")
   }
   // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
   private[admin] case class CsvUtils() {
-    def readerFor[T <: CsvRecord: ClassTag]: ObjectReader = load[T]._1
-    def writerFor[T <: CsvRecord: ClassTag]: ObjectWriter = load[T]._2
-    private def load[T <: CsvRecord: ClassTag] = {
-      val mapper = new CsvMapper with ScalaObjectMapper
-      mapper.registerModule(DefaultScalaModule)
-      val csvRecord = implicitly[ClassTag[T]].runtimeClass.getDeclaredConstructor().newInstance().asInstanceOf[T]
-      val csvRecordClass = csvRecord match {
-        case _: CsvRecordWithGroup => classOf[CsvRecordWithGroup]
-        case _: CsvRecordNoGroup   => classOf[CsvRecordNoGroup]
+    val mapper = new CsvMapper with ScalaObjectMapper
+    mapper.registerModule(DefaultScalaModule)
+    def readerFor[T <: CsvRecord: ClassTag] = {
+      val schema = getSchema[T]
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      mapper.readerFor(clazz).`with`(schema)
+    }
+    def writerFor[T <: CsvRecord: ClassTag] = {
+      val schema = getSchema[T]
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      mapper.writerFor(clazz).`with`(schema)
+    }
+    private def getSchema[T <: CsvRecord: ClassTag] = {
+      val clazz = implicitly[ClassTag[T]].runtimeClass
+      val fields = clazz match {
+        case _ if classOf[CsvRecordWithGroup] == clazz => CsvRecordWithGroup.fields
+        case _ if classOf[CsvRecordNoGroup]   == clazz => CsvRecordNoGroup.fields
       }
-      val schema = mapper.schemaFor(csvRecordClass).sortedBy(csvRecord.fields: _*)
-      val reader = mapper.readerFor(csvRecordClass).`with`(schema)
-      val writer = mapper.writerFor(csvRecordClass).`with`(schema)
-      (reader, writer)
+      val schema = mapper.schemaFor(clazz).sortedBy(fields: _*)
+      mapper.schemaFor(clazz).sortedBy(fields: _*)
+      schema
     }
   }
 
@@ -561,31 +566,32 @@ object ConsumerGroupCommand extends Logging {
       ).partitionsToOffsetAndMetadata.get
     }
 
-    private def parseResetPlan(resetPlanCsv: String): Map[String, Map[TopicPartition, OffsetAndMetadata]] = {
+    type GroupMetadata = Map[String, Map[TopicPartition, OffsetAndMetadata]]
+    private def parseResetPlan(resetPlanCsv: String): GroupMetadata = {
+      def updateGroupMetadata(group: String, topic: String, partition: Int, offset: Long, acc: GroupMetadata) = {
+        val topicPartition = new TopicPartition(topic, partition)
+        val offsetAndMetadata = new OffsetAndMetadata(offset)
+        val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
+        acc.updated(group, dataMap)
+      }
       val csvReader = CsvUtils().readerFor[CsvRecordNoGroup]
       val lines = resetPlanCsv.split("\n")
       val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
       val isOldCsvFormat = lines.headOption.flatMap(line =>
-        Try(csvReader.readValue[CsvRecordNoGroup](line)).toOption).exists(_ => true)
+        Try(csvReader.readValue[CsvRecordNoGroup](line)).toOption).nonEmpty
       // Single group CSV format: "topic,partition,offset"
       val dataMap = if (isSingleGroupQuery && isOldCsvFormat) {
         val group = opts.options.valueOf(opts.groupOpt)
         lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
           val CsvRecordNoGroup(topic, partition, offset) = csvReader.readValue[CsvRecordNoGroup](line)
-          val topicPartition = new TopicPartition(topic, partition)
-          val offsetAndMetadata = new OffsetAndMetadata(offset)
-          val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
-          acc.updated(group, dataMap)
+          updateGroupMetadata(group, topic, partition, offset, acc)
         }
         // Multiple group CSV format: "group,topic,partition,offset"
       } else {
         val csvReader = CsvUtils().readerFor[CsvRecordWithGroup]
         lines.foldLeft(Map[String, Map[TopicPartition, OffsetAndMetadata]]()) { (acc, line) =>
           val CsvRecordWithGroup(group, topic, partition, offset) = csvReader.readValue[CsvRecordWithGroup](line)
-          val topicPartition = new TopicPartition(topic, partition)
-          val offsetAndMetadata = new OffsetAndMetadata(offset)
-          val dataMap = acc.getOrElse(group, Map()).updated(topicPartition, offsetAndMetadata)
-          acc.updated(group, dataMap)
+          updateGroupMetadata(group, topic, partition, offset, acc)
         }
       }
       dataMap
