@@ -109,7 +109,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassHeader(String className, boolean isTopLevel,
-            boolean isSetElement) throws Exception {
+                                     boolean isSetElement) {
         Set<String> implementedInterfaces = new HashSet<>();
         implementedInterfaces.add("Message");
         headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
@@ -144,7 +144,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateHashSet(String className, StructSpec struct) throws Exception {
+    private void generateHashSet(String className, StructSpec struct) {
         buffer.printf("%n");
         headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
         buffer.printf("public static class %s extends ImplicitLinkedHashMultiSet<%s> {%n",
@@ -159,7 +159,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateHashSetZeroArgConstructor(String className) throws Exception {
+    private void generateHashSetZeroArgConstructor(String className) {
         buffer.printf("public %s() {%n", hashSetType(className));
         buffer.incrementIndent();
         buffer.printf("super();%n");
@@ -168,7 +168,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
     }
 
-    private void generateHashSetSizeArgConstructor(String className) throws Exception {
+    private void generateHashSetSizeArgConstructor(String className) {
         buffer.printf("public %s(int expectedNumElements) {%n", hashSetType(className));
         buffer.incrementIndent();
         buffer.printf("super(expectedNumElements);%n");
@@ -177,7 +177,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
     }
 
-    private void generateHashSetIteratorConstructor(String className) throws Exception {
+    private void generateHashSetIteratorConstructor(String className) {
         headerGenerator.addImport(MessageGenerator.ITERATOR_CLASS);
         buffer.printf("public %s(Iterator<%s> iterator) {%n", hashSetType(className), className);
         buffer.incrementIndent();
@@ -187,8 +187,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
     }
 
-    private void generateHashSetFindMethod(String className, StructSpec struct)
-            throws Exception {
+    private void generateHashSetFindMethod(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.LIST_CLASS);
         buffer.printf("public %s find(%s) {%n", className,
             commaSeparatedHashSetFieldAndTypes(struct));
@@ -201,8 +200,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
     }
 
-    private void generateHashSetFindAllMethod(String className, StructSpec struct)
-            throws Exception {
+    private void generateHashSetFindAllMethod(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.LIST_CLASS);
         buffer.printf("public List<%s> findAll(%s) {%n", className,
             commaSeparatedHashSetFieldAndTypes(struct));
@@ -215,7 +213,7 @@ public final class MessageDataGenerator {
         buffer.printf("%n");
     }
 
-    private void generateKeyElement(String className, StructSpec struct) throws Exception {
+    private void generateKeyElement(String className, StructSpec struct) {
         buffer.printf("%s key = new %s();%n", className, className);
         for (FieldSpec field : struct.fields()) {
             if (field.mapKey()) {
@@ -233,8 +231,7 @@ public final class MessageDataGenerator {
             collect(Collectors.joining(", "));
     }
 
-    private void generateFieldDeclarations(StructSpec struct, boolean isSetElement)
-        throws Exception {
+    private void generateFieldDeclarations(StructSpec struct, boolean isSetElement) {
         for (FieldSpec field : struct.fields()) {
             generateFieldDeclaration(field);
         }
@@ -244,13 +241,12 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldDeclaration(FieldSpec field) throws Exception {
+    private void generateFieldDeclaration(FieldSpec field) {
         buffer.printf("private %s %s;%n",
             fieldAbstractJavaType(field), field.camelCaseName());
     }
 
-    private void generateFieldAccessors(StructSpec struct, boolean isSetElement)
-            throws Exception {
+    private void generateFieldAccessors(StructSpec struct, boolean isSetElement) {
         for (FieldSpec field : struct.fields()) {
             generateFieldAccessor(field);
         }
@@ -265,8 +261,8 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldMutators(StructSpec struct,
-                String className, boolean isSetElement) throws Exception {
+    private void generateFieldMutators(StructSpec struct, String className,
+                                       boolean isSetElement) {
         for (FieldSpec field : struct.fields()) {
             generateFieldMutator(className, field);
         }
@@ -331,7 +327,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateClassConstructors(String className, StructSpec struct) throws Exception {
+    private void generateClassConstructors(String className, StructSpec struct) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("public %s(Readable readable, short version) {%n", className);
         buffer.incrementIndent();
@@ -358,7 +354,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void initializeArrayDefaults(StructSpec struct) throws Exception {
+    private void initializeArrayDefaults(StructSpec struct) {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isArray()) {
                 buffer.printf("this.%s = %s;%n",
@@ -367,7 +363,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateShortAccessor(String name, short val) throws Exception {
+    private void generateShortAccessor(String name, short val) {
         buffer.printf("@Override%n");
         buffer.printf("public short %s() {%n", name);
         buffer.incrementIndent();
@@ -377,7 +373,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassReader(String className, StructSpec struct,
-            Versions parentVersions) throws Exception {
+                                     Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("@Override%n");
         buffer.printf("public void read(Readable readable, short version) {%n");
@@ -402,8 +398,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldReader(FieldSpec field,
-                                     Versions curVersions) throws Exception {
+    private void generateFieldReader(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.struct().versions());
@@ -474,7 +469,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassFromStruct(String className, StructSpec struct,
-                                         Versions parentVersions) throws Exception {
+                                         Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.STRUCT_CLASS);
         buffer.printf("@Override%n");
         buffer.printf("public void fromStruct(Struct struct, short version) {%n");
@@ -499,8 +494,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldFromStruct(FieldSpec field,
-                                         Versions curVersions) throws Exception {
+    private void generateFieldFromStruct(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.struct().versions());
@@ -601,7 +595,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassWriter(String className, StructSpec struct,
-            Versions parentVersions) throws Exception {
+            Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.WRITABLE_CLASS);
         buffer.printf("@Override%n");
         buffer.printf("public void write(Writable writable, short version) {%n");
@@ -656,7 +650,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldWriter(FieldSpec field, Versions curVersions) throws Exception {
+    private void generateFieldWriter(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.struct().versions());
@@ -700,7 +694,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassToStruct(String className, StructSpec struct,
-                                       Versions parentVersions) throws Exception {
+                                       Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.STRUCT_CLASS);
         buffer.printf("@Override%n");
         buffer.printf("public Struct toStruct(short version) {%n");
@@ -727,7 +721,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldToStruct(FieldSpec field, Versions curVersions) throws Exception {
+    private void generateFieldToStruct(FieldSpec field, Versions curVersions) {
         if ((!field.type().canBeNullable()) &&
             (!field.nullableVersions().empty())) {
             throw new RuntimeException("Fields of type " + field.type() +
@@ -800,7 +794,7 @@ public final class MessageDataGenerator {
     }
 
     private void generateClassSize(String className, StructSpec struct,
-                                   Versions parentVersions) throws Exception {
+                                   Versions parentVersions) {
         buffer.printf("@Override%n");
         buffer.printf("public int size(short version) {%n");
         buffer.incrementIndent();
@@ -826,8 +820,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateVariableLengthFieldSize(String fieldName, FieldType type, boolean nullable)
-            throws Exception {
+    private void generateVariableLengthFieldSize(String fieldName, FieldType type, boolean nullable) {
         if (type instanceof FieldType.StringFieldType) {
             buffer.printf("size += 2;%n");
             if (nullable) {
@@ -858,7 +851,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldSize(FieldSpec field, Versions curVersions) throws Exception {
+    private void generateFieldSize(FieldSpec field, Versions curVersions) {
         if (field.type().fixedLength().isPresent()) {
             boolean maybeAbsent =
                 generateVersionCheck(curVersions, field.struct().versions());
@@ -917,7 +910,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateAbsentValueCheck(FieldSpec field) throws Exception {
+    private void generateAbsentValueCheck(FieldSpec field) {
         if (field.ignorable()) {
             buffer.printf("}%n");
             return;
@@ -948,8 +941,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys)
-            throws Exception {
+    private void generateClassEquals(String className, StructSpec struct, boolean onlyMapKeys) {
         buffer.printf("@Override%n");
         buffer.printf("public boolean equals(Object obj) {%n");
         buffer.incrementIndent();
@@ -967,7 +959,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldEquals(FieldSpec field) throws Exception {
+    private void generateFieldEquals(FieldSpec field) {
         if (field.type().isString() || field.type().isArray() || field.type().isStruct()) {
             buffer.printf("if (this.%s == null) {%n", field.camelCaseName());
             buffer.incrementIndent();
@@ -990,7 +982,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateClassHashCode(StructSpec struct, boolean onlyMapKeys) throws Exception {
+    private void generateClassHashCode(StructSpec struct, boolean onlyMapKeys) {
         buffer.printf("@Override%n");
         buffer.printf("public int hashCode() {%n");
         buffer.incrementIndent();
@@ -1005,7 +997,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldHashCode(FieldSpec field) throws Exception {
+    private void generateFieldHashCode(FieldSpec field) {
         if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("hashCode = 31 * hashCode + (%s ? 1231 : 1237);%n",
                 field.camelCaseName());
@@ -1032,7 +1024,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateClassToString(String className, StructSpec struct) throws Exception {
+    private void generateClassToString(String className, StructSpec struct) {
         buffer.printf("@Override%n");
         buffer.printf("public String toString() {%n");
         buffer.incrementIndent();
@@ -1049,7 +1041,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldToString(String prefix, FieldSpec field) throws Exception {
+    private void generateFieldToString(String prefix, FieldSpec field) {
         if (field.type() instanceof FieldType.BoolFieldType) {
             buffer.printf("+ \"%s%s=\" + (%s ? \"true\" : \"false\")%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
@@ -1078,7 +1070,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private boolean generateNullCheck(Versions prevVersions, FieldSpec field) throws Exception {
+    private boolean generateNullCheck(Versions prevVersions, FieldSpec field) {
         if (prevVersions.intersect(field.nullableVersions()).empty()) {
             return false;
         }
@@ -1087,16 +1079,7 @@ public final class MessageDataGenerator {
         return true;
     }
 
-    private boolean generateNonNullCheck(Versions prevVersions, FieldSpec field) throws Exception {
-        if (prevVersions.intersect(field.nullableVersions()).empty()) {
-            return false;
-        }
-        buffer.printf("if (%s != null) {%n", field.camelCaseName());
-        buffer.incrementIndent();
-        return true;
-    }
-
-    private boolean generateVersionCheck(Versions prev, Versions cur) throws Exception {
+    private boolean generateVersionCheck(Versions prev, Versions cur) {
         if (cur.lowest() > prev.lowest()) {
             if (cur.highest() < prev.highest()) {
                 buffer.printf("if ((version >= %d) && (version <= %d)) {%n",
@@ -1119,7 +1102,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private boolean generateInverseVersionCheck(Versions prev, Versions cur) throws Exception {
+    private boolean generateInverseVersionCheck(Versions prev, Versions cur) {
         if (cur.lowest() > prev.lowest()) {
             if (cur.highest() < prev.highest()) {
                 buffer.printf("if ((version < %d) || (version > %d)) {%n",
@@ -1139,7 +1122,7 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateSetDefault(FieldSpec field) throws Exception {
+    private void generateSetDefault(FieldSpec field) {
         buffer.decrementIndent();
         buffer.printf("} else {%n");
         buffer.incrementIndent();
@@ -1240,14 +1223,13 @@ public final class MessageDataGenerator {
         }
     }
 
-    private void generateFieldAccessor(FieldSpec field) throws Exception {
+    private void generateFieldAccessor(FieldSpec field) {
         buffer.printf("%n");
         generateAccessor(fieldAbstractJavaType(field), field.camelCaseName(),
             field.camelCaseName());
     }
 
-    private void generateAccessor(String javaType, String functionName, String memberName)
-                throws Exception {
+    private void generateAccessor(String javaType, String functionName, String memberName) {
         buffer.printf("public %s %s() {%n", javaType, functionName);
         buffer.incrementIndent();
         buffer.printf("return this.%s;%n", memberName);
@@ -1255,7 +1237,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateFieldMutator(String className, FieldSpec field) throws Exception {
+    private void generateFieldMutator(String className, FieldSpec field) {
         buffer.printf("%n");
         buffer.printf("public %s set%s(%s v) {%n",
             className,
@@ -1268,8 +1250,7 @@ public final class MessageDataGenerator {
         buffer.printf("}%n");
     }
 
-    private void generateSetter(String javaType, String functionName, String memberName)
-            throws Exception  {
+    private void generateSetter(String javaType, String functionName, String memberName) {
         buffer.printf("public void %s(%s v) {%n", functionName, javaType);
         buffer.incrementIndent();
         buffer.printf("this.%s = v;%n", memberName);

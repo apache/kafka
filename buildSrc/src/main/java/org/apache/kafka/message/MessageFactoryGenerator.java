@@ -51,7 +51,7 @@ public final class MessageFactoryGenerator {
         this.buffer = new CodeBuffer();
     }
 
-    public void generate() throws Exception {
+    public void generate() {
         buffer.printf("public final class MessageFactory {%n");
         buffer.incrementIndent();
         generateFactoryMethod("request", requestApis);
@@ -66,8 +66,7 @@ public final class MessageFactoryGenerator {
         headerGenerator.generate();
     }
 
-    public void generateFactoryMethod(String type, TreeMap<Short, String> apis)
-            throws Exception {
+    public void generateFactoryMethod(String type, TreeMap<Short, String> apis) {
         headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
         buffer.printf("public static Message new%s(short apiKey) {%n",
             MessageGenerator.capitalizeFirst(type));
@@ -92,8 +91,7 @@ public final class MessageFactoryGenerator {
         buffer.printf("}%n");
     }
 
-    public void generateSchemasAccessor(String type, TreeMap<Short, String> apis)
-            throws Exception {
+    public void generateSchemasAccessor(String type, TreeMap<Short, String> apis) {
         headerGenerator.addImport(MessageGenerator.SCHEMA_CLASS);
         buffer.printf("public static Schema[] %sSchemas(short apiKey) {%n",
             MessageGenerator.lowerCaseFirst(type));

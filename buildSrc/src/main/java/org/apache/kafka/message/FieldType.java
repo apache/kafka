@@ -20,7 +20,7 @@ package org.apache.kafka.message;
 import java.util.Optional;
 
 public interface FieldType {
-    static final String STRUCT_PREFIX = "[]";
+    String STRUCT_PREFIX = "[]";
 
     final class BoolFieldType implements FieldType {
         private static final BoolFieldType INSTANCE = new BoolFieldType();

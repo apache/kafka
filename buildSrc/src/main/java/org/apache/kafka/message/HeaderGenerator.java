@@ -60,7 +60,7 @@ public final class HeaderGenerator {
         this.imports.add(newImport);
     }
 
-    public void generate() throws Exception {
+    public void generate() {
         for (int i = 0; i < HEADER.length; i++) {
             buffer.printf("%s%n", HEADER[i]);
         }
