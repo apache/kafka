@@ -501,10 +501,10 @@ public class CoordinatorTest {
 
     /**
      * If an agent fails in the middle of a task and comes back up when the task is considered expired,
-     * we want the coordinator to mark it as DONE and not schedule it on the agent
+     * we want the task to be marked as DONE and not re-sent should a second failure happen.
      */
     @Test
-    public void testCoordinatorDoesNotReRunExpiredTask() throws Exception {
+    public void testAgentFailureAndTaskExpiry() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
@@ -533,10 +533,21 @@ public class CoordinatorTest {
 
             cluster.restartAgent("node02");
             time.sleep(550);
-            // coordinator heartbeat sees that the agent is back up but does not re-schedule the task as it is expired
+            // coordinator heartbeat sees that the agent is back up, re-schedules the task but the agent expires it
             new ExpectedTasks().
                 addTask(new ExpectedTaskBuilder("foo").
                     taskState(new TaskDone(fooSpec, 2, 552, "worker expired", false, null)).
+                    workerState(new WorkerDone("foo", fooSpec, 552, 552, null, "worker expired")).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            cluster.restartAgent("node02");
+            // coordinator heartbeat sees that the agent is back up but does not re-schedule the task as it is DONE
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskDone(fooSpec, 2, 552, "worker expired", false, null)).
+                    // no worker states
                     build()).
                 waitFor(coordinatorClient).
                 waitFor(cluster.agentClient("node02"));

@@ -49,10 +49,12 @@ import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.rest.WorkerStarting;
 import org.apache.kafka.trogdor.rest.WorkerState;
+import org.apache.kafka.trogdor.rest.WorkerStopping;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -235,6 +237,8 @@ public final class NodeManager {
                             log.debug("{}: worker state is still {}", node.name(), worker.state);
                         } else {
                             log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
+                            if (state instanceof WorkerDone || state instanceof WorkerStopping)
+                                worker.shouldRun = false;
                             worker.state = state;
                             taskManager.updateWorkerState(node.name(), worker.workerId, state);
                         }
