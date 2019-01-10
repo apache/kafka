@@ -84,8 +84,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     boolean allTasksRunning() {
-        return created.isEmpty()
-                && suspended.isEmpty();
+        return created.isEmpty() && suspended.isEmpty();
     }
 
     Collection<T> running() {

@@ -46,6 +46,42 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return restoringByPartition.get(partition);
     }
 
+    @Override
+    List<StreamTask> allTasks() {
+        final List<StreamTask> tasks = super.allTasks();
+        tasks.addAll(restoring.values());
+        return tasks;
+    }
+
+    @Override
+    Set<TaskId> allAssignedTaskIds() {
+        final Set<TaskId> taskIds = super.allAssignedTaskIds();
+        taskIds.addAll(restoring.keySet());
+        return taskIds;
+    }
+
+    @Override
+    boolean allTasksRunning() {
+        return super.allTasksRunning() && restoring.isEmpty();
+    }
+
+    void closeNonAssignedRestoringTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
+        final Iterator<StreamTask> restoringTaskIterator = restoring.values().iterator();
+        while (restoringTaskIterator.hasNext()) {
+            final StreamTask task = restoringTaskIterator.next();
+            if (!newAssignment.containsKey(task.id()) || !task.partitions().equals(newAssignment.get(task.id()))) {
+                log.debug("Closing restoring and not re-assigned task {}", task.id());
+                try {
+                    task.closeStateManager(true);
+                } catch (final Exception e) {
+                    log.error("Failed to remove restoring task {} due to the following error:", task.id(), e);
+                } finally {
+                    restoringTaskIterator.remove();
+                }
+            }
+        }
+    }
+
     void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
             return;
@@ -84,11 +120,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
         }
-    }
-
-    @Override
-    boolean allTasksRunning() {
-        return super.allTasksRunning() && restoring.isEmpty();
     }
 
     RuntimeException suspend() {
@@ -218,32 +249,18 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return punctuated;
     }
 
-    public String toString(final String indent) {
-        final StringBuilder builder = new StringBuilder();
-        builder.append(super.toString(indent));
-        describe(builder, restoring.values(), indent, "Restoring:");
-        return builder.toString();
-    }
-
-    @Override
-    List<StreamTask> allTasks() {
-        final List<StreamTask> tasks = super.allTasks();
-        tasks.addAll(restoring.values());
-        return tasks;
-    }
-
-    @Override
-    Set<TaskId> allAssignedTaskIds() {
-        final Set<TaskId> taskIds = super.allAssignedTaskIds();
-        taskIds.addAll(restoring.keySet());
-        return taskIds;
-    }
-
     void clear() {
         super.clear();
         restoring.clear();
         restoringByPartition.clear();
         restoredPartitions.clear();
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(super.toString(indent));
+        describe(builder, restoring.values(), indent, "Restoring:");
+        return builder.toString();
     }
 
     // for testing only

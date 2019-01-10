@@ -104,6 +104,7 @@ public class TaskManager {
         // will become active or vice versa
         standby.closeNonAssignedSuspendedTasks(assignedStandbyTasks);
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
+        active.closeNonAssignedRestoringTasks(assignedActiveTasks);
         addStreamTasks(assignment);
         addStandbyTasks();
         // Pause all the partitions until the underlying state store is ready for all the active tasks.
