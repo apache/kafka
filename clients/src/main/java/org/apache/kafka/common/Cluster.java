@@ -215,12 +215,13 @@ public final class Cluster {
     }
 
     /**
-     * Get the number of partitions for the given topic
+     * Get the number of partitions for the given topic.
      * @param topic The topic to get the number of partitions for
      * @return The number of partitions or null if there is no corresponding metadata
      */
     public Integer partitionCountForTopic(String topic) {
-        return partitionsForTopic(topic).size();
+        List<PartitionInfo> partitions = this.partitionsByTopic.get(topic);
+        return partitions == null ? null : partitions.size();
     }
 
     /**
