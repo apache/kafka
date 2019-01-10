@@ -26,8 +26,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 
+import static org.hamcrest.CoreMatchers.is;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThat;
 
 public class MockConsumerTest {
     
@@ -82,6 +84,18 @@ public class MockConsumerTest {
         assertEquals(2L, consumer.position(new TopicPartition("test", 0)));
         consumer.commitSync();
         assertEquals(2L, consumer.committed(new TopicPartition("test", 0)).offset());
+    }
+
+    @Test
+    public void testConsumerRecordsIsEmptyWhenReturningNoRecords() {
+        TopicPartition partition = new TopicPartition("test", 0);
+        consumer.assign(Collections.singleton(partition));
+        consumer.addRecord(new ConsumerRecord<String, String>("test", 0, 0, null, null));
+        consumer.updateEndOffsets(Collections.singletonMap(partition, 1L));
+        consumer.seekToEnd(Collections.singleton(partition));
+        ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(1));
+        assertThat(records.count(), is(0));
+        assertThat(records.isEmpty(), is(true));
     }
 
 }

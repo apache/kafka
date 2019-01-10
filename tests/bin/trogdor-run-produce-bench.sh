@@ -25,17 +25,17 @@ cat <<EOF
         "durationMs": 10000000,
         "producerNode": "node0",
         "bootstrapServers": "localhost:9092",
-        "targetMessagesPerSec": 10,
-        "maxMessages": 100,
+        "targetMessagesPerSec": 10000,
+        "maxMessages": 50000,
         "activeTopics": {
             "foo[1-3]": {
-                "numPartitions": 3,
+                "numPartitions": 10,
                 "replicationFactor": 1
             }
         },
         "inactiveTopics": {
             "foo[4-5]": {
-                "numPartitions": 3,
+                "numPartitions": 10,
                 "replicationFactor": 1
             }
         }

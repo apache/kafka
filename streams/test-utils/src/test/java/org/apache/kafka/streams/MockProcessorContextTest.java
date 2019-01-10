@@ -31,11 +31,13 @@ import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.junit.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Iterator;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -119,7 +121,7 @@ public class MockProcessorContextTest {
 
             final CapturedForward forward1 = forwarded.next();
             assertEquals(new KeyValue<>("start", -1L), forward1.keyValue());
-            assertEquals(null, forward1.childName());
+            assertNull(forward1.childName());
 
             final CapturedForward forward2 = forwarded.next();
             assertEquals(new KeyValue<>("foo5", 8L), forward2.keyValue());
@@ -204,7 +206,9 @@ public class MockProcessorContextTest {
 
             @Override
             public void process(final String key, final Long value) {
-                if (++count > 2) context().commit();
+                if (++count > 2) {
+                    context().commit();
+                }
             }
         };
 
@@ -231,7 +235,7 @@ public class MockProcessorContextTest {
         final AbstractProcessor<String, Long> processor = new AbstractProcessor<String, Long>() {
             @Override
             public void process(final String key, final Long value) {
-                //noinspection unchecked
+                @SuppressWarnings("unchecked")
                 final KeyValueStore<String, Long> stateStore = (KeyValueStore<String, Long>) context().getStateStore("my-state");
                 stateStore.put(key, (stateStore.get(key) == null ? 0 : stateStore.get(key)) + value);
                 stateStore.put("all", (stateStore.get("all") == null ? 0 : stateStore.get("all")) + value);
@@ -345,7 +349,7 @@ public class MockProcessorContextTest {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(
-                    1000L,
+                    Duration.ofSeconds(1L),
                     PunctuationType.WALL_CLOCK_TIME,
                     timestamp -> context.commit()
                 );

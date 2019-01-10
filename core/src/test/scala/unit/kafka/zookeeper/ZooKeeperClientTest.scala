@@ -367,11 +367,11 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
     }
 
+    val goodCalls = new AtomicInteger(0)
     val goodHandler = new StateChangeHandler {
-      val calls = new AtomicInteger(0)
       override val name = this.getClass.getName
       override def beforeInitializingSession(): Unit = {
-        calls.incrementAndGet()
+        goodCalls.incrementAndGet()
       }
     }
 
@@ -382,7 +382,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
     client.forceReinitialize()
 
-    assertEquals(1, goodHandler.calls.get)
+    assertEquals(1, goodCalls.get)
 
     // Client should be usable even if the callback throws an error
     val createResponse = zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],

@@ -33,7 +33,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.Serialized;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.ValueMapper;
 
 import java.io.IOException;
@@ -41,7 +41,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 public class BrokerCompatibilityTest {
 
@@ -84,7 +83,7 @@ public class BrokerCompatibilityTest {
 
 
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.<String, String>stream(SOURCE_TOPIC).groupByKey(Serialized.with(stringSerde, stringSerde))
+        builder.<String, String>stream(SOURCE_TOPIC).groupByKey(Grouped.with(stringSerde, stringSerde))
             .count()
             .toStream()
             .mapValues(new ValueMapper<Long, String>() {
@@ -108,7 +107,7 @@ public class BrokerCompatibilityTest {
                 System.err.println("FATAL: An unexpected exception " + cause);
                 e.printStackTrace(System.err);
                 System.err.flush();
-                streams.close(30, TimeUnit.SECONDS);
+                streams.close(Duration.ofSeconds(30));
             }
         });
         System.out.println("start Kafka Streams");

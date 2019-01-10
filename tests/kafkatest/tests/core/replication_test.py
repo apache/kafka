@@ -19,12 +19,7 @@ from ducktape.mark import matrix
 from ducktape.mark import parametrize
 from ducktape.mark.resource import cluster
 
-from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.services.kafka import KafkaService
-from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.services.console_consumer import ConsoleConsumer
-from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-from kafkatest.utils import is_int
+from kafkatest.tests.end_to_end import EndToEndTest
 
 import signal
 
@@ -83,7 +78,7 @@ failures = {
 }
 
 
-class ReplicationTest(ProduceConsumeValidateTest):
+class ReplicationTest(EndToEndTest):
     """
     Note that consuming is a bit tricky, at least with console consumer. The goal is to consume all messages
     (foreach partition) in the topic. In this case, waiting for the last message may cause the consumer to stop
@@ -98,25 +93,16 @@ class ReplicationTest(ProduceConsumeValidateTest):
     indicator that nothing is left to consume.
     """
 
+    TOPIC_CONFIG = {
+        "partitions": 3,
+        "replication-factor": 3,
+        "configs": {"min.insync.replicas": 2}
+    }
+ 
     def __init__(self, test_context):
         """:type test_context: ducktape.tests.test.TestContext"""
-        super(ReplicationTest, self).__init__(test_context=test_context)
-
-        self.topic = "test_topic"
-        self.zk = ZookeeperService(test_context, num_nodes=1)
-        self.kafka = KafkaService(test_context, num_nodes=3, zk=self.zk,
-                                  topics={self.topic: {
-                                      "partitions": 3,
-                                      "replication-factor": 3,
-                                      'configs': {"min.insync.replicas": 2}}
-                                  })
-        self.producer_throughput = 1000
-        self.num_producers = 1
-        self.num_consumers = 1
-
-    def setUp(self):
-        self.zk.start()
-
+        super(ReplicationTest, self).__init__(test_context=test_context, topic_config=self.TOPIC_CONFIG)
+ 
     def min_cluster_size(self):
         """Override this since we're adding services outside of the constructor"""
         return super(ReplicationTest, self).min_cluster_size() + self.num_producers + self.num_consumers
@@ -156,15 +142,23 @@ class ReplicationTest(ProduceConsumeValidateTest):
             - Validate that every acked message was consumed
         """
 
-        self.kafka.security_protocol = security_protocol
-        self.kafka.interbroker_security_protocol = security_protocol
-        self.kafka.client_sasl_mechanism = client_sasl_mechanism
-        self.kafka.interbroker_sasl_mechanism = interbroker_sasl_mechanism
-        self.enable_idempotence = enable_idempotence
-        compression_types = None if not compression_type else [compression_type] * self.num_producers
-        self.producer = VerifiableProducer(self.test_context, self.num_producers, self.kafka, self.topic,
-                                           throughput=self.producer_throughput, compression_types=compression_types,
-                                           enable_idempotence=enable_idempotence)
-        self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka, self.topic, consumer_timeout_ms=60000, message_validator=is_int)
+        self.create_zookeeper()
+        self.zk.start()
+
+        self.create_kafka(num_nodes=3,
+                          security_protocol=security_protocol,
+                          interbroker_security_protocol=security_protocol,
+                          client_sasl_mechanism=client_sasl_mechanism,
+                          interbroker_sasl_mechanism=interbroker_sasl_mechanism)
         self.kafka.start()
-        self.run_produce_consume_validate(core_test_action=lambda: failures[failure_mode](self, broker_type))
+
+        compression_types = None if not compression_type else [compression_type]
+        self.create_producer(compression_types=compression_types, enable_idempotence=enable_idempotence)
+        self.producer.start()
+
+        self.create_consumer(log_level="DEBUG")
+        self.consumer.start()
+
+        self.await_startup()
+        failures[failure_mode](self, broker_type)
+        self.run_validation(enable_idempotence=enable_idempotence)

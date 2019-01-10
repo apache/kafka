@@ -47,7 +47,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    protected final String userSpecifiedName;
+    private final String userSpecifiedName;
 
     private final Initializer<Long> countInitializer = () -> 0L;
 
@@ -72,16 +72,19 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
         final String repartitionTopic = (userSpecifiedName != null ? userSpecifiedName : materialized.storeName())
-                + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
+            + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
         final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
 
         // the passed in StreamsGraphNode must be the parent of the repartition node
         builder.addGraphNode(this.streamsGraphNode, repartitionNode);
 
-        final StatefulProcessorNode statefulProcessorNode = getStatefulProcessorNode(materialized,
-                                                                                     funcName,
-                                                                                     aggregateSupplier);
+        final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
+            funcName,
+            new ProcessorParameters<>(aggregateSupplier, funcName),
+            new KeyValueStoreMaterializer<>(materialized).materialize(),
+            false
+        );
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionNode, statefulProcessorNode);
@@ -91,23 +94,10 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 materialized.keySerde(),
                                 materialized.valueSerde(),
                                 Collections.singleton(sourceName),
-                                materialized.storeName(),
-                                materialized.isQueryable(),
+                                materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);
-    }
-
-    private <T> StatefulProcessorNode getStatefulProcessorNode(final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized,
-                                                               final String functionName,
-                                                               final ProcessorSupplier<K, Change<V>> aggregateSupplier) {
-
-        final ProcessorParameters<K, Change<V>> aggregateFunctionProcessorParams = new ProcessorParameters<>(aggregateSupplier, functionName);
-
-        return StatefulProcessorNode.statefulProcessorNodeBuilder()
-            .withNodeName(functionName)
-            .withProcessorParameters(aggregateFunctionProcessorParams)
-            .withStoreBuilder(new KeyValueStoreMaterializer<>(materialized).materialize()).build();
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,
@@ -130,8 +120,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -153,8 +143,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
-        final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -164,9 +154,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         }
 
         final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
-                countInitializer,
-                countAdder,
-                countSubtractor);
+                                                                                        countInitializer,
+                                                                                        countAdder,
+                                                                                        countSubtractor);
 
         return doAggregate(aggregateSupplier, AGGREGATE_NAME, materializedInternal);
     }
@@ -186,8 +176,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);

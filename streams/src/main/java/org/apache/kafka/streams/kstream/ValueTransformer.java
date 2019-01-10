@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -29,7 +30,7 @@ import org.apache.kafka.streams.processor.To;
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object)} is invoked individually for each
  * record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object)} (cf. {@link ValueMapper} for stateless value transformation).
- * Additionally, this {@code ValueTransformer} can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
+ * Additionally, this {@code ValueTransformer} can {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule}
  * a method to be {@link Punctuator#punctuate(long) called periodically} with the provided context.
  * If {@code ValueTransformer} is applied to a {@link KeyValue} pair record the record's key is preserved.
  * <p>
@@ -54,7 +55,7 @@ public interface ValueTransformer<V, VR> {
      * framework may later re-use the transformer by calling {@link #init(ProcessorContext)} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * <p>
      * Note that {@link ProcessorContext} is updated in the background with the current record's meta data.

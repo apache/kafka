@@ -131,8 +131,9 @@ public class KafkaBasedLogTest {
         }
     };
 
+    @SuppressWarnings("unchecked")
     @Before
-    public void setUp() throws Exception {
+    public void setUp() {
         store = PowerMock.createPartialMock(KafkaBasedLog.class, new String[]{"createConsumer", "createProducer"},
                 TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, consumedCallback, time, initializer);
         consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);

@@ -103,13 +103,6 @@ public interface Suppressed<K> {
         StrictBufferConfig shutDownWhenFull();
 
         /**
-         * Sets the buffer to use on-disk storage if it requires more memory than the constraints allow.
-         *
-         * This buffer is "strict" in the sense that it will never emit early.
-         */
-        StrictBufferConfig spillToDiskWhenFull();
-
-        /**
          * Set the buffer to just emit the oldest records when any of its constraints are violated.
          *
          * This buffer is "not strict" in the sense that it may emit early, so it is suitable for reducing
@@ -136,12 +129,10 @@ public interface Suppressed<K> {
      * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.
      *                     This is required to be a "strict" config, since it would violate the "final results"
      *                     property to emit early and then issue an update later.
-     * @param <K> The key type for the KTable to apply this suppression to. "Final results" mode is only available
-     *           on Windowed KTables (this is enforced by the type parameter).
      * @return a "final results" mode suppression configuration
      */
-    static <K extends Windowed> Suppressed<K> untilWindowCloses(final StrictBufferConfig bufferConfig) {
-        return new FinalResultsSuppressionBuilder<>(bufferConfig);
+    static Suppressed<Windowed> untilWindowCloses(final StrictBufferConfig bufferConfig) {
+        return new FinalResultsSuppressionBuilder<>(null, bufferConfig);
     }
 
     /**
@@ -155,6 +146,22 @@ public interface Suppressed<K> {
      * @return a suppression configuration
      */
     static <K> Suppressed<K> untilTimeLimit(final Duration timeToWaitForMoreEvents, final BufferConfig bufferConfig) {
-        return new SuppressedInternal<>(timeToWaitForMoreEvents, bufferConfig, null, false);
+        return new SuppressedInternal<>(null, timeToWaitForMoreEvents, bufferConfig, null, false);
     }
+
+    /**
+     * Use the specified name for the suppression node in the topology.
+     * <p>
+     * This can be used to insert a suppression without changing the rest of the topology names
+     * (and therefore not requiring an application reset).
+     * <p>
+     * Note however, that once a suppression has buffered some records, removing it from the topology would cause
+     * the loss of those records.
+     * <p>
+     * A suppression can be "disabled" with the configuration {@code untilTimeLimit(Duration.ZERO, ...}.
+     *
+     * @param name The name to be used for the suppression node and changelog topic
+     * @return The same configuration with the addition of the given {@code name}.
+     */
+    Suppressed<K> withName(final String name);
 }

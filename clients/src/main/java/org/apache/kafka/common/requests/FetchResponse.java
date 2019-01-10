@@ -52,11 +52,18 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
  *
  * Possible error codes:
  *
- *  OFFSET_OUT_OF_RANGE (1)
- *  UNKNOWN_TOPIC_OR_PARTITION (3)
- *  NOT_LEADER_FOR_PARTITION (6)
- *  REPLICA_NOT_AVAILABLE (9)
- *  UNKNOWN (-1)
+ * - {@link Errors#OFFSET_OUT_OF_RANGE} If the fetch offset is out of range for a requested partition
+ * - {@link Errors#TOPIC_AUTHORIZATION_FAILED} If the user does not have READ access to a requested topic
+ * - {@link Errors#REPLICA_NOT_AVAILABLE} If the request is received by a broker which is not a replica
+ * - {@link Errors#NOT_LEADER_FOR_PARTITION} If the broker is not a leader and either the provided leader epoch
+ *     matches the known leader epoch on the broker or is empty
+ * - {@link Errors#FENCED_LEADER_EPOCH} If the epoch is lower than the broker's epoch
+ * - {@link Errors#UNKNOWN_LEADER_EPOCH} If the epoch is larger than the broker's epoch
+ * - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION} If the broker does not have metadata for a topic or partition
+ * - {@link Errors#KAFKA_STORAGE_ERROR} If the log directory for one of the requested partitions is offline
+ * - {@link Errors#UNSUPPORTED_COMPRESSION_TYPE} If a fetched topic is using a compression type which is
+ *     not supported by the fetch request version
+ * - {@link Errors#UNKNOWN_SERVER_ERROR} For any unexpected errors
  */
 public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
@@ -175,10 +182,13 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // V9 adds the current leader epoch (see KIP-320)
     private static final Schema FETCH_RESPONSE_V9 = FETCH_RESPONSE_V8;
 
+    // V10 bumped up to indicate ZStandard capability. (see KIP-110)
+    private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
-            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9};
+            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9, FETCH_RESPONSE_V10};
     }
 
     public static final long INVALID_HIGHWATERMARK = -1L;

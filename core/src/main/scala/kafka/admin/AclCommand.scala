@@ -26,13 +26,14 @@ import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.admin.{AdminClientConfig, AdminClient => JAdminClient}
 import org.apache.kafka.common.acl._
+import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
-import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
+import scala.io.StdIn
 
 object AclCommand extends Logging {
 
@@ -52,8 +53,7 @@ object AclCommand extends Logging {
 
     val opts = new AclCommandOptions(args)
 
-    if (opts.options.has(opts.helpOpt))
-      CommandLineUtils.printUsageAndDie(opts.parser, "Usage:")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manage acls on kafka.")
 
     opts.checkArgs()
 
@@ -449,7 +449,7 @@ object AclCommand extends Logging {
     if (opts.options.has(opts.forceOpt))
         return true
     println(msg)
-    Console.readLine().equalsIgnoreCase("y")
+    StdIn.readLine().equalsIgnoreCase("y")
   }
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[Acl]]): Unit = {
@@ -460,8 +460,7 @@ object AclCommand extends Logging {
     }
   }
 
-  class AclCommandOptions(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class AclCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "A list of host/port pairs to use for establishing the connection to the Kafka cluster." +
@@ -578,11 +577,9 @@ object AclCommand extends Logging {
     val consumerOpt = parser.accepts("consumer", "Convenience option to add/remove ACLs for consumer role. " +
       "This will generate ACLs that allows READ,DESCRIBE on topic and READ on group.")
 
-    val helpOpt = parser.accepts("help", "Print usage information.")
-
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
-    val options = parser.parse(args: _*)
+    options = parser.parse(args: _*)
 
     def checkArgs() {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
@@ -620,7 +617,6 @@ object AclCommand extends Logging {
         CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
     }
   }
-
 }
 
 class PatternTypeConverter extends EnumConverter[PatternType](classOf[PatternType]) {

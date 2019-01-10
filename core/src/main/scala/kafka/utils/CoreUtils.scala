@@ -147,7 +147,7 @@ object CoreUtils extends Logging {
       }
     } catch {
       case e: Exception => {
-        error("Failed to register Mbean " + name, e)
+        error(s"Failed to register Mbean $name", e)
         false
       }
     }

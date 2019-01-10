@@ -42,6 +42,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -84,7 +85,7 @@ public class GlobalStateTaskTest {
         storeToTopic.put("t1-store", topic1);
         storeToTopic.put("t2-store", topic2);
         topology = ProcessorTopology.with(
-            Utils.mkList(sourceOne, sourceTwo, processorOne, processorTwo),
+            asList(sourceOne, sourceTwo, processorOne, processorTwo),
             sourceByTopics,
             Collections.<StateStore>emptyList(),
             storeToTopic);

@@ -83,7 +83,7 @@ class JmxMixin(object):
 
         self.logger.debug("%s: Start JmxTool %d command: %s" % (node.account, idx, cmd))
         node.account.ssh(cmd, allow_fail=False)
-        wait_until(lambda: self._jmx_has_output(node), timeout_sec=10, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
+        wait_until(lambda: self._jmx_has_output(node), timeout_sec=20, backoff_sec=.5, err_msg="%s: Jmx tool took too long to start" % node.account)
         self.started[idx-1] = True
 
     def _jmx_has_output(self, node):

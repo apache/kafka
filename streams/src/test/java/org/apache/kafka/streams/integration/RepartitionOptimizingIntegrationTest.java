@@ -55,10 +55,11 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
+import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertThat;
@@ -161,7 +162,7 @@ public class RepartitionOptimizingIntegrationTest {
 
         mappedStream.filter((k, v) -> k.equals("A"))
             .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
-                  JoinWindows.of(5000),
+                  JoinWindows.of(ofMillis(5000)),
                   Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
             .to(JOINED_TOPIC);
 
@@ -211,7 +212,7 @@ public class RepartitionOptimizingIntegrationTest {
         assertThat(3, equalTo(processorValueCollector.size()));
         assertThat(processorValueCollector, equalTo(expectedCollectedProcessorValues));
 
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(ofSeconds(5));
     }
 
 

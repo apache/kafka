@@ -158,6 +158,26 @@ public class ProduceRequestTest {
         assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
     }
 
+    @Test
+    public void testV6AndBelowCannotUseZStdCompression() {
+        ByteBuffer buffer = ByteBuffer.allocate(256);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, RecordBatch.MAGIC_VALUE_V2, CompressionType.ZSTD,
+            TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, null, "a".getBytes());
+
+        Map<TopicPartition, MemoryRecords> produceData = new HashMap<>();
+        produceData.put(new TopicPartition("test", 0), builder.build());
+
+        // Can't create ProduceRequest instance with version within [3, 7)
+        for (short version = 3; version < 7; version++) {
+            ProduceRequest.Builder requestBuilder = new ProduceRequest.Builder(version, version, (short) 1, 5000, produceData, null);
+            assertThrowsInvalidRecordExceptionForAllVersions(requestBuilder);
+        }
+
+        // Works fine with current version (>= 7)
+        ProduceRequest.Builder.forCurrentMagic((short) 1, 5000, produceData);
+    }
+
     private void assertThrowsInvalidRecordExceptionForAllVersions(ProduceRequest.Builder builder) {
         for (short version = builder.oldestAllowedVersion(); version < builder.latestAllowedVersion(); version++) {
             assertThrowsInvalidRecordException(builder, version);

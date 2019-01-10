@@ -21,20 +21,21 @@ import java.nio.charset.StandardCharsets
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 
-import collection.JavaConverters._
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.consumer.{ConsumerRecord, KafkaConsumer}
+import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.mutable.{ArrayBuffer, Buffer}
+import scala.collection.JavaConverters._
+import scala.collection.mutable.Buffer
 import scala.concurrent.ExecutionException
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
@@ -71,28 +72,21 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   protected def createProducer(brokerList: String,
                                lingerMs: Int = 0,
                                batchSize: Int = 16384,
-                               compressionType: String = "none"): KafkaProducer[Array[Byte],Array[Byte]] = {
+                               compressionType: String = "none",
+                               maxBlockMs: Long = 60 * 1000L): KafkaProducer[Array[Byte],Array[Byte]] = {
     val producer = TestUtils.createProducer(brokerList,
       compressionType = compressionType,
       securityProtocol = securityProtocol,
       trustStoreFile = trustStoreFile,
       saslProperties = clientSaslProperties,
-      lingerMs = lingerMs)
+      lingerMs = lingerMs,
+      maxBlockMs = maxBlockMs)
     registerProducer(producer)
   }
 
   protected def registerProducer(producer: KafkaProducer[Array[Byte], Array[Byte]]): KafkaProducer[Array[Byte], Array[Byte]] = {
     producers += producer
     producer
-  }
-
-  private def pollUntilNumRecords(numRecords: Int) : Seq[ConsumerRecord[Array[Byte], Array[Byte]]] = {
-    val records = new ArrayBuffer[ConsumerRecord[Array[Byte], Array[Byte]]]()
-    TestUtils.waitUntilTrue(() => {
-      records ++= consumer.poll(50).asScala
-      records.size == numRecords
-    }, s"Consumed ${records.size} records until timeout, but expected $numRecords records.")
-    records
   }
 
   /**
@@ -329,7 +323,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       consumer.assign(List(new TopicPartition(topic, partition)).asJava)
 
       // make sure the fetched messages also respect the partitioning and ordering
-      val records = pollUntilNumRecords(numRecords)
+      val records = TestUtils.consumeRecords(consumer, numRecords)
 
       records.zipWithIndex.foreach { case (record, i) =>
         assertEquals(topic, record.topic)
@@ -353,7 +347,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     */
   @Test
   def testSendBeforeAndAfterPartitionExpansion() {
-    val producer = createProducer(brokerList)
+    val producer = createProducer(brokerList, maxBlockMs = 5 * 1000L)
 
     // create topic
     createTopic(topic, 1, 2)
@@ -373,10 +367,13 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     // Trying to send a record to a partition beyond topic's partition range before adding the partition should fail.
     val partition1 = 1
     try {
-      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8)))
+      producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get()
       fail("Should not allow sending a record to a partition not present in the metadata")
     } catch {
-      case _: KafkaException => // this is ok
+      case e: ExecutionException => e.getCause match {
+        case _: TimeoutException => // this is ok
+        case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
+      }
     }
 
     val existingAssignment = zkClient.getReplicaAssignmentForTopics(Set(topic)).map {
@@ -496,7 +493,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         producer.flush()
         assertTrue("All requests are complete.", responses.forall(_.isDone()))
         // Check the messages received by broker.
-        pollUntilNumRecords(numRecords)
+        TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
       } finally {
         producer.close()
       }

@@ -172,27 +172,24 @@ public class MiniTrogdorCluster implements AutoCloseable {
                 ThreadUtils.createThreadFactory("MiniTrogdorClusterStartupThread%d", false));
             final AtomicReference<Exception> failure = new AtomicReference<Exception>(null);
             for (final Map.Entry<String, NodeData> entry : nodes.entrySet()) {
-                executor.submit(new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        String nodeName = entry.getKey();
-                        try {
-                            NodeData node = entry.getValue();
-                            node.platform = new BasicPlatform(nodeName, topology, scheduler, commandRunner);
-                            if (node.agentRestResource != null) {
-                                node.agent = new Agent(node.platform, scheduler, node.agentRestServer,
-                                    node.agentRestResource);
-                            }
-                            if (node.coordinatorRestResource != null) {
-                                node.coordinator = new Coordinator(node.platform, scheduler,
-                                    node.coordinatorRestServer, node.coordinatorRestResource, 0);
-                            }
-                        } catch (Exception e) {
-                            log.error("Unable to initialize {}", nodeName, e);
-                            failure.compareAndSet(null, e);
+                executor.submit((Callable<Void>) () -> {
+                    String nodeName = entry.getKey();
+                    try {
+                        NodeData node = entry.getValue();
+                        node.platform = new BasicPlatform(nodeName, topology, scheduler, commandRunner);
+                        if (node.agentRestResource != null) {
+                            node.agent = new Agent(node.platform, scheduler, node.agentRestServer,
+                                node.agentRestResource);
                         }
-                        return null;
+                        if (node.coordinatorRestResource != null) {
+                            node.coordinator = new Coordinator(node.platform, scheduler,
+                                node.coordinatorRestServer, node.coordinatorRestResource, 0);
+                        }
+                    } catch (Exception e) {
+                        log.error("Unable to initialize {}", nodeName, e);
+                        failure.compareAndSet(null, e);
                     }
+                    return null;
                 });
             }
             executor.shutdown();

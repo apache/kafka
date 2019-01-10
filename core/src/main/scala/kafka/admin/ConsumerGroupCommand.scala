@@ -26,7 +26,7 @@ import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
 import javax.xml.datatype.DatatypeFactory
-import joptsimple.{OptionParser, OptionSpec}
+import joptsimple.OptionSpec
 import kafka.utils._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
@@ -46,8 +46,7 @@ object ConsumerGroupCommand extends Logging {
   def main(args: Array[String]) {
     val opts = new ConsumerGroupCommandOptions(args)
 
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "List all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to list all consumer groups, describe a consumer group, delete consumer group info, or reset consumer group offsets.")
 
     // should have exactly one action
     val actions = Seq(opts.listOpt, opts.describeOpt, opts.deleteOpt, opts.resetOffsetsOpt).count(opts.options.has)
@@ -779,7 +778,7 @@ object ConsumerGroupCommand extends Logging {
     case object Ignore extends LogOffsetResult
   }
 
-  class ConsumerGroupCommandOptions(args: Array[String]) {
+  class ConsumerGroupCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val BootstrapServerDoc = "REQUIRED: The server(s) to connect to."
     val GroupDoc = "The consumer group we wish to act on."
     val TopicDoc = "The topic whose consumer group information should be deleted or topic whose should be included in the reset offset process. " +
@@ -823,7 +822,6 @@ object ConsumerGroupCommand extends Logging {
     val StateDoc = "Describe the group state. This option may be used with '--describe' and '--bootstrap-server' options only." + nl +
       "Example: --bootstrap-server localhost:9092 --describe --group group1 --state"
 
-    val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server to connect to")
@@ -888,7 +886,7 @@ object ConsumerGroupCommand extends Logging {
 
     parser.mutuallyExclusive(membersOpt, offsetsOpt, stateOpt)
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
     val describeOptPresent = options.has(describeOpt)
 

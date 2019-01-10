@@ -23,8 +23,8 @@ package kstream
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
 import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
-import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
+import org.apache.kafka.streams.scala.ImplicitConversions._
 
 import scala.collection.JavaConverters._
 
@@ -351,8 +351,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   /**
    * Group the records by their current key into a [[KGroupedStream]]
    * <p>
-   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Serialized` instance implicitly.
+   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
+   * serdes that will be converted to a `Grouped` instance implicitly.
    * <p>
    * {{{
    * Example:
@@ -365,28 +365,28 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    *     .leftJoin(userRegionsTable, (clicks: Long, region: String) => (if (region == null) "UNKNOWN" else region, clicks))
    *     .map((_, regionWithClicks) => regionWithClicks)
    *
-   *     // the groupByKey gets the Serialized instance through an implicit conversion of the
+   *     // the groupByKey gets the Grouped instance through an implicit conversion of the
    *     // serdes brought into scope through the import Serdes._ above
    *     .groupByKey
    *     .reduce(_ + _)
    *
-   * // Similarly you can create an implicit Serialized and it will be passed implicitly
+   * // Similarly you can create an implicit Grouped and it will be passed implicitly
    * // to the groupByKey call
    * }}}
    *
-   * @param serialized the instance of Serialized that gives the serdes
+   * @param grouped the instance of Grouped that gives the serdes
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupByKey`
    */
-  def groupByKey(implicit serialized: Serialized[K, V]): KGroupedStream[K, V] =
-    inner.groupByKey(serialized)
+  def groupByKey(implicit grouped: Grouped[K, V]): KGroupedStream[K, V] =
+    inner.groupByKey(grouped)
 
   /**
    * Group the records of this [[KStream]] on a new key that is selected using the provided key transformation function
-   * and the `Serialized` instance.
+   * and the `Grouped` instance.
    * <p>
-   * The user can either supply the `Serialized` instance as an implicit in scope or she can also provide an implicit
-   * serdes that will be converted to a `Serialized` instance implicitly.
+   * The user can either supply the `Grouped` instance as an implicit in scope or she can also provide an implicit
+   * serdes that will be converted to a `Grouped` instance implicitly.
    * <p>
    * {{{
    * Example:
@@ -401,7 +401,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * val wordCounts: KTable[String, Long] =
    *   textLines.flatMapValues(v => pattern.split(v.toLowerCase))
    *
-   *     // the groupBy gets the Serialized instance through an implicit conversion of the
+   *     // the groupBy gets the Grouped instance through an implicit conversion of the
    *     // serdes brought into scope through the import Serdes._ above
    *     .groupBy((k, v) => v)
    *
@@ -412,8 +412,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * @return a [[KGroupedStream]] that contains the grouped records of the original [[KStream]]
    * @see `org.apache.kafka.streams.kstream.KStream#groupBy`
    */
-  def groupBy[KR](selector: (K, V) => KR)(implicit serialized: Serialized[KR, V]): KGroupedStream[KR, V] =
-    inner.groupBy(selector.asKeyValueMapper, serialized)
+  def groupBy[KR](selector: (K, V) => KR)(implicit grouped: Grouped[KR, V]): KGroupedStream[KR, V] =
+    inner.groupBy(selector.asKeyValueMapper, grouped)
 
   /**
    * Join records of this stream with another [[KStream]]'s records using windowed inner equi join with

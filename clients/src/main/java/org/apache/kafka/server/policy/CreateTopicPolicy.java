@@ -24,12 +24,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * An interface for enforcing a policy on create topics requests.
+ * <p>An interface for enforcing a policy on create topics requests.
  *
- * Common use cases are requiring that the replication factor, min.insync.replicas and/or retention settings for a
+ * <p>Common use cases are requiring that the replication factor, <code>min.insync.replicas</code> and/or retention settings for a
  * topic are within an allowable range.
  *
- * If <code>create.topic.policy.class.name</code> is defined, Kafka will create an instance of the specified class
+ * <p>If <code>create.topic.policy.class.name</code> is defined, Kafka will create an instance of the specified class
  * using the default constructor and will then pass the broker configs to its <code>configure()</code> method. During
  * broker shutdown, the <code>close()</code> method will be invoked so that resources can be released (if necessary).
  */

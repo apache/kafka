@@ -182,6 +182,14 @@ public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCal
     private void handleTokenCallback(OAuthBearerTokenCallback callback) {
         if (callback.token() != null)
             throw new IllegalArgumentException("Callback had a token already");
+        if (moduleOptions.isEmpty()) {
+            log.debug("Token not provided, this login cannot be used to establish client connections");
+            callback.token(null);
+            return;
+        }
+        if (moduleOptions.keySet().stream().noneMatch(name -> !name.startsWith(EXTENSION_PREFIX))) {
+            throw new OAuthBearerConfigException("Extensions provided in login context without a token");
+        }
         String principalClaimNameValue = optionValue(PRINCIPAL_CLAIM_NAME_OPTION);
         String principalClaimName = principalClaimNameValue != null && !principalClaimNameValue.trim().isEmpty()
                 ? principalClaimNameValue.trim()

@@ -113,7 +113,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.<K, V>with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null, null, null));
     }
 
     /**
@@ -155,7 +155,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for topics matching the regex pattern.
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern) {
-        return stream(topicPattern, Consumed.<K, V>with(null, null));
+        return stream(topicPattern, Consumed.with(null, null));
     }
 
     /**
@@ -192,8 +192,9 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} using the given
      * {@code Materialized} instance.
-     * However, no internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      * <p>
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
@@ -225,8 +226,8 @@ public class StreamsBuilder {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
@@ -241,14 +242,15 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic the topic name; cannot be {@code null}
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<K, V>());
+        return table(topic, new ConsumedInternal<>());
     }
 
     /**
@@ -262,8 +264,9 @@ public class StreamsBuilder {
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} with an internal
      * store name. Note that store name may not be queriable through Interactive Queries.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic     the topic name; cannot be {@code null}
      * @param consumed  the instance of {@link Consumed} used to define optional parameters; cannot be {@code null}
@@ -275,8 +278,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()));
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+            new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()), internalStreamsBuilder, topic + "-");
         return internalStreamsBuilder.table(topic, consumedInternal, materializedInternal);
     }
 
@@ -290,8 +292,9 @@ public class StreamsBuilder {
      * If this is not the case the returned {@link KTable} will be corrupted.
      * <p>
      * The resulting {@link KTable} will be materialized in a local {@link KeyValueStore} using the {@link Materialized} instance.
-     * No internal changelog topic is created since the original input topic can be used for recovery (cf.
-     * methods of {@link KGroupedStream} and {@link KGroupedTable} that return a {@link KTable}).
+     * An internal changelog topic is created by default. Because the source topic can
+     * be used for recovery, you can avoid creating the changelog topic by setting
+     * the {@code "topology.optimization"} to {@code "all"} in the {@link StreamsConfig}.
      *
      * @param topic         the topic name; cannot be {@code null}
      * @param materialized  the instance of {@link Materialized} used to materialize a state store; cannot be {@code null}
@@ -301,8 +304,8 @@ public class StreamsBuilder {
                                                   final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
         final ConsumedInternal<K, V> consumedInternal =
                 new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(), materializedInternal.valueSerde()));
 
@@ -331,8 +334,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(consumed, "consumed can't be null");
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.<K, V, KeyValueStore<Bytes, byte[]>>with(consumedInternal.keySerde(), consumedInternal.valueSerde()));
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+                new MaterializedInternal<>(Materialized.with(consumedInternal.keySerde(), consumedInternal.valueSerde()), internalStreamsBuilder, topic + "-");
 
         return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
@@ -354,7 +356,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return globalTable(topic, Consumed.<K, V>with(null, null));
+        return globalTable(topic, Consumed.with(null, null));
     }
 
     /**
@@ -398,8 +400,8 @@ public class StreamsBuilder {
         final ConsumedInternal<K, V> consumedInternal = new ConsumedInternal<>(consumed);
         // always use the serdes from consumed
         materialized.withKeySerde(consumedInternal.keySerde()).withValueSerde(consumedInternal.valueSerde());
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
 
         return internalStreamsBuilder.globalTable(topic, consumedInternal, materializedInternal);
     }
@@ -433,8 +435,8 @@ public class StreamsBuilder {
                                                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(internalStreamsBuilder, topic + "-");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, internalStreamsBuilder, topic + "-");
 
         return internalStreamsBuilder.globalTable(topic,
                                                   new ConsumedInternal<>(Consumed.with(materializedInternal.keySerde(),

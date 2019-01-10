@@ -32,7 +32,6 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
 class TupleForwarder<K, V> {
     private final CachedStateStore cachedStateStore;
     private final ProcessorContext context;
-    private final boolean sendOldValues;
 
     @SuppressWarnings("unchecked")
     TupleForwarder(final StateStore store,
@@ -41,7 +40,6 @@ class TupleForwarder<K, V> {
                    final boolean sendOldValues) {
         this.cachedStateStore = cachedStateStore(store);
         this.context = context;
-        this.sendOldValues = sendOldValues;
         if (this.cachedStateStore != null) {
             cachedStateStore.setFlushListener(flushListener, sendOldValues);
         }
@@ -50,9 +48,18 @@ class TupleForwarder<K, V> {
     private CachedStateStore cachedStateStore(final StateStore store) {
         if (store instanceof CachedStateStore) {
             return (CachedStateStore) store;
-        } else if (store instanceof WrappedStateStore
-                && ((WrappedStateStore) store).wrappedStore() instanceof CachedStateStore) {
-            return (CachedStateStore) ((WrappedStateStore) store).wrappedStore();
+        } else if (store instanceof WrappedStateStore) {
+            StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+
+            while (wrapped instanceof WrappedStateStore && !(wrapped instanceof CachedStateStore)) {
+                wrapped = ((WrappedStateStore) wrapped).wrappedStore();
+            }
+
+            if (!(wrapped instanceof CachedStateStore)) {
+                return null;
+            }
+
+            return (CachedStateStore) wrapped;
         }
         return null;
     }
@@ -61,11 +68,7 @@ class TupleForwarder<K, V> {
                              final V newValue,
                              final V oldValue) {
         if (cachedStateStore == null) {
-            if (sendOldValues) {
-                context.forward(key, new Change<>(newValue, oldValue));
-            } else {
-                context.forward(key, new Change<>(newValue, null));
-            }
+            context.forward(key, new Change<>(newValue, oldValue));
         }
     }
 }

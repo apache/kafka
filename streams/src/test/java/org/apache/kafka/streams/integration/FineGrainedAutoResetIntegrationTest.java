@@ -38,7 +38,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.BeforeClass;
@@ -229,7 +228,7 @@ public class FineGrainedAutoResetIntegrationTest {
     }
 
     private void commitInvalidOffsets() {
-        final KafkaConsumer consumer = new KafkaConsumer(TestUtils.consumerConfig(
+        final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
             StringDeserializer.class,
@@ -301,16 +300,10 @@ public class FineGrainedAutoResetIntegrationTest {
 
         final TestingUncaughtExceptionHandler uncaughtExceptionHandler = new TestingUncaughtExceptionHandler();
 
-        final TestCondition correctExceptionThrownCondition = new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return uncaughtExceptionHandler.correctExceptionThrown;
-            }
-        };
-
         streams.setUncaughtExceptionHandler(uncaughtExceptionHandler);
         streams.start();
-        TestUtils.waitForCondition(correctExceptionThrownCondition, "The expected NoOffsetForPartitionException was never thrown");
+        TestUtils.waitForCondition(() -> uncaughtExceptionHandler.correctExceptionThrown,
+                "The expected NoOffsetForPartitionException was never thrown");
         streams.close();
     }
 

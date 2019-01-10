@@ -26,7 +26,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
-import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -57,8 +56,10 @@ public class KTableKTableOuterJoinTest {
     final private Serde<Integer> intSerde = Serdes.Integer();
     final private Serde<String> stringSerde = Serdes.String();
     private File stateDir = null;
+
+    @SuppressWarnings("deprecation")
     @Rule
-    public final KStreamTestDriver driver = new KStreamTestDriver();
+    public final org.apache.kafka.test.KStreamTestDriver driver = new org.apache.kafka.test.KStreamTestDriver();
     private final Consumed<Integer, String> consumed = Consumed.with(intSerde, stringSerde);
 
     @Before
@@ -88,6 +89,7 @@ public class KTableKTableOuterJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
+        @SuppressWarnings("unchecked")
         final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
 
         driver.setUp(builder, stateDir);
@@ -359,6 +361,7 @@ public class KTableKTableOuterJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
+        @SuppressWarnings("unchecked")
         final Processor<String, Change<String>> join = new KTableKTableOuterJoin<>(
             (KTableImpl<String, String, String>) builder.table("left", Consumed.with(stringSerde, stringSerde)),
             (KTableImpl<String, String, String>) builder.table("right", Consumed.with(stringSerde, stringSerde)),

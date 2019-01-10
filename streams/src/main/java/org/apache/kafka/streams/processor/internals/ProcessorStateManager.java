@@ -96,7 +96,8 @@ public class ProcessorStateManager extends AbstractStateManager {
     }
 
 
-    public static String storeChangelogTopic(final String applicationId, final String storeName) {
+    public static String storeChangelogTopic(final String applicationId,
+                                             final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
@@ -133,12 +134,13 @@ public class ProcessorStateManager extends AbstractStateManager {
             restoreCallbacks.put(topic, stateRestoreCallback);
         } else {
             log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
-            final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             new CompositeRestoreListener(stateRestoreCallback),
-                                                             checkpointableOffsets.get(storePartition),
-                                                             offsetLimit(storePartition),
-                                                             store.persistent(),
-                                                             storeName);
+            final StateRestorer restorer = new StateRestorer(
+                storePartition,
+                new CompositeRestoreListener(stateRestoreCallback),
+                checkpointableOffsets.get(storePartition),
+                offsetLimit(storePartition),
+                store.persistent(),
+                storeName);
 
             changelogReader.register(restorer);
         }
@@ -190,7 +192,8 @@ public class ProcessorStateManager extends AbstractStateManager {
         standbyRestoredOffsets.put(storePartition, lastOffset + 1);
     }
 
-    void putOffsetLimit(final TopicPartition partition, final long limit) {
+    void putOffsetLimit(final TopicPartition partition,
+                        final long limit) {
         log.trace("Updating store offset limit for partition {} to {}", partition, limit);
         offsetLimits.put(partition, limit);
     }
@@ -292,7 +295,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         try {
             checkpoint.write(this.checkpointableOffsets);
         } catch (final IOException e) {
-            log.warn("Failed to write offset checkpoint file to {}: {}", checkpoint, e);
+            log.warn("Failed to write offset checkpoint file to [{}]", checkpoint, e);
         }
     }
 

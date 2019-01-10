@@ -19,6 +19,9 @@ package org.apache.kafka.common.security.oauthbearer.internals.expiring;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.Date;
@@ -42,8 +45,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.expiring.ExpiringC
 import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.easymock.EasyMock;
 import org.junit.Test;
+import org.mockito.InOrder;
 
 public class ExpiringCredentialRefreshingLoginTest {
     private static final Configuration EMPTY_WILDCARD_CONFIGURATION;
@@ -257,24 +260,8 @@ public class ExpiringCredentialRefreshingLoginTest {
         for (int numExpectedRefreshes : new int[] {0, 1, 2}) {
             for (boolean clientReloginAllowedBeforeLogout : new boolean[] {true, false}) {
                 Subject subject = new Subject();
-                /*
-                 * Create a mock and record the fact that we expect login() to be invoked
-                 * followed by getSubject() and then ultimately followed by numExpectedRefreshes
-                 * pairs of either login()/logout() or logout()/login() calls
-                 */
-                final LoginContext mockLoginContext = EasyMock.strictMock(LoginContext.class);
-                mockLoginContext.login();
-                EasyMock.expect(mockLoginContext.getSubject()).andReturn(subject);
-                for (int i = 0; i < numExpectedRefreshes; ++i) {
-                    if (clientReloginAllowedBeforeLogout) {
-                        mockLoginContext.login();
-                        mockLoginContext.logout();
-                    } else {
-                        mockLoginContext.logout();
-                        mockLoginContext.login();
-                    }
-                }
-                EasyMock.replay(mockLoginContext);
+                final LoginContext mockLoginContext = mock(LoginContext.class);
+                when(mockLoginContext.getSubject()).thenReturn(subject);
 
                 MockTime mockTime = new MockTime();
                 long startMs = mockTime.milliseconds();
@@ -335,6 +322,23 @@ public class ExpiringCredentialRefreshingLoginTest {
                     assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get().longValue() - startMs);
                 }
                 assertFalse(waiters.get(numExpectedRefreshes).isDone());
+
+                /*
+                 * We expect login() to be invoked followed by getSubject() and then ultimately followed by
+                 * numExpectedRefreshes pairs of either login()/logout() or logout()/login() calls
+                 */
+                InOrder inOrder = inOrder(mockLoginContext);
+                inOrder.verify(mockLoginContext).login();
+                inOrder.verify(mockLoginContext).getSubject();
+                for (int i = 0; i < numExpectedRefreshes; ++i) {
+                    if (clientReloginAllowedBeforeLogout) {
+                        inOrder.verify(mockLoginContext).login();
+                        inOrder.verify(mockLoginContext).logout();
+                    } else {
+                        inOrder.verify(mockLoginContext).logout();
+                        inOrder.verify(mockLoginContext).login();
+                    }
+                }
             }
         }
     }
@@ -343,20 +347,9 @@ public class ExpiringCredentialRefreshingLoginTest {
     public void testRefreshWithExpirationSmallerThanConfiguredBuffers() throws Exception {
         int numExpectedRefreshes = 1;
         boolean clientReloginAllowedBeforeLogout = true;
+        final LoginContext mockLoginContext = mock(LoginContext.class);
         Subject subject = new Subject();
-        /*
-         * Create a mock and record the fact that we expect login() to be invoked
-         * followed by getSubject() and then ultimately followed by numExpectedRefreshes
-         * pairs of login()/logout() calls
-         */
-        final LoginContext mockLoginContext = EasyMock.strictMock(LoginContext.class);
-        mockLoginContext.login();
-        EasyMock.expect(mockLoginContext.getSubject()).andReturn(subject);
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
-            mockLoginContext.login();
-            mockLoginContext.logout();
-        }
-        EasyMock.replay(mockLoginContext);
+        when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
         long startMs = mockTime.milliseconds();
@@ -419,6 +412,13 @@ public class ExpiringCredentialRefreshingLoginTest {
             assertEquals((i + 1) * 1000 * 60 * refreshEveryMinutes, waiter.get().longValue() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
+
+        InOrder inOrder = inOrder(mockLoginContext);
+        inOrder.verify(mockLoginContext).login();
+        for (int i = 0; i < numExpectedRefreshes; ++i) {
+            inOrder.verify(mockLoginContext).login();
+            inOrder.verify(mockLoginContext).logout();
+        }
     }
 
     @Test
@@ -426,19 +426,8 @@ public class ExpiringCredentialRefreshingLoginTest {
         int numExpectedRefreshes = 1;
         boolean clientReloginAllowedBeforeLogout = true;
         Subject subject = new Subject();
-        /*
-         * Create a mock and record the fact that we expect login() to be invoked
-         * followed by getSubject() and then ultimately followed by numExpectedRefreshes
-         * pairs of login()/logout() calls
-         */
-        final LoginContext mockLoginContext = EasyMock.strictMock(LoginContext.class);
-        mockLoginContext.login();
-        EasyMock.expect(mockLoginContext.getSubject()).andReturn(subject);
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
-            mockLoginContext.login();
-            mockLoginContext.logout();
-        }
-        EasyMock.replay(mockLoginContext);
+        final LoginContext mockLoginContext = mock(LoginContext.class);
+        when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
         long startMs = mockTime.milliseconds();
@@ -504,6 +493,13 @@ public class ExpiringCredentialRefreshingLoginTest {
                     waiter.get().longValue() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
+
+        InOrder inOrder = inOrder(mockLoginContext);
+        inOrder.verify(mockLoginContext).login();
+        for (int i = 0; i < numExpectedRefreshes; ++i) {
+            inOrder.verify(mockLoginContext).login();
+            inOrder.verify(mockLoginContext).logout();
+        }
     }
 
     @Test
@@ -511,19 +507,8 @@ public class ExpiringCredentialRefreshingLoginTest {
         int numExpectedRefreshes = 1;
         boolean clientReloginAllowedBeforeLogout = true;
         Subject subject = new Subject();
-        /*
-         * Create a mock and record the fact that we expect login() to be invoked
-         * followed by getSubject() and then ultimately followed by numExpectedRefreshes
-         * pairs of login()/logout() calls
-         */
-        final LoginContext mockLoginContext = EasyMock.strictMock(LoginContext.class);
-        mockLoginContext.login();
-        EasyMock.expect(mockLoginContext.getSubject()).andReturn(subject);
-        for (int i = 0; i < numExpectedRefreshes; ++i) {
-            mockLoginContext.login();
-            mockLoginContext.logout();
-        }
-        EasyMock.replay(mockLoginContext);
+        final LoginContext mockLoginContext = mock(LoginContext.class);
+        when(mockLoginContext.getSubject()).thenReturn(subject);
 
         MockTime mockTime = new MockTime();
         long startMs = mockTime.milliseconds();
@@ -588,6 +573,13 @@ public class ExpiringCredentialRefreshingLoginTest {
                     waiter.get().longValue() - startMs);
         }
         assertFalse(waiters.get(numExpectedRefreshes).isDone());
+
+        InOrder inOrder = inOrder(mockLoginContext);
+        inOrder.verify(mockLoginContext).login();
+        for (int i = 0; i < numExpectedRefreshes; ++i) {
+            inOrder.verify(mockLoginContext).login();
+            inOrder.verify(mockLoginContext).logout();
+        }
     }
 
     private static List<KafkaFutureImpl<Long>> addWaiters(MockScheduler mockScheduler, long refreshEveryMillis,

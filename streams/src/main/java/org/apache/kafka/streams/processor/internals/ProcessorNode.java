@@ -31,6 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
@@ -165,15 +167,13 @@ public class ProcessorNode<K, V> {
         private NodeMetrics(final StreamsMetricsImpl metrics, final String processorNodeName, final ProcessorContext context) {
             this.metrics = metrics;
 
-            final String group = "stream-processor-node-metrics";
             final String taskName = context.taskId().toString();
-            final Map<String, String> tagMap = metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", processorNodeName);
-            final Map<String, String> allTagMap = metrics.tagMap("task-id", context.taskId().toString(), "processor-node-id", "all");
+            final Map<String, String> tagMap = metrics.tagMap("task-id", context.taskId().toString(), PROCESSOR_NODE_ID_TAG, processorNodeName);
+            final Map<String, String> allTagMap = metrics.tagMap("task-id", context.taskId().toString(), PROCESSOR_NODE_ID_TAG, "all");
 
             nodeProcessTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "process",
                 metrics,
-                group,
                 taskName,
                 processorNodeName,
                 allTagMap,
@@ -183,7 +183,6 @@ public class ProcessorNode<K, V> {
             nodePunctuateTimeSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "punctuate",
                 metrics,
-                group,
                 taskName,
                 processorNodeName,
                 allTagMap,
@@ -193,7 +192,6 @@ public class ProcessorNode<K, V> {
             nodeCreationSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "create",
                 metrics,
-                group,
                 taskName,
                 processorNodeName,
                 allTagMap,
@@ -204,7 +202,6 @@ public class ProcessorNode<K, V> {
             nodeDestructionSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "destroy",
                 metrics,
-                group,
                 taskName,
                 processorNodeName,
                 allTagMap,
@@ -214,7 +211,6 @@ public class ProcessorNode<K, V> {
             sourceNodeForwardSensor = createTaskAndNodeLatencyAndThroughputSensors(
                 "forward",
                 metrics,
-                group,
                 taskName,
                 processorNodeName,
                 allTagMap,
@@ -231,17 +227,18 @@ public class ProcessorNode<K, V> {
 
         private static Sensor createTaskAndNodeLatencyAndThroughputSensors(final String operation,
                                                                            final StreamsMetricsImpl metrics,
-                                                                           final String group,
                                                                            final String taskName,
                                                                            final String processorNodeName,
                                                                            final Map<String, String> taskTags,
                                                                            final Map<String, String> nodeTags) {
             final Sensor parent = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
-            addAvgMaxLatency(parent, group, taskTags, operation);
-            addInvocationRateAndCount(parent, group, taskTags, operation);
+            addAvgMaxLatency(parent, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+            addInvocationRateAndCount(parent, PROCESSOR_NODE_METRICS_GROUP, taskTags, operation);
+
             final Sensor sensor = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent);
-            addAvgMaxLatency(sensor, group, nodeTags, operation);
-            addInvocationRateAndCount(sensor, group, nodeTags, operation);
+            addAvgMaxLatency(sensor, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+            addInvocationRateAndCount(sensor, PROCESSOR_NODE_METRICS_GROUP, nodeTags, operation);
+
             return sensor;
         }
     }

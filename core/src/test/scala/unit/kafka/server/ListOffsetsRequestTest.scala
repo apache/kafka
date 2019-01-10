@@ -74,6 +74,87 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(Errors.REPLICA_NOT_AVAILABLE, nonReplica, debugReplicaRequest)
   }
 
+  @Test
+  def testCurrentEpochValidation(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+
+    def assertResponseErrorForEpoch(error: Errors, brokerId: Int, currentLeaderEpoch: Optional[Integer]): Unit = {
+      val targetTimes = Map(topicPartition -> new ListOffsetRequest.PartitionData(
+        ListOffsetRequest.EARLIEST_TIMESTAMP, currentLeaderEpoch)).asJava
+      val request = ListOffsetRequest.Builder
+        .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+        .setTargetTimes(targetTimes)
+        .build()
+      assertResponseError(error, brokerId, request)
+    }
+
+    // We need a leader change in order to check epoch fencing since the first epoch is 0 and
+    // -1 is treated as having no epoch at all
+    killBroker(firstLeaderId)
+
+    // Check leader error codes
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+    assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NONE, secondLeaderId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch - 1))
+    assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, secondLeaderId, Optional.of(secondLeaderEpoch + 1))
+
+    // Check follower error codes
+    val followerId = TestUtils.findFollowerId(topicPartition, servers)
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.empty())
+    assertResponseErrorForEpoch(Errors.NOT_LEADER_FOR_PARTITION, followerId, Optional.of(secondLeaderEpoch))
+    assertResponseErrorForEpoch(Errors.UNKNOWN_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch + 1))
+    assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
+  }
+
+  @Test
+  def testResponseIncludesLeaderEpoch(): Unit = {
+    val topic = "topic"
+    val topicPartition = new TopicPartition(topic, 0)
+    val partitionToLeader = TestUtils.createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 3, servers)
+    val firstLeaderId = partitionToLeader(topicPartition.partition)
+
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
+
+    def fetchOffsetAndEpoch(serverId: Int,
+                            timestamp: Long): (Long, Int) = {
+      val targetTimes = Map(topicPartition -> new ListOffsetRequest.PartitionData(
+        timestamp, Optional.empty[Integer]())).asJava
+
+      val request = ListOffsetRequest.Builder
+        .forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
+        .setTargetTimes(targetTimes)
+        .build()
+
+      val response = sendRequest(serverId, request)
+      val partitionData = response.responseData.get(topicPartition)
+      val epochOpt = partitionData.leaderEpoch
+      assertTrue(epochOpt.isPresent)
+
+      (partitionData.offset, epochOpt.get)
+    }
+
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, 0L))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
+    assertEquals((10L, 0), fetchOffsetAndEpoch(firstLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
+
+    // Kill the first leader so that we can verify the epoch change when fetching the latest offset
+    killBroker(firstLeaderId)
+    val secondLeaderId = TestUtils.awaitLeaderChange(servers, topicPartition, firstLeaderId)
+    val secondLeaderEpoch = TestUtils.findLeaderEpoch(secondLeaderId, topicPartition, servers)
+
+    // No changes to written data
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, 0L))
+    assertEquals((0L, 0), fetchOffsetAndEpoch(secondLeaderId, ListOffsetRequest.EARLIEST_TIMESTAMP))
+
+    // The latest offset reflects the updated epoch
+    assertEquals((10L, secondLeaderEpoch), fetchOffsetAndEpoch(secondLeaderId, ListOffsetRequest.LATEST_TIMESTAMP))
+  }
+
   private def assertResponseError(error: Errors, brokerId: Int, request: ListOffsetRequest): Unit = {
     val response = sendRequest(brokerId, request)
     assertEquals(request.partitionTimestamps.size, response.responseData.size)
@@ -83,7 +164,8 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   private def sendRequest(leaderId: Int, request: ListOffsetRequest): ListOffsetResponse = {
-    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = brokerSocketServer(leaderId))
+    val socketServer = brokerSocketServer(leaderId)
+    val response = connectAndSend(request, ApiKeys.LIST_OFFSETS, destination = socketServer)
     ListOffsetResponse.parse(response, request.version)
   }
 

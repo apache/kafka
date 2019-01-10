@@ -190,6 +190,7 @@ public class RetryWithToleranceOperator {
     }
 
     // Visible for testing
+    @SuppressWarnings("fallthrough")
     boolean withinToleranceLimits() {
         switch (errorToleranceType) {
             case NONE:

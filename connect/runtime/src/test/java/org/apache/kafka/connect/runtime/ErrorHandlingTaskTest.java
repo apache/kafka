@@ -352,7 +352,6 @@ public class ErrorHandlingTaskTest {
     }
 
     private void expectInitializeTask() throws Exception {
-        PowerMock.expectPrivate(workerSinkTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(singletonList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -371,11 +370,10 @@ public class ErrorHandlingTaskTest {
 
         TransformationChain<SinkRecord> sinkTransforms = new TransformationChain<>(singletonList(new FaultyPassthrough<SinkRecord>()), retryWithToleranceOperator);
 
-        workerSinkTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig,
-                ClusterConfigState.EMPTY, metrics, converter, converter,
-                headerConverter, sinkTransforms, pluginLoader, time, retryWithToleranceOperator);
+        workerSinkTask = new WorkerSinkTask(
+            taskId, sinkTask, statusListener, initialState, workerConfig,
+            ClusterConfigState.EMPTY, metrics, converter, converter,
+            headerConverter, sinkTransforms, consumer, pluginLoader, time, retryWithToleranceOperator);
     }
 
     private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {

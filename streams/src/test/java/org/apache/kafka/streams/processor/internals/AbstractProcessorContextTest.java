@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeader;
@@ -197,8 +198,16 @@ public class AbstractProcessorContextTest {
             return null;
         }
 
+        @SuppressWarnings("deprecation")
         @Override
         public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+            return null;
+        }
+
+        @Override
+        public Cancellable schedule(final Duration interval,
+                                    final PunctuationType type,
+                                    final Punctuator callback) throws IllegalArgumentException {
             return null;
         }
 
@@ -208,9 +217,11 @@ public class AbstractProcessorContextTest {
         @Override
         public <K, V> void forward(final K key, final V value, final To to) {}
 
+        @SuppressWarnings("deprecation")
         @Override
         public <K, V> void forward(final K key, final V value, final int childIndex) {}
 
+        @SuppressWarnings("deprecation")
         @Override
         public <K, V> void forward(final K key, final V value, final String childName) {}
 

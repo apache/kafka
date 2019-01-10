@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode {
+public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
     OptimizableRepartitionNode(final String nodeName,
                                final String sourceName,

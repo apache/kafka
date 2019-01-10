@@ -14,21 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Window;
-import org.apache.kafka.streams.kstream.Windows;
+/**
+ * The requesting client does not support the compression type of given partition.
+ */
+public class UnsupportedCompressionTypeException extends ApiException {
 
-class KStreamWindowReduce<K, V, W extends Window> extends KStreamWindowAggregate<K, V, V, W> {
-    KStreamWindowReduce(final Windows<W> windows,
-                        final String storeName,
-                        final Reducer<V> reducer) {
-        super(
-            windows,
-            storeName,
-            () -> null,
-            (key, newValue, oldValue) -> oldValue == null ? newValue : reducer.apply(oldValue, newValue)
-        );
+    private static final long serialVersionUID = 1L;
+
+    public UnsupportedCompressionTypeException(String message) {
+        super(message);
     }
+
+    public UnsupportedCompressionTypeException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
 }

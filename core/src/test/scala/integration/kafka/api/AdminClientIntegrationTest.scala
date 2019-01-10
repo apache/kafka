@@ -804,7 +804,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until serverCount)
-      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
   }
 
   @Test
@@ -813,16 +813,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
-      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.getReplica(topicPartition) != None,
+      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.localReplica(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logStartOffset == expectedStartOffset
+        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logStartOffset == expectedStartOffset
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
+        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
@@ -843,7 +843,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until serverCount)
-      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
+      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
     killBroker(followerIndex)
@@ -867,8 +867,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     result.all().get()
     // make sure we are in the expected state after delete records
     for (i <- 0 until serverCount) {
-      assertEquals(3, servers(i).replicaManager.getReplica(topicPartition).get.logStartOffset)
-      assertEquals(expectedLEO, servers(i).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
+      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
     }
 
     // we will create another dir just for one server
@@ -882,8 +882,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }, "timed out waiting for replica movement")
 
     // once replica moved, its LSO and LEO should match other replicas
-    assertEquals(3, servers(0).replicaManager.getReplica(topicPartition).get.logStartOffset)
-    assertEquals(expectedLEO, servers(0).replicaManager.getReplica(topicPartition).get.logEndOffset.messageOffset)
+    assertEquals(3, servers(0).replicaManager.localReplica(topicPartition).get.logStartOffset)
+    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
   }
 
   @Test
@@ -918,26 +918,17 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val producer = createProducer()
     sendRecords(producer, 10, topicPartition)
     var messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
-      messageCount == 10
-    }, "Expected 10 messages", 3000L)
+    TestUtils.consumeRecords(consumer, 10)
 
     client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(3L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
-      messageCount == 7
-    }, "Expected 7 messages", 3000L)
+    TestUtils.consumeRecords(consumer, 7)
 
     client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(8L)).asJava).all.get
     consumer.seek(topicPartition, 1)
     messageCount = 0
-    TestUtils.waitUntilTrue(() => {
-      messageCount += consumer.poll(0).count
-      messageCount == 2
-    }, "Expected 2 messages", 3000L)
+    TestUtils.consumeRecords(consumer, 2)
   }
 
   @Test
@@ -988,10 +979,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]): Unit = {
     consumer.subscribe(Collections.singletonList(topic))
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(0)
-      !consumer.assignment.isEmpty
-    }, "Expected non-empty assignment")
+    TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
@@ -1147,8 +1135,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           consumerThread.start
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
-            val matching = client.listConsumerGroups().all().get().asScala.
-              filter(listing => listing.groupId().equals(testGroupId))
+            val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 

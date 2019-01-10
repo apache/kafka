@@ -142,6 +142,7 @@ public class KStreamTransformValuesTest {
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
