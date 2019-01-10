@@ -59,6 +59,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public final class Utils {
 
@@ -551,23 +552,21 @@ public final class Utils {
     }
 
     /**
-     * Read a properties file from the given path. Log an error if duplicates are found.
+     * Read a properties file from the given path and return a multi-valued map containing all values for each key.
+     * @see #stripDuplicateProps(Map)
      * @param filename The path of the file to read
      */
-    public static Properties loadProps(String filename) throws IOException {
-        Map<Object, List<Object>> overwritten = new HashMap<>();
+    public static Map<Object, List<Object>> loadPropsMap(String filename) throws IOException {
+        Map<Object, List<Object>> propertiesMap = new HashMap<>();
 
         Properties duplicateCheckingProps = new Properties() {
             @Override
             public synchronized Object put(Object key, Object value) {
-                Object previous = super.put(key, value);
-                if (previous != null) {
-                    overwritten.merge(key, new ArrayList<>(Collections.singletonList(previous)), (left, right) -> {
-                        left.addAll(right);
-                        return left;
-                    });
-                }
-                return previous;
+                propertiesMap.merge(key, new ArrayList<>(Collections.singletonList(value)), (left, right) -> {
+                    left.addAll(right);
+                    return left;
+                });
+                return super.put(key, value);
             }
         };
 
@@ -576,24 +575,62 @@ public final class Utils {
                 duplicateCheckingProps.load(propStream);
             }
         } else {
-            System.out.println("Did not load any properties since the property file is not specified");
+            log.warn("Did not load any properties since the property file is not specified");
+        }
+        return propertiesMap;
+    }
+
+    /**
+     * Convert a multi-valued map into flattened Properties. Log a warning if duplicates values are found.
+     * @see #loadPropsMap(String)
+     * @param multiMap
+     * @return
+     */
+    public static Properties stripDuplicateProps(Map<Object, List<Object>> multiMap) {
+        StringBuilder msg = new StringBuilder("Duplicate config entries detected:");
+        boolean foundDuplicates = false;
+
+        Map<Object, Object> flattened = multiMap.entrySet().stream().collect(
+                Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get(entry.getValue().size() - 1)));
+
+        for (Object key : flattened.keySet()) {
+            List<Object> values = multiMap.get(key);
+            for (int i = 0; i < values.size() - 1; i++) {
+                foundDuplicates = true;
+                msg.append("\n\tOverwriting ")
+                        .append(key)
+                        .append(" = ")
+                        .append(values.get(i))
+                        .append(" with ")
+                        .append(flattened.get(key));
+            }
         }
 
-        if (!overwritten.isEmpty()) {
-            StringBuilder msg = new StringBuilder("Duplicate config entries detected!");
-            overwritten.forEach((key, values) -> {
-                values.forEach(value -> {
-                    msg.append("\n\tIgnoring ")
-                            .append(key)
-                            .append(" = ")
-                            .append(value);
-                });
-            });
+        if (foundDuplicates) {
             msg.append("\n");
             log.warn(msg.toString());
         }
+
+        Properties properties = new Properties();
+        properties.putAll(flattened);
+        return properties;
+    }
+
+    /**
+     * Read a properties file from the given path. Log an error if duplicates are found.
+     * @param filename The path of the file to read
+     */
+    public static Properties loadProps(String filename) throws IOException {
         Properties props = new Properties();
-        props.putAll(duplicateCheckingProps);
+
+        if (filename != null) {
+            try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
+                props.load(propStream);
+            }
+        } else {
+            System.out.println("Did not load any properties since the property file is not specified");
+        }
+
         return props;
     }
 

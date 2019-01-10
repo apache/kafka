@@ -25,6 +25,7 @@ import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
@@ -32,10 +33,14 @@ import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
 import java.util.Random;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.common.utils.Utils.abs;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -465,5 +470,36 @@ public class UtilsTest {
         // Test that deleting a non-existent directory hierarchy works.
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
+    }
+
+    @Test
+    public void testDuplicateProperties() throws Exception {
+        {
+            URL url = getClass().getResource("/properties/no-duplicates.properties");
+            File propFile = new File(url.toURI());
+            String absPath = propFile.getAbsolutePath();
+            Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
+            propMap.values().forEach(values -> assertEquals(values.size(), 1));
+
+            Properties props = Utils.stripDuplicateProps(propMap);
+            assertEquals(props.getProperty("prop1"), "value1");
+            assertEquals(props.getProperty("prop2"), "value2");
+            assertEquals(props.getProperty("prop3"), "value3");
+        }
+
+        {
+            URL url = getClass().getResource("/properties/duplicates.properties");
+            File propFile = new File(url.toURI());
+            String absPath = propFile.getAbsolutePath();
+            Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
+            assertEquals(propMap.get("prop1").size(), 2);
+            assertEquals(propMap.get("prop2").size(), 3);
+            assertEquals(propMap.get("prop3").size(), 1);
+
+            Properties props = Utils.stripDuplicateProps(propMap);
+            assertEquals(props.getProperty("prop1"), "value1-overwrite1");
+            assertEquals(props.getProperty("prop2"), "value2-overwrite2");
+            assertEquals(props.getProperty("prop3"), "value3");
+        }
     }
 }
