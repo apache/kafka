@@ -22,11 +22,12 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class MessageSpec {
     private final StructSpec struct;
 
-    private final short apiKey;
+    private final Optional<Short> apiKey;
 
     private final MessageSpecType type;
 
@@ -37,7 +38,7 @@ public final class MessageSpec {
                        @JsonProperty("apiKey") Short apiKey,
                        @JsonProperty("type") MessageSpecType type) {
         this.struct = new StructSpec(name, validVersions, fields);
-        this.apiKey = apiKey == null ? -1 : apiKey;
+        this.apiKey = apiKey == null ? Optional.empty() : Optional.of(apiKey);
         this.type = Objects.requireNonNull(type);
     }
 
@@ -61,7 +62,7 @@ public final class MessageSpec {
     }
 
     @JsonProperty("apiKey")
-    public short apiKey() {
+    public Optional<Short> apiKey() {
         return apiKey;
     }
 

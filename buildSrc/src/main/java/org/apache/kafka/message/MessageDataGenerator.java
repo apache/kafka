@@ -72,8 +72,9 @@ public final class MessageDataGenerator {
         schemaGenerator.writeSchema(className, buffer);
         generateClassConstructors(className, struct);
         buffer.printf("%n");
-        generateShortAccessor("apiKey", isTopLevel ?
-            topLevelMessageSpec.get().apiKey() : -1);
+        if (isTopLevel) {
+            generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().get());
+        }
         buffer.printf("%n");
         generateShortAccessor("lowestSupportedVersion", parentVersions.lowest());
         buffer.printf("%n");
@@ -111,8 +112,13 @@ public final class MessageDataGenerator {
     private void generateClassHeader(String className, boolean isTopLevel,
                                      boolean isSetElement) {
         Set<String> implementedInterfaces = new HashSet<>();
-        implementedInterfaces.add("Message");
-        headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
+        if (isTopLevel) {
+            implementedInterfaces.add("ApiMessage");
+            headerGenerator.addImport(MessageGenerator.API_MESSAGE_CLASS);
+        } else {
+            implementedInterfaces.add("Message");
+            headerGenerator.addImport(MessageGenerator.MESSAGE_CLASS);
+        }
         if (isSetElement) {
             headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
             implementedInterfaces.add("ImplicitLinkedHashMultiSet.Element");

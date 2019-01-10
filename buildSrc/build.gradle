@@ -20,7 +20,7 @@ repositories {
 dependencies {
   compile "com.fasterxml.jackson.core:jackson-databind:2.9.6"
   compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:2.9.6"
+  compile "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.9.6"
 }
 
-// Workaround for https://github.com/gradle/gradle/issues/1271
 test.enabled=false

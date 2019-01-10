@@ -25,11 +25,6 @@ import org.apache.kafka.common.protocol.types.Struct;
  */
 public interface Message {
     /**
-     * Returns the API key of this message, or -1 if there is none.
-     */
-    short apiKey();
-
-    /**
      * Returns the lowest supported API key of this message, inclusive.
      */
     short lowestSupportedVersion();

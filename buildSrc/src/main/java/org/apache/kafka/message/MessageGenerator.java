@@ -43,7 +43,9 @@ public final class MessageGenerator {
 
     static final String JAVA_SUFFIX = ".java";
 
-    static final String MESSAGE_FACTORY_JAVA = "MessageFactory.java";
+    static final String API_MESSAGE_FACTORY_JAVA = "ApiMessageFactory.java";
+
+    static final String API_MESSAGE_CLASS = "org.apache.kafka.common.protocol.ApiMessage";
 
     static final String MESSAGE_CLASS = "org.apache.kafka.common.protocol.Message";
 
@@ -100,7 +102,7 @@ public final class MessageGenerator {
             File outputFile = new File(outputDir, javaName);
             outputFiles.put(outputFile.toString(), outputFile);
         }
-        File factoryFile = new File(outputDir, MESSAGE_FACTORY_JAVA);
+        File factoryFile = new File(outputDir, API_MESSAGE_FACTORY_JAVA);
         outputFiles.put(factoryFile.toString(), factoryFile);
         return outputFiles;
     }
@@ -108,7 +110,7 @@ public final class MessageGenerator {
     public static void processDirectories(String outputDir, String inputDir) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        MessageFactoryGenerator messageFactoryGenerator = new MessageFactoryGenerator();
+        ApiMessageFactoryGenerator messageFactoryGenerator = new ApiMessageFactoryGenerator();
         HashSet<String> outputFileNames = new HashSet<>();
         for (Path inputPath : Files.newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
             try {
@@ -128,8 +130,8 @@ public final class MessageGenerator {
                 throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
             }
         }
-        Path factoryOutputPath = Paths.get(outputDir, MESSAGE_FACTORY_JAVA);
-        outputFileNames.add(MESSAGE_FACTORY_JAVA);
+        Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_FACTORY_JAVA);
+        outputFileNames.add(API_MESSAGE_FACTORY_JAVA);
         try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
             messageFactoryGenerator.generate();
             messageFactoryGenerator.write(writer);
