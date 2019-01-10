@@ -127,7 +127,6 @@ public class TaskManager {
                     if (!active.maybeResumeSuspendedTask(taskId, partitions)) {
                         newTasks.put(taskId, partitions);
                     }
-                    active.maybeResumeRestoringTask(taskId, partitions);
                 } catch (final StreamsException e) {
                     log.error("Failed to resume an active task {} due to the following error:", taskId, e);
                     throw e;
@@ -376,7 +375,7 @@ public class TaskManager {
     }
 
     public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                               final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+                                      final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }

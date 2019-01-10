@@ -19,8 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.errors.LockException;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -91,31 +89,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         restoringByPartition.clear();
 
         return exception;
-    }
-
-    /**
-     * @throws TaskMigratedException if the task producer got fenced (EOS only)
-     */
-    void maybeResumeRestoringTask(final TaskId taskId, final Set<TopicPartition> partitions) {
-        if (restoring.containsKey(taskId)) {
-            final StreamTask task = restoring.get(taskId);
-            log.trace("Found and resume restoring task {}", taskId);
-            if (task.partitions().equals(partitions)) {
-                try {
-                    if (!task.initializeStateStores()) {
-                        log.debug("Transitioning task {} to restoring", taskId);
-                    } else {
-                        transitionToRunning(task);
-                    }
-                } catch (final LockException e) {
-                    // made this trace as it will spam the logs in the poll loop.
-                    log.error("Could not create task {} due to {}; this is not expected", taskId, e.toString());
-                    throw new StreamsException(e);
-                }
-            } else {
-                log.warn("Couldn't resume restoring task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
-            }
-        }
     }
 
     void updateRestored(final Collection<TopicPartition> restored) {
