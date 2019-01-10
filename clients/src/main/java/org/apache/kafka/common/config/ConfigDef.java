@@ -862,7 +862,7 @@ public class ConfigDef {
         }
 
         public static Range atLeast(Number min) {
-            return atLeast(min, new ArrayList<>());
+            return atLeast(min, Collections.emptyList());
         }
 
         /**
@@ -873,7 +873,7 @@ public class ConfigDef {
         }
 
         public static Range between(Number min, Number max) {
-            return between(min, max, new ArrayList<>());
+            return between(min, max, Collections.emptyList());
         }
 
         public void ensureValid(String name, Object o) {
