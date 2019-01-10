@@ -250,10 +250,6 @@ public final class WorkerManager {
             this.reference = shutdownManager.takeReference();
         }
 
-        boolean hasExpired() {
-            return spec.hasExpired(time, startedMs);
-        }
-
         long workerId() {
             return workerId;
         }
@@ -284,7 +280,8 @@ public final class WorkerManager {
         void transitionToRunning() {
             state = State.RUNNING;
             timeoutFuture = scheduler.schedule(stateChangeExecutor,
-                new StopWorker(workerId, false), spec.durationMs());
+                new StopWorker(workerId, false),
+                Math.max(0, spec.endMs() - time.milliseconds()));
         }
 
         void transitionToStopping() {
@@ -320,7 +317,7 @@ public final class WorkerManager {
                     "a worker with that id.", nodeName, workerId);
                 return;
             }
-            if (worker.hasExpired()) {
+            if (worker.spec.endMs() <= time.milliseconds()) {
                 log.info("{}: Will not run worker {} as it has expired.", nodeName, worker);
                 stateChangeExecutor.submit(new HandleWorkerHalting(worker,
                     "worker expired", true));

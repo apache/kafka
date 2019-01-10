@@ -43,14 +43,12 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.ThreadUtils;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
-import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerReceiving;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.rest.WorkerStarting;
@@ -84,7 +82,6 @@ public final class NodeManager {
         private final long workerId;
         private final String taskId;
         private final TaskSpec spec;
-        private long startedMs = -1;
         private boolean shouldRun;
         private WorkerState state;
 
@@ -97,15 +94,9 @@ public final class NodeManager {
             this.state = state;
         }
 
-        boolean hasExpired() {
-            return spec.hasExpired(time, startedMs);
-        }
-
         void tryCreate() {
             try {
                 client.createWorker(new CreateWorkerRequest(workerId, taskId, spec));
-                if (startedMs == -1)
-                    startedMs = time.milliseconds();
             } catch (Throwable e) {
                 log.error("{}: error creating worker {}.", node.name(), this, e);
             }
@@ -155,17 +146,14 @@ public final class NodeManager {
      */
     private final NodeHeartbeat heartbeat;
 
-    private final Time time;
-
     /**
      * A future which can be used to cancel the periodic hearbeat task.
      */
     private ScheduledFuture<?> heartbeatFuture;
 
-    NodeManager(Node node, TaskManager taskManager, Time time) {
+    NodeManager(Node node, TaskManager taskManager) {
         this.node = node;
         this.taskManager = taskManager;
-        this.time = time;
         this.client = new AgentClient.Builder().
             maxTries(1).
             target(node.hostname(), Node.Util.getTrogdorAgentPort(node)).
@@ -214,64 +202,46 @@ public final class NodeManager {
                 if (log.isTraceEnabled()) {
                     log.trace("{}: got heartbeat status {}", node.name(), agentStatus);
                 }
-                handleMissingWorkers(agentStatus);
-                handlePresentWorkers(agentStatus);
-            } catch (Throwable e) {
-                log.error("{}: Unhandled exception in NodeHeartbeatRunnable", node.name(), e);
-            }
-        }
-
-        /**
-         * Identify workers which we think should be running, but which do not appear
-         * in the agent's response.  We need to send startWorker requests for these.
-         */
-        private void handleMissingWorkers(AgentStatusResponse agentStatus) {
-            for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
-                Long workerId = entry.getKey();
-                if (agentStatus.workers().containsKey(workerId))
-                    continue;
-                ManagedWorker worker = entry.getValue();
-                if (!worker.shouldRun)
-                    continue;
-
-                if (!worker.hasExpired()) {
-                    worker.tryCreate();
-                } else {
-                    log.info("{}: Will not create worker state {} as it has expired. ", node.name(), worker.state);
-                    worker.shouldRun = false;
-                    taskManager.updateWorkerState(node.name(), worker.workerId,
-                        new WorkerDone(worker.taskId, worker.spec, worker.startedMs, -1, null, "worker expired"));
-                }
-            }
-        }
-
-        private void handlePresentWorkers(AgentStatusResponse agentStatus) {
-            for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
-                long workerId = entry.getKey();
-                WorkerState state = entry.getValue();
-                ManagedWorker worker = workers.get(workerId);
-                if (worker == null) {
-                    // Identify tasks which are running, but which we don't know about.
-                    // Add these to the NodeManager as tasks that should not be running.
-                    log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
-                    workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
-                        state.spec(), false, state));
-                } else {
-                    // Handle workers which need to be stopped.
-                    if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
-                        if (!worker.shouldRun) {
-                            worker.tryStop();
+                // Identify workers which we think should be running, but which do not appear
+                // in the agent's response.  We need to send startWorker requests for these.
+                for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
+                    Long workerId = entry.getKey();
+                    if (!agentStatus.workers().containsKey(workerId)) {
+                        ManagedWorker worker = entry.getValue();
+                        if (worker.shouldRun) {
+                            worker.tryCreate();
                         }
                     }
-                    // Notify the TaskManager if the worker state has changed.
-                    if (worker.state.equals(state)) {
-                        log.debug("{}: worker state is still {}", node.name(), worker.state);
+                }
+                for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
+                    long workerId = entry.getKey();
+                    WorkerState state = entry.getValue();
+                    ManagedWorker worker = workers.get(workerId);
+                    if (worker == null) {
+                        // Identify tasks which are running, but which we don't know about.
+                        // Add these to the NodeManager as tasks that should not be running.
+                        log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
+                        workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
+                            state.spec(), false, state));
                     } else {
-                        log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
-                        worker.state = state;
-                        taskManager.updateWorkerState(node.name(), worker.workerId, state);
+                        // Handle workers which need to be stopped.
+                        if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
+                            if (!worker.shouldRun) {
+                                worker.tryStop();
+                            }
+                        }
+                        // Notify the TaskManager if the worker state has changed.
+                        if (worker.state.equals(state)) {
+                            log.debug("{}: worker state is still {}", node.name(), worker.state);
+                        } else {
+                            log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
+                            worker.state = state;
+                            taskManager.updateWorkerState(node.name(), worker.workerId, state);
+                        }
                     }
                 }
+            } catch (Throwable e) {
+                log.error("{}: Unhandled exception in NodeHeartbeatRunnable", node.name(), e);
             }
         }
     }

@@ -19,7 +19,6 @@ package org.apache.kafka.trogdor.task;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Collections;
@@ -68,23 +67,18 @@ public abstract class TaskSpec {
     }
 
     /**
+     * Get the deadline time of this task in ms
+     */
+    public final long endMs() {
+        return startMs + durationMs;
+    }
+
+    /**
      * Get the duration of this task in ms.
      */
     @JsonProperty
     public final long durationMs() {
         return durationMs;
-    }
-
-    /**
-     * Whether the task is considered expired
-     * @param startedMs the actual time that this task started on
-     */
-    public boolean hasExpired(Time time, long startedMs) {
-        long startMs = this.startMs > 0 ? this.startMs : startedMs;
-        if (startMs <= 0) // task doesn't have a start time yet
-            return false;
-
-        return startMs + durationMs < time.milliseconds();
     }
 
     /**

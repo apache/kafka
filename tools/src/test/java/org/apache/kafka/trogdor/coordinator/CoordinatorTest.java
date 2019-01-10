@@ -363,12 +363,15 @@ public class CoordinatorTest {
     @Test
     public void testNetworkPartitionFault() throws Exception {
         CapturingCommandRunner runner = new CapturingCommandRunner();
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
                 addCoordinator("node01").
                 addAgent("node01").
                 addAgent("node02").
                 addAgent("node03").
                 commandRunner(runner).
+                scheduler(scheduler).
                 build()) {
             CoordinatorClient coordinatorClient = cluster.coordinatorClient();
             NetworkPartitionFaultSpec spec = new NetworkPartitionFaultSpec(0, Long.MAX_VALUE,
@@ -541,7 +544,7 @@ public class CoordinatorTest {
     }
 
     @Test
-    public void testTaskRequestExpiredTaskDoesNotGetRun() throws Exception {
+    public void testTaskRequestWithOldStartMsGetsUpdated() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         Scheduler scheduler = new MockScheduler(time);
         try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
@@ -554,13 +557,37 @@ public class CoordinatorTest {
             time.sleep(552);
 
             CoordinatorClient coordinatorClient = cluster.coordinatorClient();
-            NoOpTaskSpec alreadyExpired = new NoOpTaskSpec(1, 500);
-            coordinatorClient.createTask(new CreateTaskRequest("alreadyExpired", alreadyExpired));
-            TaskState expectedState = new ExpectedTaskBuilder("alreadyExpired").taskState(
-                new TaskDone(fooSpec, -1, 552, "worker expired", false, null)
+            NoOpTaskSpec updatedSpec = new NoOpTaskSpec(552, 500);
+            coordinatorClient.createTask(new CreateTaskRequest("fooSpec", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("fooSpec").taskState(
+                new TaskRunning(updatedSpec, 552, new TextNode("receiving"))
             ).build().taskState();
 
-            TaskState resp = coordinatorClient.task(new TaskRequest("alreadyExpired"));
+            TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
+            assertEquals(expectedState, resp);
+        }
+    }
+
+    @Test
+    public void testTaskRequestWithFutureStartMsDoesNotGetRun() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1000, 500);
+            time.sleep(999);
+
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+            coordinatorClient.createTask(new CreateTaskRequest("fooSpec", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("fooSpec").taskState(
+                new TaskPending(fooSpec)
+            ).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("fooSpec"));
             assertEquals(expectedState, resp);
         }
     }
