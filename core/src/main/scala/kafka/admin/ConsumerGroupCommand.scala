@@ -128,10 +128,10 @@ object ConsumerGroupCommand extends Logging {
   private[admin] sealed trait CsvRecord
   private[admin] case class CsvRecordWithGroup(group: String, topic: String, partition: Int, offset: Long) extends CsvRecord
   private[admin] case class CsvRecordNoGroup(topic: String, partition: Int, offset: Long) extends CsvRecord
-  object CsvRecordWithGroup {
+  private[admin] object CsvRecordWithGroup {
     val fields = Array("group", "topic", "partition", "offset")
   }
-  object CsvRecordNoGroup {
+  private[admin] object CsvRecordNoGroup {
     val fields = Array("topic", "partition", "offset")
   }
   // Example: CsvUtils().readerFor[CsvRecordWithoutGroup]
@@ -211,11 +211,12 @@ object ConsumerGroupCommand extends Logging {
     private def printOffsets(group: String, state: Option[String], assignments: Option[Seq[PartitionAssignmentState]]): Unit = {
       if (shouldPrintMemberState(group, state, size(assignments))) {
         // find proper columns width
-        var (maxTopicLen, maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15, 15)
+        var (maxGroupLen, maxTopicLen, maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15, 15, 15)
         assignments match {
           case None => // do nothing
           case Some(consumerAssignments) =>
             consumerAssignments.foreach { consumerAssignment =>
+              maxGroupLen = Math.max(maxGroupLen, consumerAssignment.group.length)
               maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
               maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
               maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
@@ -223,19 +224,20 @@ object ConsumerGroupCommand extends Logging {
             }
         }
 
-        println(s"\n%${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %s"
-          .format("TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID", "GROUP"))
+        println(s"\n%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s"
+          .format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID"))
 
         assignments match {
           case None => // do nothing
           case Some(consumerAssignments) =>
             consumerAssignments.foreach { consumerAssignment =>
-              println(s"%-${maxTopicLen}s %-10s %-15s %-15s %-15s %-${maxConsumerIdLen}s %-${maxHostLen}s %-${maxClientIdLen}s %s".format(
+              println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s".format(
+                consumerAssignment.group,
                 consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
                 consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
                 consumerAssignment.lag.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE),
-                consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE),
-                consumerAssignment.group))
+                consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE))
+              )
             }
         }
       }
@@ -256,8 +258,8 @@ object ConsumerGroupCommand extends Logging {
             }
         }
 
-        print(s"\n%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s %${-maxGroupLen}s "
-          .format("CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS", "GROUP"))
+        print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
+          .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
         if (verbose)
           print(s"   %s".format("ASSIGNMENT"))
         println()
@@ -266,8 +268,8 @@ object ConsumerGroupCommand extends Logging {
           case None => // do nothing
           case Some(memberAssignments) =>
             memberAssignments.foreach { memberAssignment =>
-              print(s"%${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s %${-maxGroupLen}s ".format(
-                memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions, memberAssignment.group))
+              print(s"%${-maxGroupLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s %${-maxConsumerIdLen}s ".format(
+                memberAssignment.group, memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
               if (verbose) {
                 val partitions = memberAssignment.assignment match {
                   case List() => MISSING_COLUMN_VALUE
@@ -288,8 +290,8 @@ object ConsumerGroupCommand extends Logging {
       if (shouldPrintMemberState(group, Some(state.state), Some(1))) {
         val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
         val coordinatorColLen = Math.max(25, coordinator.length)
-        print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format("COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS", "GROUP"))
-        print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format(coordinator, state.assignmentStrategy, state.state, state.numMembers, state.group))
+        print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format("GROUP", "COORDINATOR (ID)", "ASSIGNMENT-STRATEGY", "STATE", "#MEMBERS"))
+        print(s"\n%${-coordinatorColLen}s %-25s %-20s %-15s %s".format(state.group, coordinator, state.assignmentStrategy, state.state, state.numMembers))
         println()
       }
     }
