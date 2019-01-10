@@ -19,6 +19,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.LockException;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.TaskId;
 
@@ -30,7 +32,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Map<TaskId, StreamTask> restoring = new HashMap<>();
@@ -65,19 +66,54 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return super.allTasksRunning() && restoring.isEmpty();
     }
 
-    void closeNonAssignedRestoringTasks(final Map<TaskId, Set<TopicPartition>> newAssignment) {
+    RuntimeException closeAllRestoringTasks() {
+        RuntimeException exception = null;
+
+        log.trace("Close restoring stream task {}", restoring.keySet());
         final Iterator<StreamTask> restoringTaskIterator = restoring.values().iterator();
         while (restoringTaskIterator.hasNext()) {
             final StreamTask task = restoringTaskIterator.next();
-            if (!newAssignment.containsKey(task.id()) || !task.partitions().equals(newAssignment.get(task.id()))) {
-                log.debug("Closing restoring and not re-assigned task {}", task.id());
-                try {
-                    task.closeStateManager(true);
-                } catch (final Exception e) {
-                    log.error("Failed to remove restoring task {} due to the following error:", task.id(), e);
-                } finally {
-                    restoringTaskIterator.remove();
+            log.debug("Closing restoring and not re-assigned task {}", task.id());
+            try {
+                task.closeStateManager(true);
+            } catch (final RuntimeException e) {
+                log.error("Failed to remove restoring task {} due to the following error:", task.id(), e);
+                if (exception == null) {
+                    exception = e;
                 }
+            } finally {
+                restoringTaskIterator.remove();
+            }
+        }
+
+        restoring.clear();
+        restoredPartitions.clear();
+        restoringByPartition.clear();
+
+        return exception;
+    }
+
+    /**
+     * @throws TaskMigratedException if the task producer got fenced (EOS only)
+     */
+    void maybeResumeRestoringTask(final TaskId taskId, final Set<TopicPartition> partitions) {
+        if (restoring.containsKey(taskId)) {
+            final StreamTask task = restoring.get(taskId);
+            log.trace("Found and resume restoring task {}", taskId);
+            if (task.partitions().equals(partitions)) {
+                try {
+                    if (!task.initializeStateStores()) {
+                        log.debug("Transitioning task {} to restoring", taskId);
+                    } else {
+                        transitionToRunning(task);
+                    }
+                } catch (final LockException e) {
+                    // made this trace as it will spam the logs in the poll loop.
+                    log.error("Could not create task {} due to {}; this is not expected", taskId, e.toString());
+                    throw new StreamsException(e);
+                }
+            } else {
+                log.warn("Couldn't resume restoring task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
             }
         }
     }
@@ -120,15 +156,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
         }
-    }
-
-    RuntimeException suspend() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(super.suspend());
-        log.trace("Close restoring stream task {}", restoring.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
-        restoring.clear();
-        restoringByPartition.clear();
-        return firstException.get();
     }
 
     /**
