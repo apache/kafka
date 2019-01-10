@@ -525,7 +525,7 @@ public class Worker {
         producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
         producerProps.put(ProducerConfig.MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION, "1");
         producerProps.put(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "connect-producer-" + id);
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "connector-producer-" + id);
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
         return producerProps;
@@ -538,7 +538,7 @@ public class Worker {
         Map<String, Object> consumerProps = new HashMap<>();
 
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
-        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connect-consumer-" + id);
+        consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connector-consumer-" + id);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
                   Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");

@@ -830,7 +830,7 @@ public class WorkerTest extends ThreadedTest {
     @Test
     public void testProducerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
-        expectedConfigs.put("client.id", "connect-producer-job-0");
+        expectedConfigs.put("client.id", "connector-producer-job-0");
         assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID, config));
     }
 
@@ -853,7 +853,7 @@ public class WorkerTest extends ThreadedTest {
     public void testConsumerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test");
-        expectedConfigs.put("client.id", "connect-consumer-test-1");
+        expectedConfigs.put("client.id", "connector-consumer-test-1");
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), config));
     }
 
