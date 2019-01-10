@@ -30,10 +30,10 @@ buildscript {
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
     classpath 'org.scoverage:gradle-scoverage:2.5.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.2'
-    classpath 'org.owasp:dependency-check-gradle:3.3.4'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.16.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.5"
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.3'
+    classpath 'org.owasp:dependency-check-gradle:4.0.2'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
   }
 }
 
@@ -89,7 +89,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "5.0"
+  gradleVersion = "5.1"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
