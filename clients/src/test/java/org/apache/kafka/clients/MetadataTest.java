@@ -435,8 +435,8 @@ public class MetadataTest {
         metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true, false, new ClusterResourceListeners());
         assertFalse(metadata.updateRequested());
 
-        int[] epochs = {42, 42, 41, 41, 42, 43, 43, 42, 41, 43};
-        boolean[] updateResult = {true, true, false, false, true, true, true, false, false, true};
+        int[] epochs =           {42,   42,    41,    41,    42,    43,   43,    42,    41,    44};
+        boolean[] updateResult = {true, false, false, false, false, true, false, false, false, true};
         TopicPartition tp = new TopicPartition("topic", 0);
 
         for (int i = 0; i < epochs.length; i++) {
@@ -517,7 +517,7 @@ public class MetadataTest {
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 1);
 
         metadata.update(emptyMetadataResponse(), 1L);
-        assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 1));
+        assertFalse(metadata.updateLastSeenEpochIfNewer(tp, 1));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 1);
 
         metadata.update(emptyMetadataResponse(), 2L);

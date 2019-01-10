@@ -238,7 +238,7 @@ public final class Cluster {
      * @return A list of partitions
      */
     public List<PartitionInfo> partitionsForNode(int nodeId) {
-        return partitionsByNode.get(nodeId);
+        return partitionsByNode.getOrDefault(nodeId, Collections.emptyList());
     }
 
     /**
