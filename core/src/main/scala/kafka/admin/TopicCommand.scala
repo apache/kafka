@@ -28,7 +28,7 @@ import kafka.utils.Implicits._
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{Config, ConfigEntry, ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
@@ -165,15 +165,14 @@ object TopicCommand extends Logging {
           new NewTopic(topic.name, asJavaReplicaReassignment(topic.replicaAssignment.get))
         else
           new NewTopic(topic.name, topic.partitions.get, topic.replicationFactor.shortValue())
+        val configsMap = topic.configsToAdd.stringPropertyNames()
+          .asScala
+          .map(name => name -> topic.configsToAdd.getProperty(name))
+          .toMap.asJava
 
+        newTopic.configs(configsMap)
         val createResult = adminClient.createTopics(Collections.singleton(newTopic))
         createResult.all().get()
-        val topicConfigResource = new ConfigResource(Type.TOPIC, topic.name)
-        val config = new Config(topic.configsToAdd.asScala.map(cfg => new ConfigEntry(cfg._1, cfg._2)).asJavaCollection)
-        if (!topic.configsToAdd.isEmpty) {
-          val configResult = adminClient.alterConfigs(Map(topicConfigResource -> config).asJava)
-          configResult.all().get()
-        }
       } else {
         throw new IllegalArgumentException(s"Topic ${topic.name} already exists")
       }
