@@ -30,7 +30,7 @@ from kafkatest.services.kafka import config_property
 from kafkatest.services.monitor.jmx import JmxMixin
 from kafkatest.services.security.minikdc import MiniKdc
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH, LATEST_0_10_0
+from kafkatest.version import DEV_BRANCH, LATEST_0_10_0, LATEST_2_1
 
 Port = collections.namedtuple('Port', ['name', 'number', 'open'])
 
@@ -126,7 +126,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for node in self.nodes:
             node.version = version
             node.config = KafkaConfig(**{config_property.BROKER_ID: self.idx(node)})
-
 
     def set_version(self, version):
         for node in self.nodes:
@@ -341,10 +340,16 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
 
         cmd = kafka_topic_script + " "
-        cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
+        if node.version > LATEST_2_1 or node.version == DEV_BRANCH:
+            cmd += "--bootstrap-server %(bootstrap_servers)s --create --topic %(topic)s " % {
+                'bootstrap_servers': self.bootstrap_servers(),
+                'topic': topic_cfg.get("topic"),
+            }
+        else:
+            cmd += "--zookeeper %(zk_connect)s --create --topic %(topic)s " % {
                 'zk_connect': self.zk_connect_setting(),
                 'topic': topic_cfg.get("topic"),
-           }
+            }
         if 'replica-assignment' in topic_cfg:
             cmd += " --replica-assignment %(replica-assignment)s" % {
                 'replica-assignment': topic_cfg.get('replica-assignment')
