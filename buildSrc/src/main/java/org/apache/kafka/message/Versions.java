@@ -19,8 +19,22 @@ package org.apache.kafka.message;
 
 import java.util.Objects;
 
+/**
+ * A version range.
+ *
+ * A range consists of two 16-bit numbers: the lowest version which is accepted, and the highest.
+ * Ranges are inclusive, meaning that both the lowest and the highest version are valid versions.
+ * The only exception to this is the NONE range, which contains no versions at all.
+ *
+ * Version ranges can be represented as strings.
+ *
+ * A single supported version V is represented as "V".
+ * A bounded range from A to B is represented as "A-B".
+ * All versions greater than A is represented as "A+".
+ * The NONE range is represented as an the string "none".
+ */
 public final class Versions {
-    private final short lowest;
+    private final short lowest ;
     private final short highest;
 
     public static Versions parse(String input, Versions defaultVersions) {
@@ -57,6 +71,12 @@ public final class Versions {
     public static final String NONE_STRING = "none";
 
     public Versions(short lowest, short highest) {
+        if ((NONE.lowest != lowest) || (NONE.highest != highest)) {
+            if ((lowest < 0) || (highest < 0)) {
+                throw new RuntimeException("Invalid negative version range " +
+                    lowest + " to " + highest);
+            }
+        }
         this.lowest = lowest;
         this.highest = highest;
     }
