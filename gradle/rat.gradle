@@ -112,7 +112,7 @@ class RatPlugin implements Plugin<Project> {
       mavenCentral()
     }
     project.dependencies {
-      rat 'org.apache.rat:apache-rat-tasks:0.12'
+      rat 'org.apache.rat:apache-rat-tasks:0.13'
     }
   }
 }
