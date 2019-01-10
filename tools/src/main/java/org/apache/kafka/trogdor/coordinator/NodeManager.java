@@ -204,48 +204,58 @@ public final class NodeManager {
                 if (log.isTraceEnabled()) {
                     log.trace("{}: got heartbeat status {}", node.name(), agentStatus);
                 }
-                // Identify workers which we think should be running, but which do not appear
-                // in the agent's response.  We need to send startWorker requests for these.
-                for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
-                    Long workerId = entry.getKey();
-                    if (!agentStatus.workers().containsKey(workerId)) {
-                        ManagedWorker worker = entry.getValue();
-                        if (worker.shouldRun) {
-                            worker.tryCreate();
-                        }
-                    }
-                }
-                for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
-                    long workerId = entry.getKey();
-                    WorkerState state = entry.getValue();
-                    ManagedWorker worker = workers.get(workerId);
-                    if (worker == null) {
-                        // Identify tasks which are running, but which we don't know about.
-                        // Add these to the NodeManager as tasks that should not be running.
-                        log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
-                        workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
-                            state.spec(), false, state));
-                    } else {
-                        // Handle workers which need to be stopped.
-                        if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
-                            if (!worker.shouldRun) {
-                                worker.tryStop();
-                            }
-                        }
-                        // Notify the TaskManager if the worker state has changed.
-                        if (worker.state.equals(state)) {
-                            log.debug("{}: worker state is still {}", node.name(), worker.state);
-                        } else {
-                            log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
-                            if (state instanceof WorkerDone || state instanceof WorkerStopping)
-                                worker.shouldRun = false;
-                            worker.state = state;
-                            taskManager.updateWorkerState(node.name(), worker.workerId, state);
-                        }
-                    }
-                }
+                handleMissingWorkers(agentStatus);
+                handlePresentWorkers(agentStatus);
             } catch (Throwable e) {
                 log.error("{}: Unhandled exception in NodeHeartbeatRunnable", node.name(), e);
+            }
+        }
+
+        /**
+         * Identify workers which we think should be running but do not appear in the agent's response.
+         * We need to send startWorker requests for those
+         */
+        private void handleMissingWorkers(AgentStatusResponse agentStatus) {
+            for (Map.Entry<Long, ManagedWorker> entry : workers.entrySet()) {
+                Long workerId = entry.getKey();
+                if (!agentStatus.workers().containsKey(workerId)) {
+                    ManagedWorker worker = entry.getValue();
+                    if (worker.shouldRun) {
+                        worker.tryCreate();
+                    }
+                }
+            }
+        }
+
+        private void handlePresentWorkers(AgentStatusResponse agentStatus) {
+            for (Map.Entry<Long, WorkerState> entry : agentStatus.workers().entrySet()) {
+                long workerId = entry.getKey();
+                WorkerState state = entry.getValue();
+                ManagedWorker worker = workers.get(workerId);
+                if (worker == null) {
+                    // Identify tasks which are running, but which we don't know about.
+                    // Add these to the NodeManager as tasks that should not be running.
+                    log.warn("{}: scheduling unknown worker with ID {} for stopping.", node.name(), workerId);
+                    workers.put(workerId, new ManagedWorker(workerId, state.taskId(),
+                        state.spec(), false, state));
+                } else {
+                    // Handle workers which need to be stopped.
+                    if (state instanceof WorkerStarting || state instanceof WorkerRunning) {
+                        if (!worker.shouldRun) {
+                            worker.tryStop();
+                        }
+                    }
+                    // Notify the TaskManager if the worker state has changed.
+                    if (worker.state.equals(state)) {
+                        log.debug("{}: worker state is still {}", node.name(), worker.state);
+                    } else {
+                        log.info("{}: worker state changed from {} to {}", node.name(), worker.state, state);
+                        if (state instanceof WorkerDone || state instanceof WorkerStopping)
+                            worker.shouldRun = false;
+                        worker.state = state;
+                        taskManager.updateWorkerState(node.name(), worker.workerId, state);
+                    }
+                }
             }
         }
     }
