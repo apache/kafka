@@ -268,7 +268,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
     topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
-    onPreferredReplicaElection(pendingPreferredReplicaElections, false, false)
+    onPreferredReplicaElection(pendingPreferredReplicaElections, zkTriggered)
     info("Starting the controller scheduler")
     kafkaScheduler.startup()
     if (config.autoLeaderRebalanceEnable) {
@@ -628,14 +628,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     removePartitionsFromReassignedPartitions(partitionsToBeRemovedFromReassignment)
   }
 
+  private sealed trait ElectionType
+  private object autoTriggered extends ElectionType
+  private object zkTriggered extends ElectionType
+  private object adminClientTriggered extends ElectionType
+
   private def onPreferredReplicaElection(partitions: Set[TopicPartition],
-                                         isTriggeredByAutoRebalance: Boolean = false,
-                                         newPath: Boolean = false): Map[TopicPartition, Throwable] = {
+                                         electionType: ElectionType): Map[TopicPartition, Throwable] = {
     info(s"Starting preferred replica leader election for partitions ${partitions.mkString(",")}")
     try {
       val results = partitionStateMachine.handleStateChanges(partitions.toSeq, OnlinePartition,
         Option(PreferredReplicaPartitionLeaderElectionStrategy))
-      if (!newPath) {
+      if (electionType != adminClientTriggered) {
         results.foreach(entry =>
           if (entry._2.isInstanceOf[ControllerMovedException]) {
             error(s"Error completing preferred replica leader election for partition ${entry._1} because controller has moved to another broker.", entry._2)
@@ -647,8 +651,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       }
       return results;
     } finally {
-      if (!newPath) {
-        removePartitionsFromPreferredReplicaElection(partitions, isTriggeredByAutoRebalance)
+      if (electionType != adminClientTriggered) {
+        removePartitionsFromPreferredReplicaElection(partitions, electionType == autoTriggered)
       }
     }
   }
@@ -995,7 +999,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
           controllerContext.allTopics.contains(tp.topic))
-        onPreferredReplicaElection(candidatePartitions.toSet, isTriggeredByAutoRebalance = true, newPath = false)
+        onPreferredReplicaElection(candidatePartitions.toSet, autoTriggered)
       }
     }
   }
@@ -1566,7 +1570,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             currentLeader != preferredReplica
           }
 
-          val electionErrors = onPreferredReplicaElection(electablePartitions, false, newPath)
+          val electionErrors = onPreferredReplicaElection(electablePartitions, if (newPath) adminClientTriggered else zkTriggered)
           val successfulPartitions = electablePartitions -- electionErrors.keySet
           val results = electionErrors.map { case (partition, ex) =>
             val apiError = if (ex.isInstanceOf[StateChangeFailedException])
