@@ -2331,8 +2331,8 @@ public class TransactionManagerTest {
         try {
             result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
             fail("Should have raised TimeoutException");
-        } catch (TimeoutException e) {}
-
+        } catch (TimeoutException e) {
+        }
 
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         sender.run(time.milliseconds());

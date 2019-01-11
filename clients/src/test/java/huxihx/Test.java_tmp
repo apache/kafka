@@ -1,0 +1,104 @@
+package huxihx;
+
+import org.apache.kafka.clients.admin.AdminClient;
+import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+
+import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+
+public class Test {
+
+    public static void main(String[] args) throws Exception {
+        testConsumer();
+//        testProducer();
+//        testAdminClient();
+    }
+
+
+    public static void testAdminClient() throws ExecutionException, InterruptedException {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "localhost:9092");
+
+        try (AdminClient client = AdminClient.create(props)) {
+            Map<String, NewPartitions> partitions = new HashMap<>();
+            partitions.put("t1", NewPartitions.increaseTo(20));
+            client.createPartitions(partitions).all().get();
+        }
+    }
+
+    public static void testProducer() throws InterruptedException {
+
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "localhost:9092,localhost:9093,localhost:9094");
+        props.put("acks", "all");
+        props.put("delivery.timeout.ms", 30001);
+        props.put("batch.size", 163840);
+        props.put("linger.ms", 4000);
+        props.put("retries", Integer.MAX_VALUE);
+        props.put("delivery.timeout.ms", 40000);
+//        props.put(ProducerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, 10000);
+        props.put("buffer.memory", 33554432);
+        props.put("key.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+        props.put("value.serializer", "org.apache.kafka.common.serialization.StringSerializer");
+//        props.put("metadata.max.age.ms", 10000);
+
+        Producer<String, String> producer = new KafkaProducer<>(props);
+        try {
+            System.out.println("Sending....");
+            while (true) {
+                producer.send(new ProducerRecord<>("test", "value"), (m, e) -> {
+                    if (e != null) {
+                        System.out.println("Failed to send event.......");
+                    }
+                });
+            }
+        } finally {
+            producer.close(5000, TimeUnit.MILLISECONDS);
+        }
+
+    }
+
+    public static void testConsumer() throws InterruptedException {
+        Properties props = new Properties();
+        props.put("bootstrap.servers", "localhost:9092");
+//        props.put("group.id", "test-group");
+        props.put("enable.auto.commit", "true");
+        props.put("auto.commit.interval.ms", "2000");
+//        props.put("auto.offset.reset", "earliest");
+//        props.put("metadata.max.age.ms", 5000);
+//        props.put(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG, 10000);
+        props.put("key.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+        props.put("value.deserializer", "org.apache.kafka.common.serialization.StringDeserializer");
+
+        try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props)) {
+
+            Runtime.getRuntime().addShutdownHook(new Thread(() -> consumer.close()));
+//            consumer.subscribe(Arrays.asList("t1"));
+            consumer.assign(Arrays.asList(new TopicPartition("test", 0)));
+
+//            consumer.subscribe(Arrays.asList("t1"));
+//
+            while (true) {
+                ConsumerRecords<String, String> records = consumer.poll(Duration.ofMillis(9000));
+                for (ConsumerRecord<String, String> record : records)
+                    System.out.printf("offset = %d, key = %s, value = %s%n", record.offset(), record.key(), record.value());
+            }
+
+        }
+
+    }
+
+}
