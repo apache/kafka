@@ -901,10 +901,10 @@ class GroupCoordinator(val brokerId: Int,
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long) {
     group.inLock {
       if (isPending) {
-        debug(s"Pending member $memberId gets cleaned out from purgatory after the member given session timeout.")
+        debug(s"Pending member $memberId has been removed after session timeout expiration.")
         group.removePendingMember(memberId)
       } else if (!group.has(memberId)) {
-        debug(s"Member $memberId has already been cleaned out from the group.")
+        debug(s"Member $memberId has already been removed from the group.")
       } else {
         val member = group.get(memberId)
         if (!member.shouldKeepAlive(heartbeatDeadline)) {

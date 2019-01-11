@@ -554,7 +554,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // Broker requires a concrete member id to be allowed to join the group. Update generation and member id
                 // and send another join group request in next cycle.
                 synchronized (AbstractCoordinator.this) {
-                    AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
+                    AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID,
                         joinResponse.memberId(), generation.protocol);
                     AbstractCoordinator.this.rejoinNeeded = true;
                 }
@@ -741,24 +741,13 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
-     * Get member id in the current generation. Only using in unit tests.
-     * @return member id
-     */
-    final synchronized String memberId() {
-        if (generation == null) {
-            return JoinGroupResponse.UNKNOWN_MEMBER_ID;
-        }
-        return generation.memberId;
-    }
-
-    /**
      * Check whether given generation id is matching the record within current generation.
      * Only using in unit tests.
      * @param generationId generation id
      * @return true if the two ids are matching.
      */
-    final synchronized boolean hasValidGenerationId(int generationId) {
-        return generation.generationId == generationId;
+    final synchronized boolean hasMatchingGenerationId(int generationId) {
+        return generation != null && generation.generationId == generationId;
     }
 
     /**

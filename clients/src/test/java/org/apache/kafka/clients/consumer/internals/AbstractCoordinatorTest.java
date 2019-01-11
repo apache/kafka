@@ -205,8 +205,7 @@ public class AbstractCoordinatorTest {
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
-        assertEquals(memberId, coordinator.memberId());
-        assertTrue(coordinator.hasValidGenerationId(generation));
+        assertTrue(coordinator.hasMatchingGenerationId(generation));
         future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
     }
