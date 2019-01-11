@@ -37,7 +37,7 @@ backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
 
 """
-After each any release one should first check that the released version has been uploaded to 
+After each release one should first check that the released version has been uploaded to 
 https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
 anyone can verify that by calling 
 curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
