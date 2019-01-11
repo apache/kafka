@@ -30,10 +30,10 @@ buildscript {
     classpath "org.ajoberstar:grgit:1.9.3"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
     classpath 'org.scoverage:gradle-scoverage:2.5.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.2'
-    classpath 'org.owasp:dependency-check-gradle:3.3.4'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.16.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.5"
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.3'
+    classpath 'org.owasp:dependency-check-gradle:4.0.2'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
   }
 }
 
@@ -89,7 +89,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "5.0"
+  gradleVersion = "5.1"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -966,7 +966,13 @@ project(':streams') {
 
   dependencies {
     compile project(':clients')
-    compile project(':connect:json')  // this dependency should be removed after we unify data API
+
+    // this dependency should be removed after we unify data API
+    compile(project(':connect:json')) {
+      // this transitive dependency is not used in Streams, and it breaks SBT builds
+      exclude module: 'javax.ws.rs-api'
+    }
+
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
@@ -1200,6 +1206,18 @@ project(':streams:upgrade-system-tests-20') {
 
   dependencies {
     testCompile libs.kafkaStreams_20
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-21') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-21"
+
+  dependencies {
+    testCompile libs.kafkaStreams_21
   }
 
   systemTestLibs {

@@ -35,6 +35,7 @@ import scala.collection.{Map, Set, mutable}
 import scala.collection.JavaConverters._
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
+import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
@@ -42,7 +43,6 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
-
 
 import scala.math._
 
@@ -145,18 +145,20 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
 
-    partitionStates.partitionStates.asScala.foreach { state =>
-      val tp = state.topicPartition
-      if (state.value.isTruncating) {
-        latestEpoch(tp) match {
-          case Some(latestEpoch) =>
-            val partitionData = new EpochData(Optional.of(state.value.currentLeaderEpoch), latestEpoch)
-            partitionsWithEpochs += tp -> partitionData
-          case None =>
-            partitionsWithoutEpochs += tp
+    partitionStates.stream().forEach(new Consumer[PartitionStates.PartitionState[PartitionFetchState]] {
+      override def accept(state: PartitionStates.PartitionState[PartitionFetchState]): Unit = {
+        val tp = state.topicPartition
+        if (state.value.isTruncating) {
+          latestEpoch(tp) match {
+            case Some(latestEpoch) =>
+              val partitionData = new EpochData(Optional.of(state.value.currentLeaderEpoch), latestEpoch)
+              partitionsWithEpochs += tp -> partitionData
+            case None =>
+              partitionsWithoutEpochs += tp
+          }
         }
       }
-    }
+    })
 
     debug(s"Build leaderEpoch request $partitionsWithEpochs")
     ResultWithPartitions(partitionsWithEpochs, partitionsWithoutEpochs)
@@ -179,8 +181,17 @@ abstract class AbstractFetcherThread(name: String,
       val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
       //Ensure we hold a lock during truncation.
       inLock(partitionMapLock) {
-        //Check no leadership changes happened whilst we were unlocked, fetching epochs
-        val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
+        //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
+        val leaderEpochs = fetchedEpochs.filter { case (tp, _) =>
+          val curPartitionState = partitionStates.stateValue(tp)
+          val partitionEpochRequest = epochRequests.get(tp).getOrElse {
+            throw new IllegalStateException(
+              s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
+          }
+          val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
+          curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
+        }
+
         val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)

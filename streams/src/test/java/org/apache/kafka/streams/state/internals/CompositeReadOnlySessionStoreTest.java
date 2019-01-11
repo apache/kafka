@@ -107,10 +107,11 @@ public class CompositeReadOnlySessionStoreTest {
 
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowInvalidStateStoreExceptionOnRebalance() {
-        final CompositeReadOnlySessionStore<String, String> store
-                = new CompositeReadOnlySessionStore<>(new StateStoreProviderStub(true),
-                                                      QueryableStoreTypes.<String, String>sessionStore(),
-                                                      "whateva");
+        final CompositeReadOnlySessionStore<String, String> store =
+            new CompositeReadOnlySessionStore<>(
+                new StateStoreProviderStub(true),
+                QueryableStoreTypes.<String, String>sessionStore(),
+                "whateva");
 
         store.fetch("a");
     }
