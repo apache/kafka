@@ -96,7 +96,7 @@ class StreamsOptimizedTest(Test):
         with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
             processor.start()
             monitor.wait_until('REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%s' % repartition_topic_count,
-                               timeout_sec=60,
+                               timeout_sec=120,
                                err_msg="Never saw 'REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%s' message "
                                        % repartition_topic_count + str(processor.node.account))
 

@@ -40,6 +40,7 @@ import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
@@ -110,6 +111,43 @@ public class AgentTest {
     }
 
     @Test
+    public void testCreateExpiredWorkerIsNotScheduled() throws Exception {
+        long initialTimeMs = 100;
+        long tickMs = 15;
+        final boolean[] toSleep = {true};
+        MockTime time = new MockTime(tickMs, initialTimeMs, 0) {
+            /**
+             * Modify sleep() to call super.sleep() every second call
+             * in order to avoid the endless loop in the tick() calls to the MockScheduler listener
+             */
+            @Override
+            public void sleep(long ms) {
+                toSleep[0] = !toSleep[0];
+                if (toSleep[0])
+                    super.sleep(ms);
+            }
+        };
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+        AgentStatusResponse status = client.status();
+        assertEquals(Collections.emptyMap(), status.workers());
+        new ExpectedTasks().waitFor(client);
+
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 10);
+        client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
+        long actualStartTimeMs = initialTimeMs + tickMs;
+        long doneMs = actualStartTimeMs + 2 * tickMs;
+        new ExpectedTasks().addTask(new ExpectedTaskBuilder("foo").
+            workerState(new WorkerDone("foo", fooSpec, actualStartTimeMs,
+                doneMs, null, "worker expired")).
+            taskState(new TaskDone(fooSpec, actualStartTimeMs, doneMs, "worker expired", false, null)).
+            build()).
+            waitFor(client);
+    }
+
+    @Test
     public void testAgentCreateWorkers() throws Exception {
         MockTime time = new MockTime(0, 0, 0);
         MockScheduler scheduler = new MockScheduler(time);
@@ -171,53 +209,58 @@ public class AgentTest {
 
     @Test
     public void testAgentFinishesTasks() throws Exception {
-        MockTime time = new MockTime(0, 0, 0);
+        long startTimeMs = 2000;
+        MockTime time = new MockTime(0, startTimeMs, 0);
         MockScheduler scheduler = new MockScheduler(time);
         Agent agent = createAgent(scheduler);
         AgentClient client = new AgentClient.Builder().
             maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
-        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 2);
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(startTimeMs, 2);
+        long fooSpecStartTimeMs = startTimeMs;
         client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning("foo", fooSpec, 0, new TextNode("active"))).
+                workerState(new WorkerRunning("foo", fooSpec, startTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(1);
 
-        final NoOpTaskSpec barSpec = new NoOpTaskSpec(2000, 900000);
-        client.createWorker(new CreateWorkerRequest(1, "bar", barSpec));
+        long barSpecWorkerId = 1;
+        long barSpecStartTimeMs = startTimeMs + 1;
+        final NoOpTaskSpec barSpec = new NoOpTaskSpec(startTimeMs, 900000);
+        client.createWorker(new CreateWorkerRequest(barSpecWorkerId, "bar", barSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerRunning("foo", fooSpec, 0, new TextNode("active"))).
+                workerState(new WorkerRunning("foo", fooSpec, fooSpecStartTimeMs, new TextNode("active"))).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning("bar", barSpec, 1, new TextNode("active"))).
+                workerState(new WorkerRunning("bar", barSpec, barSpecStartTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(1);
 
+        // foo task expired
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone("foo", fooSpec, 0, 2, new TextNode("done"), "")).
+                workerState(new WorkerDone("foo", fooSpec, fooSpecStartTimeMs, fooSpecStartTimeMs + 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerRunning("bar", barSpec, 1, new TextNode("active"))).
+                workerState(new WorkerRunning("bar", barSpec, barSpecStartTimeMs, new TextNode("active"))).
                 build()).
             waitFor(client);
 
         time.sleep(5);
-        client.stopWorker(new StopWorkerRequest(1));
+        client.stopWorker(new StopWorkerRequest(barSpecWorkerId));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
-                workerState(new WorkerDone("foo", fooSpec, 0, 2, new TextNode("done"), "")).
+                workerState(new WorkerDone("foo", fooSpec, fooSpecStartTimeMs, fooSpecStartTimeMs + 2, new TextNode("done"), "")).
                 build()).
             addTask(new ExpectedTaskBuilder("bar").
-                workerState(new WorkerDone("bar", barSpec, 1, 7, new TextNode("done"), "")).
+                workerState(new WorkerDone("bar", barSpec, barSpecStartTimeMs, startTimeMs + 7, new TextNode("done"), "")).
                 build()).
             waitFor(client);
 
@@ -348,7 +391,7 @@ public class AgentTest {
             maxTries(10).target("localhost", agent.port()).build();
         new ExpectedTasks().waitFor(client);
 
-        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(10, 5);
+        final NoOpTaskSpec fooSpec = new NoOpTaskSpec(0, 5);
         client.createWorker(new CreateWorkerRequest(0, "foo", fooSpec));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").
@@ -363,7 +406,7 @@ public class AgentTest {
         new ExpectedTasks().waitFor(client);
         time.sleep(1);
 
-        final NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(100, 1);
+        final NoOpTaskSpec fooSpec2 = new NoOpTaskSpec(2, 1);
         client.createWorker(new CreateWorkerRequest(1, "foo", fooSpec2));
         new ExpectedTasks().
             addTask(new ExpectedTaskBuilder("foo").

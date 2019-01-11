@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import java.time.Duration;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -44,14 +43,13 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.io.IOException;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.ExecutionException;
 
 @Category({IntegrationTest.class})
 public class PurgeRepartitionTopicIntegrationTest {
@@ -64,18 +62,18 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     private static AdminClient adminClient;
     private static KafkaStreams kafkaStreams;
-    private static Integer purgeIntervalMs = 10;
-    private static Integer purgeSegmentBytes = 2000;
+    private static final Integer PURGE_INTERVAL_MS = 10;
+    private static final Integer PURGE_SEGMENT_BYTES = 2000;
 
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
         {
-            put("log.retention.check.interval.ms", purgeIntervalMs);
+            put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
         }
     });
 
-    private Time time = CLUSTER.time;
+    private final Time time = CLUSTER.time;
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
@@ -92,11 +90,14 @@ public class PurgeRepartitionTopicIntegrationTest {
 
             try {
                 final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, REPARTITION_TOPIC);
-                final Config config = adminClient.describeConfigs(Collections.singleton(resource))
-                        .values().get(resource).get();
+                final Config config = adminClient
+                    .describeConfigs(Collections.singleton(resource))
+                    .values()
+                    .get(resource)
+                    .get();
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
-                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(purgeIntervalMs.toString())
-                        && config.get(TopicConfig.SEGMENT_BYTES_CONFIG).value().equals(purgeSegmentBytes.toString());
+                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString())
+                        && config.get(TopicConfig.SEGMENT_BYTES_CONFIG).value().equals(PURGE_SEGMENT_BYTES.toString());
             } catch (final Exception e) {
                 return false;
             }
@@ -104,7 +105,6 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
     private interface TopicSizeVerifier {
-
         boolean verify(long currentSize);
     }
 
@@ -117,18 +117,19 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         @Override
         public final boolean conditionMet() {
-            time.sleep(purgeIntervalMs);
+            time.sleep(PURGE_INTERVAL_MS);
 
             try {
-                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo = adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
+                final Collection<DescribeLogDirsResponse.LogDirInfo> logDirInfo =
+                    adminClient.describeLogDirs(Collections.singleton(0)).values().get(0).get().values();
 
                 for (final DescribeLogDirsResponse.LogDirInfo partitionInfo : logDirInfo) {
-                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo = partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
+                    final DescribeLogDirsResponse.ReplicaInfo replicaInfo =
+                        partitionInfo.replicaInfos.get(new TopicPartition(REPARTITION_TOPIC, 0));
                     if (replicaInfo != null && verifier.verify(replicaInfo.size)) {
                         return true;
                     }
                 }
-
             } catch (final Exception e) {
                 // swallow
             }
@@ -138,7 +139,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
     @BeforeClass
-    public static void createTopics() throws InterruptedException {
+    public static void createTopics() throws Exception {
         CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
     }
 
@@ -151,18 +152,17 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, purgeIntervalMs);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPLICATION_ID).getPath());
-        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), purgeIntervalMs);
-        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), purgeSegmentBytes);
-        streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), purgeSegmentBytes / 2);    // we cannot allow batch size larger than segment size
+        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), PURGE_INTERVAL_MS);
+        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), PURGE_SEGMENT_BYTES);
+        streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), PURGE_SEGMENT_BYTES / 2);    // we cannot allow batch size larger than segment size
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         final StreamsBuilder builder = new StreamsBuilder();
-
         builder.stream(INPUT_TOPIC)
                .groupBy(MockMapper.selectKeyKeyValueMapper())
                .count();
@@ -171,15 +171,14 @@ public class PurgeRepartitionTopicIntegrationTest {
     }
 
     @After
-    public void shutdown() throws IOException {
+    public void shutdown() {
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }
     }
 
-
     @Test
-    public void shouldRestoreState() throws InterruptedException, ExecutionException {
+    public void shouldRestoreState() throws Exception {
         // produce some data to input topic
         final List<KeyValue<Integer, Integer>> messages = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
@@ -198,26 +197,16 @@ public class PurgeRepartitionTopicIntegrationTest {
                 "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
         TestUtils.waitForCondition(
-                new RepartitionTopicVerified(new TopicSizeVerifier() {
-                    @Override
-                    public boolean verify(final long currentSize) {
-                        return currentSize > 0;
-                    }
-                }),
-                60000,
-                "Repartition topic " + REPARTITION_TOPIC + " not received data after 60000 ms."
+            new RepartitionTopicVerified(currentSize -> currentSize > 0),
+            60000,
+            "Repartition topic " + REPARTITION_TOPIC + " not received data after 60000 ms."
         );
 
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
         TestUtils.waitForCondition(
-                new RepartitionTopicVerified(new TopicSizeVerifier() {
-                    @Override
-                    public boolean verify(final long currentSize) {
-                        return currentSize <= purgeSegmentBytes;
-                    }
-                }),
-                60000,
-                "Repartition topic " + REPARTITION_TOPIC + " not purged data after 60000 ms."
+            new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),
+            60000,
+            "Repartition topic " + REPARTITION_TOPIC + " not purged data after 60000 ms."
         );
     }
 }
