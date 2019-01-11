@@ -37,7 +37,13 @@ backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
 
 """
-After each any release this test needs to get updated, but this requires several steps
+After each any release one should first check that the released version has been uploaded to 
+https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
+anyone can verify that by calling 
+curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
+and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
+
+This test needs to get updated, but this requires several steps
 which are outlined here:
 
 1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
@@ -62,20 +68,6 @@ which are outlined here:
    
 6. Then you'll need to update any version changes in gradle/dependencies.gradle
 
-7. Finally you need to add the new kafka release and the kafka-streams-$version-test.jar file.
-
-   a. First go to the Apache Kafka downloads page and download the kafka release in the latest 
-   supported Scala version (currently 2.12).  This step needs to be performed for all released
-   versions.
-   
-   b. Then download the source of the Apache Kafka of the same version and once unpacked 
-   
-     i. run the "gradle" command
-     ii. run ./gradlew testJar.  This will build the kafka-streams-$version-test.jar file
-     
-   c. Go to the AWS link on confluent.onelogin.com/portal.  Click on the link, then select 
-      S3.  From there select the kafka-packages bucket.  Then upload the kafka tgz release files
-      and the kafka-streams-$version-test.jar files. Make sure they have world readable permissions.
 """
 
 class StreamsUpgradeTest(Test):
