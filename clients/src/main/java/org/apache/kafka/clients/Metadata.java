@@ -259,7 +259,7 @@ public class Metadata implements Closeable {
     public synchronized void setTopics(Collection<String> topics) {
         Set<TopicPartition> toRemove = lastSeenLeaderEpochs.keySet()
                 .stream()
-                .filter(tp -> topics.contains(tp.topic()))
+                .filter(tp -> !topics.contains(tp.topic()))
                 .collect(Collectors.toSet());
         toRemove.forEach(lastSeenLeaderEpochs::remove);
 
