@@ -317,21 +317,18 @@ public final class WorkerManager {
                 return;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();
-            haltFuture.thenApply(new KafkaFuture.BaseFunction<String, Void>() {
-                @Override
-                public Void apply(String errorString) {
-                    if (errorString == null)
-                        errorString = "";
-                    if (errorString.isEmpty()) {
-                        log.info("{}: Worker {} is halting.", nodeName, worker);
-                    } else {
-                        log.info("{}: Worker {} is halting with error {}",
-                            nodeName, worker, errorString);
-                    }
-                    stateChangeExecutor.submit(
-                        new HandleWorkerHalting(worker, errorString, false));
-                    return null;
+            haltFuture.thenApply((KafkaFuture.BaseFunction<String, Void>) errorString -> {
+                if (errorString == null)
+                    errorString = "";
+                if (errorString.isEmpty()) {
+                    log.info("{}: Worker {} is halting.", nodeName, worker);
+                } else {
+                    log.info("{}: Worker {} is halting with error {}",
+                        nodeName, worker, errorString);
                 }
+                stateChangeExecutor.submit(
+                    new HandleWorkerHalting(worker, errorString, false));
+                return null;
             });
             try {
                 worker.taskWorker.start(platform, worker.status, haltFuture);

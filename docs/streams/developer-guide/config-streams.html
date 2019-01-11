@@ -54,7 +54,7 @@
     </ol>
     <div class="section" id="configuration-parameter-reference">
       <span id="streams-developer-guide-required-configs"></span><h2>Configuration parameter reference<a class="headerlink" href="#configuration-parameter-reference" title="Permalink to this headline"></a></h2>
-      <p>This section contains the most common Streams configuration parameters. For a full reference, see the <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsConfig.html">Streams</a> Javadocs.</p>
+      <p>This section contains the most common Streams configuration parameters. For a full reference, see the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsConfig.html">Streams</a> Javadocs.</p>
       <div class="contents local topic" id="contents">
         <ul class="simple">
           <li><a class="reference internal" href="#required-configuration-parameters" id="id3">Required configuration parameters</a><ul>
@@ -149,7 +149,7 @@
       </div>
       <div class="section" id="optional-configuration-parameters">
         <span id="streams-developer-guide-optional-configs"></span><h3><a class="toc-backref" href="#id6">Optional configuration parameters</a><a class="headerlink" href="#optional-configuration-parameters" title="Permalink to this headline"></a></h3>
-        <p>Here are the optional <a href="../../../javadoc/org/apache/kafka/streams/StreamsConfig.html">Streams</a> javadocs, sorted by level of importance:</p>
+        <p>Here are the optional <a href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsConfig.html">Streams</a> javadocs, sorted by level of importance:</p>
         <blockquote>
           <div><ul class="simple">
             <li>High: These parameters can have a significant impact on performance. Take care when deciding the values of these parameters.</li>
@@ -305,11 +305,11 @@
               <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams should ignore the issue
               and continue processing. The following library built-in exception handlers are available:</p>
               <ul class="simple">
-                <li><a class="reference external" href="../../../javadoc/org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html">LogAndContinueExceptionHandler</a>:
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/LogAndContinueExceptionHandler.html">LogAndContinueExceptionHandler</a>:
                   This handler logs the deserialization exception and then signals the processing pipeline to continue processing more records.
                   This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records that fail
                   to deserialize.</li>
-                <li><a class="reference external" href="../../../javadoc/org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html">LogAndFailExceptionHandler</a>.
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/LogAndFailExceptionHandler.html">LogAndFailExceptionHandler</a>.
                   This handler logs the deserialization exception and then signals the processing pipeline to stop processing more records.</li>
               </ul>
 
@@ -354,7 +354,7 @@
           <span id="streams-developer-guide-peh"></span><h4><a class="toc-backref" href="#id24">default.production.exception.handler</a><a class="headerlink" href="#default-production-exception-handler" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The default production exception handler allows you to manage exceptions triggered when trying to interact with a broker
-              such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
+              such as attempting to produce a record that is too large. By default, Kafka provides and uses the <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/errors/DefaultProductionExceptionHandler.html">DefaultProductionExceptionHandler</a>
               that always fails when these exceptions occur.</p>
 
             <p>Each exception handler can return a <code>FAIL</code> or <code>CONTINUE</code> depending on the record and the exception thrown. Returning <code>FAIL</code> will signal that Streams should shut down and <code>CONTINUE</code> will signal that Streams
@@ -439,7 +439,7 @@
           <span id="streams-developer-guide-partition-grouper"></span><h4><a class="toc-backref" href="#id12">partition.grouper</a><a class="headerlink" href="#partition-grouper" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div>A partition grouper creates a list of stream tasks from the partitions of source topics, where each created task is assigned with a group of source topic partitions.
-              The default implementation provided by Kafka Streams is <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
+              The default implementation provided by Kafka Streams is <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/DefaultPartitionGrouper.html">DefaultPartitionGrouper</a>.
               It assigns each task with one partition for each of the source topic partitions. The generated number of tasks equals the largest
               number of partitions among the input topics. Usually an application does not need to customize the partition grouper.</div></blockquote>
         </div>
@@ -479,10 +479,10 @@
         <div class="section" id="timestamp-extractor">
           <span id="streams-developer-guide-timestamp-extractor"></span><h4><a class="toc-backref" href="#id15">timestamp.extractor</a><a class="headerlink" href="#timestamp-extractor" title="Permalink to this headline"></a></h4>
           <blockquote>
-            <div><p>A timestamp extractor pulls a timestamp from an instance of <a class="reference external" href="../../../javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html">ConsumerRecord</a>.
+            <div><p>A timestamp extractor pulls a timestamp from an instance of <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/consumer/ConsumerRecord.html">ConsumerRecord</a>.
               Timestamps are used to control the progress of streams.</p>
               <p>The default extractor is
-                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html">FailOnInvalidTimestamp</a>.
+                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/FailOnInvalidTimestamp.html">FailOnInvalidTimestamp</a>.
                 This extractor retrieves built-in timestamps that are automatically embedded into Kafka messages by the Kafka producer
                 client since
                 <a class="reference external" href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-32+-+Add+timestamps+to+Kafka+message">Kafka version 0.10</a>.
@@ -504,19 +504,19 @@
               <p>If you have data with invalid timestamps and want to process it, then there are two alternative extractors available.
                 Both work on built-in timestamps, but handle invalid timestamps differently.</p>
               <ul class="simple">
-                <li><a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html">LogAndSkipOnInvalidTimestamp</a>:
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/LogAndSkipOnInvalidTimestamp.html">LogAndSkipOnInvalidTimestamp</a>:
                   This extractor logs a warn message and returns the invalid timestamp to Kafka Streams, which will not process but
                   silently drop the record.
                   This log-and-skip strategy allows Kafka Streams to make progress instead of failing if there are records with an
                   invalid built-in timestamp in your input data.</li>
-                <li><a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/UsePreviousTimeOnInvalidTimestamp.html">UsePreviousTimeOnInvalidTimestamp</a>.
+                <li><a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/UsePreviousTimeOnInvalidTimestamp.html">UsePreviousTimeOnInvalidTimestamp</a>.
                   This extractor returns the record&#8217;s built-in timestamp if it is valid (i.e. not negative).  If the record does not
                   have a valid built-in timestamps, the extractor returns the previously extracted valid timestamp from a record of the
                   same topic partition as the current record as a timestamp estimation.  In case that no timestamp can be estimated, it
                   throws an exception.</li>
               </ul>
               <p>Another built-in extractor is
-                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html">WallclockTimestampExtractor</a>.
+                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/processor/WallclockTimestampExtractor.html">WallclockTimestampExtractor</a>.
                 This extractor does not actually &#8220;extract&#8221; a timestamp from the consumed record but rather returns the current time in
                 milliseconds from the system clock (think: <code class="docutils literal"><span class="pre">System.currentTimeMillis()</span></code>), which effectively means Streams will operate
                 on the basis of the so-called <strong>processing-time</strong> of events.</p>
@@ -568,10 +568,10 @@
       </div>
       <div class="section" id="kafka-consumers-and-producer-configuration-parameters">
         <h3><a class="toc-backref" href="#id16">Kafka consumers, producer and admin client configuration parameters</a><a class="headerlink" href="#kafka-consumers-and-producer-configuration-parameters" title="Permalink to this headline"></a></h3>
-        <p>You can specify parameters for the Kafka <a class="reference external" href="../../../javadoc/org/apache/kafka/clients/consumer/package-summary.html">consumers</a>, <a class="reference external" href="../../../javadoc/org/apache/kafka/clients/producer/package-summary.html">producers</a>,
-            and <a class="reference external" href="../../../javadoc/org/apache/kafka/kafka/clients/admin/package-summary.html">admin client</a> that are used internally.
+        <p>You can specify parameters for the Kafka <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/consumer/package-summary.html">consumers</a>, <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/producer/package-summary.html">producers</a>,
+            and <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/kafka/clients/admin/package-summary.html">admin client</a> that are used internally.
             The consumer, producer and admin client settings are defined by specifying parameters in a <code class="docutils literal"><span class="pre">StreamsConfig</span></code> instance.</p>
-        <p>In this example, the Kafka <a class="reference external" href="../../../javadoc/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG">consumer session timeout</a> is configured to be 60000 milliseconds in the Streams settings:</p>
+        <p>In this example, the Kafka <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/clients/consumer/ConsumerConfig.html#SESSION_TIMEOUT_MS_CONFIG">consumer session timeout</a> is configured to be 60000 milliseconds in the Streams settings:</p>
         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">Properties</span> <span class="n">streamsSettings</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
 <span class="c1">// Example of a &quot;normal&quot; setting for Kafka Streams</span>
 <span class="n">streamsSettings</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">BOOTSTRAP_SERVERS_CONFIG</span><span class="o">,</span> <span class="s">&quot;kafka-broker-01:9092&quot;</span><span class="o">);</span>
@@ -680,7 +680,7 @@
           <span id="streams-developer-guide-rocksdb-config"></span><h4><a class="toc-backref" href="#id20">rocksdb.config.setter</a><a class="headerlink" href="#rocksdb-config-setter" title="Permalink to this headline"></a></h4>
           <blockquote>
             <div><p>The RocksDB configuration. Kafka Streams uses RocksDB as the default storage engine for persistent stores. To change the default
-              configuration for RocksDB, implement <code class="docutils literal"><span class="pre">RocksDBConfigSetter</span></code> and provide your custom class via <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html">rocksdb.config.setter</a>.</p>
+              configuration for RocksDB, implement <code class="docutils literal"><span class="pre">RocksDBConfigSetter</span></code> and provide your custom class via <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/state/RocksDBConfigSetter.html">rocksdb.config.setter</a>.</p>
               <p>Here is an example that adjusts the memory size consumed by RocksDB.</p>
               <div class="highlight-java"><div class="highlight"><pre><span></span>    <span class="kd">public</span> <span class="kd">static</span> <span class="kd">class</span> <span class="nc">CustomRocksDBConfig</span> <span class="kd">implements</span> <span class="n">RocksDBConfigSetter</span> <span class="o">{</span>
 

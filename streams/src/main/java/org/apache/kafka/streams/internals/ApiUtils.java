@@ -24,6 +24,8 @@ import static java.lang.String.format;
 public final class ApiUtils {
 
     private static final String MILLISECOND_VALIDATION_FAIL_MSG_FRMT = "Invalid value for parameter \"%s\" (value was: %s). ";
+    private static final String VALIDATE_MILLISECOND_NULL_SUFFIX = "It shouldn't be null.";
+    private static final String VALIDATE_MILLISECOND_OVERFLOW_SUFFIX = "It can't be converted to milliseconds.";
 
     private ApiUtils() {
     }
@@ -37,12 +39,12 @@ public final class ApiUtils {
     public static long validateMillisecondDuration(final Duration duration, final String messagePrefix) {
         try {
             if (duration == null) {
-                throw new IllegalArgumentException(messagePrefix + "It shouldn't be null.");
+                throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_NULL_SUFFIX);
             }
 
             return duration.toMillis();
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException(messagePrefix + "It can't be converted to milliseconds.", e);
+            throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_OVERFLOW_SUFFIX, e);
         }
     }
 
@@ -55,12 +57,12 @@ public final class ApiUtils {
     public static long validateMillisecondInstant(final Instant instant, final String messagePrefix) {
         try {
             if (instant == null) {
-                throw new IllegalArgumentException(messagePrefix + "It shouldn't be null.");
+                throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_NULL_SUFFIX);
             }
 
             return instant.toEpochMilli();
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException(messagePrefix + "It can't be converted to milliseconds.", e);
+            throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_OVERFLOW_SUFFIX, e);
         }
     }
 

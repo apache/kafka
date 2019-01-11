@@ -82,8 +82,8 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(new Windowed<>(key, new SessionWindow(1500L, 2000L)), 1L);
         sessionStore.put(new Windowed<>(key, new SessionWindow(2500L, 3000L)), 2L);
 
-        final List<KeyValue<Windowed<String>, Long>> expected
-                = Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
+        final List<KeyValue<Windowed<String>, Long>> expected =
+            Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
 
         final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(key, 0, 1000L);
         assertEquals(expected, toList(values));

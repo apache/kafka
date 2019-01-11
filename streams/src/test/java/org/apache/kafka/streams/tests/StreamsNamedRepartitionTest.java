@@ -63,6 +63,7 @@ public class StreamsNamedRepartitionTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<String, String> sourceStream = builder.stream(inputTopic, Consumed.with(Serdes.String(), Serdes.String()));
+        sourceStream.peek((k, v) -> System.out.println(String.format("input data key=%s, value=%s", k, v)));
 
         final KStream<String, String> mappedStream = sourceStream.selectKey((k, v) -> keyFunction.apply(v));
 

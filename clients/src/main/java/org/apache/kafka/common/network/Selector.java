@@ -250,10 +250,11 @@ public class Selector implements Selectable, AutoCloseable {
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
+        SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
@@ -262,6 +263,9 @@ public class Selector implements Selectable, AutoCloseable {
                 key.interestOps(0);
             }
         } catch (IOException | RuntimeException e) {
+            if (key != null)
+                immediatelyConnectedKeys.remove(key);
+            channels.remove(id);
             socketChannel.close();
             throw e;
         }
@@ -316,7 +320,7 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
-    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
         this.channels.put(id, channel);
@@ -532,27 +536,35 @@ public class Selector implements Selectable, AutoCloseable {
                     try {
                         channel.prepare();
                     } catch (AuthenticationException e) {
-                        if (channel.successfulAuthentications() == 0)
-                            sensors.failedAuthentication.record();
-                        else
+                        boolean isReauthentication = channel.successfulAuthentications() > 0;
+                        if (isReauthentication)
                             sensors.failedReauthentication.record();
+                        else
+                            sensors.failedAuthentication.record();
+                        log.info("Address {} failed {}authentication ({})",
+                            channel.socketDescription(),
+                            isReauthentication ? "re-" : "",
+                            e.getClass().getName());
                         throw e;
                     }
                     if (channel.ready()) {
                         long readyTimeMs = time.milliseconds();
-                        if (channel.successfulAuthentications() == 1) {
-                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
-                            if (!channel.connectedClientSupportsReauthentication())
-                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
-                        } else {
+                        boolean isReauthentication = channel.successfulAuthentications() > 1;
+                        if (isReauthentication) {
                             sensors.successfulReauthentication.record(1.0, readyTimeMs);
                             if (channel.reauthenticationLatencyMs() == null)
                                 log.warn(
-                                        "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
+                                    "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
                             else
                                 sensors.reauthenticationLatency
-                                        .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                                    .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                        } else {
+                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
+                            if (!channel.connectedClientSupportsReauthentication())
+                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
                         }
+                        log.debug("Address {} successfully {}authenticated",
+                            channel.socketDescription(), isReauthentication ? "re-" : "");
                     }
                     List<NetworkReceive> responsesReceivedDuringReauthentication = channel
                             .getAndClearResponsesReceivedDuringReauthentication();

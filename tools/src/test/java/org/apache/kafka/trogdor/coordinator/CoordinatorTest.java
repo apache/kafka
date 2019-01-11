@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
@@ -318,12 +317,8 @@ public class CoordinatorTest {
 
         public ExpectedLines waitFor(final String nodeName,
                 final CapturingCommandRunner runner) throws InterruptedException {
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return linesMatch(nodeName, runner.lines(nodeName));
-                }
-            }, "failed to find the expected lines " + this.toString());
+            TestUtils.waitForCondition(() -> linesMatch(nodeName, runner.lines(nodeName)),
+                "failed to find the expected lines " + this.toString());
             return this;
         }
 
@@ -473,7 +468,7 @@ public class CoordinatorTest {
             assertEquals(0, coordinatorClient.tasks(
                 new TasksRequest(null, 10, 0, 10, 0, Optional.empty())).tasks().size());
             TasksResponse resp1 = coordinatorClient.tasks(
-                new TasksRequest(Arrays.asList(new String[] {"foo", "baz" }), 0, 0, 0, 0, Optional.empty()));
+                new TasksRequest(Arrays.asList("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
             assertTrue(resp1.tasks().containsKey("foo"));
             assertFalse(resp1.tasks().containsKey("bar"));
             assertEquals(1, resp1.tasks().size());
