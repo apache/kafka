@@ -75,7 +75,9 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           Utils.loadProps(commandOpts.options.valueOf(commandOpts.adminClientConfigOpt))
         else
           new Properties()
-        adminProps.putAll(CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala).asInstanceOf[java.util.Map[_ <: Object, _ <: Object]])
+        for ((k, v) <- CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala).asScala) {
+            adminProps.setProperty(k, v)
+          }
         adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
         adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
         new AdminClientCommand(adminProps)
