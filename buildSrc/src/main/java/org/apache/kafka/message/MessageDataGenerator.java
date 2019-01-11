@@ -73,7 +73,7 @@ public final class MessageDataGenerator {
         generateClassConstructors(className, struct);
         buffer.printf("%n");
         if (isTopLevel) {
-            generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().get());
+            generateShortAccessor("apiKey", topLevelMessageSpec.get().apiKey().orElse((short) -1));
         }
         buffer.printf("%n");
         generateShortAccessor("lowestSupportedVersion", parentVersions.lowest());
