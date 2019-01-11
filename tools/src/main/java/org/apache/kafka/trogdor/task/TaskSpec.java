@@ -70,9 +70,7 @@ public abstract class TaskSpec {
     protected TaskSpec(
             @JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs) {
-        this.startMs = startMs;
-        this.durationMs = Math.max(0, Math.min(durationMs, MAX_TASK_DURATION_MS));
-        this.workerCommand = null;
+        this(startMs, durationMs, null);
     }
 
     /**
