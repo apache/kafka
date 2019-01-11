@@ -32,7 +32,6 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -71,7 +70,6 @@ public class Metadata implements Closeable {
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
     private MetadataCache cache = MetadataCache.empty();
-    private Set<String> unavailableTopics = Collections.emptySet();
     private boolean needUpdate;
     /* Topics with expiry time */
     private final Map<String, Long> topics;
@@ -329,7 +327,7 @@ public class Metadata implements Closeable {
         String previousClusterId = cache.cluster().clusterResource().clusterId();
 
         this.cache = handleMetadataResponse(metadataResponse, topic -> true);
-        this.unavailableTopics = metadataResponse.unavailableTopics();
+        Set<String> unavailableTopics = metadataResponse.unavailableTopics();
         Cluster clusterForListeners = this.cache.cluster();
         fireListeners(clusterForListeners, unavailableTopics);
 
@@ -341,8 +339,9 @@ public class Metadata implements Closeable {
         }
 
         String newClusterId = cache.cluster().clusterResource().clusterId();
-        if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
+        if (!Objects.equals(previousClusterId, newClusterId)) {
             log.info("Cluster ID: {}", newClusterId);
+        }
         clusterResourceListeners.onUpdate(clusterForListeners.clusterResource());
 
         notifyAll();
