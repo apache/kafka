@@ -22,7 +22,7 @@
     "targetMessagesPerSec": 100,
     "threadsPerWorker": 5,
     "consumerGroup": "cg",
-    "maxMessages": 100,
+    "maxMessages": 500,
     "activeTopics": ["foo[1-3]"]
   }
 }

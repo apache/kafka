@@ -98,7 +98,7 @@ public class RuntimeProcessWorker implements TaskWorker {
                 executor.submit(new ErrorUpdater());
                 worker.waitFor();
                 if (worker.exitValue() != 0) {
-                    status.update(new TextNode("Error: " + command + " returns " + worker.exitValue()));
+                    status.update(new TextNode("Error: " + command + " returned " + worker.exitValue()));
                 }
                 log.info("ProcessWorker finished with the exit value:{}.", worker.exitValue());
                 updater.get();
@@ -163,16 +163,16 @@ public class RuntimeProcessWorker implements TaskWorker {
     @Override
     public void stop(Platform platform) throws Exception {
         if (!running.compareAndSet(true, false)) {
-            throw new IllegalStateException("ProduceBenchWorker is not running.");
+            throw new IllegalStateException("RuntimeProcessWorker is not running.");
         }
         log.info("{}: Deactivating ProduceBenchWorker.", id);
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.DAYS);
         worker.waitFor(1, TimeUnit.MINUTES);
+        doneFuture.complete("");
         this.executor = null;
         this.worker = null;
         this.status = null;
         this.doneFuture = null;
-        doneFuture.complete("");
     }
 }

@@ -92,7 +92,6 @@ public class ProduceBenchSpec extends TaskSpec {
             @JsonProperty("activeTopics") TopicsSpec activeTopics,
             @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
         super(startMs, durationMs, workerCommand);
-        System.out.println("workerComamnd is " + workerCommand);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;

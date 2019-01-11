@@ -104,6 +104,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("durationMs") long durationMs,
                             @JsonProperty("consumerNode") String consumerNode,
                             @JsonProperty("bootstrapServers") String bootstrapServers,
+                            @JsonProperty("workerCommand") List<String> workerCommand,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") long maxMessages,
                             @JsonProperty("consumerGroup") String consumerGroup,
@@ -112,7 +113,7 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
                             @JsonProperty("activeTopics") List<String> activeTopics) {
-        super(startMs, durationMs);
+        super(startMs, durationMs, workerCommand);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;

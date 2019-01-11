@@ -30,11 +30,9 @@ public class SpecUtils {
      */
     public static String readSpec(String argument) throws IOException {
         if (argument.startsWith("@")) {
-            BufferedReader br = null;
-            try {
-                String specPath = argument.substring(1);
-                br = new BufferedReader(
-                        new InputStreamReader(new FileInputStream(specPath), StandardCharsets.UTF_8));
+            String specPath = argument.substring(1);
+            try (BufferedReader br = new BufferedReader(
+                        new InputStreamReader(new FileInputStream(specPath), StandardCharsets.UTF_8))) {
                 String line;
                 StringBuffer spec = new StringBuffer();
                 while ((line = br.readLine()) != null) {
@@ -47,9 +45,6 @@ public class SpecUtils {
                     throw new IOException("Empty SPEC in the file " + spec);
                 }
                 return specString;
-            } finally {
-                if (br != null)
-                    br.close();
             }
         } else {
             return argument;
