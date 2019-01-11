@@ -127,7 +127,7 @@ class CommandLineUtilsTest {
       "--str-opt", "some-string-2",
       "--int-opt", "700",
       "--str-opt-nodef", "some-string-3",
-      "--int-opt-nodef", "800",
+      "--int-opt-nodef", "800"
     )
 
     CommandLineUtils.maybeMergeOptions(props, "skey", options, stringOpt)
@@ -158,7 +158,7 @@ class CommandLineUtilsTest {
       "--str-opt",
       "--int-opt",
       "--str-opt-nodef",
-      "--int-opt-nodef",
+      "--int-opt-nodef"
     )
 
     CommandLineUtils.maybeMergeOptions(props, "sokey", options, stringOptOptionalArg)
