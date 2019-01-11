@@ -182,7 +182,11 @@ public class ConsumeBenchSpec extends TaskSpec {
 
     @Override
     public TaskWorker newTaskWorker(String id) {
-        return new ConsumeBenchWorker(id, this);
+        if (this.workerCommand() == null) {
+            return new ConsumeBenchWorker(id, this);
+        } else {
+            return new RuntimeProcessWorker(id, this);
+        }
     }
 
     /**

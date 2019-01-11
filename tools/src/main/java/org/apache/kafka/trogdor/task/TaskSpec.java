@@ -22,6 +22,7 @@ import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import org.apache.kafka.trogdor.common.JsonUtil;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -52,10 +53,26 @@ public abstract class TaskSpec {
      */
     private final long durationMs;
 
-    protected TaskSpec(@JsonProperty("startMs") long startMs,
+    /*
+     * How to start the worker as a process.
+     */
+    private final List<String> workerCommand;
+
+    protected TaskSpec(
+            @JsonProperty("startMs") long startMs,
+            @JsonProperty("durationMs") long durationMs,
+            @JsonProperty("workerCommand") List<String> workerCommand) {
+        this.startMs = startMs;
+        this.durationMs = Math.max(0, Math.min(durationMs, MAX_TASK_DURATION_MS));
+        this.workerCommand = workerCommand;
+    }
+
+    protected TaskSpec(
+            @JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs) {
         this.startMs = startMs;
         this.durationMs = Math.max(0, Math.min(durationMs, MAX_TASK_DURATION_MS));
+        this.workerCommand = null;
     }
 
     /**
@@ -72,6 +89,11 @@ public abstract class TaskSpec {
     @JsonProperty
     public final long durationMs() {
         return durationMs;
+    }
+
+    @JsonProperty
+    public final List<String> workerCommand() {
+        return workerCommand;
     }
 
     /**

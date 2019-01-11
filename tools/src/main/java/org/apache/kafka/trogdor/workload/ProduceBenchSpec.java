@@ -24,8 +24,10 @@ import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+
 
 /**
  * The specification for a benchmark that produces messages to a set of topics.
@@ -73,21 +75,24 @@ public class ProduceBenchSpec extends TaskSpec {
     private final TopicsSpec inactiveTopics;
 
     @JsonCreator
-    public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
-                         @JsonProperty("durationMs") long durationMs,
-                         @JsonProperty("producerNode") String producerNode,
-                         @JsonProperty("bootstrapServers") String bootstrapServers,
-                         @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
-                         @JsonProperty("maxMessages") long maxMessages,
-                         @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
-                         @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
-                         @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
-                         @JsonProperty("producerConf") Map<String, String> producerConf,
-                         @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
-                         @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
-                         @JsonProperty("activeTopics") TopicsSpec activeTopics,
-                         @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
-        super(startMs, durationMs);
+    public ProduceBenchSpec(
+            @JsonProperty("startMs") long startMs,
+            @JsonProperty("durationMs") long durationMs,
+            @JsonProperty("producerNode") String producerNode,
+            @JsonProperty("workerCommand") List<String> workerCommand,
+            @JsonProperty("bootstrapServers") String bootstrapServers,
+            @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
+            @JsonProperty("maxMessages") long maxMessages,
+            @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
+            @JsonProperty("valueGenerator") PayloadGenerator valueGenerator,
+            @JsonProperty("transactionGenerator") Optional<TransactionGenerator> txGenerator,
+            @JsonProperty("producerConf") Map<String, String> producerConf,
+            @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
+            @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
+            @JsonProperty("activeTopics") TopicsSpec activeTopics,
+            @JsonProperty("inactiveTopics") TopicsSpec inactiveTopics) {
+        super(startMs, durationMs, workerCommand);
+        System.out.println("workerComamnd is " + workerCommand);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.targetMessagesPerSec = targetMessagesPerSec;
@@ -173,6 +178,9 @@ public class ProduceBenchSpec extends TaskSpec {
 
     @Override
     public TaskWorker newTaskWorker(String id) {
-        return new ProduceBenchWorker(id, this);
+        if (this.workerCommand() == null)
+            return new ProduceBenchWorker(id, this);
+        else
+            return new RuntimeProcessWorker(id, this);
     }
 }
