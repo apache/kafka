@@ -206,8 +206,8 @@ public class KeyValueStoreTestDriver<K, V> {
                                       final Serializer<V1> valueSerializer) {
                 // for byte arrays we need to wrap it for comparison
 
-                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, key));
-                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, value));
+                final K keyTest = serdes.keyFrom(keySerializer.serialize(topic, headers, key));
+                final V valueTest = serdes.valueFrom(valueSerializer.serialize(topic, headers, value));
 
                 recordFlushed(keyTest, valueTest);
             }

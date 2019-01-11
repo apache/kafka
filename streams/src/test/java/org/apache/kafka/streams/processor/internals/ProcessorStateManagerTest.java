@@ -28,6 +28,7 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -40,7 +41,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -51,7 +52,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
+import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
@@ -79,7 +82,7 @@ public class ProcessorStateManagerTest {
     private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final MockKeyValueStore mockKeyValueStore = new MockKeyValueStore(storeName, true);
     private final byte[] key = new byte[]{0x0, 0x0, 0x0, 0x1};
-    private final byte[] value = "the-value".getBytes(Charset.forName("UTF-8"));
+    private final byte[] value = "the-value".getBytes(StandardCharsets.UTF_8);
     private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(changelogTopic, 0, 0, key, value);
     private final LogContext logContext = new LogContext("process-state-manager-test ");
 
@@ -98,7 +101,7 @@ public class ProcessorStateManagerTest {
                 put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
                 put(StreamsConfig.STATE_DIR_CONFIG, baseDir.getPath());
             }
-        }), new MockTime());
+        }), new MockTime(), true);
         checkpointFile = new File(stateDirectory.directoryForTask(taskId), ProcessorStateManager.CHECKPOINT_FILE_NAME);
         checkpoint = new OffsetCheckpoint(checkpointFile);
     }
@@ -184,8 +187,8 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void testRegisterNonPersistentStore() throws IOException {
-        final MockKeyValueStore nonPersistentStore
-            = new MockKeyValueStore(nonPersistentStoreName, false); // non persistent store
+        final MockKeyValueStore nonPersistentStore =
+            new MockKeyValueStore(nonPersistentStoreName, false); // non persistent store
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 2),
             noPartitions,
@@ -564,8 +567,45 @@ public class ProcessorStateManagerTest {
         }
     }
 
+    // if the optional is absent, it'll throw an exception and fail the test.
+    @SuppressWarnings("OptionalGetWithoutIsPresent")
     @Test
-    public void shouldFlushAllStoresEvenIfStoreThrowsExcepiton() throws IOException {
+    public void shouldLogAWarningIfCheckpointThrowsAnIOException() {
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final ProcessorStateManager stateMgr;
+        try {
+            stateMgr = new ProcessorStateManager(
+                taskId,
+                noPartitions,
+                false,
+                stateDirectory,
+                Collections.singletonMap(persistentStore.name(), persistentStoreTopicName),
+                changelogReader,
+                false,
+                logContext);
+        } catch (final IOException e) {
+            e.printStackTrace();
+            throw new AssertionError(e);
+        }
+        stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+
+        stateDirectory.clean();
+        stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
+        LogCaptureAppender.unregister(appender);
+
+        final List<LogCaptureAppender.Event> messages = appender.getEvents();
+
+        final LogCaptureAppender.Event lastEvent = messages.get(messages.size() - 1);
+
+        assertThat(lastEvent.getLevel(), is("WARN"));
+        assertThat(lastEvent.getMessage(), startsWith("process-state-manager-test Failed to write offset checkpoint file to ["));
+        assertThat(lastEvent.getMessage(), endsWith(".checkpoint]"));
+        assertThat(lastEvent.getThrowableInfo().get(), startsWith("java.io.FileNotFoundException: "));
+    }
+
+    @Test
+    public void shouldFlushAllStoresEvenIfStoreThrowsException() throws IOException {
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             Collections.singleton(changelogTopicPartition),

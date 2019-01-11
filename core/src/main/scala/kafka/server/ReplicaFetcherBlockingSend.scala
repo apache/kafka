@@ -35,6 +35,8 @@ trait BlockingSend {
 
   def sendRequest(requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): ClientResponse
 
+  def initiateClose()
+
   def close()
 }
 
@@ -56,6 +58,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       brokerConfig,
       brokerConfig.interBrokerListenerName,
       brokerConfig.saslMechanismInterBrokerProtocol,
+      time,
       brokerConfig.saslInterBrokerHandshakeRequestEnable
     )
     val selector = new Selector(
@@ -79,6 +82,7 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       brokerConfig.replicaSocketReceiveBufferBytes,
       brokerConfig.requestTimeoutMs,
+      ClientDnsLookup.DEFAULT,
       time,
       false,
       new ApiVersions,
@@ -101,6 +105,10 @@ class ReplicaFetcherBlockingSend(sourceBroker: BrokerEndPoint,
         networkClient.close(sourceBroker.id.toString)
         throw e
     }
+  }
+
+  override def initiateClose(): Unit = {
+    networkClient.initiateClose()
   }
 
   def close(): Unit = {

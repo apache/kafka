@@ -58,6 +58,7 @@
                             <li><a class="reference internal" href="#hopping-time-windows" id="id21">Hopping time windows</a></li>
                             <li><a class="reference internal" href="#sliding-time-windows" id="id22">Sliding time windows</a></li>
                             <li><a class="reference internal" href="#session-windows" id="id23">Session Windows</a></li>
+                            <li><a class="reference internal" href="#window-final-results" id="id31">Window Final Results</a></li>
                         </ul>
                         </li>
                     </ul>
@@ -65,6 +66,7 @@
                     <li><a class="reference internal" href="#applying-processors-and-transformers-processor-api-integration" id="id24">Applying processors and transformers (Processor API integration)</a></li>
                 </ul>
                 </li>
+                <li><a class="reference internal" href="#controlling-emit-rate" id="id32">Controlling KTable update rate</a></li>
                 <li><a class="reference internal" href="#writing-streams-back-to-kafka" id="id25">Writing streams back to Kafka</a></li>
                 <li><a class="reference internal" href="#testing-a-streams-app" id="id26">Testing a Streams application</a></li>
                 <li><a class="reference internal" href="#scala-dsl" id="id27">Kafka Streams DSL for Scala</a></li>
@@ -79,9 +81,9 @@
             <h2><a class="toc-backref" href="#id7">Overview</a><a class="headerlink" href="#overview" title="Permalink to this headline"></a></h2>
             <p>In comparison to the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a>, only the DSL supports:</p>
             <ul class="simple">
-                <li>Built-in abstractions for <a class="reference internal" href="../concepts.html#streams-concepts-duality"><span class="std std-ref">streams and tables</span></a> in the form of
-                    <a class="reference internal" href="../concepts.html#streams-concepts-kstream"><span class="std std-ref">KStream</span></a>, <a class="reference internal" href="../concepts.html#streams-concepts-ktable"><span class="std std-ref">KTable</span></a>, and
-                    <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">GlobalKTable</span></a>.  Having first-class support for streams and tables is crucial
+                <li>Built-in abstractions for <a class="reference internal" href="../core-concepts.html#streams_concepts_duality"><span class="std std-ref">streams and tables</span></a> in the form of
+                    <a class="reference internal" href="#streams_concepts_kstream"><span class="std std-ref">KStream</span></a>, <a class="reference internal" href="#streams_concepts_ktable"><span class="std std-ref">KTable</span></a>, and
+                    <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">GlobalKTable</span></a>.  Having first-class support for streams and tables is crucial
                     because, in practice, most use cases require not just either streams or databases/tables, but a combination of both.
                     For example, if your use case is to create a customer 360-degree view that is updated in real-time, what your
                     application will be doing is transforming many input <em>streams</em> of customer-related events into an output <em>table</em>
@@ -93,7 +95,7 @@
                     <a class="reference internal" href="#streams-developer-guide-dsl-joins"><span class="std std-ref">joins</span></a> (e.g. <code class="docutils literal"><span class="pre">leftJoin</span></code>), and
                     <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">windowing</span></a> (e.g. <a class="reference internal" href="#windowing-session"><span class="std std-ref">session windows</span></a>).</li>
             </ul>
-            <p>With the DSL, you can define <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topologies</span></a> (i.e., the logical
+            <p>With the DSL, you can define <a class="reference internal" href="../core-concepts.html#streams_topology"><span class="std std-ref">processor topologies</span></a> (i.e., the logical
                 processing plan) in your application. The steps to accomplish this are:</p>
             <ol class="arabic simple">
                 <li>Specify <a class="reference internal" href="#streams-developer-guide-dsl-sources"><span class="std std-ref">one or more input streams that are read from Kafka topics</span></a>.</li>
@@ -102,7 +104,115 @@
             </ol>
             <p>After the application is run, the defined processor topologies are continuously executed (i.e., the processing plan is put into
                 action). A step-by-step guide for writing a stream processing application using the DSL is provided below.</p>
-            <p>For a complete list of available API functionality, see also the <a href="../../../javadoc/org/apache/kafka/streams/package-summary.html">Streams</a> API docs.</p>
+            <p>For a complete list of available API functionality, see also the <a href="/{{version}}/javadoc/org/apache/kafka/streams/package-summary.html">Streams</a> API docs.</p>
+        </div>
+
+        <div class="section" id="dsl-core-constructs-overview">
+            <h4><a id="streams_concepts_kstream" href="#streams_concepts_kstream">KStream</a></h4>
+
+            <p>
+                Only the <strong>Kafka Streams DSL</strong> has the notion of a <code>KStream</code>.
+            </p>
+
+            <p>
+                A <strong>KStream</strong> is an abstraction of a <strong>record stream</strong>, where each data record represents a self-contained datum in the unbounded data set. Using the table analogy, data records in a record stream are always interpreted as an &quot;INSERT&quot; -- think: adding more entries to an append-only ledger -- because no record replaces an existing row with the same key. Examples are a credit card transaction, a page view event, or a server log entry.
+            </p>
+
+            <p>
+                To illustrate, let's imagine the following two data records are being sent to the stream:
+            </p>
+
+            <div class="sourcecode">
+                <p>(&quot;alice&quot;, 1) --&gt; (&quot;alice&quot;, 3)</p>
+            </div>
+
+            <p>
+                If your stream processing application were to sum the values per user, it would return <code>4</code> for <code>alice</code>. Why? Because the second data record would not be considered an update of the previous record. Compare this behavior of KStream to <code>KTable</code> below,
+                which would return <code>3</code> for <code>alice</code>.
+            </p>
+
+            <h4><a id="streams_concepts_ktable" href="#streams_concepts_ktable">KTable</a></h4>
+
+            <p>
+                Only the <strong>Kafka Streams DSL</strong> has the notion of a <code>KTable</code>.
+            </p>
+
+            <p>
+                A <strong>KTable</strong> is an abstraction of a <strong>changelog stream</strong>, where each data record represents an update. More precisely, the value in a data record is interpreted as an &quot;UPDATE&quot; of the last value for the same record key, if any (if a corresponding key doesn't exist yet, the update will be considered an INSERT). Using the table analogy, a data record in a changelog stream is interpreted as an UPSERT aka INSERT/UPDATE because any existing row with the same key is overwritten. Also, <code>null</code> values are interpreted in a special way: a record with a <code>null</code> value represents a &quot;DELETE&quot; or tombstone for the record's key.
+            </p>
+            <p>
+                To illustrate, let's imagine the following two data records are being sent to the stream:
+            </p>
+
+            <div class="sourcecode">
+                <p>
+                    (&quot;alice&quot;, 1) --&gt; (&quot;alice&quot;, 3)
+                </p>
+            </div>
+
+            <p>
+                If your stream processing application were to sum the values per user, it would return <code>3</code> for <code>alice</code>. Why? Because the second data record would be considered an update of the previous record.
+            </p>
+
+            <p>
+                <strong>Effects of Kafka's log compaction:</strong> Another way of thinking about KStream and KTable is as follows: If you were to store a KTable into a Kafka topic, you'd probably want to enable Kafka's <a href="http://kafka.apache.org/documentation.html#compaction">log compaction</a> feature, e.g. to save storage space.
+            </p>
+
+            <p>
+                However, it would not be safe to enable log compaction in the case of a KStream because, as soon as log compaction would begin purging older data records of the same key, it would break the semantics of the data. To pick up the illustration example again, you'd suddenly get a <code>3</code> for <code>alice</code> instead of a <code>4</code> because log compaction would have removed the <code>(&quot;alice&quot;, 1)</code> data record. Hence log compaction is perfectly safe for a KTable (changelog stream) but it is a mistake for a KStream (record stream).
+            </p>
+
+            <p>
+                We have already seen an example of a changelog stream in the section <strong>streams_concepts_duality</strong>. Another example are change data capture (CDC) records in the changelog of a relational database, representing which row in a database table was inserted, updated, or deleted.
+            </p>
+
+            <p>
+                KTable also provides an ability to look up <em>current</em> values of data records by keys. This table-lookup functionality is available through <strong>join operations</strong> (see also <strong>Joining</strong> in the Developer Guide) as well as through <strong>Interactive Queries</strong>.
+            </p>
+
+            <h4><a id="streams_concepts_globalktable" href="#streams_concepts_globalktable">GlobalKTable</a></h4>
+
+            <p>Only the <strong>Kafka Streams DSL</strong> has the notion of a <strong>GlobalKTable</strong>.</p>
+
+            <p>
+                Like a <strong>KTable</strong>, a <strong>GlobalKTable</strong> is an abstraction of a <strong>changelog stream</strong>, where each data record represents an update.
+            </p>
+
+            <p>
+                A GlobalKTable differs from a KTable in the data that they are being populated with, i.e. which data from the underlying Kafka topic is being read into the respective table. Slightly simplified, imagine you have an input topic with 5 partitions. In your application, you want to read this topic into a table. Also, you want to run your application across 5 application instances for <strong>maximum parallelism</strong>.
+            </p>
+
+            <ul>
+                <li>
+                    If you read the input topic into a <strong>KTable</strong>, then the &quot;local&quot; KTable instance of each application instance will be populated with data <strong>from only 1 partition</strong> of the topic's 5 partitions.
+                </li>
+
+                <li>
+                    If you read the input topic into a <strong>GlobalKTable</strong>, then the local GlobalKTable instance of each application instance will be populated with data <strong>from all partitions of the topic</strong>.
+                </li>
+            </ul>
+
+            <p>
+                GlobalKTable provides the ability to look up <em>current</em> values of data records by keys. This table-lookup functionality is available through <code class="interpreted-text">join operations</code>.
+                Note that a GlobalKTable has <strong>no</strong> notion of time in contrast to a KTable.
+            </p>
+            <p>Benefits of global tables:</p>
+
+            <ul>
+                <li>
+                    More convenient and/or efficient <strong>joins</strong>: Notably, global tables allow you to perform star joins, they support &quot;foreign-key&quot; lookups (i.e., you can lookup data in the table not just by record key, but also by data in the record values), and they are more efficient when chaining multiple joins. Also, when joining against a global table, the input data does not need to be <strong>co-partitioned</strong>.
+                </li>
+                <li>
+                    Can be used to &quot;broadcast&quot; information to all the running instances of your application.
+                </li>
+            </ul>
+
+            <p>Downsides of global tables:</p>
+            <ul>
+                <li>Increased local storage consumption compared to the (partitioned) KTable because the entire topic is tracked.</li>
+                <li>Increased network and Kafka broker load compared to the (partitioned) KTable because the entire topic is read.</li>
+            </ul>
+
         </div>
         <div class="section" id="creating-source-streams-from-kafka">
             <span id="streams-developer-guide-dsl-sources"></span><h2><a class="toc-backref" href="#id8">Creating source streams from Kafka</a><a class="headerlink" href="#creating-source-streams-from-kafka" title="Permalink to this headline"></a></h2>
@@ -123,10 +233,10 @@
                         <li><em>input topics</em> &rarr; KStream</li>
                     </ul>
                 </td>
-                    <td><p class="first">Creates a <a class="reference internal" href="../concepts.html#streams-concepts-kstream"><span class="std std-ref">KStream</span></a> from the specified Kafka input topics and interprets the data
-                        as a <a class="reference internal" href="../concepts.html#streams-concepts-kstream"><span class="std std-ref">record stream</span></a>.
+                    <td><p class="first">Creates a <a class="reference internal" href="#streams_concepts_kstream"><span class="std std-ref">KStream</span></a> from the specified Kafka input topics and interprets the data
+                        as a <a class="reference internal" href="#streams_concepts_kstream"><span class="std std-ref">record stream</span></a>.
                         A <code class="docutils literal"><span class="pre">KStream</span></code> represents a <em>partitioned</em> record stream.
-                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#stream(java.lang.String)">(details)</a></p>
                         <p>In the case of a KStream, the local KStream instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
@@ -157,10 +267,10 @@
                         <li><em>input topic</em> &rarr; KTable</li>
                     </ul>
                 </td>
-                    <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="../concepts.html#streams-concepts-ktable"><span class="std std-ref">KTable</span></a>.  The topic is
+                    <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="#streams_concepts_ktable"><span class="std std-ref">KTable</span></a>.  The topic is
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
-                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#table-java.lang.String(java.lang.String)">(details)</a></p>
                         <p>In the case of a KTable, the local KTable instance of every application instance will
                             be populated with data from only <strong>a subset</strong> of the partitions of the input topic.  Collectively, across
                             all application instances, all input topic partitions are read and processed.</p>
@@ -182,10 +292,10 @@
                         <li><em>input topic</em> &rarr; GlobalKTable</li>
                     </ul>
                 </td>
-                    <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">GlobalKTable</span></a>.  The topic is
+                    <td><p class="first">Reads the specified Kafka input topic into a <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">GlobalKTable</span></a>.  The topic is
                         interpreted as a changelog stream, where records with the same key are interpreted as UPSERT aka INSERT/UPDATE
                         (when the record value is not <code class="docutils literal"><span class="pre">null</span></code>) or as DELETE (when the value is <code class="docutils literal"><span class="pre">null</span></code>) for that key.
-                        <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String(java.lang.String)">(details)</a></p>
+                        <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/StreamsBuilder.html#globalTable-java.lang.String(java.lang.String)">(details)</a></p>
                         <p>In the case of a GlobalKTable, the local GlobalKTable instance of every application instance will
                             be populated with data from <strong>all</strong> the partitions of the input topic.</p>
                         <p>You must provide a name for the table (more precisely, for the internal
@@ -225,7 +335,7 @@
             <p>Some KStream transformations may generate one or more KStream objects, for example:
                 - <code class="docutils literal"><span class="pre">filter</span></code> and <code class="docutils literal"><span class="pre">map</span></code> on a KStream will generate another KStream
                 - <code class="docutils literal"><span class="pre">branch</span></code> on KStream can generate multiple KStreams</p>
-            <p>Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of <a class="reference internal" href="../concepts.html#streams-concepts-aggregations"><span class="std std-ref">late records</span></a> after it
+            <p>Some others may generate a KTable object, for example an aggregation of a KStream also yields a KTable. This allows Kafka Streams to continuously update the computed value upon arrivals of <a class="reference internal" href="../core-concepts.html#streams_concepts_aggregations"><span class="std std-ref">late records</span></a> after it
                 has already been produced to the downstream transformation operators.</p>
             <p>All KTable transformation operations can only generate another KTable. However, the Kafka Streams DSL does provide a special function
                 that converts a KTable representation into a KStream. All of these transformation methods can be chained together to compose
@@ -256,7 +366,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Branch (or split) a <code class="docutils literal"><span class="pre">KStream</span></code> based on the supplied predicates into one or more <code class="docutils literal"><span class="pre">KStream</span></code> instances.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#branch-org.apache.kafka.streams.kstream.Predicate...-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#branch-org.apache.kafka.streams.kstream.Predicate...-">details</a>)</p>
                             <p>Predicates are evaluated in order.  A record is placed to one and only one output stream on the first match:
                                 if the n-th predicate evaluates to true, the record is placed to n-th stream.  If no predicate matches, the
                                 the record is dropped.</p>
@@ -284,8 +394,8 @@
                         </ul>
                     </td>
                         <td><p class="first">Evaluates a boolean function for each element and retains those for which the function returns true.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filter-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filter-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// A filter that selects (keeps) only positive numbers</span>
@@ -311,8 +421,8 @@
                         </ul>
                     </td>
                         <td><p class="first">Evaluates a boolean function for each element and drops those for which the function returns true.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KStream details</a>,
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#filterNot-org.apache.kafka.streams.kstream.Predicate-">KTable details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// An inverse filter that discards any negative numbers or zero</span>
@@ -338,7 +448,7 @@
                     </td>
                         <td><p class="first">Takes one record and produces zero, one, or more records.  You can modify the record keys and values, including
                             their types.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMap-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">flatMap</span></code> will result in re-partitioning of the records.
                                 If possible use <code class="docutils literal"><span class="pre">flatMapValues</span></code> instead, which will not cause data re-partitioning.</p>
@@ -367,7 +477,7 @@
                     </td>
                         <td><p class="first">Takes one record and produces zero, one, or more records, while retaining the key of the original record.
                             You can modify the record values and the value type.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#flatMapValues-org.apache.kafka.streams.kstream.ValueMapper-">details</a>)</p>
                             <p><code class="docutils literal"><span class="pre">flatMapValues</span></code> is preferable to <code class="docutils literal"><span class="pre">flatMap</span></code> because it will not cause data re-partitioning.  However, you
                                 cannot modify the key or key type like <code class="docutils literal"><span class="pre">flatMap</span></code> does.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="c1">// Split a sentence into words.</span>
@@ -387,7 +497,7 @@
                         </ul>
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Performs a stateless action on each record.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#foreach-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
                             <p>You would use <code class="docutils literal"><span class="pre">foreach</span></code> to cause <em>side effects</em> based on the input data (similar to <code class="docutils literal"><span class="pre">peek</span></code>) and then <em>stop</em>
                                 <em>further processing</em> of the input data (unlike <code class="docutils literal"><span class="pre">peek</span></code>, which is not a terminal operation).</p>
                             <p><strong>Note on processing guarantees:</strong> Any side effects of an action (such as writing to external systems) are not
@@ -416,7 +526,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Groups the records by the existing key.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupByKey--">details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
                             <p><strong>When to set explicit SerDes:</strong>
@@ -444,7 +554,7 @@
 <span class="c1">// When the key and/or value types do not match the configured</span>
 <span class="c1">// default serdes, we must explicitly specify serdes.</span>
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">groupByKey</span><span class="o">(</span>
-    <span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
+    <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">ByteArray</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">())</span>     <span class="cm">/* value */</span>
   <span class="o">);</span>
@@ -461,8 +571,8 @@
                         <td><p class="first">Groups the records by a <em>new</em> key, which may be of a different key type.
                             When grouping a table, you may also specify a new value and value type.
                             <code class="docutils literal"><span class="pre">groupBy</span></code> is a shorthand for <code class="docutils literal"><span class="pre">selectKey(...).groupByKey()</span></code>.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KStream details</a>,
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KTable details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KStream details</a>,
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#groupBy-org.apache.kafka.streams.kstream.KeyValueMapper-">KTable details</a>)</p>
                             <p>Grouping is a prerequisite for <a class="reference internal" href="#streams-developer-guide-dsl-aggregating"><span class="std std-ref">aggregating a stream or a table</span></a>
                                 and ensures that data is properly partitioned (&#8220;keyed&#8221;) for subsequent operations.</p>
                             <p><strong>When to set explicit SerDes:</strong>
@@ -487,7 +597,7 @@
 <span class="c1">// Group the stream by a new key and key type</span>
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="n">stream</span><span class="o">.</span><span class="na">groupBy</span><span class="o">(</span>
     <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">value</span><span class="o">,</span>
-    <span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
+    <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key (note: type was modified) */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">())</span>  <span class="cm">/* value */</span>
   <span class="o">);</span>
@@ -495,7 +605,7 @@
 <span class="c1">// Group the table by a new key and key type, and also modify the value and value type.</span>
 <span class="n">KGroupedTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">groupedTable</span> <span class="o">=</span> <span class="n">table</span><span class="o">.</span><span class="na">groupBy</span><span class="o">(</span>
     <span class="o">(</span><span class="n">key</span><span class="o">,</span> <span class="n">value</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">KeyValue</span><span class="o">.</span><span class="na">pair</span><span class="o">(</span><span class="n">value</span><span class="o">,</span> <span class="n">value</span><span class="o">.</span><span class="na">length</span><span class="o">()),</span>
-    <span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
+    <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key (note: type was modified) */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Integer</span><span class="o">())</span> <span class="cm">/* value (note: type was modified) */</span>
   <span class="o">);</span>
@@ -511,7 +621,7 @@
         <span class="k">return</span> <span class="n">value</span><span class="o">;</span>
       <span class="o">}</span>
     <span class="o">},</span>
-    <span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
+    <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key (note: type was modified) */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">())</span>  <span class="cm">/* value */</span>
   <span class="o">);</span>
@@ -524,7 +634,7 @@
         <span class="k">return</span> <span class="n">KeyValue</span><span class="o">.</span><span class="na">pair</span><span class="o">(</span><span class="n">value</span><span class="o">,</span> <span class="n">value</span><span class="o">.</span><span class="na">length</span><span class="o">());</span>
       <span class="o">}</span>
     <span class="o">},</span>
-    <span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
+    <span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key (note: type was modified) */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Integer</span><span class="o">())</span> <span class="cm">/* value (note: type was modified) */</span>
   <span class="o">);</span>
@@ -538,7 +648,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Takes one record and produces one record.  You can modify the record key and value, including their types.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#map-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">map</span></code> will result in re-partitioning of the records.
                                 If possible use <code class="docutils literal"><span class="pre">mapValues</span></code> instead, which will not cause data re-partitioning.</p>
@@ -570,8 +680,8 @@
                     </td>
                         <td><p class="first">Takes one record and produces one record, while retaining the key of the original record.
                             You can modify the record value and the value type.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KStream details</a>,
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KTable details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KStream details</a>,
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#mapValues-org.apache.kafka.streams.kstream.ValueMapper-">KTable details</a>)</p>
                             <p><code class="docutils literal"><span class="pre">mapValues</span></code> is preferable to <code class="docutils literal"><span class="pre">map</span></code> because it will not cause data re-partitioning.  However, it does not
                                 allow you to modify the key or key type like <code class="docutils literal"><span class="pre">map</span></code> does.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
@@ -598,7 +708,7 @@
                     </td>
                         <td><p class="first">Merges records of two streams into one larger stream.
                             (<a class="reference external"
-                            href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-">details</a>)
+                            href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#merge-org.apache.kafka.streams.kstream.KStream-">details</a>)
                             <p>There is no ordering guarantee between records
                             from different streams in the merged stream. Relative order is preserved within each input stream though (ie, records within the same input stream are processed in order)</p>
                             <div class="last highlight-java">
@@ -620,7 +730,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Performs a stateless action on each record, and returns an unchanged stream.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#peek-org.apache.kafka.streams.kstream.ForeachAction-">details</a>)</p>
                             <p>You would use <code class="docutils literal"><span class="pre">peek</span></code> to cause <em>side effects</em> based on the input data (similar to <code class="docutils literal"><span class="pre">foreach</span></code>) and <em>continue</em>
                                 <em>processing</em> the input data (unlike <code class="docutils literal"><span class="pre">foreach</span></code>, which is a terminal operation).  <code class="docutils literal"><span class="pre">peek</span></code> returns the input
                                 stream as-is;  if you need to modify the input stream, use <code class="docutils literal"><span class="pre">map</span></code> or <code class="docutils literal"><span class="pre">mapValues</span></code> instead.</p>
@@ -652,7 +762,7 @@
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Prints the records to <code class="docutils literal"><span class="pre">System.out</span></code>.  See Javadocs for serde and <code class="docutils literal"><span class="pre">toString()</span></code>
                             caveats.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#print--">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#print--">details</a>)</p>
                             <p>Calling <code class="docutils literal"><span class="pre">print()</span></code> is the same as calling <code class="docutils literal"><span class="pre">foreach((key,</span> <span class="pre">value)</span> <span class="pre">-&gt;</span> <span class="pre">System.out.println(key</span> <span class="pre">+</span> <span class="pre">&quot;,</span> <span class="pre">&quot;</span> <span class="pre">+</span> <span class="pre">value))</span></code></p>
                             <p><code class="docutils literal"><span class="pre">print</span></code> is mainly for debugging/testing purposes, and it will try to flush on each record print. Hence it <strong>should not</strong> be used for production usage if performance requirements are concerned.</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KStream</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">stream</span> <span class="o">=</span> <span class="o">...;</span>
@@ -671,7 +781,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Assigns a new key &#8211; possibly of a new key type &#8211; to each record.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#selectKey-org.apache.kafka.streams.kstream.KeyValueMapper-">details</a>)</p>
                             <p>Calling <code class="docutils literal"><span class="pre">selectKey(mapper)</span></code> is the same as calling <code class="docutils literal"><span class="pre">map((key,</span> <span class="pre">value)</span> <span class="pre">-&gt;</span> <span class="pre">mapper(key,</span> <span class="pre">value),</span> <span class="pre">value)</span></code>.</p>
                             <p><strong>Marks the stream for data re-partitioning:</strong>
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">selectKey</span></code> will result in re-partitioning of the records.</p>
@@ -699,7 +809,7 @@
                         </ul>
                     </td>
                         <td><p class="first">Get the changelog stream of this table.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#toStream--">details</a>)</p>
                             <div class="last highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="kt">byte</span><span class="o">[],</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">table</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Also, a variant of `toStream` exists that allows you</span>
@@ -803,8 +913,8 @@
                             <td><p class="first"><strong>Rolling aggregation.</strong> Aggregates the values of (non-windowed) records by the grouped key.
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>When aggregating a <em>grouped stream</em>, you must provide an initializer (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>) and an &#8220;adder&#8221;
                                     aggregator (e.g., <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).  When aggregating a <em>grouped table</em>, you must provide a
                                     &#8220;subtractor&#8221; aggregator (think: <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
@@ -906,21 +1016,21 @@
                                 Aggregates the values of records, <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">per window</span></a>, by the grouped key.
                                 Aggregating is a generalization of <code class="docutils literal"><span class="pre">reduce</span></code> and allows, for example, the aggregate value to have a different
                                 type than the input values.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>You must provide an initializer (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">=</span> <span class="pre">0</span></code>), &#8220;adder&#8221; aggregator (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>),
                                     and a window.  When windowing based on sessions, you must additionally provide a &#8220;session merger&#8221; aggregator
                                     (e.g.,  <code class="docutils literal"><span class="pre">mergedAggValue</span> <span class="pre">=</span> <span class="pre">leftAggValue</span> <span class="pre">+</span> <span class="pre">rightAggValue</span></code>).</p>
                                 <p>The windowed <code class="docutils literal"><span class="pre">aggregate</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or <code class="docutils literal"><span class="pre">SessionWindowdKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">aggregate</span></code> exist, see Javadocs for details.</p>
-                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Java 8+ examples, using lambda expressions</span>
 
 <span class="c1">// Aggregating with time-based windowing (here: with 5-minute tumbling windows)</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
     <span class="o">.</span><span class="na">aggregate</span><span class="o">(</span>
         <span class="o">()</span> <span class="o">-&gt;</span> <span class="mi">0</span><span class="n">L</span><span class="o">,</span> <span class="cm">/* initializer */</span>
         <span class="o">(</span><span class="n">aggKey</span><span class="o">,</span> <span class="n">newValue</span><span class="o">,</span> <span class="n">aggValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">aggValue</span> <span class="o">+</span> <span class="n">newValue</span><span class="o">,</span> <span class="cm">/* adder */</span>
@@ -928,7 +1038,7 @@
         <span class="o">.</span><span class="na">withValueSerde</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">()));</span> <span class="cm">/* serde for aggregate value */</span>
 
 <span class="c1">// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
     <span class="n">aggregate</span><span class="o">(</span>
     	<span class="o">()</span> <span class="o">-&gt;</span> <span class="mi">0</span><span class="n">L</span><span class="o">,</span> <span class="cm">/* initializer */</span>
     	<span class="o">(</span><span class="n">aggKey</span><span class="o">,</span> <span class="n">newValue</span><span class="o">,</span> <span class="n">aggValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">aggValue</span> <span class="o">+</span> <span class="n">newValue</span><span class="o">,</span> <span class="cm">/* adder */</span>
@@ -939,7 +1049,7 @@
 <span class="c1">// Java 7 examples</span>
 
 <span class="c1">// Aggregating with time-based windowing (here: with 5-minute tumbling windows)</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span>
     <span class="o">.</span><span class="na">aggregate</span><span class="o">(</span>
         <span class="k">new</span> <span class="n">Initializer</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;()</span> <span class="o">{</span> <span class="cm">/* initializer */</span>
             <span class="nd">@Override</span>
@@ -957,7 +1067,7 @@
           <span class="o">.</span><span class="na">withValueSerde</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">()));</span>
 
 <span class="c1">// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)</span>
-<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
+<span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionizedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span><span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o"><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)).</span>
     <span class="n">aggregate</span><span class="o">(</span>
         <span class="k">new</span> <span class="n">Initializer</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;()</span> <span class="o">{</span> <span class="cm">/* initializer */</span>
             <span class="nd">@Override</span>
@@ -1001,8 +1111,8 @@
                             </ul>
                         </td>
                             <td><p class="first"><strong>Rolling aggregation.</strong> Counts the number of records by the grouped key.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">count</span></code> exist, see Javadocs for details.</p>
                                 <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KGroupedTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedTable</span> <span class="o">=</span> <span class="o">...;</span>
@@ -1032,22 +1142,22 @@
                         </td>
                             <td><p class="first"><strong>Windowed aggregation.</strong>
                                 Counts the number of records, <a class="reference internal" href="#streams-developer-guide-dsl-windowing"><span class="std std-ref">per window</span></a>, by the grouped key.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>The windowed <code class="docutils literal"><span class="pre">count</span></code> turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">count</span></code> exist, see Javadocs for details.</p>
-                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Counting a KGroupedStream with time-based windowing (here: with 5-minute tumbling windows)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">aggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-    <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* time-based window */</span>
+    <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* time-based window */</span>
     <span class="o">.</span><span class="na">count</span><span class="o">();</span>
 
 <span class="c1">// Counting a KGroupedStream with session-based windowing (here: with 5-minute inactivity gaps)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">aggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-    <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
+    <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
     <span class="o">.</span><span class="na">count</span><span class="o">();</span>
 </pre></div>
                                 </div>
@@ -1066,8 +1176,8 @@
                             <td><p class="first"><strong>Rolling aggregation.</strong> Combines the values of (non-windowed) records by the grouped key.
                                 The current record value is combined with the last reduced value, and a new reduced value is returned.
                                 The result value type cannot be changed, unlike <code class="docutils literal"><span class="pre">aggregate</span></code>.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedStream.html">KGroupedStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KGroupedTable.html">KGroupedTable details</a>)</p>
                                 <p>When reducing a <em>grouped stream</em>, you must provide an &#8220;adder&#8221; reducer (e.g.,  <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">+</span> <span class="pre">curValue</span></code>).
                                     When reducing a <em>grouped table</em>, you must additionally provide a &#8220;subtractor&#8221; reducer (e.g.,
                                     <code class="docutils literal"><span class="pre">aggValue</span> <span class="pre">-</span> <span class="pre">oldValue</span></code>).</p>
@@ -1150,26 +1260,26 @@
                                 The current record value is combined with the last reduced value, and a new reduced value is returned.
                                 Records with <code class="docutils literal"><span class="pre">null</span></code> key or value are ignored.
                                 The result value type cannot be changed, unlike <code class="docutils literal"><span class="pre">aggregate</span></code>.
-                                (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
+                                (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/TimeWindowedKStream.html">TimeWindowedKStream details</a>,
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/SessionWindowedKStream.html">SessionWindowedKStream details</a>)</p>
                                 <p>The windowed <code class="docutils literal"><span class="pre">reduce</span></code> turns a turns a <code class="docutils literal"><span class="pre">TimeWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code> or a <code class="docutils literal"><span class="pre">SessionWindowedKStream&lt;K,</span> <span class="pre">V&gt;</span></code>
                                     into a windowed <code class="docutils literal"><span class="pre">KTable&lt;Windowed&lt;K&gt;,</span> <span class="pre">V&gt;</span></code>.</p>
                                 <p>Several variants of <code class="docutils literal"><span class="pre">reduce</span></code> exist, see Javadocs for details.</p>
-                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Java 8+ examples, using lambda expressions</span>
 
 <span class="c1">// Aggregating with time-based windowing (here: with 5-minute tumbling windows)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-  <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
+  <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
   <span class="o">.</span><span class="na">reduce</span><span class="o">(</span>
     <span class="o">(</span><span class="n">aggValue</span><span class="o">,</span> <span class="n">newValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">aggValue</span> <span class="o">+</span> <span class="n">newValue</span> <span class="cm">/* adder */</span>
   <span class="o">);</span>
 
 <span class="c1">// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">sessionzedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-  <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
+  <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
   <span class="o">.</span><span class="na">reduce</span><span class="o">(</span>
     <span class="o">(</span><span class="n">aggValue</span><span class="o">,</span> <span class="n">newValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="n">aggValue</span> <span class="o">+</span> <span class="n">newValue</span> <span class="cm">/* adder */</span>
   <span class="o">);</span>
@@ -1179,7 +1289,7 @@
 
 <span class="c1">// Aggregating with time-based windowing (here: with 5-minute tumbling windows)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">..</span><span class="na">windowedBy</span><span class="o">(</span>
-  <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
+  <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">))</span> <span class="cm">/* time-based window */</span><span class="o">)</span>
   <span class="o">.</span><span class="na">reduce</span><span class="o">(</span>
     <span class="k">new</span> <span class="n">Reducer</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;()</span> <span class="o">{</span> <span class="cm">/* adder */</span>
       <span class="nd">@Override</span>
@@ -1190,7 +1300,7 @@
 
 <span class="c1">// Aggregating with session-based windowing (here: with an inactivity gap of 5 minutes)</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">Windowed</span><span class="o">&lt;</span><span class="n">String</span><span class="o">&gt;,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">timeWindowedAggregatedStream</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">windowedBy</span><span class="o">(</span>
-  <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
+  <span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)))</span> <span class="cm">/* session window */</span>
   <span class="o">.</span><span class="na">reduce</span><span class="o">(</span>
     <span class="k">new</span> <span class="n">Reducer</span><span class="o">&lt;</span><span class="n">Long</span><span class="o">&gt;()</span> <span class="o">{</span> <span class="cm">/* adder */</span>
       <span class="nd">@Override</span>
@@ -1223,7 +1333,7 @@
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">wordCounts</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="n">KGroupedStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">groupedStream</span> <span class="o">=</span> <span class="n">wordCounts</span>
-    <span class="o">.</span><span class="na">groupByKey</span><span class="o">(</span><span class="n">Serialized</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Integer</span><span class="o">()));</span>
+    <span class="o">.</span><span class="na">groupByKey</span><span class="o">(</span><span class="n">Grouped</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="n">Serdes</span><span class="o">.</span><span class="na">Integer</span><span class="o">()));</span>
 
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Integer</span><span class="o">&gt;</span> <span class="n">aggregated</span> <span class="o">=</span> <span class="n">groupedStream</span><span class="o">.</span><span class="na">aggregate</span><span class="o">(</span>
     <span class="o">()</span> <span class="o">-&gt;</span> <span class="mi">0</span><span class="o">,</span> <span class="cm">/* initializer */</span>
@@ -1485,7 +1595,7 @@
                         prices, inventory, customer information) in order to enrich a new data record (e.g. customer transaction) with context
                         information.  That is, scenarios where you need to perform table lookups at very large scale and with a low processing
                         latency.  Here, a popular pattern is to make the information in the databases available in Kafka through so-called
-                        <em>change data capture</em> in combination with <a class="reference internal" href="../../connect/index.html#kafka-connect"><span class="std std-ref">Kafka&#8217;s Connect API</span></a>, and then implementing
+                        <em>change data capture</em> in combination with <a class="reference internal" href="../../#connect"><span class="std std-ref">Kafka&#8217;s Connect API</span></a>, and then implementing
                         applications that leverage the Streams API to perform very fast and efficient local joins
                         of such tables and streams, rather than requiring the application to make a query to a remote database over the network
                         for each record.  In this example, the KTable concept in Kafka Streams would enable you to track the latest state
@@ -1546,7 +1656,7 @@
                             <strong>It is the responsibility of the user to ensure data co-partitioning when joining</strong>.</p>
                         <div class="admonition tip">
                             <p><b>Tip</b></p>
-                            <p class="last">If possible, consider using <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">global tables</span></a> (<code class="docutils literal"><span class="pre">GlobalKTable</span></code>) for joining because they do not require data co-partitioning.</p>
+                            <p class="last">If possible, consider using <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">global tables</span></a> (<code class="docutils literal"><span class="pre">GlobalKTable</span></code>) for joining because they do not require data co-partitioning.</p>
                         </div>
                         <p>The requirements for data co-partitioning are:</p>
                         <ul class="simple">
@@ -1554,7 +1664,7 @@
                             <li>All applications that <em>write</em> to the input topics must have the <strong>same partitioning strategy</strong> so that records with
                                 the same key are delivered to same partition number.  In other words, the keyspace of the input data must be
                                 distributed across partitions in the same manner.
-                                This means that, for example, applications that use Kafka&#8217;s <a class="reference internal" href="../../clients/index.html#kafka-clients"><span class="std std-ref">Java Producer API</span></a> must use the
+                                This means that, for example, applications that use Kafka&#8217;s <a class="reference internal" href="../../#producerapi"><span class="std std-ref">Java Producer API</span></a> must use the
                                 same partitioner (cf. the producer setting <code class="docutils literal"><span class="pre">&quot;partitioner.class&quot;</span></code> aka <code class="docutils literal"><span class="pre">ProducerConfig.PARTITIONER_CLASS_CONFIG</span></code>),
                                 and applications that use the Kafka&#8217;s Streams API must use the same <code class="docutils literal"><span class="pre">StreamPartitioner</span></code> for operations such as
                                 <code class="docutils literal"><span class="pre">KStream#to()</span></code>.  The good news is that, if you happen to use the default partitioner-related settings across all
@@ -1650,18 +1760,18 @@
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exists, see the Javadocs for details.</p>
-                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Java 8+ example, using lambda expressions</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">joined</span> <span class="o">=</span> <span class="n">left</span><span class="o">.</span><span class="na">join</span><span class="o">(</span><span class="n">right</span><span class="o">,</span>
     <span class="o">(</span><span class="n">leftValue</span><span class="o">,</span> <span class="n">rightValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">,</span> <span class="cm">/* ValueJoiner */</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1676,7 +1786,7 @@
         <span class="k">return</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">;</span>
       <span class="o">}</span>
     <span class="o">},</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1709,18 +1819,18 @@
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">leftJoin</span></code> exists, see the Javadocs for details.</p>
-                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Java 8+ example, using lambda expressions</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">joined</span> <span class="o">=</span> <span class="n">left</span><span class="o">.</span><span class="na">leftJoin</span><span class="o">(</span><span class="n">right</span><span class="o">,</span>
     <span class="o">(</span><span class="n">leftValue</span><span class="o">,</span> <span class="n">rightValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">,</span> <span class="cm">/* ValueJoiner */</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1735,7 +1845,7 @@
         <span class="k">return</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">;</span>
       <span class="o">}</span>
     <span class="o">},</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1771,18 +1881,18 @@
                             </td>
                                 <td><p class="first">Performs an OUTER JOIN of this stream with another stream.
                                     Even though this operation is windowed, the joined stream will be of type <code class="docutils literal"><span class="pre">KStream&lt;K,</span> <span class="pre">...&gt;</span></code> rather than <code class="docutils literal"><span class="pre">KStream&lt;Windowed&lt;K&gt;,</span> <span class="pre">...&gt;</span></code>.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#outerJoin-org.apache.kafka.streams.kstream.KStream-org.apache.kafka.streams.kstream.ValueJoiner-org.apache.kafka.streams.kstream.JoinWindows-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of a stream if and only if the stream was marked for re-partitioning (if both are marked, both are re-partitioned).</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">outerJoin</span></code> exists, see the Javadocs for details.</p>
-                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                                    <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
 
 <span class="c1">// Java 8+ example, using lambda expressions</span>
 <span class="n">KStream</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">String</span><span class="o">&gt;</span> <span class="n">joined</span> <span class="o">=</span> <span class="n">left</span><span class="o">.</span><span class="na">outerJoin</span><span class="o">(</span><span class="n">right</span><span class="o">,</span>
     <span class="o">(</span><span class="n">leftValue</span><span class="o">,</span> <span class="n">rightValue</span><span class="o">)</span> <span class="o">-&gt;</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">,</span> <span class="cm">/* ValueJoiner */</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1797,7 +1907,7 @@
         <span class="k">return</span> <span class="s">&quot;left=&quot;</span> <span class="o">+</span> <span class="n">leftValue</span> <span class="o">+</span> <span class="s">&quot;, right=&quot;</span> <span class="o">+</span> <span class="n">rightValue</span><span class="o">;</span>
       <span class="o">}</span>
     <span class="o">},</span>
-    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
+    <span class="n">JoinWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">)),</span>
     <span class="n">Joined</span><span class="o">.</span><span class="na">with</span><span class="o">(</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">String</span><span class="o">(),</span> <span class="cm">/* key */</span>
       <span class="n">Serdes</span><span class="o">.</span><span class="na">Long</span><span class="o">(),</span>   <span class="cm">/* left value */</span>
@@ -1832,7 +1942,7 @@
                             The semantics of the various stream-stream join variants are explained below.
                             To improve the readability of the table, assume that (1) all records have the same key (and thus the key in the table is omitted), (2) all records belong to a single join window, and (3) all records are processed in timestamp order.
                             The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -1958,7 +2068,7 @@
                         <span id="streams-developer-guide-dsl-joins-ktable-ktable"></span><h5><a class="toc-backref" href="#id16">KTable-KTable Join</a><a class="headerlink" href="#ktable-ktable-join" title="Permalink to this headline"></a></h5>
                         <p>KTable-KTable joins are always <em>non-windowed</em> joins.  They are designed to be consistent with their counterparts in
                             relational databases.  The changelog streams of both KTables are materialized into local state stores to represent the
-                            latest snapshot of their <a class="reference internal" href="../concepts.html#streams-concepts-ktable"><span class="std std-ref">table duals</span></a>.
+                            latest snapshot of their <a class="reference internal" href="#streams_concepts_ktable"><span class="std std-ref">table duals</span></a>.
                             The join result is a new KTable that represents the changelog stream of the join operation.</p>
                         <p>Join output records are effectively created as follows, leveraging the user-supplied <code class="docutils literal"><span class="pre">ValueJoiner</span></code>:</p>
                         <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KeyValue</span><span class="o">&lt;</span><span class="n">K</span><span class="o">,</span> <span class="n">LV</span><span class="o">&gt;</span> <span class="n">leftRecord</span> <span class="o">=</span> <span class="o">...;</span>
@@ -1990,7 +2100,7 @@
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this table with another table.
                                     The result is an ever-updating KTable that represents the &#8220;current&#8221; result of the join.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2036,7 +2146,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this table with another table.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2085,7 +2195,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an OUTER JOIN of this table with another table.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KTable.html#outerJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Long</span><span class="o">&gt;</span> <span class="n">left</span> <span class="o">=</span> <span class="o">...;</span>
 <span class="n">KTable</span><span class="o">&lt;</span><span class="n">String</span><span class="o">,</span> <span class="n">Double</span><span class="o">&gt;</span> <span class="n">right</span> <span class="o">=</span> <span class="o">...;</span>
@@ -2134,7 +2244,7 @@
                             The semantics of the various table-table join variants are explained below.
                             To improve the readability of the table, you can assume that (1) all records have the same key (and thus the key in the table is omitted) and that (2) all records are processed in timestamp order.
                             The columns INNER JOIN, LEFT JOIN, and OUTER JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code>, <code class="docutils literal"><span class="pre">leftJoin</span></code>, and
                             <code class="docutils literal"><span class="pre">outerJoin</span></code> methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -2298,7 +2408,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with the table, effectively doing a table lookup.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">join</span></code> exists, see the Javadocs for details.</p>
@@ -2351,7 +2461,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with the table, effectively doing a table lookup.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.KTable-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p><strong>Data must be co-partitioned</strong>: The input data for both sides must be <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">co-partitioned</span></a>.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
                                     <p>Several variants of <code class="docutils literal"><span class="pre">leftJoin</span></code> exists, see the Javadocs for details.</p>
@@ -2407,7 +2517,7 @@
                             To improve the readability of the table we assume that (1) all records have the same key (and thus we omit the key in
                             the table) and that (2) all records are processed in timestamp order.
                             The columns INNER JOIN and LEFT JOIN denote what is passed as arguments to the user-supplied
-                            <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code> and <code class="docutils literal"><span class="pre">leftJoin</span></code>
+                            <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/ValueJoiner.html">ValueJoiner</a> for the <code class="docutils literal"><span class="pre">join</span></code> and <code class="docutils literal"><span class="pre">leftJoin</span></code>
                             methods, respectively, whenever a new input record is received on either side of the join.  An empty table
                             cell denotes that the <code class="docutils literal"><span class="pre">ValueJoiner</span></code> is not called at all.</p>
                         <table border="1" class="docutils">
@@ -2523,13 +2633,13 @@
                     <div class="section" id="kstream-globalktable-join">
                         <span id="streams-developer-guide-dsl-joins-kstream-globalktable"></span><h5><a class="toc-backref" href="#id18">KStream-GlobalKTable Join</a><a class="headerlink" href="#kstream-globalktable-join" title="Permalink to this headline"></a></h5>
                         <p>KStream-GlobalKTable joins are always <em>non-windowed</em> joins.  They allow you to perform <em>table lookups</em> against a
-                            <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">GlobalKTable</span></a> (entire changelog stream) upon receiving a new record from the
+                            <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">GlobalKTable</span></a> (entire changelog stream) upon receiving a new record from the
                             KStream (record stream).  An example use case would be &#8220;star queries&#8221; or &#8220;star joins&#8221;, where you would enrich a stream
                             of user activities (KStream) with the latest user profile information (GlobalKTable) and further context information
-                            (further GlobalKTables).</p>
+                            (further GlobalKTables). However, because GlobalKTables have no notion of time, a KStream-GlobalKTable join is not a temporal join, and there is no event-time synchronization between updates to a GlobalKTable and processing of KStream records.</p>
                         <p>At a high-level, KStream-GlobalKTable joins are very similar to
                             <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a>.  However, global tables provide you
-                            with much more flexibility at the <a class="reference internal" href="../concepts.html#streams-concepts-globalktable"><span class="std std-ref">some expense</span></a> when compared to partitioned
+                            with much more flexibility at the <a class="reference internal" href="#streams_concepts_globalktable"><span class="std std-ref">some expense</span></a> when compared to partitioned
                             tables:</p>
                         <ul class="simple">
                             <li>They do not require <a class="reference internal" href="#streams-developer-guide-dsl-joins-co-partitioning"><span class="std std-ref">data co-partitioning</span></a>.</li>
@@ -2569,7 +2679,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs an INNER JOIN of this stream with the global table, effectively doing a table lookup.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#join-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p>The <code class="docutils literal"><span class="pre">GlobalKTable</span></code> is fully bootstrapped upon (re)start of a <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, which means the table is fully populated with all the data in the underlying topic that is
                                         available at the time of the startup.  The actual data processing begins only once the bootstrapping has completed.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
@@ -2623,7 +2733,7 @@
                                 </ul>
                             </td>
                                 <td><p class="first">Performs a LEFT JOIN of this stream with the global table, effectively doing a table lookup.
-                                    <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
+                                    <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#leftJoin-org.apache.kafka.streams.kstream.GlobalKTable-org.apache.kafka.streams.kstream.KeyValueMapper-org.apache.kafka.streams.kstream.ValueJoiner-">(details)</a></p>
                                     <p>The <code class="docutils literal"><span class="pre">GlobalKTable</span></code> is fully bootstrapped upon (re)start of a <code class="docutils literal"><span class="pre">KafkaStreams</span></code> instance, which means the table is fully populated with all the data in the underlying topic that is
                                         available at the time of the startup.  The actual data processing begins only once the bootstrapping has completed.</p>
                                     <p><strong>Causes data re-partitioning of the stream if and only if the stream was marked for re-partitioning.</strong></p>
@@ -2674,9 +2784,9 @@
                             </tr>
                             </tbody>
                         </table>
-                        <p><strong>Semantics of stream-table joins:</strong>
-                            The join semantics are identical to <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a>.
-                            The only difference is that, for KStream-GlobalKTable joins, the left input record is first &#8220;mapped&#8221; with
+                        <p><strong>Semantics of stream-global-table joins:</strong>
+                            The join semantics are different to <a class="reference internal" href="#streams-developer-guide-dsl-joins-kstream-ktable"><span class="std std-ref">KStream-KTable joins</span></a> because it's not a temporal join.
+                            Another difference is that, for KStream-GlobalKTable joins, the left input record is first &#8220;mapped&#8221; with
                             a user-supplied <code class="docutils literal"><span class="pre">KeyValueMapper</span></code> into the table&#8217;s keyspace prior to the table lookup.</p>
                     </div>
                 </div>
@@ -2695,9 +2805,9 @@
                         defined window boundary.  In aggregating operations, a windowing state store is used to store the latest aggregation
                         results per window.
                         Old records in the state store are purged after the specified
-                        <a class="reference internal" href="../concepts.html#streams-concepts-windowing"><span class="std std-ref">window retention period</span></a>.
+                        <a class="reference internal" href="../core-concepts.html#streams_concepts_windowing"><span class="std std-ref">window retention period</span></a>.
                         Kafka Streams guarantees to keep a window for at least this specified time; the default value is one day and can be
-                        changed via <code class="docutils literal"><span class="pre">Windows#until()</span></code> and <code class="docutils literal"><span class="pre">SessionWindows#until()</span></code>.</p>
+                        changed via <code class="docutils literal"><span class="pre">Materialized#withRetention()</span></code>.</p>
                     <p>The DSL supports the following types of windows:</p>
                     <table border="1" class="docutils">
                         <colgroup>
@@ -2750,12 +2860,12 @@ become t=300,000).</span></p>
                             windows with a size of 5000ms have predictable window boundaries <code class="docutils literal"><span class="pre">[0;5000),[5000;10000),...</span></code> &#8212; and <strong>not</strong>
                             <code class="docutils literal"><span class="pre">[1000;6000),[6000;11000),...</span></code> or even something &#8220;random&#8221; like <code class="docutils literal"><span class="pre">[1452;6452),[6452;11452),...</span></code>.</p>
                         <p>The following code defines a tumbling window with a size of 5 minutes:</p>
-                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.TimeWindows</span><span class="o">;</span>
 
 <span class="c1">// A tumbling time window with a size of 5 minutes (and, by definition, an implicit</span>
 <span class="c1">// advance interval of 5 minutes).</span>
-<span class="kt">long</span> <span class="n">windowSizeMs</span> <span class="o">=</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span> <span class="c1">// 5 * 60 * 1000L</span>
+<span class="kt">Duration</span> <span class="n">windowSizeMs</span> <span class="o">=</span> <span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span>
 <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">);</span>
 
 <span class="c1">// The above is equivalent to the following code:</span>
@@ -2777,13 +2887,13 @@ become t=300,000).</span></p>
                                 terminology in academic literature, where the semantics of sliding windows are different to those of hopping windows.</p>
                         </div>
                         <p>The following code defines a hopping window with a size of 5 minutes and an advance interval of 1 minute:</p>
-                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.TimeWindows</span><span class="o">;</span>
 
 <span class="c1">// A hopping time window with a size of 5 minutes and an advance interval of 1 minute.</span>
 <span class="c1">// The window&#39;s name -- the string parameter -- is used to e.g. name the backing state store.</span>
-<span class="kt">long</span> <span class="n">windowSizeMs</span> <span class="o">=</span> <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span> <span class="c1">// 5 * 60 * 1000L</span>
-<span class="kt">long</span> <span class="n">advanceMs</span> <span class="o">=</span>    <span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span> <span class="c1">// 1 * 60 * 1000L</span>
+<span class="kt">Duration</span> <span class="n">windowSizeMs</span> <span class="o">=</span> <span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">);</span>
+<span class="kt">Duration</span> <span class="n">advanceMs</span> <span class="o">=</span>    <span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">1</span><span class="o">);</span>
 <span class="n">TimeWindows</span><span class="o">.</span><span class="na">of</span><span class="o">(</span><span class="n">windowSizeMs</span><span class="o">).</span><span class="na">advanceBy</span><span class="o">(</span><span class="n">advanceMs</span><span class="o">);</span>
 </pre></div>
                         </div>
@@ -2831,11 +2941,11 @@ milliseconds (e.g. t=5 would become t=300,000).</span></p>
                             simple metrics (e.g. count of user visits on a news website or social platform) to more complex metrics (e.g. customer
                             conversion funnel and event flows).</p>
                         <p>The following code defines a session window with an inactivity gap of 5 minutes:</p>
-                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.util.concurrent.TimeUnit</span><span class="o">;</span>
+                        <div class="highlight-java"><div class="highlight"><pre><span></span><span class="kn">import</span> <span class="nn">java.time.Duration</span><span class="o">;</span>
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.kstream.SessionWindows</span><span class="o">;</span>
 
 <span class="c1">// A session window with an inactivity gap of 5 minutes.</span>
-<span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">TimeUnit</span><span class="o">.</span><span class="na">MINUTES</span><span class="o">.</span><span class="na">toMillis</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
+<span class="n">SessionWindows</span><span class="o">.</span><span class="na">with</span><span class="o">(</span><span class="n">Duration</span><span class="o">.</span><span class="na">ofMinutes</span><span class="o">(</span><span class="mi">5</span><span class="o">));</span>
 </pre></div>
                         </div>
                         <p>Given the previous session window example, here&#8217;s what would happen on an input stream of six records.
@@ -2862,6 +2972,73 @@ convert from minutes to milliseconds (e.g. t=5 would become t=300,000).</span></
 t=5 (blue), which lead to a merge of sessions and an extension of a session, respectively.</span></p>
                         </div>
                     </div>
+		    <div class="section" id="window-final-results">
+			    <span id="windowing-final-results"></span><h5><a class="toc-backref" href="#id31">Window Final Results</a><a class="headerlink" href="#window-final-results" title="Permalink to this headline"></a></h5>
+			    <p>In Kafka Streams, windowed computations update their results continuously.
+			       As new data arrives for a window, freshly computed results are emitted downstream.
+			       For many applications, this is ideal, since fresh results are always available.
+			       and Kafka Streams is designed to make programming continuous computations seamless.
+			       However, some applications need to take action <strong>only</strong> on the final result of a windowed computation.
+			       Common examples of this are sending alerts or delivering results to a system that doesn't support updates.
+			    </p>
+			    <p>Suppose that you have an hourly windowed count of events per user.
+			       If you want to send an alert when a user has <em>less than</em> three events in an hour, you have a real challange.
+			       All users would match this condition at first, until they accrue enough events, so you cannot simply
+			       send an alert when someone matches the condition; you have to wait until you know you won't see any more events for a particular window
+			       and <em>then</em> send the alert.
+			    </p>
+                            <p>Kafka Streams offers a clean way to define this logic: after defining your windowed computation, you can
+			       <span class="pre">suppress</span> the intermediate results, emitting the final count for each user when the window is <strong>closed</strong>.
+			    </p>
+			    <p>For example:</p>
+			    <div class="highlight-java"><div class="highlight">
+<pre>
+KGroupedStream&lt;UserId, Event&gt; grouped = ...;
+grouped
+    .windowedBy(TimeWindows.of(Duration.ofHours(1)).grace(ofMinutes(10)))
+    .count()
+    .suppress(Suppressed.untilWindowCloses(unbounded()))
+    .filter((windowedUserId, count) -&gt; count &lt; 3)
+    .toStream()
+    .foreach((windowedUserId, count) -&gt; sendAlert(windowedUserId.window(), windowedUserId.key(), count));
+</pre>
+			    </div></div>
+			    <p>The key parts of this program are:
+			    <dl>
+				    <dt><code>grace(ofMinutes(10))</code></dt>
+				    <dd>This allows us to bound the lateness of events the window will accept.
+				        For example, the 09:00 to 10:00 window will accept late-arriving records until 10:10, at which point, the window is <strong>closed</strong>.
+				    </dd>
+				    <dt><code>.suppress(Suppressed.untilWindowCloses(...))</code></dt>
+				    <dd>This configures the suppression operator to emit nothing for a window until it closes, and then emit the final result.
+				        For example, if user <code>U</code> gets 10 events between 09:00 and 10:10, the <code>filter</code> downstream of the suppression
+					will get no events for the windowed key <code>U@09:00-10:00</code> until 10:10, and then it will get exactly one with the value <code>10</code>.
+					This is the final result of the windowed count.
+				    </dd>
+				    <dt><code>unbounded()</code></dt>
+				    <dd>
+				      This configures the buffer used for storing events
+				      until their windows close.
+				      Production code is able to put a cap on the amount
+				      of memory to use for the buffer,
+				      but this simple example creates a buffer with no
+				      upper bound.
+				    </dd>
+			    </dl>
+			    </p>
+			    <p>
+			      One thing to note is that suppression is just like any other
+			      Kafka Streams operator, so you can build a topology with two
+			      branches emerging from the <code>count</code>,
+			      one suppressed, and one not, or even multiple differently
+			      configured suppressions.
+			      This allows you to apply suppressions where they are needed
+			      and otherwise rely on the default continuous update behavior.
+			    </p>
+			    <p>For more detailed information, see the JavaDoc on the <code>Suppressed</code> config object
+	                       and <a href="https://cwiki.apache.org/confluence/x/sQU0BQ" title="KIP-328">KIP-328</a>.
+			    </p>
+		    </div>
                 </div>
             </div>
             <div class="section" id="applying-processors-and-transformers-processor-api-integration">
@@ -2875,7 +3052,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     <li><strong>Combining ease-of-use with full flexibility where it&#8217;s needed:</strong> Even though you generally prefer to use
                         the expressiveness of the DSL, there are certain steps in your processing that require more flexibility and
                         tinkering than the DSL provides.  For example, only the Processor API provides access to a
-                        <a class="reference internal" href="../faq.html#streams-faq-processing-record-metadata"><span class="std std-ref">record&#8217;s metadata</span></a> such as its topic, partition, and offset information.
+                        record&#8217;s metadata such as its topic, partition, and offset information.
                         However, you don&#8217;t want to switch completely to the Processor API just because of that.</li>
                     <li><strong>Migrating from other tools:</strong> You are migrating from other stream processing technologies that provide an
                         imperative API, and migrating some of your legacy code to the Processor API was faster and/or easier than to
@@ -2899,11 +3076,11 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first"><strong>Terminal operation.</strong>  Applies a <code class="docutils literal"><span class="pre">Processor</span></code> to each record.
                             <code class="docutils literal"><span class="pre">process()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">details</a>)</p>
                             <p>This is essentially equivalent to adding the <code class="docutils literal"><span class="pre">Processor</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
-                                <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
+                                <a class="reference internal" href="../core-concepts.html#streams_topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">javadocs</a>.</p>
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#process-org.apache.kafka.streams.processor.ProcessorSupplier-java.lang.String...-">javadocs</a>.</p>
                         </td>
                     </tr>
                     <tr class="row-odd"><td><p class="first"><strong>Transform</strong></p>
@@ -2913,7 +3090,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first">Applies a <code class="docutils literal"><span class="pre">Transformer</span></code> to each record.
                             <code class="docutils literal"><span class="pre">transform()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">details</a>)</p>
                             <p>Each input record is transformed into zero, one, or more output records (similar to the stateless <code class="docutils literal"><span class="pre">flatMap</span></code>).
                                 The <code class="docutils literal"><span class="pre">Transformer</span></code> must return <code class="docutils literal"><span class="pre">null</span></code> for zero output.
                                 You can modify the record&#8217;s key and value, including their types.</p>
@@ -2921,9 +3098,9 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                                 Applying a grouping or a join after <code class="docutils literal"><span class="pre">transform</span></code> will result in re-partitioning of the records.
                                 If possible use <code class="docutils literal"><span class="pre">transformValues</span></code> instead, which will not cause data re-partitioning.</p>
                             <p><code class="docutils literal"><span class="pre">transform</span></code> is essentially equivalent to adding the <code class="docutils literal"><span class="pre">Transformer</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
-                                <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
+                                <a class="reference internal" href="../core-concepts.html#streams_topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">javadocs</a>.
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#transform-org.apache.kafka.streams.kstream.TransformerSupplier-java.lang.String...-">javadocs</a>.
                                </p>
                         </td>
                     </tr>
@@ -2935,14 +3112,14 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </td>
                         <td><p class="first">Applies a <code class="docutils literal"><span class="pre">ValueTransformer</span></code> to each record, while retaining the key of the original record.
                             <code class="docutils literal"><span class="pre">transformValues()</span></code> allows you to leverage the <a class="reference internal" href="processor-api.html#streams-developer-guide-processor-api"><span class="std std-ref">Processor API</span></a> from the DSL.
-                            (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">details</a>)</p>
+                            (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">details</a>)</p>
                             <p>Each input record is transformed into exactly one output record (zero output records or multiple output records are not possible).
                                 The <code class="docutils literal"><span class="pre">ValueTransformer</span></code> may return <code class="docutils literal"><span class="pre">null</span></code> as the new value for a record.</p>
                             <p><code class="docutils literal"><span class="pre">transformValues</span></code> is preferable to <code class="docutils literal"><span class="pre">transform</span></code> because it will not cause data re-partitioning.</p>
                             <p><code class="docutils literal"><span class="pre">transformValues</span></code> is essentially equivalent to adding the <code class="docutils literal"><span class="pre">ValueTransformer</span></code> via <code class="docutils literal"><span class="pre">Topology#addProcessor()</span></code> to your
-                                <a class="reference internal" href="../concepts.html#streams-concepts-processor-topology"><span class="std std-ref">processor topology</span></a>.</p>
+                                <a class="reference internal" href="../core-concepts.html#streams_topology"><span class="std std-ref">processor topology</span></a>.</p>
                             <p class="last">An example is available in the
-                                <a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">javadocs</a>.</p>
+                                <a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#transformValues-org.apache.kafka.streams.kstream.ValueTransformerSupplier-java.lang.String...-">javadocs</a>.</p>
                         </td>
                     </tr>
                     </tbody>
@@ -3027,6 +3204,50 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                 </div>
             </div>
         </div>
+
+	<div class="section" id="controlling-emit-rate">
+            <span id="streams-developer-guide-dsl-suppression"></span><h2><a class="toc-backref" href="#id32">Controlling KTable emit rate</a><a class="headerlink" href="#controlling-emit-rate" title="Permalink to this headline"></a></h2>
+	    <p>A KTable is logically a continuously updated table.
+	       These updates make their way to downstream operators whenever new data is available, ensuring that the whole computation is as fresh as possible.
+	       Logically speaking, most programs describe a series of transformations, and the update rate is not a factor in the program behavior.
+	       In these cases, the rate of update is more of a performance concern.
+	       Operators are able to optimize both the network traffic (to the Kafka brokers) and the disk traffic (to the local state stores) by adjusting
+	       commit interval and batch size configurations.
+	    </p>
+	    <p>However, some applications need to take other actions, such as calling out to external systems,
+	       and therefore need to exercise some control over the rate of invocations, for example of <code>KStream#foreach</code>.
+	    </p>
+	    <p>Rather than achieving this as a side-effect of the  <a class="reference internal" href="memory-mgmt.html#streams-developer-guide-memory-management-record-cache"><span class="std std-ref">KTable record cache</span></a>,
+	       you can directly impose a rate limit via the <code>KTable#suppress</code> operator.
+	    </p>
+	    <p>For example:
+	    </p>
+	    <div class="highlight-java"><div class="highlight">
+<pre>
+KGroupedTable&lt;String, String&gt; groupedTable = ...;
+groupedTable
+    .count()
+    .suppress(untilTimeLimit(ofMinutes(5), maxBytes(1_000_000L).emitEarlyWhenFull()))
+    .toStream()
+    .foreach((key, count) -&gt; updateCountsDatabase(key, count));
+</pre>
+	    </div></div>
+	    <p>This configuration ensures that <code>updateCountsDatabase</code> gets events for each <code>key</code> no more than once every 5 minutes.
+	       Note that the latest state for each key has to be buffered in memory for that 5-minute period.
+	       You have the option to control the maximum amount of memory to use for this buffer (in this case, 1MB).
+	       There is also an option to impose a limit in terms of number of records (or to leave both limits unspecified).
+	    </p>
+	    <p>Additionally, it is possible to choose what happens if the buffer fills up.
+	       This example takes a relaxed approach and just emits the oldest records before their 5-minute time limit to bring the buffer back down to size.
+	       Alternatively, you can choose to stop processing and shut the application down.
+	       This may seem extreme, but it gives you a guarantee that the 5-minute time limit will be absolutely enforced.
+	       After the application shuts down, you could allocate more memory for the buffer and resume processing.
+	       Emitting early is preferable for most applications.
+	    </p>
+	    <p>For more detailed information, see the JavaDoc on the <code>Suppressed</code> config object
+	       and <a href="https://cwiki.apache.org/confluence/x/sQU0BQ" title="KIP-328">KIP-328</a>.
+	    </p>
+	</div>
         <div class="section" id="writing-streams-back-to-kafka">
             <span id="streams-developer-guide-dsl-destinations"></span><h2><a class="toc-backref" href="#id25">Writing streams back to Kafka</a><a class="headerlink" href="#writing-streams-back-to-kafka" title="Permalink to this headline"></a></h2>
             <p>Any streams and tables may be (continuously) written back to a Kafka topic.  As we will describe in more detail below, the output data might be
@@ -3048,7 +3269,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                     </ul>
                 </td>
                     <td><p class="first"><strong>Terminal operation.</strong>  Write the records to Kafka topic(s).
-                        (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
+                        (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#to(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide serdes explicitly:</p>
                         <ul class="simple">
                             <li>If you do not specify SerDes explicitly, the default SerDes from the
@@ -3097,7 +3318,7 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                 </td>
                     <td><p class="first">Write the records to a Kafka topic and create a new stream/table from that topic.
                         Essentially a shorthand for <code class="docutils literal"><span class="pre">KStream#to()</span></code> followed by <code class="docutils literal"><span class="pre">StreamsBuilder#stream()</span></code>, same for tables.
-                        (<a class="reference external" href="../../../javadoc/org/apache/kafka/streams/kstream/KStream.html#through(java.lang.String)">KStream details</a>)</p>
+                        (<a class="reference external" href="/{{version}}/javadoc/org/apache/kafka/streams/kstream/KStream.html#through(java.lang.String)">KStream details</a>)</p>
                         <p>When to provide SerDes explicitly:</p>
                         <ul class="simple">
                             <li>If you do not specify SerDes explicitly, the default SerDes from the
@@ -3194,11 +3415,11 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.ImplicitConversions</span></code>: Module that brings into scope the implicit conversions between the Scala and Java classes.</li>
               <li><code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.Serdes</span></code>: Module that contains all primitive SerDes that can be imported as implicits and a helper to create custom SerDes.</li>
             </ul>
-            <p>The library is cross-built with Scala 2.11 and 2.12.  To reference the library compiled against Scala 2.11 include the following in your maven <code>pom.xml</code> add the following:</p>
+            <p>The library is cross-built with Scala 2.11 and 2.12.  To reference the library compiled against Scala {{scalaVersion}} include the following in your maven <code>pom.xml</code> add the following:</p>
             <pre class="brush: xml;">
               &lt;dependency&gt;
                 &lt;groupId&gt;org.apache.kafka&lt;/groupId&gt;
-                &lt;artifactId&gt;kafka-streams-scala_2.11&lt;/artifactId&gt;
+                &lt;artifactId&gt;kafka-streams-scala_{{scalaVersion}}&lt;/artifactId&gt;
                 &lt;version&gt;{{fullDotVersion}}&lt;/version&gt;
               &lt;/dependency&gt;
             </pre>
@@ -3213,8 +3434,8 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
               <p>Here's an example of the classic WordCount program that uses the Scala <code class="docutils literal"><span class="pre">StreamsBuilder</span></code> that builds an instance of <code class="docutils literal"><span class="pre">KStream</span></code> which is a wrapper around Java <code class="docutils literal"><span class="pre">KStream</span></code>. Then we reify to a table and get a <code class="docutils literal"><span class="pre">KTable</span></code>, which, again is a wrapper around Java <code class="docutils literal"><span class="pre">KTable</span></code>.</p>
               <p>The net result is that the following code is structured just like using the Java API, but with Scala and with far fewer type annotations compared to using the Java API directly from Scala. The difference in type annotation usage is more obvious when given an example.  Below is an example WordCount implementation that will be used to demonstrate the differences between the Scala and Java API.</p>
               <pre class="brush: scala;">
+import java.time.Duration
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.streams.kstream.Materialized
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -3244,22 +3465,22 @@ object WordCountApplication extends App {
   streams.start()
 
   sys.ShutdownHookThread {
-     streams.close(10, TimeUnit.SECONDS)
+     streams.close(Duration.ofSeconds(10))
   }
 }
               </pre>
-              <p>In the above code snippet, we don't have to provide any SerDes, <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> explicitly. They will also not be dependent on any SerDes specified in the config.  <strong>In fact all SerDes specified in the config will be ignored by the Scala APIs</strong>. All SerDes and <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be handled through implicit SerDes as discussed later in the <a href="#scala-dsl-implicit-serdes">Implicit SerDes</a> section. The complete independence from configuration based SerDes is what makes this library completely typesafe.  Any missing instances of SerDes, <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be flagged as a compile time error.</p>
+              <p>In the above code snippet, we don't have to provide any SerDes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> explicitly. They will also not be dependent on any SerDes specified in the config.  <strong>In fact all SerDes specified in the config will be ignored by the Scala APIs</strong>. All SerDes and <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be handled through implicit SerDes as discussed later in the <a href="#scala-dsl-implicit-serdes">Implicit SerDes</a> section. The complete independence from configuration based SerDes is what makes this library completely typesafe.  Any missing instances of SerDes, <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> will be flagged as a compile time error.</p>
             </div>
             <div class="section" id="scala-dsl-implicit-serdes">
               <span id="streams-developer-guide-dsl-scala-dsl-implicit-serdes"></span><h3><a class="toc-backref" href="#id29">Implicit SerDes</a><a class="headerlink" href="#scala-dsl-implicit-serdes" title="Permalink to this headline"></a></h3>
-              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
-              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Serialized</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
+              <p>One of the common complaints of Scala users with the Java API has been the repetitive usage of the SerDes in API invocations. Many of the APIs need to take the SerDes through abstractions like <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code>. And the user has to supply them every time through the with function of these classes.</p>
+              <p>The library uses the power of <a href="https://docs.scala-lang.org/tour/implicit-parameters.html">Scala implicit parameters</a> to alleviate this concern. As a user you can provide implicit SerDes or implicit values of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> once and make your code less verbose. In fact you can just have the implicit SerDes in scope and the library will make the instances of <code class="docutils literal"><span class="pre">Grouped</span></code>, <code class="docutils literal"><span class="pre">Produced</span></code>, <code class="docutils literal"><span class="pre">Consumed</span></code> or <code class="docutils literal"><span class="pre">Joined</span></code> available in scope.</p>
               <p>The library also bundles all implicit SerDes of the commonly used primitive types in a Scala module - so just import the module vals and have all SerDes in scope.  A similar strategy of modular implicits can be adopted for any user-defined SerDes as well (User-defined SerDes are discussed in the next section).</p>
               <p>Here's an example:</p>
               <pre class="brush: scala;">
 // DefaultSerdes brings into scope implicit SerDes (mostly for primitives)
-// that will set up all Serialized, Produced, Consumed and Joined instances.
-// So all APIs below that accept Serialized, Produced, Consumed or Joined will
+// that will set up all Grouped, Produced, Consumed and Joined instances.
+// So all APIs below that accept Grouped, Produced, Consumed or Joined will
 // get these instances automatically
 import Serdes._
 
@@ -3269,7 +3490,7 @@ val userClicksStream: KStream[String, Long] = builder.stream(userClicksTopic)
 
 val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 
-// The following code fragment does not have a single instance of Serialized,
+// The following code fragment does not have a single instance of Grouped,
 // Produced, Consumed or Joined supplied explicitly.
 // All of them are taken care of by the implicit SerDes imported by DefaultSerdes
 val clicksPerRegion: KTable[String, Long] =

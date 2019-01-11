@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.IMocksControl;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -52,16 +51,19 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.easymock.EasyMock.createControl;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 
 /**
@@ -379,16 +381,7 @@ public class SelectorTest {
     @Test
     public void testImmediatelyConnectedCleaned() throws Exception {
         Metrics metrics = new Metrics(); // new metrics object to avoid metric registration conflicts
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
-            @Override
-            protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
-                // Use a blocking connect to trigger the immediately connected path
-                channel.configureBlocking(true);
-                boolean connected = super.doConnect(channel, address);
-                channel.configureBlocking(false);
-                return connected;
-            }
-        };
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
 
         try {
             testImmediatelyConnectedCleaned(selector, true);
@@ -396,6 +389,26 @@ public class SelectorTest {
         } finally {
             selector.close();
             metrics.close();
+        }
+    }
+
+    private static class ImmediatelyConnectingSelector extends Selector {
+        public ImmediatelyConnectingSelector(long connectionMaxIdleMS,
+                                             Metrics metrics,
+                                             Time time,
+                                             String metricGrpPrefix,
+                                             ChannelBuilder channelBuilder,
+                                             LogContext logContext) {
+            super(connectionMaxIdleMS, metrics, time, metricGrpPrefix, channelBuilder, logContext);
+        }
+
+        @Override
+        protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+            // Use a blocking connect to trigger the immediately connected path
+            channel.configureBlocking(true);
+            boolean connected = super.doConnect(channel, address);
+            channel.configureBlocking(false);
+            return connected;
         }
     }
 
@@ -409,6 +422,46 @@ public class SelectorTest {
         }
         selector.close(id);
         verifySelectorEmpty(selector);
+    }
+
+    /**
+     * Verify that if Selector#connect fails and throws an Exception, all related objects
+     * are cleared immediately before the exception is propagated.
+     */
+    @Test
+    public void testConnectException() throws Exception {
+        Metrics metrics = new Metrics();
+        AtomicBoolean throwIOException = new AtomicBoolean();
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+                SelectionKey key = super.registerChannel(id, socketChannel, interestedOps);
+                key.cancel();
+                if (throwIOException.get())
+                    throw new IOException("Test exception");
+                return key;
+            }
+        };
+
+        try {
+            verifyImmediatelyConnectedException(selector, "0");
+            throwIOException.set(true);
+            verifyImmediatelyConnectedException(selector, "1");
+        } finally {
+            selector.close();
+            metrics.close();
+        }
+    }
+
+    private void verifyImmediatelyConnectedException(Selector selector, String id) throws Exception {
+        try {
+            selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+            fail("Expected exception not thrown");
+        } catch (Exception e) {
+            verifyEmptyImmediatelyConnectedKeys(selector);
+            assertNull("Channel not removed", selector.channel(id));
+            ensureEmptySelectorFields(selector);
+        }
     }
 
     @Test
@@ -561,31 +614,20 @@ public class SelectorTest {
      */
     @Test
     public void testConnectDisconnectDuringInSinglePoll() throws Exception {
-        IMocksControl control = createControl();
-
         // channel is connected, not ready and it throws an exception during prepare
-        KafkaChannel kafkaChannel = control.createMock(KafkaChannel.class);
-        expect(kafkaChannel.id()).andStubReturn("1");
-        expect(kafkaChannel.socketDescription()).andStubReturn("");
-        expect(kafkaChannel.state()).andStubReturn(ChannelState.NOT_CONNECTED);
-        expect(kafkaChannel.finishConnect()).andReturn(true);
-        expect(kafkaChannel.isConnected()).andStubReturn(true);
-        // record void method invocations
-        kafkaChannel.disconnect();
-        kafkaChannel.close();
-        expect(kafkaChannel.ready()).andReturn(false).anyTimes();
-        // prepare throws an exception
-        kafkaChannel.prepare();
-        expectLastCall().andThrow(new IOException());
+        KafkaChannel kafkaChannel = mock(KafkaChannel.class);
+        when(kafkaChannel.id()).thenReturn("1");
+        when(kafkaChannel.socketDescription()).thenReturn("");
+        when(kafkaChannel.state()).thenReturn(ChannelState.NOT_CONNECTED);
+        when(kafkaChannel.finishConnect()).thenReturn(true);
+        when(kafkaChannel.isConnected()).thenReturn(true);
+        when(kafkaChannel.ready()).thenReturn(false);
+        doThrow(new IOException()).when(kafkaChannel).prepare();
 
-        SelectionKey selectionKey = control.createMock(SelectionKey.class);
-        expect(kafkaChannel.selectionKey()).andStubReturn(selectionKey);
-        expect(selectionKey.channel()).andReturn(SocketChannel.open());
-        expect(selectionKey.readyOps()).andStubReturn(SelectionKey.OP_CONNECT);
-        selectionKey.cancel();
-        expectLastCall();
-
-        control.replay();
+        SelectionKey selectionKey = mock(SelectionKey.class);
+        when(kafkaChannel.selectionKey()).thenReturn(selectionKey);
+        when(selectionKey.channel()).thenReturn(SocketChannel.open());
+        when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
 
         selectionKey.attach(kafkaChannel);
         Set<SelectionKey> selectionKeys = Utils.mkSet(selectionKey);
@@ -595,7 +637,10 @@ public class SelectorTest {
         assertTrue(selector.disconnected().containsKey(kafkaChannel.id()));
         assertNull(selectionKey.attachment());
 
-        control.verify();
+        verify(kafkaChannel, atLeastOnce()).ready();
+        verify(kafkaChannel).disconnect();
+        verify(kafkaChannel).close();
+        verify(selectionKey).cancel();
     }
 
     @Test
@@ -722,6 +767,10 @@ public class SelectorTest {
         }
         selector.poll(0);
         selector.poll(0); // Poll a second time to clear everything
+        ensureEmptySelectorFields(selector);
+    }
+
+    private void ensureEmptySelectorFields(Selector selector) throws Exception {
         for (Field field : Selector.class.getDeclaredFields()) {
             ensureEmptySelectorField(selector, field);
         }

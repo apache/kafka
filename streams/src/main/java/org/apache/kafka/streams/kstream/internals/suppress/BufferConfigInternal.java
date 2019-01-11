@@ -46,9 +46,4 @@ abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> impl
     public Suppressed.BufferConfig emitEarlyWhenFull() {
         return new EagerBufferConfigImpl(maxRecords(), maxBytes());
     }
-
-    @Override
-    public Suppressed.StrictBufferConfig spillToDiskWhenFull() {
-        throw new UnsupportedOperationException("not implemented");
-    }
 }

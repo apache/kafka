@@ -271,7 +271,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         with node.account.monitor_log(KafkaService.STDOUT_STDERR_CAPTURE) as monitor:
             node.account.ssh(cmd)
             # Kafka 1.0.0 and higher don't have a space between "Kafka" and "Server"
-            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=30, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
+            monitor.wait_until("Kafka\s*Server.*started", timeout_sec=60, backoff_sec=.25, err_msg="Kafka server didn't finish startup")
 
         # Credentials for inter-broker communication are created before starting Kafka.
         # Client credentials are created after starting Kafka so that both loading of
@@ -531,6 +531,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.logger.warn("The following values were not found in the data files: " + str(missing))
 
         return missing
+
+    def restart_cluster(self, clean_shutdown=True):
+        for node in self.nodes:
+            self.restart_node(node, clean_shutdown=clean_shutdown)
 
     def restart_node(self, node, clean_shutdown=True):
         """Restart the given node."""

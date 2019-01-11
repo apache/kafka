@@ -14,23 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals.suppress;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.state.internals.ContextualRecord;
+/**
+ * The request contained a leader epoch which is smaller than that on the broker that received the
+ * request. This can happen when an operation is attempted before a pending metadata update has been
+ * received. Clients will typically refresh metadata before retrying.
+ */
+public class FencedLeaderEpochException extends InvalidMetadataException {
+    private static final long serialVersionUID = 1L;
 
-import java.util.function.Consumer;
-import java.util.function.Supplier;
+    public FencedLeaderEpochException(String message) {
+        super(message);
+    }
 
-interface TimeOrderedKeyValueBuffer {
-    void evictWhile(final Supplier<Boolean> predicate, final Consumer<KeyValue<Bytes, ContextualRecord>> callback);
+    public FencedLeaderEpochException(String message, Throwable cause) {
+        super(message, cause);
+    }
 
-    void put(final long time, final Bytes key, final ContextualRecord value);
-
-    int numRecords();
-
-    long bufferSize();
-
-    long minTimestamp();
 }

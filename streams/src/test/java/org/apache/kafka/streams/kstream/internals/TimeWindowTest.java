@@ -21,6 +21,7 @@ import org.junit.Test;
 
 import java.util.Map;
 
+import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -124,7 +125,7 @@ public class TimeWindowTest {
 
     @Test
     public void shouldReturnMatchedWindowsOrderedByTimestamp() {
-        final TimeWindows windows = TimeWindows.of(12L).advanceBy(5L);
+        final TimeWindows windows = TimeWindows.of(ofMillis(12L)).advanceBy(ofMillis(5L));
         final Map<Long, TimeWindow> matched = windows.windowsFor(21L);
 
         final Long[] expected = matched.keySet().toArray(new Long[matched.size()]);

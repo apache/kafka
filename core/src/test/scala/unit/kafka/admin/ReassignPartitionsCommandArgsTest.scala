@@ -93,7 +93,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
   @Test
   def shouldFailIfNoArgs(): Unit = {
     val args: Array[String]= Array()
-    shouldFailWith("This command moves topic partitions between replicas.", args)
+    shouldFailWith(ReassignPartitionsCommand.helpText, args)
   }
 
   @Test

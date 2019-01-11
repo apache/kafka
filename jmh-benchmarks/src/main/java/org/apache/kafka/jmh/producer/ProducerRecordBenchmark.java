@@ -41,7 +41,7 @@ public class ProducerRecordBenchmark {
     @Benchmark
     @OutputTimeUnit(TimeUnit.NANOSECONDS)
     public ProducerRecord<String, String> constructorBenchmark() {
-        return new ProducerRecord("topic", "value");
+        return new ProducerRecord<>("topic", "value");
     }
 
 }

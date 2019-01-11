@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 
 class KafkaTest {
 
@@ -106,6 +107,21 @@ class KafkaTest {
     assertEquals(password, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
     assertEquals(password, config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
     assertEquals(password, config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+  }
+
+  @Test
+  def testConnectionsMaxReauthMsDefault(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    assertEquals(0L, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
+  }
+
+  @Test
+  def testConnectionsMaxReauthMsExplicit(): Unit = {
+    val propertiesFile = prepareDefaultConfig()
+    val expected = 3600000
+    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
+    assertEquals(expected, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
   }
 
   def prepareDefaultConfig(): String = {

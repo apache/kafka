@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.security.KeyStore;
 import java.util.Map;
 
@@ -32,8 +33,11 @@ import org.junit.Test;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotSame;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -79,6 +83,48 @@ public class SslFactoryTest {
         //host and port are hints
         SSLEngine engine = sslFactory.createSslEngine("localhost", 0);
         assertTrue(engine.getUseClientMode());
+    }
+
+    @Test
+    public void testReconfiguration() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(sslConfig);
+        SSLContext sslContext = sslFactory.sslContext();
+        assertNotNull("SSL context not created", sslContext);
+        assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
+        assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
+
+        // Verify that context is not recreated on reconfigure() if config and file are not changed
+        sslFactory.reconfigure(sslConfig);
+        assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
+
+        // Verify that context is recreated on reconfigure() if config is changed
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+        sslContext = sslFactory.sslContext();
+
+        // Verify that context is recreated on reconfigure() if config is not changed, but truststore file was modified
+        trustStoreFile.setLastModified(System.currentTimeMillis() + 10000);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+        sslContext = sslFactory.sslContext();
+
+        // Verify that context is recreated on reconfigure() if config is not changed, but keystore file was modified
+        File keyStoreFile = new File((String) sslConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
+        keyStoreFile.setLastModified(System.currentTimeMillis() + 10000);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+        sslContext = sslFactory.sslContext();
+
+        // Verify that the context is not recreated if modification time cannot be determined
+        keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
+        Files.delete(keyStoreFile.toPath());
+        sslFactory.reconfigure(sslConfig);
+        assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
     }
 
     @Test

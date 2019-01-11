@@ -32,10 +32,10 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -44,6 +44,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -70,6 +71,11 @@ public class SuppressScenarioTest {
     private static final StringSerializer STRING_SERIALIZER = new StringSerializer();
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
+    private final Properties config = Utils.mkProperties(Utils.mkMap(
+            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
+            Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+    ));
 
     @Test
     public void shouldImmediatelyEmitEventsWithZeroEmitAfter() {
@@ -83,7 +89,7 @@ public class SuppressScenarioTest {
                     .withCachingDisabled()
                     .withLoggingDisabled()
             )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count();
 
         valueCounts
@@ -97,10 +103,6 @@ public class SuppressScenarioTest {
 
         final Topology topology = builder.build();
 
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
 
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
@@ -168,7 +170,7 @@ public class SuppressScenarioTest {
                     .withCachingDisabled()
                     .withLoggingDisabled()
             )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count();
         valueCounts
             .suppress(untilTimeLimit(ofMillis(2L), unbounded()))
@@ -178,10 +180,6 @@ public class SuppressScenarioTest {
             .toStream()
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -240,7 +238,7 @@ public class SuppressScenarioTest {
                     .withCachingDisabled()
                     .withLoggingDisabled()
             )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count(Materialized.with(STRING_SERDE, Serdes.Long()));
         valueCounts
             .suppress(untilTimeLimit(ofMillis(Long.MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
@@ -251,10 +249,6 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -306,7 +300,7 @@ public class SuppressScenarioTest {
                     .withCachingDisabled()
                     .withLoggingDisabled()
             )
-            .groupBy((k, v) -> new KeyValue<>(v, k), Serialized.with(STRING_SERDE, STRING_SERDE))
+            .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count();
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
@@ -318,10 +312,6 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -362,13 +352,14 @@ public class SuppressScenarioTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
-            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(2L).grace(1L))
+            .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(ofMillis(2L)).grace(ofMillis(1L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -381,10 +372,6 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -416,13 +403,14 @@ public class SuppressScenarioTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindowsWithLargeJump() {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
-            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(TimeWindows.of(2L).grace(2L))
+            .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(TimeWindows.of(ofMillis(2L)).grace(ofMillis(2L)))
             .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled().withKeySerde(STRING_SERDE));
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -435,10 +423,6 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -480,8 +464,8 @@ public class SuppressScenarioTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
-            .groupBy((String k, String v) -> k, Serialized.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(5L).grace(5L))
+            .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled());
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -494,10 +478,6 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
-        ));
         final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             // first window
@@ -528,7 +508,6 @@ public class SuppressScenarioTest {
             );
         }
     }
-
 
     private <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {

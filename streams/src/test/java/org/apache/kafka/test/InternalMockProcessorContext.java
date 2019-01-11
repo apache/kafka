@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -204,8 +205,16 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         return storeMap.get(name);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public Cancellable schedule(final long interval, final PunctuationType type, final Punctuator callback) {
+        throw new UnsupportedOperationException("schedule() not supported.");
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
         throw new UnsupportedOperationException("schedule() not supported.");
     }
 
@@ -219,13 +228,13 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     public <K, V> void forward(final K key, final V value, final String childName) {
         forward(key, value, To.child(childName));
     }

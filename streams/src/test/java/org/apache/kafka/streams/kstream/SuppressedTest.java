@@ -59,33 +59,39 @@ public class SuppressedTest {
     @Test
     public void intermediateEventsShouldAcceptAnyBufferAndSetBounds() {
         assertThat(
+            "name should be set",
+            untilTimeLimit(ofMillis(2), unbounded()).withName("myname"),
+            is(new SuppressedInternal<>("myname", ofMillis(2), unbounded(), null, false))
+        );
+
+        assertThat(
             "time alone should be set",
             untilTimeLimit(ofMillis(2), unbounded()),
-            is(new SuppressedInternal<>(ofMillis(2), unbounded(), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), unbounded(), null, false))
         );
 
         assertThat(
             "time and unbounded buffer should be set",
             untilTimeLimit(ofMillis(2), unbounded()),
-            is(new SuppressedInternal<>(ofMillis(2), unbounded(), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), unbounded(), null, false))
         );
 
         assertThat(
             "time and keys buffer should be set",
             untilTimeLimit(ofMillis(2), maxRecords(2)),
-            is(new SuppressedInternal<>(ofMillis(2), maxRecords(2), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), maxRecords(2), null, false))
         );
 
         assertThat(
             "time and size buffer should be set",
             untilTimeLimit(ofMillis(2), maxBytes(2)),
-            is(new SuppressedInternal<>(ofMillis(2), maxBytes(2), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), maxBytes(2), null, false))
         );
 
         assertThat(
             "all constraints should be set",
             untilTimeLimit(ofMillis(2L), maxRecords(3L).withMaxBytes(2L)),
-            is(new SuppressedInternal<>(ofMillis(2), new EagerBufferConfigImpl(3L, 2L), null, false))
+            is(new SuppressedInternal<>(null, ofMillis(2), new EagerBufferConfigImpl(3L, 2L), null, false))
         );
     }
 
@@ -94,18 +100,35 @@ public class SuppressedTest {
 
         assertThat(
             untilWindowCloses(unbounded()),
-            is(new FinalResultsSuppressionBuilder<>(unbounded()))
+            is(new FinalResultsSuppressionBuilder<>(null, unbounded()))
         );
 
         assertThat(
             untilWindowCloses(maxRecords(2L).shutDownWhenFull()),
-            is(new FinalResultsSuppressionBuilder<>(new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN))
             )
         );
 
         assertThat(
             untilWindowCloses(maxBytes(2L).shutDownWhenFull()),
-            is(new FinalResultsSuppressionBuilder<>(new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN))
+            is(new FinalResultsSuppressionBuilder<>(null, new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN))
+            )
+        );
+
+        assertThat(
+            untilWindowCloses(unbounded()).withName("name"),
+            is(new FinalResultsSuppressionBuilder<>("name", unbounded()))
+        );
+
+        assertThat(
+            untilWindowCloses(maxRecords(2L).shutDownWhenFull()).withName("name"),
+            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(2L, MAX_VALUE, SHUT_DOWN))
+            )
+        );
+
+        assertThat(
+            untilWindowCloses(maxBytes(2L).shutDownWhenFull()).withName("name"),
+            is(new FinalResultsSuppressionBuilder<>("name", new StrictBufferConfigImpl(MAX_VALUE, 2L, SHUT_DOWN))
             )
         );
     }

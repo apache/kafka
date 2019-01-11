@@ -16,7 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals.metrics;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Avg;
+import org.apache.kafka.common.metrics.stats.Max;
+import org.apache.kafka.common.metrics.stats.Value;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Map;
@@ -25,7 +31,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 public final class Sensors {
-    
     private Sensors() {}
 
     public static Sensor createTaskAndStoreLatencyAndThroughputSensors(final Sensor.RecordingLevel level,
@@ -42,6 +47,68 @@ public final class Sensors {
         final Sensor sensor = metrics.storeLevelSensor(taskName, storeName, operation, level, taskSensor);
         addAvgMaxLatency(sensor, metricsGroup, storeTags, operation);
         addInvocationRateAndCount(sensor, metricsGroup, storeTags, operation);
+        return sensor;
+    }
+
+    public static Sensor createBufferSizeSensor(final StateStore store,
+                                                final InternalProcessorContext context) {
+        return getBufferSizeOrCountSensor(store, context, "size");
+    }
+
+    public static Sensor createBufferCountSensor(final StateStore store,
+                                                 final InternalProcessorContext context) {
+        return getBufferSizeOrCountSensor(store, context, "count");
+    }
+
+    private static Sensor getBufferSizeOrCountSensor(final StateStore store,
+                                                     final InternalProcessorContext context,
+                                                     final String property) {
+        final StreamsMetricsImpl metrics = context.metrics();
+
+        final String sensorName = "suppression-buffer-" + property;
+
+        final Sensor sensor = metrics.storeLevelSensor(
+            context.taskId().toString(),
+            store.name(),
+            sensorName,
+            Sensor.RecordingLevel.DEBUG
+        );
+
+        final String metricsGroup = "stream-buffer-metrics";
+
+        final Map<String, String> tags = metrics.tagMap(
+            "task-id", context.taskId().toString(),
+            "buffer-id", store.name()
+        );
+
+        sensor.add(
+            new MetricName(
+                sensorName + "-current",
+                metricsGroup,
+                "The current " + property + " of buffered records.",
+                tags),
+            new Value()
+        );
+
+
+        sensor.add(
+            new MetricName(
+                sensorName + "-avg",
+                metricsGroup,
+                "The average " + property + " of buffered records.",
+                tags),
+            new Avg()
+        );
+
+        sensor.add(
+            new MetricName(
+                sensorName + "-max",
+                metricsGroup,
+                "The max " + property + " of buffered records.",
+                tags),
+            new Max()
+        );
+
         return sensor;
     }
 }

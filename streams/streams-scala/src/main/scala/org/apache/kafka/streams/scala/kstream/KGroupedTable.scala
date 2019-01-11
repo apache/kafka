@@ -20,7 +20,7 @@
 package org.apache.kafka.streams.scala
 package kstream
 
-import org.apache.kafka.streams.kstream.{KGroupedTable => KGroupedTableJ, _}
+import org.apache.kafka.streams.kstream.{KGroupedTable => KGroupedTableJ}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 

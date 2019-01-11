@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -29,7 +30,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
-import org.apache.kafka.test.KStreamTestDriver;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Rule;
@@ -46,8 +46,9 @@ public class KStreamTransformTest {
     private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
+    @SuppressWarnings("deprecation")
     @Rule
-    public final KStreamTestDriver kstreamDriver = new KStreamTestDriver();
+    public final org.apache.kafka.test.KStreamTestDriver kstreamDriver = new org.apache.kafka.test.KStreamTestDriver();
 
     @Test
     public void testTransform() {
@@ -112,7 +113,7 @@ public class KStreamTransformTest {
 
                     @Override
                     public void init(final ProcessorContext context) {
-                        context.schedule(1, PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
+                        context.schedule(Duration.ofMillis(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
                             @Override
                             public void punctuate(final long timestamp) {
                                 context.forward(-1, (int) timestamp);

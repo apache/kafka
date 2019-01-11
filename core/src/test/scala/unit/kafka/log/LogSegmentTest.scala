@@ -38,14 +38,8 @@ class LogSegmentTest {
   /* create a segment with the given base offset */
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
-                    maxSegmentMs: Int = Int.MaxValue,
                     time: Time = Time.SYSTEM): LogSegment = {
-    val ms = FileRecords.open(Log.logFile(logDir, offset))
-    val idx = new OffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
-    val timeIdx = new TimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
-    val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
-    val seg = new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, maxSegmentMs = maxSegmentMs,
-      maxSegmentBytes = Int.MaxValue, time)
+    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
     segments += seg
     seg
   }
@@ -168,10 +162,10 @@ class LogSegmentTest {
 
     val maxSegmentMs = 300000
     val time = new MockTime
-    val seg = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    val seg = createSegment(0, time = time)
     seg.close()
 
-    val reopened = createSegment(0, maxSegmentMs = maxSegmentMs, time = time)
+    val reopened = createSegment(0, time = time)
     assertEquals(0, seg.timeIndex.sizeInBytes)
     assertEquals(0, seg.offsetIndex.sizeInBytes)
 
@@ -181,24 +175,21 @@ class LogSegmentTest {
     assertFalse(reopened.timeIndex.isFull)
     assertFalse(reopened.offsetIndex.isFull)
 
-    assertFalse(reopened.shouldRoll(messagesSize = 1024,
-      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = 100L,
-      now = time.milliseconds()))
+    var rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
+    assertFalse(reopened.shouldRoll(rollParams))
 
     // The segment should not be rolled even if maxSegmentMs has been exceeded
     time.sleep(maxSegmentMs + 1)
     assertEquals(maxSegmentMs + 1, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(reopened.shouldRoll(messagesSize = 1024,
-      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = 100L,
-      now = time.milliseconds()))
+    rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
+    assertFalse(reopened.shouldRoll(rollParams))
 
     // But we should still roll the segment if we cannot fit the next offset
-    assertTrue(reopened.shouldRoll(messagesSize = 1024,
-      maxTimestampInMessages = RecordBatch.NO_TIMESTAMP,
-      maxOffsetInMessages = Int.MaxValue.toLong + 200,
-      now = time.milliseconds()))
+    rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
+      maxOffsetInMessages = Int.MaxValue.toLong + 200L, messagesSize = 1024, time.milliseconds())
+    assertTrue(reopened.shouldRoll(rollParams))
   }
 
   @Test

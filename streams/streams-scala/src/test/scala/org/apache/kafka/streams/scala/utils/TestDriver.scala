@@ -29,7 +29,8 @@ import org.scalatest.Suite
 
 trait TestDriver { this: Suite =>
 
-  def createTestDriver(builder: StreamsBuilder, initialWallClockTimeMs: Long = System.currentTimeMillis()) = {
+  def createTestDriver(builder: StreamsBuilder,
+                       initialWallClockTimeMs: Long = System.currentTimeMillis()): TopologyTestDriver = {
     val config = new Properties()
     config.put(StreamsConfig.APPLICATION_ID_CONFIG, "test")
     config.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")

@@ -16,21 +16,44 @@
  */
  package kafka.utils
 
-import joptsimple.{OptionSpec, OptionSet, OptionParser}
-import scala.collection.Set
 import java.util.Properties
 
- /**
- * Helper functions for dealing with command line utilities
- */
+import joptsimple.{OptionParser, OptionSet, OptionSpec}
+
+import scala.collection.Set
+
+/**
+  * Helper functions for dealing with command line utilities
+  */
 object CommandLineUtils extends Logging {
+  /**
+    * Check if there are no options or `--help` option from command line
+    *
+    * @param commandOpts Acceptable options for a command
+    * @return true on matching the help check condition
+    */
+  def isPrintHelpNeeded(commandOpts: CommandDefaultOptions): Boolean = {
+    return commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt)
+  }
+
+  /**
+    * Check and print help message if there is no options or `--help` option
+    * from command line
+    *
+    * @param commandOpts Acceptable options for a command
+    * @param message     Message to display on successful check
+    */
+  def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String) = {
+    if (isPrintHelpNeeded(commandOpts))
+      printUsageAndDie(commandOpts.parser, message)
+  }
 
   /**
    * Check that all the listed options are present
    */
   def checkRequiredArgs(parser: OptionParser, options: OptionSet, required: OptionSpec[_]*) {
     for (arg <- required) {
-      if(!options.has(arg))
+      if (!options.has(arg))
         printUsageAndDie(parser, "Missing required argument \"" + arg + "\"")
     }
   }
@@ -39,9 +62,9 @@ object CommandLineUtils extends Logging {
    * Check that none of the listed options are present
    */
   def checkInvalidArgs(parser: OptionParser, options: OptionSet, usedOption: OptionSpec[_], invalidOptions: Set[OptionSpec[_]]) {
-    if(options.has(usedOption)) {
-      for(arg <- invalidOptions) {
-        if(options.has(arg))
+    if (options.has(usedOption)) {
+      for (arg <- invalidOptions) {
+        if (options.has(arg))
           printUsageAndDie(parser, "Option \"" + usedOption + "\" can't be used with option\"" + arg + "\"")
       }
     }

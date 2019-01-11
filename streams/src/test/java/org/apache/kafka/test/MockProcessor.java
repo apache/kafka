@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import java.time.Duration;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -55,7 +56,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public void init(final ProcessorContext context) {
         super.init(context);
         if (scheduleInterval > 0L) {
-            scheduleCancellable = context.schedule(scheduleInterval, punctuationType, new Punctuator() {
+            scheduleCancellable = context.schedule(Duration.ofMillis(scheduleInterval), punctuationType, new Punctuator() {
                 @Override
                 public void punctuate(final long timestamp) {
                     if (punctuationType == PunctuationType.STREAM_TIME) {

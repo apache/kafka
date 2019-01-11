@@ -41,14 +41,11 @@ abstract class AssignedTasks<T extends Task> {
     private final String taskTypeName;
     private final Map<TaskId, T> created = new HashMap<>();
     private final Map<TaskId, T> suspended = new HashMap<>();
-    private final Map<TaskId, T> restoring = new HashMap<>();
-    private final Set<TopicPartition> restoredPartitions = new HashSet<>();
     private final Set<TaskId> previousActiveTasks = new HashSet<>();
 
     // IQ may access this map.
     final Map<TaskId, T> running = new ConcurrentHashMap<>();
     private final Map<TopicPartition, T> runningByPartition = new HashMap<>();
-    final Map<TopicPartition, T> restoringByPartition = new HashMap<>();
 
     AssignedTasks(final LogContext logContext,
                   final String taskTypeName) {
@@ -74,7 +71,7 @@ abstract class AssignedTasks<T extends Task> {
             try {
                 if (!entry.getValue().initializeStateStores()) {
                     log.debug("Transitioning {} {} to restoring", taskTypeName, entry.getKey());
-                    addToRestoring(entry.getValue());
+                    ((AssignedStreamsTasks) this).addToRestoring((StreamTask) entry.getValue());
                 } else {
                     transitionToRunning(entry.getValue());
                 }
@@ -86,42 +83,9 @@ abstract class AssignedTasks<T extends Task> {
         }
     }
 
-    void updateRestored(final Collection<TopicPartition> restored) {
-        if (restored.isEmpty()) {
-            return;
-        }
-        log.trace("{} changelog partitions that have completed restoring so far: {}", taskTypeName, restored);
-        restoredPartitions.addAll(restored);
-        for (final Iterator<Map.Entry<TaskId, T>> it = restoring.entrySet().iterator(); it.hasNext(); ) {
-            final Map.Entry<TaskId, T> entry = it.next();
-            final T task = entry.getValue();
-            if (restoredPartitions.containsAll(task.changelogPartitions())) {
-                transitionToRunning(task);
-                it.remove();
-                log.trace("{} {} completed restoration as all its changelog partitions {} have been applied to restore state",
-                        taskTypeName,
-                        task.id(),
-                        task.changelogPartitions());
-            } else {
-                if (log.isTraceEnabled()) {
-                    final HashSet<TopicPartition> outstandingPartitions = new HashSet<>(task.changelogPartitions());
-                    outstandingPartitions.removeAll(restoredPartitions);
-                    log.trace("{} {} cannot resume processing yet since some of its changelog partitions have not completed restoring: {}",
-                              taskTypeName,
-                              task.id(),
-                              outstandingPartitions);
-                }
-            }
-        }
-        if (allTasksRunning()) {
-            restoredPartitions.clear();
-        }
-    }
-
     boolean allTasksRunning() {
         return created.isEmpty()
-                && suspended.isEmpty()
-                && restoring.isEmpty();
+                && suspended.isEmpty();
     }
 
     Collection<T> running() {
@@ -132,21 +96,17 @@ abstract class AssignedTasks<T extends Task> {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         log.trace("Suspending running {} {}", taskTypeName, runningTaskIds());
         firstException.compareAndSet(null, suspendTasks(running.values()));
-        log.trace("Close restoring {} {}", taskTypeName, restoring.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
         log.trace("Close created {} {}", taskTypeName, created.keySet());
         firstException.compareAndSet(null, closeNonRunningTasks(created.values()));
         previousActiveTasks.clear();
         previousActiveTasks.addAll(running.keySet());
         running.clear();
-        restoring.clear();
         created.clear();
         runningByPartition.clear();
-        restoringByPartition.clear();
         return firstException.get();
     }
 
-    private RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
+    RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
         RuntimeException exception = null;
         for (final T task : tasks) {
             try {
@@ -234,20 +194,10 @@ abstract class AssignedTasks<T extends Task> {
         return false;
     }
 
-    private void addToRestoring(final T task) {
-        restoring.put(task.id(), task);
-        for (final TopicPartition topicPartition : task.partitions()) {
-            restoringByPartition.put(topicPartition, task);
-        }
-        for (final TopicPartition topicPartition : task.changelogPartitions()) {
-            restoringByPartition.put(topicPartition, task);
-        }
-    }
-
     /**
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    private void transitionToRunning(final T task) {
+    void transitionToRunning(final T task) {
         log.debug("transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         task.initializeTopology();
@@ -280,15 +230,14 @@ abstract class AssignedTasks<T extends Task> {
         final StringBuilder builder = new StringBuilder();
         describe(builder, running.values(), indent, "Running:");
         describe(builder, suspended.values(), indent, "Suspended:");
-        describe(builder, restoring.values(), indent, "Restoring:");
         describe(builder, created.values(), indent, "New:");
         return builder.toString();
     }
 
-    private void describe(final StringBuilder builder,
-                          final Collection<T> tasks,
-                          final String indent,
-                          final String name) {
+    void describe(final StringBuilder builder,
+                  final Collection<T> tasks,
+                  final String indent,
+                  final String name) {
         builder.append(indent).append(name);
         for (final T t : tasks) {
             builder.append(indent).append(t.toString(indent + "\t\t"));
@@ -296,35 +245,27 @@ abstract class AssignedTasks<T extends Task> {
         builder.append("\n");
     }
 
-    private List<T> allTasks() {
+    List<T> allTasks() {
         final List<T> tasks = new ArrayList<>();
         tasks.addAll(running.values());
         tasks.addAll(suspended.values());
-        tasks.addAll(restoring.values());
         tasks.addAll(created.values());
         return tasks;
-    }
-
-    Collection<T> restoringTasks() {
-        return Collections.unmodifiableCollection(restoring.values());
     }
 
     Set<TaskId> allAssignedTaskIds() {
         final Set<TaskId> taskIds = new HashSet<>();
         taskIds.addAll(running.keySet());
         taskIds.addAll(suspended.keySet());
-        taskIds.addAll(restoring.keySet());
         taskIds.addAll(created.keySet());
         return taskIds;
     }
 
     void clear() {
         runningByPartition.clear();
-        restoringByPartition.clear();
         running.clear();
         created.clear();
         suspended.clear();
-        restoredPartitions.clear();
     }
 
     Set<TaskId> previousTaskIds() {

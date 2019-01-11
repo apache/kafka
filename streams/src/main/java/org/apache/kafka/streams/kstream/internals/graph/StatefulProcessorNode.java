@@ -31,25 +31,44 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     private final StoreBuilder<? extends StateStore> storeBuilder;
 
 
+    /**
+     * Create a node representing a stateful processor, where the named store has already been registered.
+     */
     public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters processorParameters,
+                                 final ProcessorParameters<K, V> processorParameters,
                                  final String[] storeNames,
+                                 final boolean repartitionRequired) {
+        super(nodeName,
+              processorParameters,
+              repartitionRequired);
+
+        this.storeNames = storeNames;
+        this.storeBuilder = null;
+    }
+
+
+    /**
+     * Create a node representing a stateful processor,
+     * where the store needs to be built and registered as part of building this node.
+     */
+    public StatefulProcessorNode(final String nodeName,
+                                 final ProcessorParameters<K, V> processorParameters,
                                  final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder,
                                  final boolean repartitionRequired) {
         super(nodeName,
-            processorParameters,
-            repartitionRequired);
+              processorParameters,
+              repartitionRequired);
 
-        this.storeNames = storeNames;
+        this.storeNames = null;
         this.storeBuilder = materializedKTableStoreBuilder;
     }
 
     @Override
     public String toString() {
         return "StatefulProcessorNode{" +
-               "storeNames=" + Arrays.toString(storeNames) +
-               ", storeBuilder=" + storeBuilder +
-               "} " + super.toString();
+            "storeNames=" + Arrays.toString(storeNames) +
+            ", storeBuilder=" + storeBuilder +
+            "} " + super.toString();
     }
 
     @Override
@@ -66,58 +85,6 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
-        }
-    }
-
-    public static <K, V> StatefulProcessorNodeBuilder<K, V> statefulProcessorNodeBuilder() {
-        return new StatefulProcessorNodeBuilder<>();
-    }
-
-    public static final class StatefulProcessorNodeBuilder<K, V> {
-
-        private ProcessorParameters processorSupplier;
-        private String nodeName;
-        private boolean repartitionRequired;
-        private String[] storeNames;
-        private StoreBuilder<? extends StateStore> storeBuilder;
-
-        private StatefulProcessorNodeBuilder() {
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
-            this.processorSupplier = processorParameters;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withNodeName(final String nodeName) {
-            this.nodeName = nodeName;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withStoreNames(final String[] storeNames) {
-            this.storeNames = storeNames;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withRepartitionRequired(final boolean repartitionRequired) {
-            this.repartitionRequired = repartitionRequired;
-            return this;
-        }
-
-        public StatefulProcessorNodeBuilder<K, V> withStoreBuilder(final StoreBuilder<? extends StateStore> storeBuilder) {
-            this.storeBuilder = storeBuilder;
-            return this;
-        }
-
-        public StatefulProcessorNode<K, V> build() {
-            return new StatefulProcessorNode<>(
-                nodeName,
-                processorSupplier,
-                storeNames,
-                storeBuilder,
-                repartitionRequired
-            );
-
         }
     }
 }

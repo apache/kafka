@@ -69,7 +69,7 @@ class DelayedDeleteRecords(delayMs: Long,
   override def tryComplete(): Boolean = {
     // check for each partition if it still has pending acks
     deleteRecordsStatus.foreach { case (topicPartition, status) =>
-      trace(s"Checking delete records satisfaction for ${topicPartition}, current status $status")
+      trace(s"Checking delete records satisfaction for $topicPartition, current status $status")
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (lowWatermarkReached, error, lw) = replicaManager.getPartition(topicPartition) match {

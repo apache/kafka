@@ -45,6 +45,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -77,7 +78,7 @@ public class RestServer {
     private final WorkerConfig config;
     private Server jettyServer;
 
-    private List<ConnectRestExtension> connectRestExtensions = Collections.EMPTY_LIST;
+    private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
      * Create a REST server for this herder using the specified configs.
@@ -92,6 +93,7 @@ public class RestServer {
         createConnectors(listeners);
     }
 
+    @SuppressWarnings("deprecation")
     List<String> parseListeners() {
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         if (listeners == null || listeners.size() == 0) {
@@ -170,6 +172,7 @@ public class RestServer {
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
         resourceConfig.register(ConnectExceptionMapper.class);
+        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
         registerRestExtensions(herder, resourceConfig);
 

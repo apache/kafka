@@ -38,8 +38,9 @@ public class QuickUnion<T> {
         T current = id;
         T parent = ids.get(current);
 
-        if (parent == null)
+        if (parent == null) {
             throw new NoSuchElementException("id: " + id.toString());
+        }
 
         while (!parent.equals(current)) {
             // do the path splitting
@@ -53,7 +54,7 @@ public class QuickUnion<T> {
     }
 
     @SuppressWarnings("unchecked")
-    public void unite(final T id1, final T... idList) {
+    void unite(final T id1, final T... idList) {
         for (final T id2 : idList) {
             unitePair(id1, id2);
         }
@@ -63,8 +64,9 @@ public class QuickUnion<T> {
         final T root1 = root(id1);
         final T root2 = root(id2);
 
-        if (!root1.equals(root2))
+        if (!root1.equals(root2)) {
             ids.put(root1, root2);
+        }
     }
 
 }

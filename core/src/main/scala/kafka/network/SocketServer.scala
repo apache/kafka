@@ -23,6 +23,7 @@ import java.nio.channels._
 import java.nio.channels.{Selector => NSelector}
 import java.util.concurrent._
 import java.util.concurrent.atomic._
+import java.util.function.Supplier
 
 import com.yammer.metrics.core.Gauge
 import kafka.cluster.{BrokerEndPoint, EndPoint}
@@ -35,8 +36,10 @@ import org.apache.kafka.common.{KafkaException, Reconfigurable}
 import org.apache.kafka.common.memory.{MemoryPool, SimpleMemoryPool}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Meter
+import org.apache.kafka.common.metrics.stats.Total
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteEvent
 import org.apache.kafka.common.network.{ChannelBuilder, ChannelBuilders, KafkaChannel, ListenerName, Selectable, Send, Selector => KSelector}
+import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestContext, RequestHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
@@ -117,7 +120,20 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         def value = memoryPool.size() - memoryPool.availableMemory()
       }
     )
-    info("Started " + acceptors.size + " acceptor threads")
+    newGauge("ExpiredConnectionsKilledCount",
+      new Gauge[Double] {
+
+        def value = SocketServer.this.synchronized {
+          val expiredConnectionsKilledCountMetricNames = processors.values.asScala.map { p =>
+            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
+          }
+          expiredConnectionsKilledCountMetricNames.map { metricName =>
+            Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
+          }.sum
+        }
+      }
+    )
+    info(s"Started ${acceptors.size} acceptor threads")
   }
 
   /**
@@ -319,7 +335,7 @@ private[kafka] abstract class AbstractServerThread(connectionQuotas: ConnectionQ
    */
   def close(channel: SocketChannel): Unit = {
     if (channel != null) {
-      debug("Closing connection from " + channel.socket.getRemoteSocketAddress())
+      debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress()}")
       connectionQuotas.dec(channel.socket.getInetAddress)
       CoreUtils.swallow(channel.socket().close(), this, Level.ERROR)
       CoreUtils.swallow(channel.close(), this, Level.ERROR)
@@ -548,6 +564,10 @@ private[kafka] class Processor(val id: Int,
     // also includes the listener name)
     Map(NetworkProcessorMetricTag -> id.toString)
   )
+  
+  val expiredConnectionsKilledCount = new Total()
+  private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", "socket-server-metrics", metricTags)
+  metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
   private val selector = createSelector(
     ChannelBuilders.serverChannelBuilder(listenerName,
@@ -555,7 +575,8 @@ private[kafka] class Processor(val id: Int,
       securityProtocol,
       config,
       credentialProvider.credentialCache,
-      credentialProvider.tokenCache))
+      credentialProvider.tokenCache,
+      time))
   // Visible to override for testing
   protected[network] def createSelector(channelBuilder: ChannelBuilder): KSelector = {
     channelBuilder match {
@@ -606,7 +627,7 @@ private[kafka] class Processor(val id: Int,
         }
       }
     } finally {
-      debug("Closing selector - processor " + id)
+      debug(s"Closing selector - processor $id")
       CoreUtils.swallow(closeAll(), this, Level.ERROR)
       shutdownComplete()
     }
@@ -637,7 +658,7 @@ private[kafka] class Processor(val id: Int,
             // There is no response to send to the client, we need to read more pipelined requests
             // that are sitting in the server's socket buffer
             updateRequestMetrics(response)
-            trace("Socket server received empty response to send, registering for read: " + response)
+            trace(s"Socket server received empty response to send, registering for read: $response")
             // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
             // it will be unmuted immediately. If the channel has been throttled, it will be unmuted only if the
             // throttling delay has already passed by now.
@@ -685,6 +706,10 @@ private[kafka] class Processor(val id: Int,
     }
   }
 
+  private def nowNanosSupplier = new Supplier[java.lang.Long] {
+    override def get(): java.lang.Long = time.nanoseconds()
+  }
+
   private def poll() {
     try selector.poll(300)
     catch {
@@ -701,14 +726,25 @@ private[kafka] class Processor(val id: Int,
         openOrClosingChannel(receive.source) match {
           case Some(channel) =>
             val header = RequestHeader.parse(receive.payload)
-            val connectionId = receive.source
-            val context = new RequestContext(header, connectionId, channel.socketAddress,
-              channel.principal, listenerName, securityProtocol)
-            val req = new RequestChannel.Request(processor = id, context = context,
-              startTimeNanos = time.nanoseconds, memoryPool, receive.payload, requestChannel.metrics)
-            requestChannel.sendRequest(req)
-            selector.mute(connectionId)
-            handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+            if (header.apiKey() == ApiKeys.SASL_HANDSHAKE && channel.maybeBeginServerReauthentication(receive, nowNanosSupplier))
+              trace(s"Begin re-authentication: $channel")
+            else {
+              val nowNanos = time.nanoseconds()
+              if (channel.serverAuthenticationSessionExpired(nowNanos)) {
+                channel.disconnect()
+                debug(s"Disconnected expired channel: $channel : $header")
+                expiredConnectionsKilledCount.record(null, 1, 0)
+              } else {
+                val connectionId = receive.source
+                val context = new RequestContext(header, connectionId, channel.socketAddress,
+                  channel.principal, listenerName, securityProtocol)
+                val req = new RequestChannel.Request(processor = id, context = context,
+                  startTimeNanos = nowNanos, memoryPool, receive.payload, requestChannel.metrics)
+                requestChannel.sendRequest(req)
+                selector.mute(connectionId)
+                handleChannelMuteEvent(connectionId, ChannelMuteEvent.REQUEST_RECEIVED)
+              }
+            }
           case None =>
             // This should never happen since completed receives are processed immediately after `poll()`
             throw new IllegalStateException(s"Channel ${receive.source} removed from selector before processing completed receive")
@@ -883,6 +919,7 @@ private[kafka] class Processor(val id: Int,
   override def shutdown(): Unit = {
     super.shutdown()
     removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+    metrics.removeMetric(expiredConnectionsKilledCountMetricName)
   }
 
 }

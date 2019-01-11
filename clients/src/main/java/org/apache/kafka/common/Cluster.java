@@ -79,12 +79,12 @@ public final class Cluster {
      * @param partitions Information about a subset of the topic-partitions this cluster hosts
      */
     public Cluster(String clusterId,
-        Collection<Node> nodes,
-        Collection<PartitionInfo> partitions,
-        Set<String> unauthorizedTopics,
-        Set<String> invalidTopics,
-        Set<String> internalTopics,
-        Node controller) {
+                   Collection<Node> nodes,
+                   Collection<PartitionInfo> partitions,
+                   Set<String> unauthorizedTopics,
+                   Set<String> invalidTopics,
+                   Set<String> internalTopics,
+                   Node controller) {
         this(clusterId, false, nodes, partitions, unauthorizedTopics, invalidTopics, internalTopics, controller);
     }
 

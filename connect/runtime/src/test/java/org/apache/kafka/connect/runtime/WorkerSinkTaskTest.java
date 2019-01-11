@@ -162,12 +162,11 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState) {
-        workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-                keyConverter, valueConverter, headerConverter,
-                transformationChain, pluginLoader, time,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        workerTask = new WorkerSinkTask(
+            taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
+            keyConverter, valueConverter, headerConverter,
+            transformationChain, consumer, pluginLoader, time,
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
     @After
@@ -198,7 +197,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("status", "paused");
         assertTaskMetricValue("running-ratio", 0.0);
         assertTaskMetricValue("pause-ratio", 1.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
 
         PowerMock.verifyAll();
     }
@@ -272,7 +271,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 1.0);
         assertTaskMetricValue("batch-size-avg", 0.5);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
         assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
         assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 
@@ -350,7 +349,7 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("pause-ratio", 0.0);
         assertTaskMetricValue("batch-size-max", 0.0);
         assertTaskMetricValue("batch-size-avg", 0.0);
-        assertTaskMetricValue("offset-commit-max-time-ms", Double.NEGATIVE_INFINITY);
+        assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
         assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
         assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 
@@ -1167,7 +1166,6 @@ public class WorkerSinkTaskTest {
 
         createTask(TargetState.PAUSED);
 
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -1255,7 +1253,6 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectInitializeTask() throws Exception {
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -1407,7 +1404,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void printMetrics() {
-        System.out.println("");
+        System.out.println();
         sinkMetricValue("sink-record-read-rate");
         sinkMetricValue("sink-record-read-total");
         sinkMetricValue("sink-record-send-rate");

@@ -69,7 +69,7 @@ public class JsonConverterTest {
 
     @Before
     public void setUp() {
-        converter.configure(Collections.EMPTY_MAP, false);
+        converter.configure(Collections.emptyMap(), false);
     }
 
     // Schema metadata
@@ -172,10 +172,13 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(expectedSchema, expected), converted);
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void nullToConnect() {
-        // When schemas are enabled, trying to decode a null should be an error -- we should *always* have the envelope
-        assertEquals(SchemaAndValue.NULL, converter.toConnectData(TOPIC, null));
+        // When schemas are enabled, trying to decode a tombstone should be an empty envelope
+        // the behavior is the same as when the json is "{ "schema": null, "payload": null }"
+        // to keep compatibility with the record
+        SchemaAndValue converted = converter.toConnectData(TOPIC, null);
+        assertEquals(SchemaAndValue.NULL, converted);
     }
 
     @Test
@@ -588,7 +591,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void dateToJson() throws IOException {
+    public void dateToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.DATE, 10000);
@@ -604,7 +607,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void timeToJson() throws IOException {
+    public void timeToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.MILLISECOND, 14400000);
@@ -620,7 +623,7 @@ public class JsonConverterTest {
     }
 
     @Test
-    public void timestampToJson() throws IOException {
+    public void timestampToJson() {
         GregorianCalendar calendar = new GregorianCalendar(1970, Calendar.JANUARY, 1, 0, 0, 0);
         calendar.setTimeZone(TimeZone.getTimeZone("UTC"));
         calendar.add(Calendar.MILLISECOND, 2000000000);
@@ -696,14 +699,29 @@ public class JsonConverterTest {
         );
     }
 
+    @Test
+    public void nullSchemaAndNullValueToJson() {
+        // This characterizes the production of tombstone messages when Json schemas is enabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", true);
+        converter.configure(props, true);
+        byte[] converted = converter.fromConnectData(TOPIC, null, null);
+        assertNull(converted);
+    }
+
+    @Test
+    public void nullValueToJson() {
+        // This characterizes the production of tombstone messages when Json schemas is not enabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        byte[] converted = converter.fromConnectData(TOPIC, null, null);
+        assertNull(converted);
+    }
 
     @Test(expected = DataException.class)
     public void mismatchSchemaJson() {
         // If we have mismatching schema info, we should properly convert to a DataException
         converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true);
     }
-
-
 
     @Test
     public void noSchemaToConnect() {
@@ -756,7 +774,7 @@ public class JsonConverterTest {
     // The following simply verify that the delegation works.
 
     @Test
-    public void testStringHeaderToJson() throws UnsupportedEncodingException {
+    public void testStringHeaderToJson() {
         JsonNode converted = parse(converter.fromConnectHeader(TOPIC, "headerName", Schema.STRING_SCHEMA, "test-string"));
         validateEnvelope(converted);
         assertEquals(parse("{ \"type\": \"string\", \"optional\": false }"), converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));

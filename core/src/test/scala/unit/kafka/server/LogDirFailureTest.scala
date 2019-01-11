@@ -139,12 +139,10 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // The first send() should succeed
     producer.send(record).get()
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(0).count() == 1
-    }, "Expected the first message", 3000L)
+    TestUtils.consumeRecords(consumer, 1)
 
     // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-    val replica = leaderServer.replicaManager.getReplicaOrException(partition)
+    val replica = leaderServer.replicaManager.localReplicaOrException(partition)
     val logDir = replica.log.get.dir.getParentFile
     CoreUtils.swallow(Utils.delete(logDir), this)
     logDir.createNewFile()
@@ -163,7 +161,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // Wait for ReplicaHighWatermarkCheckpoint to happen so that the log directory of the topic will be offline
     TestUtils.waitUntilTrue(() => !leaderServer.logManager.isLogDirOnline(logDir.getAbsolutePath), "Expected log directory offline", 3000L)
-    assertTrue(leaderServer.replicaManager.getReplica(partition).isEmpty)
+    assertTrue(leaderServer.replicaManager.localReplica(partition).isEmpty)
 
     // The second send() should fail due to either KafkaStorageException or NotLeaderForPartitionException
     try {
@@ -178,17 +176,17 @@ class LogDirFailureTest extends IntegrationTestHarness {
         }
     }
 
-    // Wait for producer to update metadata for the partition
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       producer.send(record)
       producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
     }, "Expected new leader for the partition", 6000L)
 
+    // Block on send to ensure that new leader accepts a message.
+    producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
+
     // Consumer should receive some messages
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(0).count() > 0
-    }, "Expected some messages", 3000L)
+    TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
 
     // There should be no remaining LogDirEventNotification znode
     assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
@@ -201,10 +199,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: KafkaConsumer[Array[Byte], Array[Byte]]) {
     consumer.subscribe(Collections.singletonList(topic))
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(0)
-      !consumer.assignment.isEmpty
-    }, "Expected non-empty assignment")
+    TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 
 }

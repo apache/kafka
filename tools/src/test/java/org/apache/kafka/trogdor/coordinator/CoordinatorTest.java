@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.MockScheduler;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Scheduler;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.trogdor.agent.AgentClient;
 import org.apache.kafka.trogdor.common.CapturingCommandRunner;
@@ -41,7 +40,10 @@ import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
 import org.apache.kafka.trogdor.rest.TaskPending;
 import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
@@ -53,10 +55,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.junit.Test;
 
+import javax.ws.rs.NotFoundException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -313,12 +317,8 @@ public class CoordinatorTest {
 
         public ExpectedLines waitFor(final String nodeName,
                 final CapturingCommandRunner runner) throws InterruptedException {
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return linesMatch(nodeName, runner.lines(nodeName));
-                }
-            }, "failed to find the expected lines " + this.toString());
+            TestUtils.waitForCondition(() -> linesMatch(nodeName, runner.lines(nodeName)),
+                "failed to find the expected lines " + this.toString());
             return this;
         }
 
@@ -404,34 +404,40 @@ public class CoordinatorTest {
 
     @Test
     public void testTasksRequestMatches() throws Exception {
-        TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0);
-        assertTrue(req1.matches("foo1", -1, -1));
-        assertTrue(req1.matches("bar1", 100, 200));
-        assertTrue(req1.matches("baz1", 100, -1));
+        TasksRequest req1 = new TasksRequest(null, 0, 0, 0, 0, Optional.empty());
+        assertTrue(req1.matches("foo1", -1, -1, TaskStateType.PENDING));
+        assertTrue(req1.matches("bar1", 100, 200, TaskStateType.DONE));
+        assertTrue(req1.matches("baz1", 100, -1, TaskStateType.RUNNING));
 
-        TasksRequest req2 = new TasksRequest(null, 100, 0, 0, 0);
-        assertFalse(req2.matches("foo1", -1, -1));
-        assertTrue(req2.matches("bar1", 100, 200));
-        assertFalse(req2.matches("bar1", 99, 200));
-        assertFalse(req2.matches("baz1", 99, -1));
+        TasksRequest req2 = new TasksRequest(null, 100, 0, 0, 0, Optional.empty());
+        assertFalse(req2.matches("foo1", -1, -1, TaskStateType.PENDING));
+        assertTrue(req2.matches("bar1", 100, 200, TaskStateType.DONE));
+        assertFalse(req2.matches("bar1", 99, 200, TaskStateType.DONE));
+        assertFalse(req2.matches("baz1", 99, -1, TaskStateType.RUNNING));
 
-        TasksRequest req3 = new TasksRequest(null, 200, 900, 200, 900);
-        assertFalse(req3.matches("foo1", -1, -1));
-        assertFalse(req3.matches("bar1", 100, 200));
-        assertFalse(req3.matches("bar1", 200, 1000));
-        assertTrue(req3.matches("bar1", 200, 700));
-        assertFalse(req3.matches("baz1", 101, -1));
+        TasksRequest req3 = new TasksRequest(null, 200, 900, 200, 900, Optional.empty());
+        assertFalse(req3.matches("foo1", -1, -1, TaskStateType.PENDING));
+        assertFalse(req3.matches("bar1", 100, 200, TaskStateType.DONE));
+        assertFalse(req3.matches("bar1", 200, 1000, TaskStateType.DONE));
+        assertTrue(req3.matches("bar1", 200, 700, TaskStateType.DONE));
+        assertFalse(req3.matches("baz1", 101, -1, TaskStateType.RUNNING));
 
         List<String> taskIds = new ArrayList<>();
         taskIds.add("foo1");
         taskIds.add("bar1");
         taskIds.add("baz1");
-        TasksRequest req4 = new TasksRequest(taskIds, 1000, -1, -1, -1);
-        assertFalse(req4.matches("foo1", -1, -1));
-        assertTrue(req4.matches("foo1", 1000, -1));
-        assertFalse(req4.matches("foo1", 900, -1));
-        assertFalse(req4.matches("baz2", 2000, -1));
-        assertFalse(req4.matches("baz2", -1, -1));
+        TasksRequest req4 = new TasksRequest(taskIds, 1000, -1, -1, -1, Optional.empty());
+        assertFalse(req4.matches("foo1", -1, -1, TaskStateType.PENDING));
+        assertTrue(req4.matches("foo1", 1000, -1, TaskStateType.RUNNING));
+        assertFalse(req4.matches("foo1", 900, -1, TaskStateType.RUNNING));
+        assertFalse(req4.matches("baz2", 2000, -1, TaskStateType.RUNNING));
+        assertFalse(req4.matches("baz2", -1, -1, TaskStateType.PENDING));
+
+        TasksRequest req5 = new TasksRequest(null, 0, 0, 0, 0, Optional.of(TaskStateType.RUNNING));
+        assertTrue(req5.matches("foo1", -1, -1, TaskStateType.RUNNING));
+        assertFalse(req5.matches("bar1", -1, -1, TaskStateType.DONE));
+        assertFalse(req5.matches("baz1", -1, -1, TaskStateType.STOPPING));
+        assertFalse(req5.matches("baz1", -1, -1, TaskStateType.PENDING));
     }
 
     @Test
@@ -460,9 +466,9 @@ public class CoordinatorTest {
                 waitFor(coordinatorClient);
 
             assertEquals(0, coordinatorClient.tasks(
-                new TasksRequest(null, 10, 0, 10, 0)).tasks().size());
+                new TasksRequest(null, 10, 0, 10, 0, Optional.empty())).tasks().size());
             TasksResponse resp1 = coordinatorClient.tasks(
-                new TasksRequest(Arrays.asList(new String[] {"foo", "baz" }), 0, 0, 0, 0));
+                new TasksRequest(Arrays.asList("foo", "baz"), 0, 0, 0, 0, Optional.empty()));
             assertTrue(resp1.tasks().containsKey("foo"));
             assertFalse(resp1.tasks().containsKey("bar"));
             assertEquals(1, resp1.tasks().size());
@@ -480,13 +486,47 @@ public class CoordinatorTest {
                 waitFor(cluster.agentClient("node02"));
 
             TasksResponse resp2 = coordinatorClient.tasks(
-                new TasksRequest(null, 1, 0, 0, 0));
+                new TasksRequest(null, 1, 0, 0, 0, Optional.empty()));
             assertTrue(resp2.tasks().containsKey("foo"));
             assertFalse(resp2.tasks().containsKey("bar"));
             assertEquals(1, resp2.tasks().size());
 
             assertEquals(0, coordinatorClient.tasks(
-                new TasksRequest(null, 3, 0, 0, 0)).tasks().size());
+                new TasksRequest(null, 3, 0, 0, 0, Optional.empty())).tasks().size());
+        }
+    }
+
+    @Test
+    public void testTaskRequest() throws Exception {
+        MockTime time = new MockTime(0, 0, 0);
+        Scheduler scheduler = new MockScheduler(time);
+        try (MiniTrogdorCluster cluster = new MiniTrogdorCluster.Builder().
+            addCoordinator("node01").
+            addAgent("node02").
+            scheduler(scheduler).
+            build()) {
+            CoordinatorClient coordinatorClient = cluster.coordinatorClient();
+
+            NoOpTaskSpec fooSpec = new NoOpTaskSpec(1, 10);
+            coordinatorClient.createTask(new CreateTaskRequest("foo", fooSpec));
+            TaskState expectedState = new ExpectedTaskBuilder("foo").taskState(new TaskPending(fooSpec)).build().taskState();
+
+            TaskState resp = coordinatorClient.task(new TaskRequest("foo"));
+            assertEquals(expectedState, resp);
+
+            time.sleep(2);
+            new ExpectedTasks().
+                addTask(new ExpectedTaskBuilder("foo").
+                    taskState(new TaskRunning(fooSpec, 2, new TextNode("active"))).
+                    workerState(new WorkerRunning("foo", fooSpec, 2, new TextNode("active"))).
+                    build()).
+                waitFor(coordinatorClient).
+                waitFor(cluster.agentClient("node02"));
+
+            try {
+                coordinatorClient.task(new TaskRequest("non-existent-foo"));
+                fail("Non existent task request should have raised a NotFoundException");
+            } catch (NotFoundException ignored) { }
         }
     }
 

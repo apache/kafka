@@ -152,7 +152,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     }
 
     /**
-     * @See KafkaFutureImpl#thenApply(BaseFunction)
+     * @see KafkaFutureImpl#thenApply(BaseFunction)
      */
     @Override
     public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
@@ -247,9 +247,7 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
      */
     @Override
     public synchronized boolean cancel(boolean mayInterruptIfRunning) {
-        if (completeExceptionally(new CancellationException()))
-            return true;
-        return exception instanceof CancellationException;
+        return completeExceptionally(new CancellationException()) || exception instanceof CancellationException;
     }
 
     /**

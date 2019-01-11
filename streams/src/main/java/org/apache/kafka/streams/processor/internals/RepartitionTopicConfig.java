@@ -40,7 +40,7 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
         REPARTITION_TOPIC_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempTopicDefaultOverrides);
     }
 
-    public RepartitionTopicConfig(final String name, final Map<String, String> topicConfigs) {
+    RepartitionTopicConfig(final String name, final Map<String, String> topicConfigs) {
         super(name, topicConfigs);
     }
 
@@ -64,8 +64,12 @@ public class RepartitionTopicConfig extends InternalTopicConfig {
 
     @Override
     public boolean equals(final Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         final RepartitionTopicConfig that = (RepartitionTopicConfig) o;
         return Objects.equals(name, that.name) &&
                Objects.equals(topicConfigs, that.topicConfigs);

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
@@ -23,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -66,6 +68,7 @@ import java.util.concurrent.TimeUnit;
 
 import kafka.tools.StreamsResetter;
 
+import static java.time.Duration.ofMillis;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -199,7 +202,7 @@ public abstract class AbstractResetIntegrationTest {
 
     void cleanupTest() throws Exception {
         if (streams != null) {
-            streams.close(30, TimeUnit.SECONDS);
+            streams.close(Duration.ofSeconds(30));
         }
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfig);
     }
@@ -526,7 +529,7 @@ public abstract class AbstractResetIntegrationTest {
 
         input.through(INTERMEDIATE_USER_TOPIC)
             .groupByKey()
-            .windowedBy(TimeWindows.of(35).advanceBy(10))
+            .windowedBy(TimeWindows.of(ofMillis(35)).advanceBy(ofMillis(10)))
             .count()
             .toStream()
             .map(new KeyValueMapper<Windowed<Long>, Long, KeyValue<Long, Long>>() {
@@ -602,9 +605,11 @@ public abstract class AbstractResetIntegrationTest {
     private void assertInternalTopicsGotDeleted(final String intermediateUserTopic) throws Exception {
         // do not use list topics request, but read from the embedded cluster's zookeeper path directly to confirm
         if (intermediateUserTopic != null) {
-            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME, intermediateUserTopic);
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
+                    Topic.GROUP_METADATA_TOPIC_NAME, intermediateUserTopic);
         } else {
-            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN, TestUtils.GROUP_METADATA_TOPIC_NAME);
+            cluster.waitForRemainingTopics(30000, INPUT_TOPIC, OUTPUT_TOPIC, OUTPUT_TOPIC_2, OUTPUT_TOPIC_2_RERUN,
+                    Topic.GROUP_METADATA_TOPIC_NAME);
         }
     }
 }

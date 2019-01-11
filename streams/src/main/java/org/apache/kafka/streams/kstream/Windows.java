@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 
+import java.time.Duration;
 import java.util.Map;
 
 import static org.apache.kafka.streams.kstream.internals.WindowingDefaults.DEFAULT_RETENTION_MS;
@@ -57,7 +58,7 @@ public abstract class Windows<W extends Window> {
      * @param durationMs the window retention time in milliseconds
      * @return itself
      * @throws IllegalArgumentException if {@code durationMs} is negative
-     * @deprecated since 2.1. Use {@link Materialized#withRetention(long)}
+     * @deprecated since 2.1. Use {@link Materialized#withRetention(Duration)}
      *             or directly configure the retention in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
     @Deprecated
@@ -81,21 +82,6 @@ public abstract class Windows<W extends Window> {
     public long maintainMs() {
         return maintainDurationMs;
     }
-
-    /**
-     * Return the segment interval in milliseconds.
-     *
-     * @return the segment interval
-     * @deprecated since 2.1. Instead, directly configure the segment interval in a store supplier and use {@link Materialized#as(WindowBytesStoreSupplier)}.
-     */
-    @Deprecated
-    public long segmentInterval() {
-        // Pinned arbitrarily to a minimum of 60 seconds. Profiling may indicate a different value is more efficient.
-        final long minimumSegmentInterval = 60_000L;
-        // Scaled to the (possibly overridden) retention period
-        return Math.max(maintainMs() / (segments - 1), minimumSegmentInterval);
-    }
-
 
     /**
      * Set the number of segments to be used for rolling the window store.

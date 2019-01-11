@@ -12,7 +12,9 @@
   */
 package kafka.api
 
+import java.time.Duration
 import java.util
+import java.util.Arrays.asList
 import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
 
@@ -22,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
-import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -125,6 +127,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, records.size)
   }
 
+  @deprecated("poll(Duration) is the replacement", since = "2.0")
+  @Test
+  def testDeprecatedPollBlocksForAssignment(): Unit = {
+    val consumer = createConsumer()
+    consumer.subscribe(Set(topic).asJava)
+    consumer.poll(0)
+    assertEquals(Set(tp, tp2), consumer.assignment().asScala)
+  }
+
+  @deprecated("Serializer now includes a default method that provides the headers", since = "2.1")
   @Test
   def testHeadersExtendedSerializerDeserializer(): Unit = {
     val extendedSerializer = new ExtendedSerializer[Array[Byte]] with SerializerImpl
@@ -168,15 +180,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val listener = new TestConsumerReassignmentListener()
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to get the initial assignment
-    consumer.poll(0)
+    // rebalance to get the initial assignment
+    awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
     assertEquals(1, listener.callsToRevoked)
 
     Thread.sleep(3500)
 
     // we should fall out of the group and need to rebalance
-    consumer.poll(0)
+    awaitRebalance(consumer, listener)
     assertEquals(2, listener.callsToAssigned)
     assertEquals(2, listener.callsToRevoked)
   }
@@ -209,12 +221,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to join the group and get the initial assignment
-    consumer.poll(0)
+    // rebalance to get the initial assignment
+    awaitRebalance(consumer, listener)
 
     // force a rebalance to trigger an invocation of the revocation callback while in the group
     consumer.subscribe(List("otherTopic").asJava, listener)
-    consumer.poll(0)
+    awaitRebalance(consumer, listener)
 
     assertEquals(0, committedPosition)
     assertTrue(commitCompleted)
@@ -237,14 +249,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
     consumer.subscribe(List(topic).asJava, listener)
 
-    // poll once to join the group and get the initial assignment
-    consumer.poll(0)
+    // rebalance to get the initial assignment
+    awaitRebalance(consumer, listener)
 
-    // we should still be in the group after this invocation
-    consumer.poll(0)
-
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
+    // We should still be in the group after this invocation
+    ensureNoRebalance(consumer, listener)
   }
 
   @Test
@@ -257,12 +266,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp)
 
     consumer.subscribe(List(topic).asJava)
-
-    val assignment = Set(tp, tp2)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == assignment.asJava
-    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, Set(tp, tp2))
 
     // should auto-commit seeked positions before closing
     consumer.seek(tp, 300)
@@ -285,12 +289,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp)
 
     consumer.subscribe(List(topic).asJava)
-
-    val assignment = Set(tp, tp2)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == assignment.asJava
-    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, Set(tp, tp2))
 
     // should auto-commit seeked positions before closing
     consumer.seek(tp, 300)
@@ -362,32 +361,23 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern = Pattern.compile("t.*c")
     consumer.subscribe(pattern, new TestConsumerReassignmentListener)
-    consumer.poll(50)
 
-    var subscriptions = Set(
+    var assignment = Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1),
       new TopicPartition(topic1, 0),
       new TopicPartition(topic1, 1))
-
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, assignment)
 
     val topic4 = "tsomec" // matches subscribed pattern
     createTopic(topic4, 2, serverCount)
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic4, 0))
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic4, 1))
 
-    subscriptions ++= Set(
+    assignment ++= Set(
       new TopicPartition(topic4, 0),
       new TopicPartition(topic4, 1))
-
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, assignment)
 
     consumer.unsubscribe()
     assertEquals(0, consumer.assignment().size)
@@ -421,17 +411,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern1 = Pattern.compile(".*o.*") // only 'topic' and 'foo' match this
     consumer.subscribe(pattern1, new TestConsumerReassignmentListener)
-    consumer.poll(50)
 
-    var subscriptions = Set(
+    var assignment = Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1),
       new TopicPartition(fooTopic, 0))
-
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, assignment)
 
     val barTopic = "bar" // matches the next subscription pattern
     createTopic(barTopic, 1, serverCount)
@@ -439,19 +424,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val pattern2 = Pattern.compile("...") // only 'foo' and 'bar' match this
     consumer.subscribe(pattern2, new TestConsumerReassignmentListener)
-    consumer.poll(50)
-
-    subscriptions --= Set(
+    assignment --= Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1))
-
-    subscriptions ++= Set(
+    assignment ++= Set(
       new TopicPartition(barTopic, 0))
-
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, assignment)
 
     consumer.unsubscribe()
     assertEquals(0, consumer.assignment().size)
@@ -480,18 +458,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
 
     consumer.subscribe(Pattern.compile("t.*c"), new TestConsumerReassignmentListener)
-    consumer.poll(50)
-
-    val subscriptions = Set(
+    val assignment = Set(
       new TopicPartition(topic, 0),
       new TopicPartition(topic, 1),
       new TopicPartition(topic1, 0),
       new TopicPartition(topic1, 1))
-
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, assignment)
 
     consumer.unsubscribe()
     assertEquals(0, consumer.assignment().size)
@@ -509,14 +481,12 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // async commit
     val asyncMetadata = new OffsetAndMetadata(10, "bar")
-    val callback = new CountConsumerCommitCallback
-    consumer.commitAsync(Map((tp, asyncMetadata)).asJava, callback)
-    awaitCommitCallback(consumer, callback)
+    sendAndAwaitAsyncCommit(consumer, Some(Map(tp -> asyncMetadata)))
     assertEquals(asyncMetadata, consumer.committed(tp))
 
     // handle null metadata
     val nullMetadata = new OffsetAndMetadata(5, null)
-    consumer.commitSync(Map((tp, nullMetadata)).asJava)
+    consumer.commitSync(Map(tp -> nullMetadata).asJava)
     assertEquals(nullMetadata, consumer.committed(tp))
   }
 
@@ -524,55 +494,47 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testAsyncCommit() {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    consumer.poll(0)
 
     val callback = new CountConsumerCommitCallback
     val count = 5
+
     for (i <- 1 to count)
       consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
 
-    awaitCommitCallback(consumer, callback, count=count)
+    TestUtils.pollUntilTrue(consumer, () => callback.successCount >= count || callback.lastError.isDefined,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+
+    assertEquals(None, callback.lastError)
+    assertEquals(count, callback.successCount)
     assertEquals(new OffsetAndMetadata(count), consumer.committed(tp))
   }
 
   @Test
   def testExpandingTopicSubscriptions() {
     val otherTopic = "other"
-    val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
-    val expandedSubscriptions = subscriptions ++ Set(new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
+    val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment}")
+    awaitAssignment(consumer, initialAssignment)
 
     createTopic(otherTopic, 2, serverCount)
+    val expandedAssignment = initialAssignment ++ Set(new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     consumer.subscribe(List(topic, otherTopic).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment == expandedSubscriptions.asJava
-    }, s"Expected partitions ${expandedSubscriptions.asJava} but actually got ${consumer.assignment}")
+    awaitAssignment(consumer, expandedAssignment)
   }
 
   @Test
   def testShrinkingTopicSubscriptions() {
     val otherTopic = "other"
     createTopic(otherTopic, 2, serverCount)
-    val subscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
-    val shrunkenSubscriptions = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
+    val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
     val consumer = createConsumer()
     consumer.subscribe(List(topic, otherTopic).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment}")
+    awaitAssignment(consumer, initialAssignment)
 
+    val shrunkenAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     consumer.subscribe(List(topic).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment == shrunkenSubscriptions.asJava
-    }, s"Expected partitions ${shrunkenSubscriptions.asJava} but actually got ${consumer.assignment}")
+    awaitAssignment(consumer, shrunkenAssignment)
   }
 
   @Test
@@ -611,7 +573,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.seekToEnd(List(tp).asJava)
     assertEquals(totalRecords, consumer.position(tp))
-    assertFalse(consumer.poll(totalRecords).iterator().hasNext)
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp).asJava)
     assertEquals(0, consumer.position(tp), 0)
@@ -629,7 +591,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.seekToEnd(List(tp2).asJava)
     assertEquals(totalRecords, consumer.position(tp2))
-    assertFalse(consumer.poll(totalRecords).iterator().hasNext)
+    assertTrue(consumer.poll(Duration.ofMillis(50)).isEmpty)
 
     consumer.seekToBeginning(List(tp2).asJava)
     assertEquals(0, consumer.position(tp2), 0)
@@ -695,7 +657,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0)
     consumer.pause(partitions)
     sendRecords(producer, numRecords = 5, tp)
-    assertTrue(consumer.poll(0).isEmpty)
+    assertTrue(consumer.poll(Duration.ofMillis(100)).isEmpty)
     consumer.resume(partitions)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 5)
   }
@@ -713,14 +675,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // poll should fail because there is no offset reset strategy set
     intercept[NoOffsetForPartitionException] {
-      consumer.poll(50)
+      consumer.poll(Duration.ofMillis(50))
     }
 
     // seek to out of range position
     val outOfRangePos = totalRecords + 1
     consumer.seek(tp, outOfRangePos)
     val e = intercept[OffsetOutOfRangeException] {
-      consumer.poll(20000)
+      consumer.poll(Duration.ofMillis(20000))
     }
     val outOfRangePartitions = e.offsetOutOfRangePartitions()
     assertNotNull(outOfRangePartitions)
@@ -746,7 +708,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consuming a record that is too large should succeed since KIP-74
     consumer.assign(List(tp).asJava)
-    val records = consumer.poll(20000)
+    val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
     assertEquals(0L, consumerRecord.offset)
@@ -778,7 +740,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // we should only get the small record in the first `poll`
     consumer.assign(List(tp).asJava)
-    val records = consumer.poll(20000)
+    val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
     assertEquals(0L, consumerRecord.offset)
@@ -830,10 +792,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.subscribe(List(topic1, topic2, topic3).asJava)
 
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == partitions.toSet.asJava
-    }, s"Expected partitions ${partitions.asJava} but actually got ${consumer.assignment}")
+    awaitAssignment(consumer, partitions.toSet)
 
     val producer = createProducer()
     val producerRecords = partitions.flatMap(sendRecords(producer, partitionCount, _))
@@ -868,10 +827,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // subscribe to two topics
     consumer.subscribe(List(topic1, topic2).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == expectedAssignment.asJava
-    }, s"Expected partitions ${expectedAssignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, expectedAssignment)
 
     // add one more topic with 2 partitions
     val topic3 = "topic3"
@@ -879,17 +835,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val newExpectedAssignment = expectedAssignment ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
     consumer.subscribe(List(topic1, topic2, topic3).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == newExpectedAssignment.asJava
-    }, s"Expected partitions ${newExpectedAssignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, newExpectedAssignment)
 
     // remove the topic we just added
     consumer.subscribe(List(topic1, topic2).asJava)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == expectedAssignment.asJava
-    }, s"Expected partitions ${expectedAssignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, expectedAssignment)
 
     consumer.unsubscribe()
     assertEquals(0, consumer.assignment().size)
@@ -1075,9 +1025,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(commitCountBefore + 1, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
     // commit async and verify onCommit is called
-    val commitCallback = new CountConsumerCommitCallback()
-    testConsumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(5L))).asJava, commitCallback)
-    awaitCommitCallback(testConsumer, commitCallback)
+    sendAndAwaitAsyncCommit(testConsumer, Some(Map(tp -> new OffsetAndMetadata(5L))))
     assertEquals(5, testConsumer.committed(tp).offset)
     assertEquals(commitCountBefore + 2, MockConsumerInterceptor.ON_COMMIT_COUNT.intValue)
 
@@ -1270,16 +1218,27 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     //  topic3Partition0 -> 80,
     //  topic3Partition1 -> 100)
     val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
-    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).offset())
-    assertEquals(0, timestampOffsets.get(new TopicPartition(topic1, 0)).timestamp())
-    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).offset())
-    assertEquals(20, timestampOffsets.get(new TopicPartition(topic1, 1)).timestamp())
+
+    val timestampTopic1P0 = timestampOffsets.get(new TopicPartition(topic1, 0))
+    assertEquals(0, timestampTopic1P0.offset)
+    assertEquals(0, timestampTopic1P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P0.leaderEpoch)
+
+    val timestampTopic1P1 = timestampOffsets.get(new TopicPartition(topic1, 1))
+    assertEquals(20, timestampTopic1P1.offset)
+    assertEquals(20, timestampTopic1P1.timestamp)
+    assertEquals(Optional.of(0), timestampTopic1P1.leaderEpoch)
+
     assertEquals("null should be returned when message format is 0.9.0",
       null, timestampOffsets.get(new TopicPartition(topic2, 0)))
     assertEquals("null should be returned when message format is 0.9.0",
       null, timestampOffsets.get(new TopicPartition(topic2, 1)))
-    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).offset())
-    assertEquals(80, timestampOffsets.get(new TopicPartition(topic3, 0)).timestamp())
+
+    val timestampTopic3P0 = timestampOffsets.get(new TopicPartition(topic3, 0))
+    assertEquals(80, timestampTopic3P0.offset)
+    assertEquals(80, timestampTopic3P0.timestamp)
+    assertEquals(Optional.of(0), timestampTopic3P0.leaderEpoch)
+
     assertEquals(null, timestampOffsets.get(new TopicPartition(topic3, 1)))
   }
 
@@ -1321,8 +1280,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
-    while (listener.callsToAssigned == 0)
-      consumer.poll(50)
+    awaitRebalance(consumer, listener)
 
     consumer.subscribe(List[String]().asJava)
     assertEquals(0, consumer.assignment.size())
@@ -1357,8 +1315,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
     consumer.assign(List(tp, tp2).asJava)
 
-    // Need to poll to join the group
-    consumer.poll(50)
     val pos1 = consumer.position(tp)
     val pos2 = consumer.position(tp2)
     consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
@@ -1373,9 +1329,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(5, consumer.committed(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
-    val commitCallback = new CountConsumerCommitCallback()
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(7L))).asJava, commitCallback)
-    awaitCommitCallback(consumer, commitCallback)
+    sendAndAwaitAsyncCommit(consumer, Some(Map(tp2 -> new OffsetAndMetadata(7L))))
     assertEquals(7, consumer.committed(tp2).offset)
   }
 
@@ -1402,11 +1356,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer.subscribe(List(topic).asJava, rebalanceListener)
 
-    val assignment = Set(tp, tp2)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == assignment.asJava
-    }, s"Expected partitions ${assignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, Set(tp, tp2))
 
     consumer.seek(tp, 300)
     consumer.seek(tp2, 500)
@@ -1415,10 +1365,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic, topic2).asJava, rebalanceListener)
 
     val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == newAssignment.asJava
-    }, s"Expected partitions ${newAssignment.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, newAssignment)
 
     // after rebalancing, we should have reset to the committed positions
     assertEquals(300, consumer.committed(tp).offset)
@@ -1438,14 +1385,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     val consumer = createConsumer()
-    val listener0 = new TestConsumerReassignmentListener
-    consumer.subscribe(List(topic, topic2).asJava, listener0)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.records(tp).isEmpty
-    }, "Consumer did not consume any message before timeout.")
-    assertEquals("should be assigned once", 1, listener0.callsToAssigned)
+    val listener = new TestConsumerReassignmentListener
+    consumer.subscribe(List(topic, topic2).asJava, listener)
+    val records = awaitNonEmptyRecords(consumer, tp)
+    assertEquals("should be assigned once", 1, listener.callsToAssigned)
     // Verify the metric exist.
     val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
@@ -1458,14 +1401,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     tags2.put("partition", String.valueOf(tp2.partition()))
     val fetchLead0 = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1))
     assertNotNull(fetchLead0)
-    assertTrue(s"The lead should be ${records.count}", fetchLead0.metricValue() == records.count)
+    assertEquals(s"The lead should be ${records.count}", records.count.toDouble, fetchLead0.metricValue())
 
     // Remove topic from subscription
-    consumer.subscribe(List(topic2).asJava, listener0)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(100)
-      listener0.callsToAssigned >= 2
-    }, "Expected rebalance did not occur.")
+    consumer.subscribe(List(topic2).asJava, listener)
+    awaitRebalance(consumer, listener)
     // Verify the metric has gone
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1)))
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)))
@@ -1484,14 +1424,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
     val consumer = createConsumer()
-    val listener0 = new TestConsumerReassignmentListener
-    consumer.subscribe(List(topic, topic2).asJava, listener0)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.records(tp).isEmpty
-    }, "Consumer did not consume any message before timeout.")
-    assertEquals("should be assigned once", 1, listener0.callsToAssigned)
+    val listener = new TestConsumerReassignmentListener
+    consumer.subscribe(List(topic, topic2).asJava, listener)
+    val records = awaitNonEmptyRecords(consumer, tp)
+    assertEquals("should be assigned once", 1, listener.callsToAssigned)
     // Verify the metric exist.
     val tags1 = new util.HashMap[String, String]()
     tags1.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
@@ -1508,11 +1444,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag0.metricValue.asInstanceOf[Double], epsilon)
 
     // Remove topic from subscription
-    consumer.subscribe(List(topic2).asJava, listener0)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(100)
-      listener0.callsToAssigned >= 2
-    }, "Expected rebalance did not occur.")
+    consumer.subscribe(List(topic2).asJava, listener)
+    awaitRebalance(consumer, listener)
     // Verify the metric has gone
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1)))
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)))
@@ -1531,11 +1464,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithAssign")
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.records(tp).isEmpty
-    }, "Consumer did not consume any message before timeout.")
+    val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadMetricsCleanUpWithAssign")
@@ -1547,7 +1476,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(s"The lead should be ${records.count}", records.count == fetchLead.metricValue())
 
     consumer.assign(List(tp2).asJava)
-    TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
+    awaitNonEmptyRecords(consumer ,tp2)
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags)))
   }
 
@@ -1564,11 +1493,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.records(tp).isEmpty
-    }, "Consumer did not consume any message before timeout.")
+    val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
@@ -1581,9 +1506,32 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(s"The lag should be $expectedLag", expectedLag, fetchLag.metricValue.asInstanceOf[Double], epsilon)
 
     consumer.assign(List(tp2).asJava)
-    TestUtils.waitUntilTrue(() => !consumer.poll(100).isEmpty, "Consumer did not consume any message before timeout.")
+    awaitNonEmptyRecords(consumer, tp2)
     assertNull(consumer.metrics.get(new MetricName(tp + ".records-lag", "consumer-fetch-manager-metrics", "", tags)))
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
+  }
+
+  @Test
+  def testPerPartitionLagMetricsWhenReadCommitted() {
+    val numMessages = 1000
+    // send some messages.
+    val producer = createProducer()
+    sendRecords(producer, numMessages, tp)
+    sendRecords(producer, numMessages, tp2)
+
+    consumerConfig.setProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
+    consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
+    val consumer = createConsumer()
+    consumer.assign(List(tp).asJava)
+    awaitNonEmptyRecords(consumer, tp)
+    // Verify the metric exist.
+    val tags = new util.HashMap[String, String]()
+    tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
+    tags.put("topic", tp.topic())
+    tags.put("partition", String.valueOf(tp.partition()))
+    val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
+    assertNotNull(fetchLag)
   }
 
   @Test
@@ -1598,11 +1546,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.isEmpty
-    }, "Consumer did not consume any message before timeout.")
+    awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadWithMaxPollRecords")
@@ -1624,11 +1568,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
-    var records: ConsumerRecords[Array[Byte], Array[Byte]] = ConsumerRecords.empty()
-    TestUtils.waitUntilTrue(() => {
-      records = consumer.poll(100)
-      !records.isEmpty
-    }, "Consumer did not consume any message before timeout.")
+    val records = awaitNonEmptyRecords(consumer, tp)
 
     val tags = new util.HashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
@@ -1854,13 +1794,150 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   def changeConsumerSubscriptionAndValidateAssignment[K, V](consumer: Consumer[K, V],
                                                             topicsToSubscribe: List[String],
-                                                            subscriptions: Set[TopicPartition],
+                                                            expectedAssignment: Set[TopicPartition],
                                                             rebalanceListener: ConsumerRebalanceListener): Unit = {
     consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
-    TestUtils.waitUntilTrue(() => {
-      consumer.poll(50)
-      consumer.assignment() == subscriptions.asJava
-    }, s"Expected partitions ${subscriptions.asJava} but actually got ${consumer.assignment()}")
+    awaitAssignment(consumer, expectedAssignment)
   }
 
+  private def awaitNonEmptyRecords[K, V](consumer: Consumer[K, V], partition: TopicPartition): ConsumerRecords[K, V] = {
+    TestUtils.pollRecordsUntilTrue(consumer, (polledRecords: ConsumerRecords[K, V]) => {
+      if (polledRecords.records(partition).asScala.nonEmpty)
+        return polledRecords
+      false
+    }, s"Consumer did not consume any messages for partition $partition before timeout.")
+    throw new IllegalStateException("Should have timed out before reaching here")
+  }
+
+  private def awaitAssignment(consumer: Consumer[_, _], expectedAssignment: Set[TopicPartition]): Unit = {
+    TestUtils.pollUntilTrue(consumer, () => consumer.assignment() == expectedAssignment.asJava,
+      s"Timed out while awaiting expected assignment $expectedAssignment. " +
+        s"The current assignment is ${consumer.assignment()}")
+  }
+
+  @Test
+  def testConsumingWithNullGroupId(): Unit = {
+    val topic = "test_topic"
+    val partition = 0;
+    val tp = new TopicPartition(topic, partition)
+    createTopic(topic, 1, 1)
+
+    TestUtils.waitUntilTrue(() => {
+      this.zkClient.topicExists(topic)
+    }, "Failed to create topic")
+
+    val producer = createProducer()
+    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k3".getBytes, "v3".getBytes)).get()
+    producer.close()
+
+    // consumer 1 uses the default group id and consumes from earliest offset
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    val consumer1 = createConsumer(
+      configOverrides = consumer1Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    // consumer 2 uses the default group id and consumes from latest offset
+    val consumer2Config = new Properties(consumerConfig)
+    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
+    val consumer2 = createConsumer(
+      configOverrides = consumer2Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    // consumer 3 uses the default group id and starts from an explicit offset
+    val consumer3Config = new Properties(consumerConfig)
+    consumer3Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer3")
+    val consumer3 = createConsumer(
+      configOverrides = consumer3Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    consumer1.assign(asList(tp))
+    consumer2.assign(asList(tp))
+    consumer3.assign(asList(tp))
+    consumer3.seek(tp, 1)
+
+    val numRecords1 = consumer1.poll(Duration.ofMillis(5000)).count()
+
+    try {
+      consumer1.commitSync()
+      fail("Expected offset commit to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
+    try {
+      consumer2.committed(tp)
+      fail("Expected committed offset fetch to fail due to null group id")
+    } catch {
+      case e: InvalidGroupIdException => // OK
+    }
+
+    val numRecords2 = consumer2.poll(Duration.ofMillis(5000)).count()
+    val numRecords3 = consumer3.poll(Duration.ofMillis(5000)).count()
+
+    consumer1.unsubscribe()
+    consumer2.unsubscribe()
+    consumer3.unsubscribe()
+
+    consumer1.close()
+    consumer2.close()
+    consumer3.close()
+
+    assertEquals("Expected consumer1 to consume from earliest offset", 3, numRecords1)
+    assertEquals("Expected consumer2 to consume from latest offset", 0, numRecords2)
+    assertEquals("Expected consumer3 to consume from offset 1", 2, numRecords3)
+  }
+
+  @Test
+  def testConsumingWithEmptyGroupId(): Unit = {
+    val topic = "test_topic"
+    val partition = 0;
+    val tp = new TopicPartition(topic, partition)
+    createTopic(topic, 1, 1)
+
+    TestUtils.waitUntilTrue(() => {
+      this.zkClient.topicExists(topic)
+    }, "Failed to create topic")
+
+    val producer = createProducer()
+    producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
+    producer.send(new ProducerRecord(topic, partition, "k2".getBytes, "v2".getBytes)).get()
+    producer.close()
+
+    // consumer 1 uses the empty group id
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
+    val consumer1 = createConsumer(configOverrides = consumer1Config)
+
+    // consumer 2 uses the empty group id and consumes from latest offset if there is no committed offset
+    val consumer2Config = new Properties(consumerConfig)
+    consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
+    consumer2Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
+    consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
+    consumer2Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
+    val consumer2 = createConsumer(configOverrides = consumer2Config)
+
+    consumer1.assign(asList(tp))
+    consumer2.assign(asList(tp))
+
+    val records1 = consumer1.poll(Duration.ofMillis(5000))
+    consumer1.commitSync()
+
+    val records2 = consumer2.poll(Duration.ofMillis(5000))
+    consumer2.commitSync()
+
+    consumer1.close()
+    consumer2.close()
+
+    assertTrue("Expected consumer1 to consume one message from offset 0",
+      records1.count() == 1 && records1.records(tp).asScala.head.offset == 0)
+    assertTrue("Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1",
+      records2.count() == 1 && records2.records(tp).asScala.head.offset == 1)
+  }
 }

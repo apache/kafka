@@ -64,12 +64,13 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.userName = groupedInternal.name();
     }
 
-    <KR, T> KTable<KR, T> build(final String functionName,
-                                final StoreBuilder<? extends StateStore> storeBuilder,
-                                final KStreamAggProcessorSupplier<K, KR, V, T> aggregateSupplier,
-                                final boolean isQueryable,
-                                final Serde<KR> keySerde,
-                                final Serde<T> valSerde) {
+    <KR, VR> KTable<KR, VR> build(final String functionName,
+                                  final StoreBuilder<? extends StateStore> storeBuilder,
+                                  final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
+                                  final String queryableStoreName,
+                                  final Serde<KR> keySerde,
+                                  final Serde<VR> valSerde) {
+        assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
         final String aggFunctionName = builder.newProcessorName(functionName);
 
@@ -84,16 +85,14 @@ class GroupedStreamAggregateBuilder<K, V> {
             builder.addGraphNode(parentNode, repartitionNode);
             parentNode = repartitionNode;
         }
-        final StatefulProcessorNode.StatefulProcessorNodeBuilder<K, T> statefulProcessorNodeBuilder = StatefulProcessorNode.statefulProcessorNodeBuilder();
 
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(aggregateSupplier, aggFunctionName);
-        statefulProcessorNodeBuilder
-            .withProcessorParameters(processorParameters)
-            .withNodeName(aggFunctionName)
-            .withRepartitionRequired(repartitionRequired)
-            .withStoreBuilder(storeBuilder);
-
-        final StatefulProcessorNode<K, T> statefulProcessorNode = statefulProcessorNodeBuilder.build();
+        final StatefulProcessorNode<K, V> statefulProcessorNode =
+            new StatefulProcessorNode<>(
+                aggFunctionName,
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
+                storeBuilder,
+                repartitionRequired
+            );
 
         builder.addGraphNode(parentNode, statefulProcessorNode);
 
@@ -101,8 +100,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                 keySerde,
                                 valSerde,
                                 sourceName.equals(this.name) ? sourceNodes : Collections.singleton(sourceName),
-                                storeBuilder.name(),
-                                isQueryable,
+                                queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);

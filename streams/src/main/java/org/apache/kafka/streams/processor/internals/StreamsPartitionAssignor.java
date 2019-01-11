@@ -304,10 +304,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 final String host = getHost(userEndPoint);
                 final Integer port = getPort(userEndPoint);
 
-                if (host == null || port == null)
+                if (host == null || port == null) {
                     throw new ConfigException(String.format("%s Config %s isn't in the correct format. Expected a host:port pair" +
-                                    " but received %s",
-                            logPrefix, StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
+                            " but received %s",
+                        logPrefix, StreamsConfig.APPLICATION_SERVER_CONFIG, userEndPoint));
+                }
             } catch (final NumberFormatException nfe) {
                 throw new ConfigException(String.format("%s Invalid port supplied in %s for config %s",
                         logPrefix, userEndPoint, StreamsConfig.APPLICATION_SERVER_CONFIG));
@@ -348,9 +349,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return new Subscription(new ArrayList<>(topics), data.encode());
     }
 
-    Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
-                                            final String topic,
-                                            final int errorCode) {
+    private Map<String, Assignment> errorAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
+                                                    final String topic,
+                                                    final int errorCode) {
         log.error("{} is unknown yet during rebalance," +
             " please make sure they have been pre-created before starting the Streams application.", topic);
         final Map<String, Assignment> assignment = new HashMap<>();
@@ -598,8 +599,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 int numPartitions = UNKNOWN;
                 if (tasksByTopicGroup.get(topicGroupId) != null) {
                     for (final TaskId task : tasksByTopicGroup.get(topicGroupId)) {
-                        if (numPartitions < task.partition + 1)
+                        if (numPartitions < task.partition + 1) {
                             numPartitions = task.partition + 1;
+                        }
                     }
                     final InternalTopicMetadata topicMetadata = new InternalTopicMetadata(topicConfig);
                     topicMetadata.numPartitions = numPartitions;

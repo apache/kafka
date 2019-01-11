@@ -53,7 +53,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
     val replicaAssignment = AdminUtils.assignReplicasToBrokers(brokerMetadatas, partitions, replicationFactor)
-    createOrUpdateTopicPartitionAssignmentPathInZK(topic, replicaAssignment, topicConfig)
+    createTopicWithAssignment(topic, topicConfig, replicaAssignment)
   }
 
   /**
@@ -80,55 +80,40 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     brokerMetadatas.sortBy(_.id)
   }
 
-  /**
-   * Creates or Updates the partition assignment for a given topic
-   * @param topic
-   * @param partitionReplicaAssignment
-   * @param config
-   * @param update
-   */
-  def createOrUpdateTopicPartitionAssignmentPathInZK(topic: String,
-                                                     partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                                     config: Properties = new Properties,
-                                                     update: Boolean = false) {
-    validateCreateOrUpdateTopic(topic, partitionReplicaAssignment, config, update)
+  def createTopicWithAssignment(topic: String,
+                                config: Properties,
+                                partitionReplicaAssignment: Map[Int, Seq[Int]]): Unit = {
+    validateTopicCreate(topic, partitionReplicaAssignment, config)
 
-    if (!update) {
-      // write out the config if there is any, this isn't transactional with the partition assignments
-      zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic, config)
-    }
+    info(s"Creating topic $topic with configuration $config and initial partition " +
+      s"assignment $partitionReplicaAssignment")
+
+    // write out the config if there is any, this isn't transactional with the partition assignments
+    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic, config)
 
     // create the partition assignment
-    writeTopicPartitionAssignment(topic, partitionReplicaAssignment, update)
+    writeTopicPartitionAssignment(topic, partitionReplicaAssignment, isUpdate = false)
   }
 
   /**
-   * Validate method to use before the topic creation or update
-   * @param topic
-   * @param partitionReplicaAssignment
-   * @param config
-   * @param update
+   * Validate topic creation parameters
    */
-  def validateCreateOrUpdateTopic(topic: String,
-                                  partitionReplicaAssignment: Map[Int, Seq[Int]],
-                                  config: Properties,
-                                  update: Boolean): Unit = {
-    // validate arguments
+  def validateTopicCreate(topic: String,
+                          partitionReplicaAssignment: Map[Int, Seq[Int]],
+                          config: Properties): Unit = {
     Topic.validate(topic)
 
-    if (!update) {
-      if (zkClient.topicExists(topic))
+    if (zkClient.topicExists(topic))
+      throw new TopicExistsException(s"Topic '$topic' already exists.")
+    else if (Topic.hasCollisionChars(topic)) {
+      val allTopics = zkClient.getAllTopicsInCluster
+      // check again in case the topic was created in the meantime, otherwise the
+      // topic could potentially collide with itself
+      if (allTopics.contains(topic))
         throw new TopicExistsException(s"Topic '$topic' already exists.")
-      else if (Topic.hasCollisionChars(topic)) {
-        val allTopics = zkClient.getAllTopicsInCluster
-        // check again in case the topic was created in the meantime, otherwise the
-        // topic could potentially collide with itself
-        if (allTopics.contains(topic))
-          throw new TopicExistsException(s"Topic '$topic' already exists.")
-        val collidingTopics = allTopics.filter(Topic.hasCollision(topic, _))
-        if (collidingTopics.nonEmpty) {
-          throw new InvalidTopicException(s"Topic '$topic' collides with existing topics: ${collidingTopics.mkString(", ")}")
-        }
+      val collidingTopics = allTopics.filter(Topic.hasCollision(topic, _))
+      if (collidingTopics.nonEmpty) {
+        throw new InvalidTopicException(s"Topic '$topic' collides with existing topics: ${collidingTopics.mkString(", ")}")
       }
     }
 
@@ -140,20 +125,16 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
     )
 
-    // Configs only matter if a topic is being created. Changing configs via AlterTopic is not supported
-    if (!update)
-      LogConfig.validate(config)
+    LogConfig.validate(config)
   }
 
-  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, Seq[Int]], update: Boolean) {
+  private def writeTopicPartitionAssignment(topic: String, replicaAssignment: Map[Int, Seq[Int]], isUpdate: Boolean) {
     try {
       val assignment = replicaAssignment.map { case (partitionId, replicas) => (new TopicPartition(topic,partitionId), replicas) }.toMap
 
-      if (!update) {
-        info("Topic creation " + assignment)
+      if (!isUpdate) {
         zkClient.createTopicAssignment(topic, assignment)
       } else {
-        info("Topic update " + assignment)
         zkClient.setTopicAssignment(topic, assignment)
       }
       debug("Updated path %s with %s for replica assignment".format(TopicZNode.path(topic), assignment))
@@ -162,7 +143,6 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       case e2: Throwable => throw new AdminOperationException(e2.toString)
     }
   }
-
 
   /**
    * Creates a delete path for a given topic
@@ -221,15 +201,15 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
         startIndex, existingAssignment.size)
     }
+
     val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
     if (!validateOnly) {
       info(s"Creating $partitionsToAdd partitions for '$topic' with the following replica assignment: " +
         s"$proposedAssignmentForNewPartitions.")
-      // add the combined new list
-      createOrUpdateTopicPartitionAssignmentPathInZK(topic, proposedAssignment, update = true)
+
+      writeTopicPartitionAssignment(topic, proposedAssignment, isUpdate = true)
     }
     proposedAssignment
-
   }
 
   private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
@@ -259,7 +239,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
       val partitions = sortedBadRepFactors.map { case (partitionId, _) => partitionId }
       val repFactors = sortedBadRepFactors.map { case (_, rf) => rf }
       throw new InvalidReplicaAssignmentException(s"Inconsistent replication factor between partitions, " +
-        s"partition 0 has ${expectedReplicationFactor} while partitions [${partitions.mkString(", ")}] have " +
+        s"partition 0 has $expectedReplicationFactor while partitions [${partitions.mkString(", ")}] have " +
         s"replication factors [${repFactors.mkString(", ")}], respectively.")
     }
   }
