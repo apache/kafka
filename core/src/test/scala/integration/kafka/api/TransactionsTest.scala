@@ -578,7 +578,6 @@ class TransactionsTest extends KafkaServerTestHarness {
     try {
       producer.commitTransaction()
     } finally {
-      restartDeadBrokers() // bring them back
       producer.close(0, TimeUnit.MILLISECONDS)
     }
   }

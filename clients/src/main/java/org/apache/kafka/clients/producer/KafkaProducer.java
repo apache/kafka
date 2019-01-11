@@ -700,8 +700,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *
      * Note that this method will raise {@link TimeoutException} if the transaction cannot be aborted before expiration
      * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
-     * It is safe to retry in either case, but once the transaction has been successfully aborted,
-     * this method should no longer be used.
+     * It is safe to retry in either case, but it is not possible to attempt a different operation (such as commitTransaction)
+     * since the abort may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active

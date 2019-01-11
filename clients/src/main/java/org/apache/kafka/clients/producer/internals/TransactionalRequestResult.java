@@ -20,6 +20,7 @@ package org.apache.kafka.clients.producer.internals;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 
+import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -69,7 +70,7 @@ public final class TransactionalRequestResult {
                 throw error();
             }
             if (!success) {
-                throw new TimeoutException("Timeout expired after " + timeout + unit.name() + " while awaiting " + operation);
+                throw new TimeoutException("Timeout expired after " + timeout + unit.name().toLowerCase(Locale.ROOT) + " while awaiting " + operation);
             }
         } catch (InterruptedException e) {
             throw new InterruptException("Received interrupt while awaiting " + operation, e);
