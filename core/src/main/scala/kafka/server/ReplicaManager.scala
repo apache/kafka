@@ -601,11 +601,12 @@ class ReplicaManager(val config: KafkaConfig,
           //   start ReplicaAlterDirThread to move data of this partition from the current log to the future log
           // - Otherwise, return KafkaStorageException. We do not create the future log while there is offline log directory
           //   so that we can avoid creating future log for the same partition in multiple log directories.
-          if (getPartition(topicPartition).get.maybeCreateFutureReplica(destinationDir)) {
+          val partition = getPartition(topicPartition).get
+          if (partition.maybeCreateFutureReplica(destinationDir)) {
             val futureReplica = getReplicaOrException(topicPartition, Request.FutureLocalReplicaId)
             logManager.abortAndPauseCleaning(topicPartition)
-            replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> BrokerAndInitialOffset(
-              BrokerEndPoint(config.brokerId, "localhost", -1), futureReplica.highWatermark.messageOffset)))
+            replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> InitialFetchState(
+              BrokerEndPoint(config.brokerId, "localhost", -1), partition.getLeaderEpoch, futureReplica.highWatermark.messageOffset)))
           }
 
           (topicPartition, Errors.NONE)
@@ -1036,10 +1037,14 @@ class ReplicaManager(val config: KafkaConfig,
 
         // First check partition's leader epoch
         val partitionState = new mutable.HashMap[Partition, LeaderAndIsrRequest.PartitionState]()
-        val newPartitions = leaderAndIsrRequest.partitionStates.asScala.keys.filter(topicPartition => getPartition(topicPartition).isEmpty)
+        val newPartitions = new mutable.HashSet[Partition]
 
         leaderAndIsrRequest.partitionStates.asScala.foreach { case (topicPartition, stateInfo) =>
-          val partition = getOrCreatePartition(topicPartition)
+          val partition = getPartition(topicPartition).getOrElse {
+            val createdPartition = getOrCreatePartition(topicPartition)
+            newPartitions.add(createdPartition)
+            createdPartition
+          }
           val partitionLeaderEpoch = partition.getLeaderEpoch
           if (partition eq ReplicaManager.OfflinePartition) {
             stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
@@ -1101,17 +1106,23 @@ class ReplicaManager(val config: KafkaConfig,
           hwThreadInitialized = true
         }
 
-        val newOnlineReplicas = newPartitions.flatMap(topicPartition => getReplica(topicPartition))
-        // Add future replica to partition's map
-        val futureReplicasAndInitialOffset = newOnlineReplicas.filter { replica =>
-          logManager.getLog(replica.topicPartition, isFuture = true).isDefined
-        }.map { replica =>
-          replica.topicPartition -> BrokerAndInitialOffset(BrokerEndPoint(config.brokerId, "localhost", -1), replica.highWatermark.messageOffset)
-        }.toMap
-        futureReplicasAndInitialOffset.keys.foreach(tp => getPartition(tp).get.getOrCreateReplica(Request.FutureLocalReplicaId))
+        val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
+        for (partition <- newPartitions) {
+          val topicPartition = partition.topicPartition
+          if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
+            partition.getReplica().foreach { replica =>
+              val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
+              // Add future replica to partition's map
+              partition.getOrCreateReplica(Request.FutureLocalReplicaId, isNew = false)
+              // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
+              // replica from source dir to destination dir
+              logManager.abortAndPauseCleaning(topicPartition)
+              futureReplicasAndInitialOffset.put(
+                topicPartition, InitialFetchState(leader, partition.getLeaderEpoch, replica.highWatermark.messageOffset))
+            }
+          }
+        }
 
-        // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move replica from source dir to destination dir
-        futureReplicasAndInitialOffset.keys.foreach(logManager.abortAndPauseCleaning)
         replicaAlterLogDirsManager.addFetcherForPartitions(futureReplicasAndInitialOffset)
 
         replicaFetcherManager.shutdownIdleFetcherThreads()
@@ -1302,8 +1313,9 @@ class ReplicaManager(val config: KafkaConfig,
       else {
         // we do not need to check if the leader exists again since this has been done at the beginning of this process
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map(partition =>
-          partition.topicPartition -> BrokerAndInitialOffset(
+          partition.topicPartition -> InitialFetchState(
             metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.brokerEndPoint(config.interBrokerListenerName),
+            partition.getLeaderEpoch,
             partition.getReplica().get.highWatermark.messageOffset)).toMap
         replicaFetcherManager.addFetcherForPartitions(partitionsToMakeFollowerWithLeaderAndOffset)
 

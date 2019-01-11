@@ -17,20 +17,20 @@
 
 package kafka.server
 
-import AbstractFetcherThread._
 import com.yammer.metrics.Metrics
 import kafka.cluster.BrokerEndPoint
-import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData}
+import kafka.server.AbstractFetcherThread.{FetchRequest, PartitionData, ResultWithPartitions}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.EpochEndOffset
-import org.junit.Assert.{assertFalse, assertTrue}
+import org.junit.Assert.{assertFalse, assertTrue, assertEquals}
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Set, mutable}
+import org.scalatest.Assertions.assertThrows
 
 class AbstractFetcherThreadTest {
 
@@ -43,12 +43,12 @@ class AbstractFetcherThreadTest {
   @Test
   def testMetricsRemovedOnShutdown() {
     val partition = new TopicPartition("topic", 0)
-    val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
+    val fetcherThread = new DummyFetcherThread(includeLogTruncation = false)
 
     fetcherThread.start()
 
     // add one partition to create the consumer lag metric
-    fetcherThread.addPartitions(Map(partition -> 0L))
+    fetcherThread.addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // wait until all fetcher metrics are present
     TestUtils.waitUntilTrue(() =>
@@ -64,12 +64,12 @@ class AbstractFetcherThreadTest {
   @Test
   def testConsumerLagRemovedWithPartition() {
     val partition = new TopicPartition("topic", 0)
-    val fetcherThread = new DummyFetcherThread("dummy", "client", new BrokerEndPoint(0, "localhost", 9092))
+    val fetcherThread = new DummyFetcherThread(includeLogTruncation = false)
 
     fetcherThread.start()
 
     // add one partition to create the consumer lag metric
-    fetcherThread.addPartitions(Map(partition -> 0L))
+    fetcherThread.addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // wait until lag metric is present
     TestUtils.waitUntilTrue(() => allMetricsNames(FetcherMetrics.ConsumerLag),
@@ -102,11 +102,12 @@ class AbstractFetcherThreadTest {
     override def exception: Option[Throwable] = None
   }
 
-  class DummyFetcherThread(name: String,
-                           clientId: String,
-                           sourceBroker: BrokerEndPoint,
-                           fetchBackOffMs: Int = 0)
-    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = false) {
+  class DummyFetcherThread(name: String = "dummy",
+                           clientId: String = "client",
+                           sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092),
+                           fetchBackOffMs: Int = 0,
+                           includeLogTruncation: Boolean = true)
+    extends AbstractFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, isInterruptible = true, includeLogTruncation = includeLogTruncation) {
 
     type REQ = DummyFetchRequest
     type PD = PartitionData
@@ -125,15 +126,74 @@ class AbstractFetcherThreadTest {
     override protected def buildFetchRequest(partitionMap: collection.Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[DummyFetchRequest] =
       ResultWithPartitions(new DummyFetchRequest(partitionMap.map { case (k, v) => (k, v.fetchOffset) }.toMap), Set())
 
-    override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
-      ResultWithPartitions(Map(), Set())
-    }
+    override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = Some(0)
 
-    override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }
+    override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+      val endOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
+      partitions.foreach { case (partition, epochData) =>
+        val epochEndOffset = new EpochEndOffset(Errors.NONE, 0, 0)
+        endOffsets.put(partition, epochEndOffset)
+      }
+      endOffsets
+    }
 
     override def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
-      ResultWithPartitions(Map(), Set())
+      val fetchOffsets = fetchedEpochs
+        .map { case (tp, epochEndOffset) => tp -> OffsetTruncationState(0L, truncationCompleted = true)}
+        .toMap
+      ResultWithPartitions(fetchOffsets, Set())
     }
+  }
+
+  @Test
+  def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new DummyFetcherThread {
+      override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        val unrequestedTp = new TopicPartition("topic2", 0)
+        super.fetchEpochsFromLeader(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
+      }
+    }
+
+    fetcher.addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = 0)))
+
+    // first round of truncation should throw an exception
+    assertThrows[IllegalStateException] {
+      fetcher.doWork()
+    }
+  }
+
+  @Test
+  def testLeaderEpochChangeDuringFetchEpochsFromLeader(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val initialLeaderEpochOnFollower = 0
+    val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
+
+    val fetcher = new DummyFetcherThread {
+      var fetchEpochsFromLeaderOnce = false
+      override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        val fetchedEpochs = super.fetchEpochsFromLeader(partitions)
+        if (!fetchEpochsFromLeaderOnce) {
+          // leader epoch changes while fetching epochs from leader
+          removePartitions(Set(partition))
+          addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = nextLeaderEpochOnFollower)))
+          fetchEpochsFromLeaderOnce = true
+        }
+        fetchedEpochs
+      }
+    }
+
+    fetcher.addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = initialLeaderEpochOnFollower)))
+
+    // first round of truncation
+    fetcher.doWork()
+    assertEquals("Expected fetcher to ignore truncation since leader epoch changed while fetchEpoch request was in flight.",
+                 Option(true), fetcher.fetchState(partition).map(_.truncatingLog))
+    assertEquals(Option(nextLeaderEpochOnFollower), fetcher.fetchState(partition).map(_.currentLeaderEpoch))
+
+    // make sure the fetcher is now able to truncate and move to fetching state
+    fetcher.doWork()
+    assertEquals(Option(false), fetcher.fetchState(partition).map(_.truncatingLog))
   }
 
 
@@ -146,7 +206,7 @@ class AbstractFetcherThreadTest {
     fetcherThread.start()
 
     // Add one partition for fetching
-    fetcherThread.addPartitions(Map(partition -> 0L))
+    fetcherThread.addPartitions(Map(partition -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // Wait until fetcherThread finishes the work
     TestUtils.waitUntilTrue(() => fetcherThread.fetchCount > 3, "Failed waiting for fetcherThread to finish the work")
@@ -161,7 +221,7 @@ class AbstractFetcherThreadTest {
                                 clientId: String,
                                 sourceBroker: BrokerEndPoint,
                                 fetchBackOffMs: Int = 0)
-    extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs) {
+    extends DummyFetcherThread(name, clientId, sourceBroker, fetchBackOffMs, false) {
 
     @volatile var logEndOffset = 0L
     @volatile var fetchCount = 0
