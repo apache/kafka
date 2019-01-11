@@ -20,6 +20,7 @@ import time
 from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.services.background_thread import BackgroundThreadService
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
+from kafkatest.services.kafka import TopicPartition
 from kafkatest.services.verifiable_client import VerifiableClientMixin
 from kafkatest.utils import is_int, is_int_with_prefix
 from kafkatest.version import DEV_BRANCH
@@ -58,7 +59,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  message_validator=is_int, compression_types=None, version=DEV_BRANCH, acks=None,
                  stop_timeout_sec=150, request_timeout_sec=30, log_level="INFO",
                  enable_idempotence=False, offline_nodes=[], create_time=-1, repeating_keys=None,
-                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override=""):
+                 jaas_override_variables=None, kafka_opts_override="", client_prop_file_override="",
+                 retries=None):
         """
         Args:
             :param max_messages                number of messages to be produced per producer
@@ -89,6 +91,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         for node in self.nodes:
             node.version = version
         self.acked_values = []
+        self._last_acked_offsets = {}
         self.not_acked_values = []
         self.produced_count = {}
         self.clean_shutdown_nodes = set()
@@ -102,7 +105,7 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.jaas_override_variables = jaas_override_variables or {}
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
-
+        self.retries = retries
 
     def java_class_name(self):
         return "VerifiableProducer"
@@ -145,6 +148,10 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
             producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"
             producer_prop_file += "\nretries=1000000\n"
             producer_prop_file += "\nenable.idempotence=true\n"
+        elif self.retries is not None:
+            self.logger.info("VerifiableProducer (index = %d) will use retries = %s", idx, self.retries)
+            producer_prop_file += "\nretries=%s\n" % self.retries
+            producer_prop_file += "\ndelivery.timeout.ms=%s\n" % (self.request_timeout_sec * 1000 * self.retries)
 
         self.logger.info("verifiable_producer.properties:")
         self.logger.info(producer_prop_file)
@@ -170,7 +177,9 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                         self.produced_count[idx] += 1
 
                     elif data["name"] == "producer_send_success":
+                        partition = TopicPartition(data["topic"], data["partition"])
                         self.acked_values.append(self.message_validator(data["value"]))
+                        self._last_acked_offsets[partition] = data["offset"]
                         self.produced_count[idx] += 1
 
                         # Log information if there is a large gap between successively acknowledged messages
@@ -235,6 +244,11 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
 
     def alive(self, node):
         return len(self.pids(node)) > 0
+
+    @property
+    def last_acked_offsets(self):
+        with self.lock:
+            return self._last_acked_offsets
 
     @property
     def acked(self):

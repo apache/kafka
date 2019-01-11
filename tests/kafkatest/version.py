@@ -111,4 +111,9 @@ LATEST_1_1 = V_1_1_1
 
 # 2.0.x versions
 V_2_0_0 = KafkaVersion("2.0.0")
-LATEST_2_0 = V_2_0_0
+V_2_0_1 = KafkaVersion("2.0.1")
+LATEST_2_0 = V_2_0_1
+
+# 2.1.x versions
+V_2_1_0 = KafkaVersion("2.1.0")
+LATEST_2_1 = V_2_1_0
