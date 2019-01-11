@@ -74,8 +74,8 @@ which are outlined here:
      ii. run ./gradlew testJar.  This will build the kafka-streams-$version-test.jar file
      
    c. Go to the AWS link on confluent.onelogin.com/portal.  Click on the link, then select 
-      S3.  From there upload the kafka tgz release files and the kafka-streams-$version-test.jar
-      files. Make sure they have world readable permissions.
+      S3.  From there select the kafka-packages bucket.  Then upload the kafka tgz release files
+      and the kafka-streams-$version-test.jar files. Make sure they have world readable permissions.
 """
 
 class StreamsUpgradeTest(Test):
