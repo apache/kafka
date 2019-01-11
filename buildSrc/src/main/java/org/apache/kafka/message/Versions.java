@@ -34,7 +34,7 @@ import java.util.Objects;
  * The NONE range is represented as an the string "none".
  */
 public final class Versions {
-    private final short lowest ;
+    private final short lowest;
     private final short highest;
 
     public static Versions parse(String input, Versions defaultVersions) {
@@ -66,16 +66,19 @@ public final class Versions {
 
     public static final Versions ALL = new Versions((short) 0, Short.MAX_VALUE);
 
-    public static final Versions NONE = new Versions((short) 0, (short) -1);
+    public static final Versions NONE = new Versions();
 
     public static final String NONE_STRING = "none";
 
+    private Versions() {
+        this.lowest = 0;
+        this.highest = -1;
+    }
+
     public Versions(short lowest, short highest) {
-        if ((NONE.lowest != lowest) || (NONE.highest != highest)) {
-            if ((lowest < 0) || (highest < 0)) {
-                throw new RuntimeException("Invalid negative version range " +
-                    lowest + " to " + highest);
-            }
+        if ((lowest < 0) || (highest < 0)) {
+            throw new RuntimeException("Invalid version range " +
+                lowest + " to " + highest);
         }
         this.lowest = lowest;
         this.highest = highest;

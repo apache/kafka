@@ -20,11 +20,17 @@ package org.apache.kafka.message;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 public final class FieldSpec {
-    private final StructSpec struct;
+    private final String name;
+
+    private final Versions versions;
+
+    private final List<FieldSpec> fields;
 
     private final FieldType type;
 
@@ -48,7 +54,14 @@ public final class FieldSpec {
                      @JsonProperty("default") String fieldDefault,
                      @JsonProperty("ignorable") boolean ignorable,
                      @JsonProperty("about") String about) {
-        this.struct = new StructSpec(name, versions, fields);
+        this.name = Objects.requireNonNull(name);
+        this.versions = Versions.parse(versions, null);
+        if (this.versions == null) {
+            throw new RuntimeException("You must specify the version of the " +
+                name + " structure.");
+        }
+        this.fields = Collections.unmodifiableList(fields == null ?
+            Collections.emptyList() : new ArrayList<>(fields));
         this.type = FieldType.parse(Objects.requireNonNull(type));
         this.mapKey = mapKey;
         this.nullableVersions = Versions.parse(nullableVersions, Versions.NONE);
@@ -60,42 +73,49 @@ public final class FieldSpec {
         this.fieldDefault = fieldDefault == null ? "" : fieldDefault;
         this.ignorable = ignorable;
         this.about = about == null ? "" : about;
-        if (!this.struct.fields().isEmpty()) {
+        if (!this.fields().isEmpty()) {
             if (!this.type.isArray()) {
                 throw new RuntimeException("Non-array field " + name + " cannot have fields");
             }
         }
     }
 
-    public StructSpec struct() {
-        return struct;
+    public StructSpec toStruct() {
+        if ((!this.type.isArray()) && (this.type.isStruct())) {
+            throw new RuntimeException("Field " + name + " cannot be treated as a structure.");
+        }
+        return new StructSpec(name, versions.toString(), fields);
     }
 
     @JsonProperty("name")
     public String name() {
-        return struct.name();
+        return name;
     }
 
     String capitalizedCamelCaseName() {
-        return MessageGenerator.capitalizeFirst(struct.name());
+        return MessageGenerator.capitalizeFirst(name);
     }
 
     String camelCaseName() {
-        return MessageGenerator.lowerCaseFirst(struct.name());
+        return MessageGenerator.lowerCaseFirst(name);
     }
 
     String snakeCaseName() {
-        return MessageGenerator.toSnakeCase(struct.name());
+        return MessageGenerator.toSnakeCase(name);
+    }
+
+    public Versions versions() {
+        return versions;
     }
 
     @JsonProperty("versions")
     public String versionsString() {
-        return struct.versionsString();
+        return versions.toString();
     }
 
     @JsonProperty("fields")
     public List<FieldSpec> fields() {
-        return struct.fields();
+        return fields;
     }
 
     @JsonProperty("type")
@@ -124,10 +144,6 @@ public final class FieldSpec {
     @JsonProperty("default")
     public String defaultString() {
         return fieldDefault;
-    }
-
-    boolean hasKeys() {
-        return struct.hasKeys();
     }
 
     @JsonProperty("ignorable")

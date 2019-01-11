@@ -141,7 +141,7 @@ public final class MessageDataGenerator {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
                 generateClass(Optional.empty(),
                     arrayType.elementType().toString(),
-                    field.struct(),
+                    field.toStruct(),
                     parentVersions.intersect(struct.versions()));
             }
         }
@@ -306,7 +306,7 @@ public final class MessageDataGenerator {
             return MessageGenerator.capitalizeFirst(field.typeString());
         } else if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.hasKeys()) {
+            if (field.toStruct().hasKeys()) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
                 return hashSetType(arrayType.elementType().toString());
             } else {
@@ -321,7 +321,7 @@ public final class MessageDataGenerator {
     private String fieldConcreteJavaType(FieldSpec field) {
         if (field.type().isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.hasKeys()) {
+            if (field.toStruct().hasKeys()) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_SET_CLASS);
                 return hashSetType(arrayType.elementType().toString());
             } else {
@@ -407,12 +407,12 @@ public final class MessageDataGenerator {
     private void generateFieldReader(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             if (!maybeAbsent) {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
             }
-            boolean hasKeys = field.hasKeys();
+            boolean hasKeys = field.toStruct().hasKeys();
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
@@ -442,7 +442,7 @@ public final class MessageDataGenerator {
             }
         } else {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("this.%s = %s;%n",
                 field.camelCaseName(),
                 readFieldFromReadable(field.type()));
@@ -503,7 +503,7 @@ public final class MessageDataGenerator {
     private void generateFieldFromStruct(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             if (!maybeAbsent) {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
@@ -548,7 +548,7 @@ public final class MessageDataGenerator {
             }
         } else {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("this.%s = %s;%n",
                 field.camelCaseName(),
                 readFieldFromStruct(field.type(), field.snakeCaseName()));
@@ -659,7 +659,7 @@ public final class MessageDataGenerator {
     private void generateFieldWriter(FieldSpec field, Versions curVersions) {
         if (field.type().isArray()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             boolean maybeNull = generateNullCheck(curVersions, field);
             if (maybeNull) {
                 buffer.printf("writable.writeInt(-1);%n");
@@ -688,7 +688,7 @@ public final class MessageDataGenerator {
             }
         } else {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("%s;%n", writeFieldToWritable(field.type(),
                 !field.nullableVersions().empty(),
                 field.camelCaseName()));
@@ -740,7 +740,7 @@ public final class MessageDataGenerator {
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.StringFieldType)) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("struct.set(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
             if (maybeAbsent) {
@@ -749,7 +749,7 @@ public final class MessageDataGenerator {
             }
         } else if (field.type().isBytes()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("struct.setByteArray(\"%s\", this.%s);%n",
                 field.snakeCaseName(), field.camelCaseName());
             if (maybeAbsent) {
@@ -758,7 +758,7 @@ public final class MessageDataGenerator {
             }
         } else if (field.type().isArray()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             if (!maybeAbsent) {
                 buffer.printf("{%n");
                 buffer.incrementIndent();
@@ -860,7 +860,7 @@ public final class MessageDataGenerator {
     private void generateFieldSize(FieldSpec field, Versions curVersions) {
         if (field.type().fixedLength().isPresent()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             buffer.printf("size += %d;%n", field.type().fixedLength().get());
             if (maybeAbsent) {
                 buffer.decrementIndent();
@@ -869,7 +869,7 @@ public final class MessageDataGenerator {
         } else if (field.type().isString() || field.type().isBytes() || field.type().isStruct()) {
             boolean nullable = !curVersions.intersect(field.nullableVersions()).empty();
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             generateVariableLengthFieldSize(field.camelCaseName(), field.type(), nullable);
             if (maybeAbsent) {
                 buffer.decrementIndent();
@@ -877,7 +877,7 @@ public final class MessageDataGenerator {
             }
         } else if (field.type().isArray()) {
             boolean maybeAbsent =
-                generateVersionCheck(curVersions, field.struct().versions());
+                generateVersionCheck(curVersions, field.versions());
             boolean maybeNull = generateNullCheck(curVersions, field);
             if (maybeNull) {
                 buffer.printf("size += 4;%n");
@@ -1218,7 +1218,7 @@ public final class MessageDataGenerator {
                     field.name() + ": custom defaults are not supported for array fields.");
             }
             FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-            if (field.hasKeys()) {
+            if (field.toStruct().hasKeys()) {
                 return "new " + hashSetType(arrayType.elementType().toString()) + "(0)";
             } else {
                 headerGenerator.addImport(MessageGenerator.ARRAYLIST_CLASS);

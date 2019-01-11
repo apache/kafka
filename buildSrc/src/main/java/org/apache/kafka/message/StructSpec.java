@@ -46,7 +46,7 @@ public final class StructSpec {
         }
         this.fields = Collections.unmodifiableList(fields == null ?
             Collections.emptyList() : new ArrayList<>(fields));
-        this.hasKeys = fields == null && fields.stream().anyMatch(f -> f.mapKey());
+        this.hasKeys = this.fields.stream().anyMatch(f -> f.mapKey());
     }
 
     @JsonProperty

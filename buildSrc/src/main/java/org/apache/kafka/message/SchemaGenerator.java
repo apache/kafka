@@ -85,9 +85,9 @@ final class SchemaGenerator {
         for (FieldSpec field : struct.fields()) {
             if (field.type().isStructArray()) {
                 FieldType.ArrayType arrayType = (FieldType.ArrayType) field.type();
-                generateSchemas(arrayType.elementType().toString(), field.struct(), versions);
+                generateSchemas(arrayType.elementType().toString(), field.toStruct(), versions);
             } else if (field.type().isStruct()) {
-                generateSchemas(field.type().toString(), field.struct(), versions);
+                generateSchemas(field.type().toString(), field.toStruct(), versions);
             }
         }
         CodeBuffer prev = null;
@@ -112,7 +112,7 @@ final class SchemaGenerator {
                 break;
             }
             FieldSpec field = struct.fields().get(lastValidIndex);
-            if (field.struct().versions().contains(version)) {
+            if (field.versions().contains(version)) {
                 break;
             }
             lastValidIndex--;
@@ -123,7 +123,7 @@ final class SchemaGenerator {
         buffer.incrementIndent();
         for (int i = 0; i <= lastValidIndex; i++) {
             FieldSpec field = struct.fields().get(i);
-            if (!field.struct().versions().contains(version)) {
+            if (!field.versions().contains(version)) {
                 continue;
             }
             headerGenerator.addImport(MessageGenerator.FIELD_CLASS);
