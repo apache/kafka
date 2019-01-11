@@ -131,6 +131,23 @@ class ProducerStateManagerTest extends JUnitSuite {
     assertEquals(0, lastEntry.lastSeq)
   }
 
+  @Test
+  def testProducerSequenceWithWrapAroundBatchRecord(): Unit = {
+    val epoch = 15.toShort
+
+    val appendInfo = stateManager.prepareUpdate(producerId, isFromClient = false)
+    // Sequence number wrap around
+    appendInfo.append(epoch, Int.MaxValue-10, 9, time.milliseconds(), 2000L, 2020L, isTransactional = false)
+    assertEquals(None, stateManager.lastEntry(producerId))
+    stateManager.update(appendInfo)
+    assertTrue(stateManager.lastEntry(producerId).isDefined)
+
+    var lastEntry = stateManager.lastEntry(producerId).get
+    assertEquals(Int.MaxValue-10, lastEntry.firstSeq)
+    assertEquals(9, lastEntry.lastSeq)
+    assertEquals(2020L, lastEntry.lastDataOffset)
+  }
+
   @Test(expected = classOf[OutOfOrderSequenceException])
   def testProducerSequenceInvalidWrapAround(): Unit = {
     val epoch = 15.toShort

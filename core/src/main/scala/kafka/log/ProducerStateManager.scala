@@ -28,7 +28,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
 import scala.collection.mutable.ListBuffer
@@ -76,7 +76,7 @@ private[log] object ProducerStateEntry {
 }
 
 private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
-  def firstSeq = lastSeq - offsetDelta
+  def firstSeq =  DefaultRecordBatch.decrementSequence(lastSeq, offsetDelta)
   def firstOffset = lastOffset - offsetDelta
 
   override def toString: String = {
