@@ -22,6 +22,7 @@ import java.util.concurrent.ExecutionException
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
+import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.errors.TimeoutException
@@ -75,9 +76,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           Utils.loadProps(commandOpts.options.valueOf(commandOpts.adminClientConfigOpt))
         else
           new Properties()
-        for ((k, v) <- CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala).asScala) {
-            adminProps.setProperty(k, v)
-          }
+        adminProps ++= CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala)
         adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
         adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
         new AdminClientCommand(adminProps)
