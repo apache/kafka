@@ -52,10 +52,6 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.map = new TreeMap<>();
     }
 
-    public KeyValueStore<K, V> enableLogging() {
-        return new InMemoryKeyValueLoggedStore<>(this, keySerde, valueSerde);
-    }
-
     @Override
     public String name() {
         return this.name;

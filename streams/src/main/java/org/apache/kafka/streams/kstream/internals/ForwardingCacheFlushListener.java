@@ -30,7 +30,9 @@ class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
     }
 
     @Override
-    public void apply(final K key, final V newValue, final V oldValue) {
+    public void apply(final K key,
+                      final V newValue,
+                      final V oldValue) {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
