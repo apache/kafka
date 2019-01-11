@@ -166,7 +166,7 @@ class GroupCoordinator(val brokerId: Int,
           // and send back a response to call for another join group request with allocated member id.
           group.addPendingMember(newMemberId)
           addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
-          responseCallback(joinError(newMemberId, error = Errors.MEMBER_ID_REQUIRED))
+          responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, clientId, clientHost, protocolType,
             protocols, group, responseCallback)

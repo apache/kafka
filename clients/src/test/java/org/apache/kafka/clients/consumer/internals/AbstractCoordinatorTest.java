@@ -193,7 +193,7 @@ public class AbstractCoordinatorTest {
                 if (!(body instanceof JoinGroupRequest)) {
                     return false;
                 }
-                JoinGroupRequest joinGroupRequest = ((JoinGroupRequest) body);
+                JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
                 if (!joinGroupRequest.memberId().equals(memberId)) {
                     return false;
                 }
