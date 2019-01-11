@@ -155,7 +155,6 @@ object ConsumerGroupCommand extends Logging {
         case _ if classOf[CsvRecordNoGroup]   == clazz => CsvRecordNoGroup.fields
       }
       val schema = mapper.schemaFor(clazz).sortedBy(fields: _*)
-      mapper.schemaFor(clazz).sortedBy(fields: _*)
       schema
     }
   }
