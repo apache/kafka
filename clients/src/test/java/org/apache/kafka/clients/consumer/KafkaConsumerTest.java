@@ -66,7 +66,6 @@ import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -76,7 +75,6 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Assert;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.ExpectedException;
@@ -123,6 +121,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
 public class KafkaConsumerTest {
+    
+    private static final ByteArrayDeserializer BYTE_DESERIALIZER = new ByteArrayDeserializer();
+    private static final StringDeserializer STRING_DESERIALIZER = new StringDeserializer();
+    
     private final String topic = "test";
     private final TopicPartition tp0 = new TopicPartition(topic, 0);
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
@@ -150,13 +152,10 @@ public class KafkaConsumerTest {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                props, new StringDeserializer(), new StringDeserializer());
-
-        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
-
-        Assert.assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
-        consumer.close();
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props, STRING_DESERIALIZER, STRING_DESERIALIZER)) {
+            MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
+            assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
+        }
     }
 
     @Test
@@ -168,9 +167,8 @@ public class KafkaConsumerTest {
 
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
-        try {
-            new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-            Assert.fail("should have caught an exception and returned");
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props, STRING_DESERIALIZER, STRING_DESERIALIZER)) {
+            fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
             assertEquals(oldCloseCount + 1, MockMetricsReporter.CLOSE_COUNT.get());
@@ -184,8 +182,7 @@ public class KafkaConsumerTest {
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
-                config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(config, BYTE_DESERIALIZER, BYTE_DESERIALIZER);
         consumer.close();
     }
 
@@ -194,7 +191,10 @@ public class KafkaConsumerTest {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
-        new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(config, BYTE_DESERIALIZER, BYTE_DESERIALIZER)) {
+        } catch (KafkaException e) {
+            throw e;
+        }
     }
 
     @Test(expected = KafkaException.class)
@@ -202,30 +202,32 @@ public class KafkaConsumerTest {
         Map<String, Object> config = new HashMap<>();
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
-        new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(config, BYTE_DESERIALIZER, BYTE_DESERIALIZER)) {
+        } catch (KafkaException e) {
+            throw e;
+        }
     }
 
     @Test
     public void testSubscription() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId);
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
 
-        consumer.subscribe(singletonList(topic));
-        assertEquals(singleton(topic), consumer.subscription());
-        assertTrue(consumer.assignment().isEmpty());
+            consumer.subscribe(singletonList(topic));
+            assertEquals(singleton(topic), consumer.subscription());
+            assertTrue(consumer.assignment().isEmpty());
 
-        consumer.subscribe(Collections.<String>emptyList());
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
+            consumer.subscribe(Collections.<String>emptyList());
+            assertTrue(consumer.subscription().isEmpty());
+            assertTrue(consumer.assignment().isEmpty());
 
-        consumer.assign(singletonList(tp0));
-        assertTrue(consumer.subscription().isEmpty());
-        assertEquals(singleton(tp0), consumer.assignment());
+            consumer.assign(singletonList(tp0));
+            assertTrue(consumer.subscription().isEmpty());
+            assertEquals(singleton(tp0), consumer.assignment());
 
-        consumer.unsubscribe();
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
-
-        consumer.close();
+            consumer.unsubscribe();
+            assertTrue(consumer.subscription().isEmpty());
+            assertTrue(consumer.assignment().isEmpty());
+        }
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -314,16 +316,14 @@ public class KafkaConsumerTest {
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
             props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
 
-            KafkaConsumer<String, String> consumer = new KafkaConsumer<>(
-                    props, new StringDeserializer(), new StringDeserializer());
-            assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
-            assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
-
-            consumer.close();
+            try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props, STRING_DESERIALIZER, STRING_DESERIALIZER)) {
+                assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+                assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
+            }
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
             // Cluster metadata will only be updated on calling poll.
-            Assert.assertNull(MockConsumerInterceptor.CLUSTER_META.get());
+            assertNull(MockConsumerInterceptor.CLUSTER_META.get());
 
         } finally {
             // cleanup since we are using mutable static variables in MockConsumerInterceptor
@@ -333,22 +333,21 @@ public class KafkaConsumerTest {
 
     @Test
     public void testPause() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId);
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
 
-        consumer.assign(singletonList(tp0));
-        assertEquals(singleton(tp0), consumer.assignment());
-        assertTrue(consumer.paused().isEmpty());
+            consumer.assign(singletonList(tp0));
+            assertEquals(singleton(tp0), consumer.assignment());
+            assertTrue(consumer.paused().isEmpty());
 
-        consumer.pause(singleton(tp0));
-        assertEquals(singleton(tp0), consumer.paused());
+            consumer.pause(singleton(tp0));
+            assertEquals(singleton(tp0), consumer.paused());
 
-        consumer.resume(singleton(tp0));
-        assertTrue(consumer.paused().isEmpty());
+            consumer.resume(singleton(tp0));
+            assertTrue(consumer.paused().isEmpty());
 
-        consumer.unsubscribe();
-        assertTrue(consumer.paused().isEmpty());
-
-        consumer.close();
+            consumer.unsubscribe();
+            assertTrue(consumer.paused().isEmpty());
+        }
     }
 
     private KafkaConsumer<byte[], byte[]> newConsumer(String groupId) {
@@ -368,7 +367,7 @@ public class KafkaConsumerTest {
     }
 
     private KafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
-        return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        return new KafkaConsumer<>(props, BYTE_DESERIALIZER, BYTE_DESERIALIZER);
     }
 
     @Test
@@ -401,7 +400,6 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertTrue(heartbeatReceived.get());
-        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -434,7 +432,6 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertTrue(heartbeatReceived.get());
-        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -456,10 +453,10 @@ public class KafkaConsumerTest {
 
         // The underlying client should NOT get a fetch request
         final Queue<ClientRequest> requests = client.requests();
-        Assert.assertEquals(0, requests.size());
+        assertEquals(0, requests.size());
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "rawtypes"})
     @Test
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
         final Time time = new MockTime();
@@ -479,9 +476,9 @@ public class KafkaConsumerTest {
 
         // The underlying client SHOULD get a fetch request
         final Queue<ClientRequest> requests = client.requests();
-        Assert.assertEquals(1, requests.size());
+        assertEquals(1, requests.size());
         final Class<? extends AbstractRequest.Builder> aClass = requests.peek().requestBuilder().getClass();
-        Assert.assertEquals(FetchRequest.Builder.class, aClass);
+        assertEquals(FetchRequest.Builder.class, aClass);
     }
 
     @Test
@@ -1353,12 +1350,13 @@ public class KafkaConsumerTest {
     public void testMetricConfigRecordingLevel() {
         Properties props = new Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        ByteArrayDeserializer deserializer = BYTE_DESERIALIZER;
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
         }
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        try (KafkaConsumer consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (KafkaConsumer<?, ?> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             assertEquals(Sensor.RecordingLevel.DEBUG, consumer.metrics.config().recordLevel());
         }
     }
@@ -1749,7 +1747,7 @@ public class KafkaConsumerTest {
         return new FetchResponse<>(Errors.NONE, tpResponses, 0, INVALID_SESSION_ID);
     }
 
-    private FetchResponse fetchResponse(TopicPartition partition, long fetchOffset, int count) {
+    private FetchResponse<?> fetchResponse(TopicPartition partition, long fetchOffset, int count) {
         FetchInfo fetchInfo = new FetchInfo(fetchOffset, count);
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }
@@ -1766,13 +1764,6 @@ public class KafkaConsumerTest {
                                                                   KafkaClient client,
                                                                   Metadata metadata) {
         return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, false, groupId);
-    }
-
-    private KafkaConsumer<String, String> newConsumer(Time time,
-                                                      KafkaClient client,
-                                                      Metadata metadata,
-                                                      String groupId) {
-        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.LATEST, true, groupId);
     }
 
     private KafkaConsumer<String, String> newConsumer(Time time,
@@ -1795,9 +1786,6 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
-
-        Deserializer<String> keyDeserializer = new StringDeserializer();
-        Deserializer<String> valueDeserializer = new StringDeserializer();
 
         List<PartitionAssignor> assignors = singletonList(assignor);
         ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
@@ -1840,8 +1828,8 @@ public class KafkaConsumerTest {
                 fetchSize,
                 maxPollRecords,
                 checkCrcs,
-                keyDeserializer,
-                valueDeserializer,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 metadata,
                 subscriptions,
                 metrics,
@@ -1855,8 +1843,8 @@ public class KafkaConsumerTest {
                 loggerFactory,
                 clientId,
                 consumerCoordinator,
-                keyDeserializer,
-                valueDeserializer,
+                STRING_DESERIALIZER,
+                STRING_DESERIALIZER,
                 fetcher,
                 interceptors,
                 time,
@@ -1882,7 +1870,7 @@ public class KafkaConsumerTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "rawtypes"})
     public void testCloseWithTimeUnit() {
         KafkaConsumer consumer = mock(KafkaConsumer.class);
         doCallRealMethod().when(consumer).close(anyLong(), any());
@@ -1912,9 +1900,10 @@ public class KafkaConsumerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
-        consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
+        try (KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true)) {
+            consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
-        consumer.poll(Duration.ZERO);
+            consumer.poll(Duration.ZERO);
+        }
     }
 }
