@@ -400,6 +400,7 @@ public class KafkaConsumerTest {
         consumer.updateAssignmentMetadataIfNeeded(time.timer(Long.MAX_VALUE));
 
         assertTrue(heartbeatReceived.get());
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -432,6 +433,7 @@ public class KafkaConsumerTest {
         consumer.poll(Duration.ZERO);
 
         assertTrue(heartbeatReceived.get());
+        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -454,6 +456,7 @@ public class KafkaConsumerTest {
         // The underlying client should NOT get a fetch request
         final Queue<ClientRequest> requests = client.requests();
         assertEquals(0, requests.size());
+        consumer.close(Duration.ofMillis(0));
     }
 
     @SuppressWarnings({"deprecation", "rawtypes"})
