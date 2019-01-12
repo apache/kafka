@@ -67,7 +67,6 @@ public class CachingSessionStoreTest {
     @Before
     public void setUp() {
         final SessionKeySchema schema = new SessionKeySchema();
-        schema.init("topic");
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);
@@ -151,10 +150,9 @@ public class CachingSessionStoreTest {
 
     @Test
     public void shouldFlushItemsToStoreOnEviction() {
-        final StateSerdes<Bytes, byte[]> serdes = new StateSerdes<>("topic", Serdes.Bytes(), Serdes.ByteArray());
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a", "b", "c", "d");
         assertEquals(added.size() - 1, cache.size());
-        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = WrappedSessionStoreIterator.bytesIterator(underlying.fetch(added.get(0).key.key(), 0, 0), serdes);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(added.get(0).key.key(), 0, 0);
         final KeyValue<Windowed<Bytes>, byte[]> next = iterator.next();
         assertEquals(added.get(0).key, next.key);
         assertArrayEquals(added.get(0).value, next.value);

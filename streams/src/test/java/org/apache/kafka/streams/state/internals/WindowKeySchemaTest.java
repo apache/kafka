@@ -55,11 +55,6 @@ public class WindowKeySchemaTest {
     final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
 
-    @Before
-    public void before() {
-        windowKeySchema.init("topic");
-    }
-
     @Test
     public void testHasNextConditionUsingNullKeys() {
         final List<KeyValue<Bytes, Integer>> keys = Arrays.asList(

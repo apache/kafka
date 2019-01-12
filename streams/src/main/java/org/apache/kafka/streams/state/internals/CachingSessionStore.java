@@ -71,7 +71,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
-        keySchema.init(topic);
         serdes = new StateSerdes<>(
             topic,
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,

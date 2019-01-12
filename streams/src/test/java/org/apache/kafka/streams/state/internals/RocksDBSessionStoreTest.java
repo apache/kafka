@@ -34,6 +34,7 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -50,7 +51,6 @@ public class RocksDBSessionStoreTest {
     @Before
     public void before() {
         final SessionKeySchema schema = new SessionKeySchema();
-        schema.init("topic");
 
         final RocksDBSegmentedBytesStore bytesStore =
                 new RocksDBSegmentedBytesStore("session-store", "metrics-scope", 10_000L, 60_000L, schema);
@@ -87,6 +87,11 @@ public class RocksDBSessionStoreTest {
 
         final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(key, 0, 1000L);
         assertEquals(expected, toList(values));
+
+        final List<KeyValue<Windowed<String>, Long>> expected2 = Collections.singletonList(KeyValue.pair(a2, 2L));
+
+        final KeyValueIterator<Windowed<String>, Long> values2 = sessionStore.findSessions(key, 400L, 600L);
+        assertEquals(expected2, toList(values2));
     }
 
     @Test
@@ -105,7 +110,6 @@ public class RocksDBSessionStoreTest {
 
         final List<KeyValue<Windowed<String>, Long>> results = toList(sessionStore.fetch("a"));
         assertEquals(expected, results);
-
     }
 
 

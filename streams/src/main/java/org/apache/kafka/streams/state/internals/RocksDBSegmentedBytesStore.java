@@ -164,8 +164,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             "expired-window-record-drop"
         );
 
-        keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
-
         segments.openExisting(this.context);
 
         bulkLoadSegments = new HashSet<>(segments.allSegments());
