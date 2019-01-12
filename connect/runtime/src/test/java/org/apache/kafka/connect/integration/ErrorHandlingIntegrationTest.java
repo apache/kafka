@@ -37,7 +37,6 @@ import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.connect.integration.ConnectIntegrationTestUtils.waitUntil;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG;
@@ -54,6 +53,7 @@ import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_EXCEPTION_MESSAGE;
 import static org.apache.kafka.connect.runtime.errors.DeadLetterQueueReporter.ERROR_HEADER_ORIG_TOPIC;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -81,14 +81,14 @@ public class ErrorHandlingIntegrationTest {
 
     @Before
     public void setup() throws IOException {
-        // get connector handles before starting test.
-        connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
-
         // setup Connect cluster with defaults
         connect = new EmbeddedConnectCluster.Builder().build();
 
         // start Connect cluster
         connect.start();
+
+        // get connector handles before starting test.
+        connectorHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME);
     }
 
     @After
@@ -132,10 +132,10 @@ public class ErrorHandlingIntegrationTest {
 
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitUntil(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 1
+        waitForCondition(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 1
                         && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1,
                 CONNECTOR_SETUP_DURATION_MS,
-                "Timed out waiting for connector task to be assigned a partition.");
+                "Connector task was not assigned a partition.");
 
         // produce some strings into test topic
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {

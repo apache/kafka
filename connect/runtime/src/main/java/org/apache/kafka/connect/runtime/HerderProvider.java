@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 public class HerderProvider {
 
     private final CountDownLatch initialized = new CountDownLatch(1);
-    Herder herder = null;
+    volatile Herder herder = null;
 
     public HerderProvider() {
     }
@@ -47,10 +47,12 @@ public class HerderProvider {
      */
     public Herder get() {
         try {
-            // wait up to 15 seconds
-            initialized.await(15, TimeUnit.SECONDS);
+            // wait for herder to be initialized
+            if (!initialized.await(1, TimeUnit.MINUTES)) {
+                throw new ConnectException("Timed out waiting for herder to be initialized.");
+            }
         } catch (InterruptedException e) {
-            throw new ConnectException("Timed out waiting for herder to be initialized");
+            throw new ConnectException("Interrupted while waiting for herder to be initialized.", e);
         }
         return herder;
     }

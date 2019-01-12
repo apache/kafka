@@ -29,13 +29,13 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-import static org.apache.kafka.connect.integration.ConnectIntegrationTestUtils.waitUntil;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 
 /**
@@ -114,10 +114,10 @@ public class ExampleConnectIntegrationTest {
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitUntil(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 3
+        waitForCondition(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 3
                         && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1),
                 CONNECTOR_SETUP_DURATION_MS,
-                "Timed out waiting for connector tasks to be assigned a partition each.");
+                "Connector tasks were not assigned a partition each.");
 
         // produce some messages into source topic partitions
         for (int i = 0; i < NUM_RECORDS_PRODUCED; i++) {
