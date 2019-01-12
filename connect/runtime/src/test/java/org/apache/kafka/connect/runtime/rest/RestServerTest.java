@@ -178,7 +178,7 @@ public class RestServerTest {
         PowerMock.replayAll();
 
         server = new RestServer(workerConfig);
-        server.start(herder);
+        server.start(new HerderProvider(herder), herder.plugins());
 
         Response response = request("/connectors")
             .accept(MediaType.WILDCARD)
