@@ -839,6 +839,7 @@ project(':clients') {
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
     testRuntime libs.jacksonJDK8Datatypes
+    testCompile libs.jacksonJaxrsJsonProvider
   }
 
   task determineCommitId {
@@ -886,6 +887,27 @@ project(':clients') {
   clean.doFirst {
     delete "$buildDir/kafka/"
   }
+
+  task processMessages(type:org.apache.kafka.task.ProcessMessagesTask) {
+    inputDirectory = file("src/main/resources/common/message")
+    outputDirectory = file("src/generated/java/org/apache/kafka/common/message")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java",
+            "$rootDir/buildSrc/src/main/java/org/apache/kafka/message/"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
 
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
