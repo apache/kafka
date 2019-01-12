@@ -235,8 +235,7 @@ public class MockAdminClient extends AdminClient {
             }
             if (!topicDescriptions.containsKey(requestedTopic)) {
                 KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                future.completeExceptionally(new UnknownTopicOrPartitionException(
-                    String.format("Topic %s unknown.", requestedTopic)));
+                future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + requestedTopic + " not found."));
                 topicDescriptions.put(requestedTopic, future);
             }
         }
