@@ -89,7 +89,7 @@ public class StreamsConfigTest {
     public void testGetProducerConfigs() {
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getProducerConfigs(clientId);
-        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), clientId + "-producer");
+        assertEquals(returnedProps.get(ProducerConfig.CLIENT_ID_CONFIG), clientId);
         assertEquals(returnedProps.get(ProducerConfig.LINGER_MS_CONFIG), "100");
     }
 
@@ -98,7 +98,7 @@ public class StreamsConfigTest {
         final String groupId = "example-application";
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId);
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-consumer");
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
         assertEquals(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG), groupId);
         assertEquals(returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "1000");
     }
@@ -158,7 +158,7 @@ public class StreamsConfigTest {
     public void testGetRestoreConsumerConfigs() {
         final String clientId = "client";
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
-        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId + "-restore-consumer");
+        assertEquals(returnedProps.get(ConsumerConfig.CLIENT_ID_CONFIG), clientId);
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
 

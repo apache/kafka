@@ -22,7 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
@@ -171,7 +171,7 @@ public class SubscriptionInfo {
         if (userEndPoint == null) {
             return new byte[0];
         } else {
-            return userEndPoint.getBytes(Charset.forName("UTF-8"));
+            return userEndPoint.getBytes(StandardCharsets.UTF_8);
         }
     }
 
@@ -318,7 +318,7 @@ public class SubscriptionInfo {
         if (bytesLength != 0) {
             final byte[] bytes = new byte[bytesLength];
             data.get(bytes);
-            subscriptionInfo.userEndPoint = new String(bytes, Charset.forName("UTF-8"));
+            subscriptionInfo.userEndPoint = new String(bytes, StandardCharsets.UTF_8);
         }
     }
 

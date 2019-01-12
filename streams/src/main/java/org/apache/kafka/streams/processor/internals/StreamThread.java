@@ -1237,7 +1237,8 @@ public class StreamThread extends Thread {
         return threadMetadata;
     }
 
-    private StreamThread updateThreadMetadata(final String adminClientId) {
+    // package-private for testing only
+    StreamThread updateThreadMetadata(final String adminClientId) {
 
         threadMetadata = new ThreadMetadata(
             this.getName(),
