@@ -557,6 +557,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID,
                         joinResponse.memberId(), null);
                     AbstractCoordinator.this.rejoinNeeded = true;
+                    AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
                 future.raise(Errors.MEMBER_ID_REQUIRED);
             } else {

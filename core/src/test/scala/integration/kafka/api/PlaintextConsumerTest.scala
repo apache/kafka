@@ -1768,7 +1768,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def validateGroupAssignment(consumerPollers: Buffer[ConsumerAssignmentPoller],
                               subscriptions: Set[TopicPartition],
                               msg: String,
-                              waitTime: Long = 60000L): Unit = {
+                              waitTime: Long = 10000L): Unit = {
     TestUtils.waitUntilTrue(() => {
       val assignments = Buffer[Set[TopicPartition]]()
       consumerPollers.foreach(assignments += _.consumerAssignment())
