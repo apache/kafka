@@ -3290,6 +3290,32 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
             <pre class="brush: scala;">
               libraryDependencies += "org.apache.kafka" %% "kafka-streams-scala" % "{{fullDotVersion}}"
             </pre>
+            <p>
+              <strong>Notes</strong>:
+              <ul>
+                <li>
+                  The bugfix version <code>2.0.1</code> fixed several important flaws in  <code class="docutils literal"><span class="pre">kafka-streams-scala</span></code>.
+                  It's strongly recommended to use the latest bugfix release in general and to avoid <code>kafka-streams-scala 2.0.0</code> specifically.
+                </li>
+                <li>
+                  <p>
+                    There is an upstream dependency that causes trouble in SBT builds. This problem is fixed in <code>2.0.2</code>, <code>2.1.1</code>, and <code>2.2.0</code>.
+                    Please consider using one of those versions or higher.
+                  </p>
+                  <p>
+                    If you must use an earlier version, you may add an explicit dependency on the problematic library as a workaround:
+                    <dl>
+                      <dt><code>2.0.0</code></dt>
+                      <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
+                      <dt><code>2.0.1</code></dt>
+                      <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
+                      <dt><code>2.1.0</code></dt>
+                      <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
+                    </dl>
+                  </p>
+                </li>
+              </ul>
+            </p>
             <div class="section" id="scala-dsl-sample-usage">
               <span id="streams-developer-guide-dsl-sample-usage"></span><h3><a class="toc-backref" href="#id28">Sample Usage</a><a class="headerlink" href="#scala-dsl-sample-usage" title="Permalink to this headline"></a></h3>
               <p>The library works by wrapping the original Java abstractions of Kafka Streams within a Scala wrapper object and then using implicit conversions between them. All the Scala abstractions are named identically as the corresponding Java abstraction, but they reside in a different package of the library e.g. the Scala class <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.StreamsBuilder</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.StreamsBuilder</span></code>, <code class="docutils literal"><span class="pre">org.apache.kafka.streams.scala.kstream.KStream</span></code> is a wrapper around <code class="docutils literal"><span class="pre">org.apache.kafka.streams.kstream.KStream</span></code>, and so on.</p>
