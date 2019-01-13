@@ -501,8 +501,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testThreadPoolResize(): Unit = {
-    val requestHandlerPrefix = "kafka-request-handler-"
-    val networkThreadPrefix = "kafka-network-thread-"
+    val requestHandlerPrefix = "data-plane-kafka-request-handler-"
+    val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
     // Executor threads and recovery threads are not verified since threads may not be running
     // For others, thread count should be configuredCount * threadMultiplier * numBrokers
@@ -577,7 +577,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       "", mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
-    verifyThreads("kafka-socket-acceptor-", config.listeners.size)
+    verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
 
     verifyProcessorMetrics()
     verifyMarkPartitionsForTruncation()
