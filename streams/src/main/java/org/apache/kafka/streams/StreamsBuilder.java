@@ -199,7 +199,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -372,7 +372,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
