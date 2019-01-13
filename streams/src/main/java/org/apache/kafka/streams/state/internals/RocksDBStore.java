@@ -157,6 +157,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             try {
                 Files.createDirectories(dbDir.getParentFile().toPath());
+                Files.createDirectories(new File(dbDir.getAbsolutePath()).toPath());
                 db = RocksDB.open(options, dbDir.getAbsolutePath());
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
