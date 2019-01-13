@@ -60,7 +60,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
             long retentionValue;
             try {
                 retentionValue = Math.addExact(retentionMs, additionalRetentionMs);
-            } catch (final ArithmeticException ex) {
+            } catch (final ArithmeticException swallow) {
                 retentionValue = Long.MAX_VALUE;
             }
             topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionValue));
