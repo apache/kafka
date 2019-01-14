@@ -46,7 +46,7 @@ public class SslPrincipalMapper {
         StringBuilder currentRule = new StringBuilder();
         for (String r : rules) {
             if (currentRule.length() > 0) {
-                if (r.startsWith(rule) || r.equalsIgnoreCase(defaultRule)) {
+                if (r.startsWith(rule) || r.equals(defaultRule)) {
                     retVal.add(currentRule.toString());
                     currentRule.setLength(0);
                     currentRule.append(r);
