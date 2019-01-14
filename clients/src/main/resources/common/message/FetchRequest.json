@@ -1,0 +1,89 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 1,
+  "type": "request",
+  "name": "FetchRequest",
+  //
+  // Version 1 is the same as version 0.
+  //
+  // Starting in Version 2, the requestor must be able to handle Kafka Log
+  // Message format version 1.
+  //
+  // Version 3 adds MaxBytes.  Starting in version 3, the partition ordering in
+  // the request is now relevant.  Partitions will be processed in the order
+  // they appear in the request.
+  //
+  // Version 4 adds IsolationLevel.  Starting in version 4, the reqestor must be
+  // able to handle Kafka log message format version 2.
+  //
+  // Version 5 adds LogStartOffset to indicate the earliest available offset of
+  // partition data that can be consumed.
+  //
+  // Version 6 is the same as version 5.
+  //
+  // Version 7 adds incremental fetch request support.
+  //
+  // Version 8 is the same as version 7.
+  //
+  // Version 9 adds CurrentLeaderEpoch, as described in KIP-320.
+  //
+  // Version 10 indicates that we can use the ZStd compression algorithm, as
+  // described in KIP-110.
+  //
+  "validVersions": "0-10",
+  "fields": [
+    { "name": "ReplicaId", "type": "int32", "versions": "0+",
+      "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
+    { "name": "MaxWait", "type": "int32", "versions": "0+",
+      "about": "The maximum time in milliseconds to wait for the response." },
+    { "name": "MinBytes", "type": "int32", "versions": "0+",
+      "about": "The minimum bytes to accumulate in the response." },
+    { "name": "MaxBytes", "type": "int32", "versions": "3+", "default": "0x7fffffff", "ignorable": true,
+      "about": "The maximum bytes to fetch.  See KIP-74 for cases where this limit may not be honored." },
+    { "name": "IsolationLevel", "type": "int8", "versions": "4+", "default": "0", "ignorable": false,
+      "about": "This setting controls the visibility of transactional records. Using READ_UNCOMMITTED (isolation_level = 0) makes all records visible. With READ_COMMITTED (isolation_level = 1), non-transactional and COMMITTED transactional records are visible. To be more concrete, READ_COMMITTED returns all data from offsets smaller than the current LSO (last stable offset), and enables the inclusion of the list of aborted transactions in the result, which allows consumers to discard ABORTED transactional records" },
+    { "name": "SessionId", "type": "int32", "versions": "7+", "default": "0", "ignorable": false,
+      "about": "The fetch session ID." },
+    { "name": "Epoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": false,
+      "about": "The fetch session ID." },
+    { "name": "Topics", "type": "[]FetchableTopic", "versions": "0+",
+      "about": "The topics to fetch.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+",
+        "about": "The name of the topic to fetch." },
+      { "name": "FetchPartitions", "type": "[]FetchPartition", "versions": "0+",
+        "about": "The partitions to fetch.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "9+", "default": "-1", "ignorable": true,
+          "about": "The current leader epoch of the partition." },
+        { "name": "FetchOffset", "type": "int64", "versions": "0+",
+          "about": "The message offset." },
+        { "name": "LogStartOffset", "type": "int64", "versions": "5+", "default": "-1", "ignorable": false,
+          "about": "The earliest available offset of the follower replica.  The field is only used when the request is sent by the follower."},
+        { "name": "MaxBytes", "type": "int32", "versions": "0+",
+          "about": "The maximum bytes to fetch from this partition.  See KIP-74 for cases where this limit may not be honored." }
+      ]}
+    ]},
+    { "name": "Forgotten", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
+      "about": "In an incremental fetch request, the partitions to remove.", "fields": [
+      { "name": "Name", "type": "string", "versions": "7+",
+        "about": "The partition name." },
+      { "name": "ForgottenPartitionIndexes", "type": "[]int32", "versions": "7+",
+        "about": "The partitions indexes to forget." }
+    ]}
+  ]
+}
