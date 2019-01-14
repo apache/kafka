@@ -347,8 +347,6 @@
       </subpackage>
     </subpackage>
 
-
-
     <subpackage name="cli">
       <allow pkg="org.apache.kafka.connect.runtime" />
       <allow pkg="org.apache.kafka.connect.storage" />
@@ -366,6 +364,18 @@
       <allow pkg="org.reflections.vfs" />
       <!-- for annotations to avoid code duplication -->
       <allow pkg="com.fasterxml.jackson.annotation" />
+      <allow pkg="com.fasterxml.jackson.databind" />
+      <subpackage name="clusters">
+        <allow pkg="kafka.server" />
+        <allow pkg="kafka.zk" />
+        <allow pkg="kafka.utils" />
+        <allow class="javax.servlet.http.HttpServletResponse" />
+      </subpackage>
+    </subpackage>
+
+    <subpackage name="integration">
+      <allow pkg="org.apache.kafka.connect.util.clusters" />
+      <allow pkg="org.apache.kafka.connect" />
     </subpackage>
 
     <subpackage name="json">
