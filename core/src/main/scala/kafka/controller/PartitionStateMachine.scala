@@ -125,9 +125,17 @@ class PartitionStateMachine(config: KafkaConfig,
     // It is important to trigger leader election for those partitions.
   }
 
+  /**
+    * Try to change the state of the given partitions to the given targetState, using the given
+    * partitionLeaderElectionStrategyOpt if a leader election is required.
+    * @param partitions The partitions
+    * @param targetState The state
+    * @param partitionLeaderElectionStrategyOpt The leader election strategy if a leader election is required.
+    * @return partitions and corresponding throwable for those partitions which could not transition to the given state
+    */
   def handleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState,
                          partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Map[TopicPartition, Throwable] = {
-    return if (partitions.nonEmpty) {
+    if (partitions.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
         val errors = doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)

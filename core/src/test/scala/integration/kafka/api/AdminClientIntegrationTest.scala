@@ -100,6 +100,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"${listenerName.value}:${securityProtocol.name}")
       config.setProperty(KafkaConfig.DeleteTopicEnableProp, "true")
       config.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, "false")
+      config.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false")
       // We set this in order to test that we don't expose sensitive data via describe configs. This will already be
       // set for subclasses with security enabled and we don't want to overwrite it.
       if (!config.containsKey(KafkaConfig.SslTruststorePasswordProp))
@@ -1336,6 +1338,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     changePreferredLeader(prefer1)
     // but shut it down...
     servers(1).shutdown()
+    waitUntilTrue (
+      () => {
+        val description = client.describeTopics(Set (partition1.topic(), partition2.topic()).asJava).all().get()
+        return !description.asScala.flatMap{
+          case (topic, description) => description.partitions().asScala.map(
+            partition => partition.isr().asScala).flatten
+        }.exists(node => node.id == 1)
+      },
+      "Expect broker 1 to no longer be in any ISR"
+    )
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)

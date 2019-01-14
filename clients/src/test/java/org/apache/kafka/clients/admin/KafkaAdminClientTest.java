@@ -665,7 +665,7 @@ public class KafkaAdminClientTest {
             results.partitionResult(topic2).get();
 
             // Now try a timeout
-            results = env.adminClient().electPreferredLeaders(asList(topic1, topic2), new ElectPreferredLeadersOptions().timeoutMs(2000));
+            results = env.adminClient().electPreferredLeaders(asList(topic1, topic2), new ElectPreferredLeadersOptions().timeoutMs(100));
             TestUtils.assertFutureError(results.partitionResult(topic1), TimeoutException.class);
             TestUtils.assertFutureError(results.partitionResult(topic2), TimeoutException.class);
         }

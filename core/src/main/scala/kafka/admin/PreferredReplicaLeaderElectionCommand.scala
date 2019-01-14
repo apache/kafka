@@ -22,7 +22,6 @@ import java.util.concurrent.ExecutionException
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
-import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.errors.TimeoutException
@@ -47,12 +46,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(commandOpts.parser, "This tool causes leadership for each partition to be transferred back to the 'preferred replica'," +
-                                                " it can be used to balance leadership among the servers." +
-                                                " The preferred replica is the first one in the replica assignment (see the output from kafka-topics.sh with the --describe option)." +
-                                                " Using this command is not necessary when the broker is configured with \"auto.leader.rebalance.enable=true\".")
-
     CommandLineUtils.checkRequiredArgs(commandOpts.parser, commandOpts.options)
 
     if (commandOpts.options.has(commandOpts.bootstrapServerOpt) == commandOpts.options.has(commandOpts.zkConnectOpt)) {
@@ -76,7 +69,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           Utils.loadProps(commandOpts.options.valueOf(commandOpts.adminClientConfigOpt))
         else
           new Properties()
-        adminProps ++= CommandLineUtils.parseKeyValueArgs(commandOpts.options.valuesOf(commandOpts.adminClientPropertyOpt).asScala)
         adminProps.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, commandOpts.options.valueOf(commandOpts.bootstrapServerOpt))
         adminProps.setProperty(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, timeout.toString)
         new AdminClientCommand(adminProps)
@@ -149,15 +141,8 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .describedAs("urls")
       .ofType(classOf[String])
 
-    val adminClientPropertyOpt = parser.accepts("admin-property",
-      "User-defined properties in the form key=value to pass to the admin client when --bootstrap-server is given")
-      .availableIf(bootstrapServerOpt)
-      .withRequiredArg
-      .describedAs("consumer_prop")
-      .ofType(classOf[String])
     val adminClientConfigOpt = parser.accepts("admin.config",
-      "Admin client config properties file to pass to the admin client when --bootstrap-server is given. " +
-        "Note that --admin-property takes precedence over this config.")
+      "Admin client config properties file to pass to the admin client when --bootstrap-server is given.")
       .availableIf(bootstrapServerOpt)
       .withRequiredArg
       .describedAs("config file")
@@ -272,7 +257,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
         partition { case (_, partitionResult) => completedExceptionally(partitionResult) }
 
       if (!ok.isEmpty) {
-        println(s"Successfully completed preferred replica election for partitions ${ok.map(_._1).mkString(", ")}")
+        println(s"Successfully completed preferred replica election for partitions ${ok.map{ case (tp, future) => tp }.mkString(", ")}")
       }
       if (!exceptional.isEmpty) {
         val adminException = new AdminCommandFailedException(

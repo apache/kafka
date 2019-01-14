@@ -21,7 +21,7 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.admin.{PreferredReplicaLeaderElectionCommand}
+import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.network.RequestChannel
 import kafka.security.auth._
@@ -29,7 +29,7 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{LeaderNotAvailableException, TimeoutException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, LeaderNotAvailableException, TimeoutException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -62,22 +62,26 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    partitionsAndAssignments.foreach { partitionAndAssignment =>
-      zkClient.createTopicAssignment(partitionAndAssignment._1.topic(),
-      Map(partitionAndAssignment._1 -> partitionAndAssignment._2))
+    partitionsAndAssignments.foreach { case (tp, assigment) =>
+      zkClient.createTopicAssignment(tp.topic(),
+      Map(tp -> assigment))
     }
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(() => servers.forall(server => partitionsAndAssignments.forall(partitionAndAssignment => server.getLogManager().getLog(partitionAndAssignment._1).isDefined)),
       "Replicas for topic test not created")
   }
 
-  /** Bounce the given server and wait for all servers to get metadata for the given partition */
-  private def bounceServer(server: Int, partition: TopicPartition) {
-    info(s"Shutting down server $server so a non-preferred replica becomes leader")
-    servers(server).shutdown()
-    info(s"Starting server $server now that a non-preferred replica is leader")
-    servers(server).startup()
-    TestUtils.waitUntilTrue(() => servers.forall(server => server.metadataCache.getPartitionInfo(partition.topic(), partition.partition()).isDefined),
+  /** Bounce the given targetServer and wait for all servers to get metadata for the given partition */
+  private def bounceServer(targetServer: Int, partition: TopicPartition) {
+    debug(s"Shutting down server $targetServer so a non-preferred replica becomes leader")
+    servers(targetServer).shutdown()
+    debug(s"Starting server $targetServer now that a non-preferred replica is leader")
+    servers(targetServer).startup()
+    TestUtils.waitUntilTrue(() => servers.forall { server =>
+      server.metadataCache.getPartitionInfo(partition.topic(), partition.partition()).exists { partitionState =>
+        partitionState.basePartitionState.isr.contains(targetServer)
+      }
+    },
       s"Replicas for partition $partition not created")
   }
 
@@ -91,7 +95,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
 
   private def bootstrapServer(broker: Int = 0): String = {
     val port = servers(broker).socketServer.boundPort(ListenerName.normalised("PLAINTEXT"))
-    info("Server bound to port "+port)
+    debug("Server bound to port "+port)
     s"localhost:$port"
   }
 
@@ -116,24 +120,15 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   /** Test the case when an invalid broker is given for --bootstrap-broker */
   @Test
   def testInvalidBrokerGiven() {
-    createTestTopicAndCluster(testPartitionAndAssignment)
-    bounceServer(testPartitionPreferredLeader, testPartition)
-    // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
         "--bootstrap-server", "example.com:1234"),
-        timeout = 10000)
+        timeout = 1000)
+      fail()
     } catch {
       case e: AdminCommandFailedException =>
-        if (e.getCause.isInstanceOf[TimeoutException]) {
-          // Check the leader for the partition is STILL not the preferred one
-          assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
-        } else {
-          throw e
-        }
+        assertTrue(e.getCause.isInstanceOf[TimeoutException])
     }
-
   }
 
   /** Test the case where no partitions are given (=> elect all partitions) */
@@ -153,7 +148,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val jsonFile = File.createTempFile("preferredreplicaelection", ".js")
     jsonFile.deleteOnExit()
     val jsonString = ZkUtils.preferredReplicaLeaderElectionZkData(partitions.map(new TopicAndPartition(_)))
-    info("Using json: "+jsonString)
+    debug("Using json: "+jsonString)
     Files.write(Paths.get(jsonFile.getAbsolutePath), jsonString.getBytes(StandardCharsets.UTF_8))
     jsonFile
   }
@@ -306,7 +301,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     }
   }
 
-  /** Test the case where a list of partitions is given */
+  /** Test the case where client is not authorized */
   @Test
   def testAuthzFailure() {
     createTestTopicAndCluster(testPartitionAndAssignment, Some(classOf[PreferredReplicaLeaderElectionCommandTestAuthorizer].getName))
@@ -325,7 +320,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     } catch {
       case e: AdminCommandFailedException =>
         assertEquals("1 preferred replica(s) could not be elected", e.getMessage)
-        assertTrue(e.getSuppressed()(0).getMessage.contains("Cluster authorization failed"))
+        assertTrue(e.getSuppressed()(0).isInstanceOf[ClusterAuthorizationException])
         // Check we still have the same leader
         assertEquals(leader, getLeader(testPartition))
     } finally {

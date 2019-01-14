@@ -800,7 +800,7 @@ public abstract class AdminClient implements AutoCloseable {
      * with default options.
      * See the overload for more details.
      *
-     * @param partitions      The partitions for which the the preferred leader should be elected.
+     * @param partitions      The partitions for which the preferred leader should be elected.
      * @return                The ElectPreferredLeadersResult.
      */
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
@@ -837,7 +837,7 @@ public abstract class AdminClient implements AutoCloseable {
      *   if the preferred leader was not alive or not in the ISR.</li>
      * </ul>
      *
-     * @param partitions      The partitions for which the the preferred leader should be elected.
+     * @param partitions      The partitions for which the preferred leader should be elected.
      * @param options         The options to use when electing the preferred leaders.
      * @return                The ElectPreferredLeadersResult.
      */

@@ -138,12 +138,9 @@ class MetadataCache(brokerId: Int) extends Logging {
   }
 
   def getAllPartitions(): Set[TopicPartition] = {
-    metadataSnapshot.partitionStates.foldLeft(Set.empty[TopicPartition]) { case (result, namePartitionsAndStates) => {
-        val topicName = namePartitionsAndStates._1
-        val partitionsAndStates = namePartitionsAndStates._2
-        result ++ partitionsAndStates.keys.map(partitionId => new TopicPartition(topicName, partitionId.toInt))
-      }
-    }
+    metadataSnapshot.partitionStates.flatMap { case (topicName, partitionsAndStates) =>
+      partitionsAndStates.keys.map(partitionId => new TopicPartition(topicName, partitionId.toInt))
+    }.toSet
   }
 
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {

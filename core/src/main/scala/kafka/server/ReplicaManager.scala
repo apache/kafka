@@ -1525,31 +1525,24 @@ class ReplicaManager(val config: KafkaConfig,
                             responseCallback: Map[TopicPartition, ApiError] => Unit,
                             requestTimeout: Long): Unit = {
 
-    val (validPartitions, invalidPartitions) = partitions.partition(tp => metadataCache.contains(tp))
+    val deadline = time.milliseconds() + requestTimeout
 
-    val invalidPartitionsResults = invalidPartitions.map { p =>
-      val msg = s"Skipping preferred replica leader election for partition ${p} since it doesn't exist."
-      logger.info(msg)
-      p -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
-    }.toMap
-
-    def electionCallback(waiting: Set[TopicPartition], results: Map[TopicPartition, ApiError]) = {
+    def electionCallback(waiting: Set[TopicPartition], results: Map[TopicPartition, ApiError]): Unit = {
       if (waiting.nonEmpty) {
-        // timeout
         val expectedLeaders = waiting.map(
           tp => ElectPreferredLeaderMetadata(tp, controller.controllerContext.partitionReplicaAssignment(tp).head))
 
         val watchKeys = waiting.map(p => new TopicPartitionOperationKey(p.topic, p.partition)).toSeq
         delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
-          new DelayedElectPreferredLeader(requestTimeout, expectedLeaders, results ++ invalidPartitionsResults,
+          new DelayedElectPreferredLeader(deadline - time.milliseconds(), expectedLeaders, results,
             this, responseCallback),
           watchKeys)
       } else {
           // There are no partitions actually being elected, so return immediately
-          responseCallback(results ++ invalidPartitionsResults)
+          responseCallback(results)
       }
     }
 
-    controller.electPreferredLeaders(validPartitions, electionCallback)
+    controller.electPreferredLeaders(partitions, electionCallback)
   }
 }

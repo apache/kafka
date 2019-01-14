@@ -72,6 +72,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -297,7 +298,9 @@ public enum Errors {
             "election so the offsets cannot be guaranteed to be monotonically increasing",
             OffsetNotAvailableException::new),
     MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering a consumer group",
-            MemberIdRequiredException::new);
+            MemberIdRequiredException::new),
+    PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
+            PreferredLeaderNotAvailableException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
