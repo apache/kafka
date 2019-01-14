@@ -18,17 +18,17 @@
  */
 package kafka.tools
 
-import java.util.Date
+import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
+
 import javax.management._
 import javax.management.remote._
-
 import joptsimple.OptionParser
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils , Exit, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 
 /**
@@ -140,7 +140,7 @@ object JmxTool extends Logging {
       else
         List(null)
 
-    val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
+    val hasPatternQueries = queries.filterNot(Objects.isNull).exists((name: ObjectName) => name.isPattern)
 
     var names: Iterable[ObjectName] = null
     def namesSet = Option(names).toSet.flatten
