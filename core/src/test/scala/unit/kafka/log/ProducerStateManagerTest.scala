@@ -142,7 +142,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     stateManager.update(appendInfo)
     assertTrue(stateManager.lastEntry(producerId).isDefined)
 
-    var lastEntry = stateManager.lastEntry(producerId).get
+    val lastEntry = stateManager.lastEntry(producerId).get
     assertEquals(Int.MaxValue-10, lastEntry.firstSeq)
     assertEquals(9, lastEntry.lastSeq)
     assertEquals(2000L, lastEntry.firstOffset)
