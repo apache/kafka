@@ -42,7 +42,7 @@ public class SslPrincipalMapper {
     private static List<String> joinSplitRules(List<String> rules) {
         String rule = "RULE:";
         String defaultRule = "DEFAULT";
-        List<String> retVal = new ArrayList<String>();
+        List<String> retVal = new ArrayList<>();
         StringBuilder currentRule = new StringBuilder();
         for (String r : rules) {
             if (currentRule.length() > 0) {
