@@ -48,7 +48,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
 
     void updateRestored(final Collection<TopicPartition> restored) {
         if (restored.isEmpty()) {
-            log.debug("updateRestored returning empty restored collection");
             return;
         }
         log.trace("Stream task changelog partitions that have completed restoring so far: {}", restored);
