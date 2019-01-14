@@ -547,7 +547,7 @@ import java.util.regex.Pattern;
  * the consumer threads can hash into these queues using the TopicPartition to ensure in-order consumption and simplify
  * commit.
  */
-public class KafkaConsumer<K, V> implements Consumer<K, V> {
+public class KafkaConsumer<K, V> implements Consumer<K, V>, AutoCloseable {
 
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
