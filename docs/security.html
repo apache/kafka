@@ -1135,6 +1135,18 @@
             <td>ResourcePattern</td>
         </tr>
         <tr>
+            <td>--transactional-id [transactional-id]</td>
+            <td>The transactionalId to which ACLs should be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
+            <td>--delegation-token [delegation-token]</td>
+            <td>Delegation token to which ACLs should be added or removed. A value of * indicates ACL should apply to all tokens.</td>
+            <td></td>
+            <td>ResourcePattern</td>
+        </tr>
+        <tr>
             <td>--resource-pattern-type [pattern-type]</td>
             <td>Indicates to the script the type of resource pattern, (for --add), or resource pattern filter, (for --list and --remove), the user wishes to use.<br>
                 When adding acls, this should be a specific pattern type, e.g. 'literal' or 'prefixed'.<br>
@@ -1179,7 +1191,21 @@
         <tr>
             <td>--operation</td>
             <td>Operation that will be allowed or denied.<br>
-                Valid values are : Read, Write, Create, Delete, Alter, Describe, ClusterAction, All</td>
+                Valid values are:
+                <ul>
+                    <li>Read</li>
+                    <li>Write</li>
+                    <li>Create</li>
+                    <li>Delete</li>
+                    <li>Alter</li>
+                    <li>Describe</li>
+                    <li>ClusterAction</li>
+                    <li>DescribeConfigs</li>
+                    <li>AlterConfigs</li>
+                    <li>IdempotentWrite</li>
+                    <li>All</li>
+                </ul>
+            </td>
             <td>All</td>
             <td>Operation</td>
         </tr>
@@ -1194,6 +1220,14 @@
             <td>--consumer</td>
             <td> Convenience option to add/remove acls for consumer role. This will generate acls that allows READ,
                 DESCRIBE on topic and READ on consumer-group.</td>
+            <td></td>
+            <td>Convenience</td>
+        </tr>
+        <tr>
+            <td>--idempotent</td>
+            <td>Enable idempotence for the producer. This should be used in combination with the --producer option.<br>
+                Note that idempotence is enabled automatically if the producer is authorized to a particular transactional-id.
+            </td>
             <td></td>
             <td>Convenience</td>
         </tr>

@@ -172,10 +172,13 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(expectedSchema, expected), converted);
     }
 
-    @Test(expected = DataException.class)
+    @Test
     public void nullToConnect() {
-        // When schemas are enabled, trying to decode a null should be an error -- we should *always* have the envelope
-        assertEquals(SchemaAndValue.NULL, converter.toConnectData(TOPIC, null));
+        // When schemas are enabled, trying to decode a tombstone should be an empty envelope
+        // the behavior is the same as when the json is "{ "schema": null, "payload": null }"
+        // to keep compatibility with the record
+        SchemaAndValue converted = converter.toConnectData(TOPIC, null);
+        assertEquals(SchemaAndValue.NULL, converted);
     }
 
     @Test
@@ -696,14 +699,29 @@ public class JsonConverterTest {
         );
     }
 
+    @Test
+    public void nullSchemaAndNullValueToJson() {
+        // This characterizes the production of tombstone messages when Json schemas is enabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", true);
+        converter.configure(props, true);
+        byte[] converted = converter.fromConnectData(TOPIC, null, null);
+        assertNull(converted);
+    }
+
+    @Test
+    public void nullValueToJson() {
+        // This characterizes the production of tombstone messages when Json schemas is not enabled
+        Map<String, Boolean> props = Collections.singletonMap("schemas.enable", false);
+        converter.configure(props, true);
+        byte[] converted = converter.fromConnectData(TOPIC, null, null);
+        assertNull(converted);
+    }
 
     @Test(expected = DataException.class)
     public void mismatchSchemaJson() {
         // If we have mismatching schema info, we should properly convert to a DataException
         converter.fromConnectData(TOPIC, Schema.FLOAT64_SCHEMA, true);
     }
-
-
 
     @Test
     public void noSchemaToConnect() {

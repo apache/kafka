@@ -600,7 +600,7 @@ class GroupCoordinator(val brokerId: Int,
         case Empty | Dead =>
         case PreparingRebalance =>
           for (member <- group.allMemberMetadata) {
-            group.invokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
+            group.maybeInvokeJoinCallback(member, joinError(member.memberId, Errors.NOT_COORDINATOR))
           }
 
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
@@ -674,14 +674,18 @@ class GroupCoordinator(val brokerId: Int,
    * Complete existing DelayedHeartbeats for the given member and schedule the next one
    */
   private def completeAndScheduleNextHeartbeatExpiration(group: GroupMetadata, member: MemberMetadata) {
+    completeAndScheduleNextExpiration(group, member, member.sessionTimeoutMs)
+  }
+
+  private def completeAndScheduleNextExpiration(group: GroupMetadata, member: MemberMetadata, timeoutMs: Long): Unit = {
     // complete current heartbeat expectation
     member.latestHeartbeat = time.milliseconds()
     val memberKey = MemberKey(member.groupId, member.memberId)
     heartbeatPurgatory.checkAndComplete(memberKey)
 
     // reschedule the next heartbeat expiration deadline
-    val newHeartbeatDeadline = member.latestHeartbeat + member.sessionTimeoutMs
-    val delayedHeartbeat = new DelayedHeartbeat(this, group, member, newHeartbeatDeadline, member.sessionTimeoutMs)
+    val deadline = member.latestHeartbeat + timeoutMs
+    val delayedHeartbeat = new DelayedHeartbeat(this, group, member, deadline, timeoutMs)
     heartbeatPurgatory.tryCompleteElseWatch(delayedHeartbeat, Seq(memberKey))
   }
 
@@ -702,11 +706,23 @@ class GroupCoordinator(val brokerId: Int,
     val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
+
+    member.isNew = true
+
     // update the newMemberAdded flag to indicate that the join group can be further delayed
     if (group.is(PreparingRebalance) && group.generationId == 0)
       group.newMemberAdded = true
 
     group.add(member, callback)
+
+    // The session timeout does not affect new members since they do not have their memberId and
+    // cannot send heartbeats. Furthermore, we cannot detect disconnects because sockets are muted
+    // while the JoinGroup is in purgatory. If the client does disconnect (e.g. because of a request
+    // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
+    // members in the rebalance. To prevent this going on indefinitely, we timeout JoinGroup requests
+    // for new members. If the new member is still there, we expect it to retry.
+    completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
+
     maybePrepareRebalance(group, s"Adding new member $memberId")
     member
   }
@@ -751,7 +767,13 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   private def removeMemberAndUpdateGroup(group: GroupMetadata, member: MemberMetadata, reason: String) {
+    // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
+    // to invoke the callback before removing the member. We return UNKNOWN_MEMBER_ID so that the consumer
+    // will retry the JoinGroup request if is still active.
+    group.maybeInvokeJoinCallback(member, joinError(NoMemberId, Errors.UNKNOWN_MEMBER_ID))
+
     group.remove(member.memberId)
+
     group.currentState match {
       case Dead | Empty =>
       case Stable | CompletingRebalance => maybePrepareRebalance(group, reason)
@@ -813,8 +835,9 @@ class GroupCoordinator(val brokerId: Int,
               leaderId = group.leaderOrNull,
               error = Errors.NONE)
 
-            group.invokeJoinCallback(member, joinResult)
+            group.maybeInvokeJoinCallback(member, joinResult)
             completeAndScheduleNextHeartbeatExpiration(group, member)
+            member.isNew = false
           }
         }
       }
@@ -823,7 +846,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (shouldKeepMemberAlive(member, heartbeatDeadline) || member.isLeaving)
+      if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving)
         forceComplete()
       else false
     }
@@ -831,7 +854,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def onExpireHeartbeat(group: GroupMetadata, member: MemberMetadata, heartbeatDeadline: Long) {
     group.inLock {
-      if (!shouldKeepMemberAlive(member, heartbeatDeadline)) {
+      if (!member.shouldKeepAlive(heartbeatDeadline)) {
         info(s"Member ${member.memberId} in group ${group.groupId} has failed, removing it from the group")
         removeMemberAndUpdateGroup(group, member, s"removing member ${member.memberId} on heartbeat expiration")
       }
@@ -843,11 +866,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
-
-  private def shouldKeepMemberAlive(member: MemberMetadata, heartbeatDeadline: Long) =
-    member.awaitingJoinCallback != null ||
-      member.awaitingSyncCallback != null ||
-      member.latestHeartbeat + member.sessionTimeoutMs > heartbeatDeadline
 
   private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
 
@@ -865,6 +883,7 @@ object GroupCoordinator {
   val NoMembers = List[MemberSummary]()
   val EmptyGroup = GroupSummary(NoState, NoProtocolType, NoProtocol, NoMembers)
   val DeadGroup = GroupSummary(Dead.toString, NoProtocolType, NoProtocol, NoMembers)
+  val NewMemberJoinTimeoutMs: Int = 5 * 60 * 1000
 
   def apply(config: KafkaConfig,
             zkClient: KafkaZkClient,

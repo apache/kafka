@@ -41,7 +41,7 @@ import java.time.Duration;
  * The result is written into a local windowed {@link KeyValueStore} (which is basically an ever-updating
  * materialized view) that can be queried using the name provided in the {@link Materialized} instance.
  *
- * New events are added to windows until their grace period ends (see {@link Windows#grace(Duration)}).
+ * New events are added to windows until their grace period ends (see {@link TimeWindows#grace(Duration)}).
  *
  * Furthermore, updates to the store are sent downstream into a windowed {@link KTable} changelog stream, where
  * "windowed" implies that the {@link KTable} key is a combined key of the original record key and a window ID.
@@ -188,7 +188,6 @@ public interface TimeWindowedKStream<K, V> {
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute aggregate functions like
      * count (c.f. {@link #count()}).
      * <p>
-     * <p>
      * Not all updates might get sent downstream, as an internal cache will be used to deduplicate consecutive updates to
      * the same window and key if caching is enabled on the {@link Materialized} instance.
      * When caching is enable the rate of propagated updates depends on your input data rate, the number of distinct keys, the number of
@@ -312,7 +311,8 @@ public interface TimeWindowedKStream<K, V> {
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
-     * @param reducer   a {@link Reducer} that computes a new aggregate result
+     * @param reducer       a {@link Reducer} that computes a new aggregate result
+     * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */

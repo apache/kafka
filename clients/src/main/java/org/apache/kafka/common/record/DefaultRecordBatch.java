@@ -28,7 +28,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
@@ -586,10 +585,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         DefaultFileChannelRecordBatch(long offset,
                                       byte magic,
-                                      FileChannel channel,
+                                      FileRecords fileRecords,
                                       int position,
                                       int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, fileRecords, position, batchSize);
         }
 
         @Override

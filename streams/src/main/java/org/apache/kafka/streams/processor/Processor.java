@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.time.Duration;
 
 /**
  * A processor of key-value pair records.
@@ -31,7 +32,7 @@ public interface Processor<K, V> {
     /**
      * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
      * that contains it is initialized. When the framework is done with the processor, {@link #close()} will be called on it; the
-     * framework may later re-use the processor by calling {@link #init()} again.
+     * framework may later re-use the processor by calling {@code #init()} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
      * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
@@ -50,9 +51,9 @@ public interface Processor<K, V> {
     void process(K key, V value);
 
     /**
-     * Close this processor and clean up any resources. Be aware that {@link #close()} is called after an internal cleanup.
+     * Close this processor and clean up any resources. Be aware that {@code #close()} is called after an internal cleanup.
      * Thus, it is not possible to write anything to Kafka as underlying clients are already closed. The framework may
-     * later re-use this processor by calling {@link #init()} on it again.
+     * later re-use this processor by calling {@code #init()} on it again.
      * <p>
      * Note: Do not close any streams managed resources, like {@link StateStore}s here, as they are managed by the library.
      */

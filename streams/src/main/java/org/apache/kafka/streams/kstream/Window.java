@@ -16,8 +16,9 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import java.time.Instant;
 import org.apache.kafka.streams.processor.TimestampExtractor;
+
+import java.time.Instant;
 
 /**
  * A single window instance, defined by its start and end timestamp.
@@ -64,6 +65,8 @@ public abstract class Window {
 
     /**
      * Return the start timestamp of this window.
+     *
+     * @return The start timestamp of this window.
      */
     public long start() {
         return startMs;
@@ -71,6 +74,8 @@ public abstract class Window {
 
     /**
      * Return the end timestamp of this window.
+     *
+     * @return The end timestamp of this window.
      */
     public long end() {
         return endMs;

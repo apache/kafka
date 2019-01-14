@@ -99,6 +99,10 @@ public class Struct {
         return getString(field.name);
     }
 
+    public Boolean get(Field.Bool field) {
+        return getBoolean(field.name);
+    }
+
     public Object[] get(Field.Array field) {
         return getArray(field.name);
     }
@@ -278,6 +282,16 @@ public class Struct {
         return (ByteBuffer) result;
     }
 
+    public byte[] getByteArray(String name) {
+        Object result = get(name);
+        if (result instanceof byte[])
+            return (byte[]) result;
+        ByteBuffer buf = (ByteBuffer) result;
+        byte[] arr = new byte[buf.remaining()];
+        buf.get(arr);
+        return arr;
+    }
+
     /**
      * Set the given field to the specified value
      *
@@ -330,6 +344,10 @@ public class Struct {
         return set(def.name, value);
     }
 
+    public Struct set(Field.Bool def, boolean value) {
+        return set(def.name, value);
+    }
+
     public Struct set(Field.Array def, Object[] value) {
         return set(def.name, value);
     }
@@ -338,12 +356,17 @@ public class Struct {
         return set(def.name, value);
     }
 
+    public Struct setByteArray(String name, byte[] value) {
+        ByteBuffer buf = value == null ? null : ByteBuffer.wrap(value);
+        return set(name, buf);
+    }
+
     public Struct setIfExists(Field.Array def, Object[] value) {
-        return set(def.name, value);
+        return setIfExists(def.name, value);
     }
 
     public Struct setIfExists(Field.ComplexArray def, Object[] value) {
-        return set(def.name, value);
+        return setIfExists(def.name, value);
     }
 
     public Struct setIfExists(Field def, Object value) {

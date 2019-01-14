@@ -233,7 +233,7 @@ public class FetchRequest extends AbstractRequest {
 
         @Override
         public String toString() {
-            return "(offset=" + fetchOffset +
+            return "(fetchOffset=" + fetchOffset +
                     ", logStartOffset=" + logStartOffset +
                     ", maxBytes=" + maxBytes +
                     ", currentLeaderEpoch=" + currentLeaderEpoch +

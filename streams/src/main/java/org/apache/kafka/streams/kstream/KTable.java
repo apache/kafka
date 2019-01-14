@@ -562,8 +562,8 @@ public interface KTable<K, V> {
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -594,8 +594,8 @@ public interface KTable<K, V> {
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
      * an internally generated name, and "-repartition" is a fixed suffix.
      *
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
@@ -628,8 +628,8 @@ public interface KTable<K, V> {
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedTable}
      * <p>
      * Because a new key is selected, an internal repartitioning topic will be created in Kafka.
-     * This topic will be named "${applicationId}-&lt;name&gt-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},  "&lt;name&gt" is
+     * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},  "&lt;name&gt;" is
      * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
      *
      * <p>

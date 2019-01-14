@@ -263,18 +263,15 @@ public class TransactionalMessageCopier {
         final AtomicBoolean isShuttingDown = new AtomicBoolean(false);
         final AtomicLong remainingMessages = new AtomicLong(maxMessages);
         final AtomicLong numMessagesProcessed = new AtomicLong(0);
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                isShuttingDown.set(true);
-                // Flush any remaining messages
-                producer.close();
-                synchronized (consumer) {
-                    consumer.close();
-                }
-                System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            isShuttingDown.set(true);
+            // Flush any remaining messages
+            producer.close();
+            synchronized (consumer) {
+                consumer.close();
             }
-        });
+            System.out.println(shutDownString(numMessagesProcessed.get(), remainingMessages.get(), transactionalId));
+        }));
 
         try {
             Random random = new Random();

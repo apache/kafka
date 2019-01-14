@@ -56,8 +56,8 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   val ClientId = "consumer-test"
   val ClientHost = "localhost"
-  val ConsumerMinSessionTimeout = 10
-  val ConsumerMaxSessionTimeout = 1000
+  val GroupMinSessionTimeout = 10
+  val GroupMaxSessionTimeout = 10 * 60 * 1000
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
   val GroupInitialRebalanceDelay = 50
@@ -80,8 +80,8 @@ class GroupCoordinatorTest extends JUnitSuite {
   @Before
   def setUp() {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-    props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, ConsumerMinSessionTimeout.toString)
-    props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, ConsumerMaxSessionTimeout.toString)
+    props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
+    props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
     props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
@@ -194,7 +194,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   def testJoinGroupSessionTimeoutTooSmall() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
-    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols, sessionTimeout = ConsumerMinSessionTimeout - 1)
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols, sessionTimeout = GroupMinSessionTimeout - 1)
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.INVALID_SESSION_TIMEOUT, joinGroupError)
   }
@@ -203,7 +203,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   def testJoinGroupSessionTimeoutTooLarge() {
     val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
 
-    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols, sessionTimeout = ConsumerMaxSessionTimeout + 1)
+    val joinGroupResult = joinGroup(groupId, memberId, protocolType, protocols, sessionTimeout = GroupMaxSessionTimeout + 1)
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.INVALID_SESSION_TIMEOUT, joinGroupError)
   }
@@ -260,6 +260,49 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     val joinGroupResult = joinGroup(groupId, memberId, protocolType, List())
     assertEquals(Errors.INCONSISTENT_GROUP_PROTOCOL, joinGroupResult.error)
+  }
+
+  @Test
+  def testNewMemberJoinExpiration(): Unit = {
+    // This tests new member expiration during a protracted rebalance. We first create a
+    // group with one member which uses a large value for session timeout and rebalance timeout.
+    // We then join with one new member and let the rebalance hang while we await the first member.
+    // The new member join timeout expires and its JoinGroup request is failed.
+
+    val sessionTimeout = GroupCoordinator.NewMemberJoinTimeoutMs + 5000
+    val rebalanceTimeout = GroupCoordinator.NewMemberJoinTimeoutMs * 2
+
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+      sessionTimeout, rebalanceTimeout)
+    val firstMemberId = firstJoinResult.memberId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE, firstJoinResult.error)
+
+    val groupOpt = groupCoordinator.groupManager.getGroup(groupId)
+    assertTrue(groupOpt.isDefined)
+    val group = groupOpt.get
+    assertEquals(0, group.allMemberMetadata.count(_.isNew))
+
+    EasyMock.reset(replicaManager)
+
+    val responseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+      rebalanceTimeout, sessionTimeout)
+    assertFalse(responseFuture.isCompleted)
+
+    assertEquals(2, group.allMembers.size)
+    assertEquals(1, group.allMemberMetadata.count(_.isNew))
+
+    val newMember = group.allMemberMetadata.find(_.isNew).get
+    assertNotEquals(firstMemberId, newMember.memberId)
+
+    timer.advanceClock(GroupCoordinator.NewMemberJoinTimeoutMs + 1)
+    assertTrue(responseFuture.isCompleted)
+
+    val response = Await.result(responseFuture, Duration(0, TimeUnit.MILLISECONDS))
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, response.error)
+    assertEquals(1, group.allMembers.size)
+    assertEquals(0, group.allMemberMetadata.count(_.isNew))
+    assertEquals(firstMemberId, group.allMembers.head)
   }
 
   @Test

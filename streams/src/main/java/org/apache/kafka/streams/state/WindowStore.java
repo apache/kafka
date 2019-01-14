@@ -23,6 +23,8 @@ import org.apache.kafka.streams.processor.StateStore;
 
 import java.time.Instant;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * A windowed store interface extending {@link StateStore}.
  *
@@ -41,16 +43,16 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param key The key to associate the value to
      * @param value The value to update, it can be null;
      *              if the serialized bytes are also null it is interpreted as deletes
-     * @throws NullPointerException If null is used for key.
+     * @throws NullPointerException if the given key is {@code null}
      */
     void put(K key, V value);
 
     /**
-     * Put a key-value pair with the given timestamp into the corresponding window
+     * Put a key-value pair into the window with given window start timestamp
      * @param key The key to associate the value to
      * @param value The value; can be null
      * @param windowStartTimestamp The timestamp of the beginning of the window to put the key/value into
-     * @throws NullPointerException If null is used for key.
+     * @throws NullPointerException if the given key is {@code null}
      */
     void put(K key, V value, long windowStartTimestamp);
 
@@ -61,7 +63,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -76,7 +77,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
@@ -86,16 +87,17 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param timeTo    time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException If {@code null} is used for key.
+     * @throws NullPointerException if the given key is {@code null}
      */
     @SuppressWarnings("deprecation")
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
     default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetch(key, from.toEpochMilli(), to.toEpochMilli());
+        return fetch(
+            key,
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 
     /**
@@ -109,16 +111,18 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param timeTo    time range end (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException If {@code null} is used for any key.
+     * @throws NullPointerException if one of the given keys is {@code null}
      */
     @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
-        ApiUtils.validateMillisecondInstant(fromTime, "fromTime");
-        ApiUtils.validateMillisecondInstant(toTime, "toTime");
-        return fetch(from, to, fromTime.toEpochMilli(), toTime.toEpochMilli());
+        return fetch(
+            from,
+            to,
+            ApiUtils.validateMillisecondInstant(fromTime, prepareMillisCheckFailMsgPrefix(fromTime, "fromTime")),
+            ApiUtils.validateMillisecondInstant(toTime, prepareMillisCheckFailMsgPrefix(toTime, "toTime")));
     }
 
     /**
@@ -128,15 +132,14 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param timeTo   the end of the time slot from which to search (inclusive)
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
-     * @throws NullPointerException if {@code null} is used for any key
      */
     @SuppressWarnings("deprecation")
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override
     default KeyValueIterator<Windowed<K>, V> fetchAll(final Instant from, final Instant to) {
-        ApiUtils.validateMillisecondInstant(from, "from");
-        ApiUtils.validateMillisecondInstant(to, "to");
-        return fetchAll(from.toEpochMilli(), to.toEpochMilli());
+        return fetchAll(
+            ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
+            ApiUtils.validateMillisecondInstant(to, prepareMillisCheckFailMsgPrefix(to, "to")));
     }
 }

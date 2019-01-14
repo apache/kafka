@@ -54,8 +54,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
         private KeyValueStore<K, T> store;
-        private TupleForwarder<K, T> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private TupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -63,7 +63,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
 
@@ -92,7 +92,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
     }
 

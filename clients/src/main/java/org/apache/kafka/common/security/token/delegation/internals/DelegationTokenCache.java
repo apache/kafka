@@ -32,10 +32,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class DelegationTokenCache {
 
     private CredentialCache credentialCache = new CredentialCache();
+
     //Cache to hold all the tokens
     private Map<String, TokenInformation> tokenCache = new ConcurrentHashMap<>();
+
     //Cache to hold hmac->tokenId mapping. This is required for renew, expire requests
-    private Map<String, String> hmacIDCache = new ConcurrentHashMap<>();
+    private Map<String, String> hmacTokenIdCache = new ConcurrentHashMap<>();
+
+    //Cache to hold tokenId->hmac mapping. This is required for removing entry from hmacTokenIdCache using tokenId.
+    private Map<String, String> tokenIdHmacCache = new ConcurrentHashMap<>();
 
     public DelegationTokenCache(Collection<String> scramMechanisms) {
         //Create caches for scramMechanisms
@@ -60,17 +65,21 @@ public class DelegationTokenCache {
         //Update Scram Credentials
         updateCredentials(tokenId, scramCredentialMap);
         //Update hmac-id cache
-        hmacIDCache.put(hmac, tokenId);
+        hmacTokenIdCache.put(hmac, tokenId);
+        tokenIdHmacCache.put(tokenId, hmac);
     }
-
 
     public void removeCache(String tokenId) {
         removeToken(tokenId);
-        updateCredentials(tokenId, new HashMap<String, ScramCredential>());
+        updateCredentials(tokenId, new HashMap<>());
+    }
+
+    public String tokenIdForHmac(String base64hmac) {
+        return hmacTokenIdCache.get(base64hmac);
     }
 
     public TokenInformation tokenForHmac(String base64hmac) {
-        String tokenId = hmacIDCache.get(base64hmac);
+        String tokenId = hmacTokenIdCache.get(base64hmac);
         return tokenId == null ? null : tokenCache.get(tokenId);
     }
 
@@ -81,7 +90,10 @@ public class DelegationTokenCache {
     public void removeToken(String tokenId) {
         TokenInformation tokenInfo = tokenCache.remove(tokenId);
         if (tokenInfo != null) {
-            hmacIDCache.remove(tokenInfo.tokenId());
+            String hmac = tokenIdHmacCache.remove(tokenInfo.tokenId());
+            if (hmac != null) {
+                hmacTokenIdCache.remove(hmac);
+            }
         }
     }
 

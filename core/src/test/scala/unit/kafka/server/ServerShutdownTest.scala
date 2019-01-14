@@ -223,17 +223,17 @@ class ServerShutdownTest extends ZooKeeperTestHarness {
       })
 
       // Start a ControllerChannelManager
-      val brokers = Seq(new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol))
+      val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
       val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
-      controllerContext.liveBrokers = brokers.toSet
+      controllerContext.setLiveBrokerAndEpochs(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(controllerContext, controllerConfig, Time.SYSTEM,
         metrics, new StateChangeLogger(controllerId, inControllerContext = true, None))
       controllerChannelManager.startup()
 
       // Initiate a sendRequest and wait until connection is established and one byte is received by the peer
       val requestBuilder = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-        controllerId, 1, Map.empty.asJava, brokers.map(_.node(listenerName)).toSet.asJava)
+        controllerId, 1, 0L, Map.empty.asJava, brokerAndEpochs.keys.map(_.node(listenerName)).toSet.asJava)
       controllerChannelManager.sendRequest(1, ApiKeys.LEADER_AND_ISR, requestBuilder)
       receiveFuture.get(10, TimeUnit.SECONDS)
 

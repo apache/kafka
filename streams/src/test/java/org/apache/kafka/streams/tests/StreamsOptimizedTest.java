@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.tests;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -111,6 +112,7 @@ public class StreamsOptimizedTest {
         config.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
         config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
         config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.adminClientPrefix(AdminClientConfig.RETRIES_CONFIG), "100");
 
 
         config.putAll(streamsProperties);
@@ -119,7 +121,7 @@ public class StreamsOptimizedTest {
         final KafkaStreams streams = new KafkaStreams(topology, config);
 
 
-        streams.setStateListener((oldState, newState) -> {
+        streams.setStateListener((newState, oldState) -> {
             if (oldState == State.REBALANCING && newState == State.RUNNING) {
                 final int repartitionTopicCount = getCountOfRepartitionTopicsFound(topology.describe().toString(), repartitionTopicPattern);
                 System.out.println(String.format("REBALANCING -> RUNNING with REPARTITION TOPIC COUNT=%d", repartitionTopicCount));

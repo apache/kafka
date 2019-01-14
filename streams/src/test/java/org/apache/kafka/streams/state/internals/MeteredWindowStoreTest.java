@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -45,6 +46,7 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
     private InternalMockProcessorContext context;
@@ -57,6 +59,7 @@ public class MeteredWindowStoreTest {
         Serdes.String(),
         new SerdeThatDoesntHandleNull()
     );
+    private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
 
     {
         EasyMock.expect(innerStoreMock.name()).andReturn("mocked-store").anyTimes();
@@ -64,7 +67,6 @@ public class MeteredWindowStoreTest {
 
     @Before
     public void setUp() {
-        final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
 
         context = new InternalMockProcessorContext(
@@ -81,6 +83,18 @@ public class MeteredWindowStoreTest {
             },
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
+    }
+
+    @Test
+    public void testMetrics() {
+        EasyMock.replay(innerStoreMock);
+        store.init(context, store);
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+                "scope", "test", context.taskId().toString(), "scope", "mocked-store")));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+                "scope", "test", context.taskId().toString(), "scope", "all")));
     }
 
     @Test
