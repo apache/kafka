@@ -887,8 +887,8 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (isPending || !group.has(memberId))
-        false
+      if (isPending)
+        group.has(memberId)
       else {
         val member = group.get(memberId)
         if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving) {

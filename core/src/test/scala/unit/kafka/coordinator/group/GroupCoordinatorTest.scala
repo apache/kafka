@@ -60,7 +60,6 @@ class GroupCoordinatorTest extends JUnitSuite {
   val GroupMaxSessionTimeout = 10 * 60 * 1000
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
-  val DefaultRequireKnownMemberIdInJoinGroup = true
   var DefaultRequireKnownMemberIdInSendJoinGroup = false
   val GroupInitialRebalanceDelay = 50
   var timer: MockTimer = null
@@ -1661,7 +1660,7 @@ class GroupCoordinatorTest extends JUnitSuite {
                             protocols: List[(String, Array[Byte])],
                             sessionTimeout: Int = DefaultSessionTimeout,
                             rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                            requireKnownMemberId: Boolean = DefaultRequireKnownMemberIdInSendJoinGroup): Future[JoinGroupResult] = {
+                            requireKnownMemberId: Boolean = false): Future[JoinGroupResult] = {
     val (responseFuture, responseCallback) = setupJoinGroupCallback
 
     EasyMock.replay(replicaManager)
@@ -1716,8 +1715,8 @@ class GroupCoordinatorTest extends JUnitSuite {
                         protocolType: String,
                         protocols: List[(String, Array[Byte])],
                         sessionTimeout: Int = DefaultSessionTimeout,
-                        rebalanceTimeout: Int = DefaultRebalanceTimeout,
-                        requireKnownMemberId: Boolean = DefaultRequireKnownMemberIdInJoinGroup): JoinGroupResult = {
+                        rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
+    val requireKnownMemberId = true
     var responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
 
     // Since member id is required, we need another bounce to get the successful join group result.
