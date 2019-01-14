@@ -188,7 +188,12 @@ public class RocksDBWindowStoreTest {
         assertEquals("four", windowStore.fetch(4, startTime + 4L));
         assertEquals("five", windowStore.fetch(5, startTime + 5L));
 
-        verifyStore("zero", 0, startTime);
+        assertEquals(
+            Collections.singletonList("zero"),
+            toList(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime + 0 - windowSize),
+                ofEpochMilli(startTime + 0 + windowSize))));
 
         putSecondBatch(windowStore, startTime, context);
 
@@ -302,17 +307,6 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkSet("four@4"), entriesByKey.get(4));
         assertEquals(Utils.mkSet("five@5"), entriesByKey.get(5));
         assertNull(entriesByKey.get(6));
-    }
-
-    private void verifyStore(final String expectedValue,
-                             final int key,
-                             final long startTime) {
-        assertEquals(
-            expectedValue == null ? Collections.emptyList() : Collections.singletonList(expectedValue),
-            toList(windowStore.fetch(
-                key,
-                ofEpochMilli(startTime + key - windowSize),
-                ofEpochMilli(startTime + key + windowSize))));
     }
 
     @Test
@@ -784,63 +778,6 @@ public class RocksDBWindowStoreTest {
             segmentDirs(baseDir)
         );
 
-        verifyStoreContent1(startTime, increment);
-
-        setCurrentTime(startTime + increment * 6);
-        windowStore.put(6, "six");
-        assertEquals(
-            Utils.mkSet(
-                segments.segmentName(3),
-                segments.segmentName(4),
-                segments.segmentName(5)
-            ),
-            segmentDirs(baseDir)
-        );
-
-        verifyStoreContent2(startTime, increment);
-
-        setCurrentTime(startTime + increment * 7);
-        windowStore.put(7, "seven");
-        assertEquals(
-            Utils.mkSet(
-                segments.segmentName(3),
-                segments.segmentName(4),
-                segments.segmentName(5)
-            ),
-            segmentDirs(baseDir)
-        );
-
-        verifyStoreContent3(startTime, increment);
-
-        setCurrentTime(startTime + increment * 8);
-        windowStore.put(8, "eight");
-        assertEquals(
-            Utils.mkSet(
-                segments.segmentName(4),
-                segments.segmentName(5),
-                segments.segmentName(6)
-            ),
-            segmentDirs(baseDir)
-        );
-
-        verifyStoreContent4(startTime, increment);
-
-        // check segment directories
-        windowStore.flush();
-        assertEquals(
-            Utils.mkSet(
-                segments.segmentName(4),
-                segments.segmentName(5),
-                segments.segmentName(6)
-            ),
-            segmentDirs(baseDir)
-        );
-
-
-    }
-
-    private void verifyStoreContent1(final long startTime,
-                                     final long increment) {
         assertEquals(
             Collections.singletonList("zero"),
             toList(windowStore.fetch(
@@ -877,10 +814,18 @@ public class RocksDBWindowStoreTest {
                 5,
                 ofEpochMilli(startTime + increment * 5 - windowSize),
                 ofEpochMilli(startTime + increment * 5 + windowSize))));
-    }
 
-    private void verifyStoreContent2(final long startTime,
-                                     final long increment) {
+        setCurrentTime(startTime + increment * 6);
+        windowStore.put(6, "six");
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(3),
+                segments.segmentName(4),
+                segments.segmentName(5)
+            ),
+            segmentDirs(baseDir)
+        );
+
         assertEquals(
             Collections.emptyList(),
             toList(windowStore.fetch(
@@ -922,10 +867,18 @@ public class RocksDBWindowStoreTest {
                 6,
                 ofEpochMilli(startTime + increment * 6 - windowSize),
                 ofEpochMilli(startTime + increment * 6 + windowSize))));
-    }
 
-    private void verifyStoreContent3(final long startTime,
-                                     final long increment) {
+        setCurrentTime(startTime + increment * 7);
+        windowStore.put(7, "seven");
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(3),
+                segments.segmentName(4),
+                segments.segmentName(5)
+            ),
+            segmentDirs(baseDir)
+        );
+
         assertEquals(
             Collections.emptyList(),
             toList(windowStore.fetch(
@@ -974,10 +927,18 @@ public class RocksDBWindowStoreTest {
                 7,
                 ofEpochMilli(startTime + increment * 7 - windowSize),
                 ofEpochMilli(startTime + increment * 7 + windowSize))));
-    }
 
-    private void verifyStoreContent4(final long startTime,
-                                     final long increment) {
+        setCurrentTime(startTime + increment * 8);
+        windowStore.put(8, "eight");
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(4),
+                segments.segmentName(5),
+                segments.segmentName(6)
+            ),
+            segmentDirs(baseDir)
+        );
+
         assertEquals(
             Collections.emptyList(),
             toList(windowStore.fetch(
@@ -1032,6 +993,19 @@ public class RocksDBWindowStoreTest {
                 8,
                 ofEpochMilli(startTime + increment * 8 - windowSize),
                 ofEpochMilli(startTime + increment * 8 + windowSize))));
+
+        // check segment directories
+        windowStore.flush();
+        assertEquals(
+            Utils.mkSet(
+                segments.segmentName(4),
+                segments.segmentName(5),
+                segments.segmentName(6)
+            ),
+            segmentDirs(baseDir)
+        );
+
+
     }
 
     @Test
@@ -1066,7 +1040,60 @@ public class RocksDBWindowStoreTest {
         Utils.delete(baseDir);
 
         windowStore = createWindowStore(context, false);
-        verifyEmpty(startTime, increment);
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                0,
+                ofEpochMilli(startTime - windowSize),
+                ofEpochMilli(startTime + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                1,
+                ofEpochMilli(startTime + increment - windowSize),
+                ofEpochMilli(startTime + increment + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                2,
+                ofEpochMilli(startTime + increment * 2 - windowSize),
+                ofEpochMilli(startTime + increment * 2 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                3,
+                ofEpochMilli(startTime + increment * 3 - windowSize),
+                ofEpochMilli(startTime + increment * 3 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                4,
+                ofEpochMilli(startTime + increment * 4 - windowSize),
+                ofEpochMilli(startTime + increment * 4 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                5,
+                ofEpochMilli(startTime + increment * 5 - windowSize),
+                ofEpochMilli(startTime + increment * 5 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                6,
+                ofEpochMilli(startTime + increment * 6 - windowSize),
+                ofEpochMilli(startTime + increment * 6 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                7,
+                ofEpochMilli(startTime + increment * 7 - windowSize),
+                ofEpochMilli(startTime + increment * 7 + windowSize))));
+        assertEquals(
+            Collections.emptyList(),
+            toList(windowStore.fetch(
+                8,
+                ofEpochMilli(startTime + increment * 8 - windowSize),
+                ofEpochMilli(startTime + increment * 8 + windowSize))));
 
         context.restore(windowName, changeLog);
 
@@ -1134,68 +1161,6 @@ public class RocksDBWindowStoreTest {
                 segments.segmentName(6L)),
             segmentDirs(baseDir)
         );
-    }
-
-    private void verifyEmpty(final long startTime,
-                             final long increment) throws Exception {
-        // remove local store image
-        Utils.delete(baseDir);
-
-        windowStore = createWindowStore(context, false);
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                0,
-                ofEpochMilli(startTime - windowSize),
-                ofEpochMilli(startTime + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                1,
-                ofEpochMilli(startTime + increment - windowSize),
-                ofEpochMilli(startTime + increment + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                2,
-                ofEpochMilli(startTime + increment * 2 - windowSize),
-                ofEpochMilli(startTime + increment * 2 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                3,
-                ofEpochMilli(startTime + increment * 3 - windowSize),
-                ofEpochMilli(startTime + increment * 3 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                4,
-                ofEpochMilli(startTime + increment * 4 - windowSize),
-                ofEpochMilli(startTime + increment * 4 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                5,
-                ofEpochMilli(startTime + increment * 5 - windowSize),
-                ofEpochMilli(startTime + increment * 5 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                6,
-                ofEpochMilli(startTime + increment * 6 - windowSize),
-                ofEpochMilli(startTime + increment * 6 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                7,
-                ofEpochMilli(startTime + increment * 7 - windowSize),
-                ofEpochMilli(startTime + increment * 7 + windowSize))));
-        assertEquals(
-            Collections.emptyList(),
-            toList(windowStore.fetch(
-                8,
-                ofEpochMilli(startTime + increment * 8 - windowSize),
-                ofEpochMilli(startTime + increment * 8 + windowSize))));
     }
 
     @Test
