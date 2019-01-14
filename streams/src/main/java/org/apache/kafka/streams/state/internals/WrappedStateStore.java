@@ -41,7 +41,7 @@ public interface WrappedStateStore extends StateStore {
     abstract class AbstractStateStore implements WrappedStateStore {
         final StateStore innerState;
 
-        AbstractStateStore(final StateStore inner) {
+        protected AbstractStateStore(final StateStore inner) {
             this.innerState = inner;
         }
 

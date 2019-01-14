@@ -24,6 +24,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -245,6 +246,11 @@ public class StreamTaskTest {
         assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
         assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
+
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-task-metrics,client-id=test,task-id=%s", task.id.toString())));
+        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=test,task-id=all"));
     }
 
     private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {

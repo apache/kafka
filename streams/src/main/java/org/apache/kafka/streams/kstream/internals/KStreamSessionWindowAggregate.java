@@ -92,7 +92,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
         @Override
@@ -135,7 +135,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 if (!mergedWindow.equals(newSessionWindow)) {
                     for (final KeyValue<Windowed<K>, Agg> session : merged) {
                         store.remove(session.key);
-                        tupleForwarder.maybeForward(session.key, null, session.value);
+                        tupleForwarder.maybeForward(session.key, null, sendOldValues ? session.value : null);
                     }
                 }
 
@@ -151,9 +151,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 lateRecordDropSensor.record();
             }
         }
-
     }
-
 
     private SessionWindow mergeSessionWindow(final SessionWindow one, final SessionWindow two) {
         final long start = one.start() < two.start() ? one.start() : two.start();

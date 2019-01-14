@@ -91,7 +91,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
 
             if (queryableName != null) {
-                final ForwardingCacheFlushListener<K, V1> flushListener = new ForwardingCacheFlushListener<>(context, sendOldValues);
+                final ForwardingCacheFlushListener<K, V1> flushListener = new ForwardingCacheFlushListener<>(context);
                 store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
                 tupleForwarder = new TupleForwarder<>(store, context, flushListener, sendOldValues);
             }

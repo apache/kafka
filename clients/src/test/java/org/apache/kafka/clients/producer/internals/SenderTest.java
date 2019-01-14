@@ -2079,6 +2079,44 @@ public class SenderTest {
 
     }
 
+    @Test
+    public void testExpiredBatchesInMultiplePartitions() throws Exception {
+        long deliveryTimeoutMs = 1500L;
+        setupWithTransactionState(null, true, null);
+
+        // Send multiple ProduceRequest across multiple partitions.
+        Future<RecordMetadata> request1 = accumulator.append(tp0, time.milliseconds(), "k1".getBytes(), "v1".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+        Future<RecordMetadata> request2 = accumulator.append(tp1, time.milliseconds(), "k2".getBytes(), "v2".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
+
+        // Send request.
+        sender.run(time.milliseconds());
+        assertEquals(1, client.inFlightRequestCount());
+        assertEquals("Expect one in-flight batch in accumulator", 1, sender.inFlightBatches(tp0).size());
+
+        Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
+        responseMap.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+        client.respond(new ProduceResponse(responseMap));
+
+        // Successfully expire both batches.
+        time.sleep(deliveryTimeoutMs);
+        sender.run(time.milliseconds());
+        assertEquals("Expect zero in-flight batch in accumulator", 0, sender.inFlightBatches(tp0).size());
+
+        try {
+            request1.get();
+            fail("The expired batch should throw a TimeoutException");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+
+        try {
+            request2.get();
+            fail("The expired batch should throw a TimeoutException");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof TimeoutException);
+        }
+    }
+
     private class MatchingBufferPool extends BufferPool {
         IdentityHashMap<ByteBuffer, Boolean> allocatedBuffers;
 

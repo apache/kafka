@@ -160,6 +160,24 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   }
 
   @Test
+  def testDescribeIfTopicNotExists() {
+    // create brokers
+    val brokers = List(0, 1, 2)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+
+    // describe topic that does not exist
+    val describeOpts = new TopicCommandOptions(Array("--topic", "test"))
+    intercept[IllegalArgumentException] {
+      TopicCommand.describeTopic(zkClient, describeOpts)
+    }
+
+    // describe topic that does not exist with --if-exists
+    val describeOptsWithExists = new TopicCommandOptions(Array("--topic", "test", "--if-exists"))
+    // should not throw any error
+    TopicCommand.describeTopic(zkClient, describeOptsWithExists)
+  }
+
+  @Test
   def testCreateAlterTopicWithRackAware() {
     val rackInfo = Map(0 -> "rack1", 1 -> "rack2", 2 -> "rack2", 3 -> "rack1", 4 -> "rack3", 5 -> "rack3")
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)

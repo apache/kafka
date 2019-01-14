@@ -424,7 +424,8 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
   }
 
-  private class NoRecordsException extends RuntimeException
+  // package-private for tests
+  private[tools] class NoRecordsException extends RuntimeException
 
   class MirrorMakerOptions(args: Array[String]) extends CommandDefaultOptions(args) {
 

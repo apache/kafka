@@ -740,8 +740,6 @@ class Partition(val topicPartition: TopicPartition,
           }
 
           val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
-          // probably unblock some follower fetch requests since log end offset has been updated
-          replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(this.topic, this.partitionId))
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
@@ -754,6 +752,10 @@ class Partition(val topicPartition: TopicPartition,
     // some delayed operations may be unblocked after HW changed
     if (leaderHWIncremented)
       tryCompleteDelayedRequests()
+    else {
+      // probably unblock some follower fetch requests since log end offset has been updated
+      replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(topicPartition))
+    }
 
     info
   }
@@ -815,17 +817,36 @@ class Partition(val topicPartition: TopicPartition,
       case None => localReplica.logEndOffset.messageOffset
     }
 
-    if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-      Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch)))
+    val epochLogString = if(currentLeaderEpoch.isPresent) {
+      s"epoch ${currentLeaderEpoch.get}"
     } else {
-      def allowed(timestampOffset: TimestampAndOffset): Boolean =
-        timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
+      "unknown epoch"
+    }
 
-      val fetchedOffset = logManager.getLog(topicPartition).flatMap { log =>
-        log.fetchOffsetByTimestamp(timestamp)
-      }
+    // Only consider throwing an error if we get a client request (isolationLevel is defined) and the start offset
+    // is lagging behind the high watermark
+    val maybeOffsetsError: Option[ApiException] = leaderEpochStartOffsetOpt
+      .filter(epochStart => isolationLevel.isDefined && epochStart > localReplica.highWatermark.messageOffset)
+      .map(epochStart => Errors.OFFSET_NOT_AVAILABLE.exception(s"Failed to fetch offsets for " +
+        s"partition $topicPartition with leader $epochLogString as this partition's " +
+        s"high watermark (${localReplica.highWatermark.messageOffset}) is lagging behind the " +
+        s"start offset from the beginning of this epoch ($epochStart)."))
 
-      fetchedOffset.filter(allowed)
+    def getOffsetByTimestamp: Option[TimestampAndOffset] = {
+      logManager.getLog(topicPartition).flatMap(log => log.fetchOffsetByTimestamp(timestamp))
+    }
+
+    // If we're in the lagging HW state after a leader election, throw OffsetNotAvailable for "latest" offset
+    // or for a timestamp lookup that is beyond the last fetchable offset.
+    timestamp match {
+      case ListOffsetRequest.LATEST_TIMESTAMP =>
+        maybeOffsetsError.map(e => throw e)
+          .orElse(Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset, Optional.of(leaderEpoch))))
+      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
+        getOffsetByTimestamp
+      case _ =>
+        getOffsetByTimestamp.filter(timestampAndOffset => timestampAndOffset.offset < lastFetchableOffset)
+          .orElse(maybeOffsetsError.map(e => throw e))
     }
   }
 

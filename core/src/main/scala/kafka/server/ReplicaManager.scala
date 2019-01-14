@@ -366,7 +366,7 @@ class ReplicaManager(val config: KafkaConfig,
   def stopReplicas(stopReplicaRequest: StopReplicaRequest): (mutable.Map[TopicPartition, Errors], Errors) = {
     replicaStateChangeLock synchronized {
       val responseMap = new collection.mutable.HashMap[TopicPartition, Errors]
-      if(stopReplicaRequest.controllerEpoch() < controllerEpoch) {
+      if (stopReplicaRequest.controllerEpoch() < controllerEpoch) {
         stateChangeLogger.warn("Received stop replica request from an old controller epoch " +
           s"${stopReplicaRequest.controllerEpoch}. Latest known controller epoch is $controllerEpoch")
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)
@@ -830,10 +830,15 @@ class ReplicaManager(val config: KafkaConfig,
     val logReadResults = readFromLog()
 
     // check if this fetch request can be satisfied right away
-    val logReadResultValues = logReadResults.map { case (_, v) => v }
-    val bytesReadable = logReadResultValues.map(_.info.records.sizeInBytes).sum
-    val errorReadingData = logReadResultValues.foldLeft(false) ((errorIncurred, readResult) =>
-      errorIncurred || (readResult.error != Errors.NONE))
+    var bytesReadable: Long = 0
+    var errorReadingData = false
+    val logReadResultMap = new mutable.HashMap[TopicPartition, LogReadResult]
+    logReadResults.foreach { case (topicPartition, logReadResult) =>
+      if (logReadResult.error != Errors.NONE)
+        errorReadingData = true
+      bytesReadable = bytesReadable + logReadResult.info.records.sizeInBytes
+      logReadResultMap.put(topicPartition, logReadResult)
+    }
 
     // respond immediately if 1) fetch request does not want to wait
     //                        2) fetch request does not require any data
@@ -847,11 +852,12 @@ class ReplicaManager(val config: KafkaConfig,
       responseCallback(fetchPartitionData)
     } else {
       // construct the fetch results from the read results
-      val fetchPartitionStatus = logReadResults.map { case (topicPartition, result) =>
-        val fetchInfo = fetchInfos.collectFirst {
-          case (tp, v) if tp == topicPartition => v
-        }.getOrElse(sys.error(s"Partition $topicPartition not found in fetchInfos"))
-        (topicPartition, FetchPartitionStatus(result.info.fetchOffsetMetadata, fetchInfo))
+      val fetchPartitionStatus = new mutable.ArrayBuffer[(TopicPartition, FetchPartitionStatus)]
+      fetchInfos.foreach { case (topicPartition, partitionData) =>
+        logReadResultMap.get(topicPartition).foreach(logReadResult => {
+          val logOffsetMetadata = logReadResult.info.fetchOffsetMetadata
+          fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
+        })
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
@@ -886,13 +892,13 @@ class ReplicaManager(val config: KafkaConfig,
       brokerTopicStats.topicStats(tp.topic).totalFetchRequestRate.mark()
       brokerTopicStats.allTopicsStats.totalFetchRequestRate.mark()
 
+      val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
       try {
         trace(s"Fetching log segment for partition $tp, offset $offset, partition fetch size $partitionFetchSize, " +
           s"remaining response limit $limitBytes" +
           (if (minOneMessage) s", ignoring response/partition size limits" else ""))
 
         val partition = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader)
-        val adjustedMaxBytes = math.min(fetchInfo.maxBytes, limitBytes)
         val fetchTimeMs = time.milliseconds
 
         // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
@@ -946,7 +952,11 @@ class ReplicaManager(val config: KafkaConfig,
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
-          error(s"Error processing fetch operation on partition $tp, offset $offset", e)
+
+          val fetchSource = Request.describeReplicaId(replicaId)
+          error(s"Error processing fetch with max size $adjustedMaxBytes from $fetchSource " +
+            s"on partition $tp: $fetchInfo", e)
+
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
                         highWatermark = -1L,
                         leaderLogStartOffset = -1L,

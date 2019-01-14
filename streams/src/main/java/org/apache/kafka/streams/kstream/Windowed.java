@@ -65,12 +65,12 @@ public class Windowed<K> {
 
     @Override
     public boolean equals(final Object obj) {
-        if (obj == this)
+        if (obj == this) {
             return true;
-
-        if (!(obj instanceof Windowed))
+        }
+        if (!(obj instanceof Windowed)) {
             return false;
-
+        }
         final Windowed<?> that = (Windowed) obj;
         return window.equals(that.window) && key.equals(that.key);
     }

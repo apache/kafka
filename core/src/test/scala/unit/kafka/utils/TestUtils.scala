@@ -142,6 +142,11 @@ object TestUtils extends Logging {
   def createBroker(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT): Broker =
     new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol)
 
+  def createBrokerAndEpoch(id: Int, host: String, port: Int, securityProtocol: SecurityProtocol = SecurityProtocol.PLAINTEXT,
+                           epoch: Long = 0): (Broker, Long) = {
+    (new Broker(id, host, port, ListenerName.forSecurityProtocol(securityProtocol), securityProtocol), epoch)
+  }
+
   /**
    * Create a test config for the provided parameters.
    *
@@ -830,7 +835,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -850,7 +855,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
-          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
+          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>
@@ -951,6 +956,12 @@ object TestUtils extends Logging {
       !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
     }
     assertEquals(0, threadCount)
+  }
+
+  def allThreadStackTraces(): String = {
+    Thread.getAllStackTraces.asScala.map { case (thread, stackTrace) =>
+      thread.getName + "\n\t" + stackTrace.toList.map(_.toString).mkString("\n\t")
+    }.mkString("\n")
   }
 
   /**

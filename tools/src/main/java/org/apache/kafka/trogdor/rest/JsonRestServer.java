@@ -132,22 +132,19 @@ public class JsonRestServer {
      */
     public void beginShutdown() {
         if (!shutdownExecutor.isShutdown()) {
-            shutdownExecutor.submit(new Callable<Void>() {
-                @Override
-                public Void call() throws Exception {
-                    try {
-                        log.info("Stopping REST server");
-                        jettyServer.stop();
-                        jettyServer.join();
-                        log.info("REST server stopped");
-                    } catch (Exception e) {
-                        log.error("Unable to stop REST server", e);
-                    } finally {
-                        jettyServer.destroy();
-                    }
-                    shutdownExecutor.shutdown();
-                    return null;
+            shutdownExecutor.submit((Callable<Void>) () -> {
+                try {
+                    log.info("Stopping REST server");
+                    jettyServer.stop();
+                    jettyServer.join();
+                    log.info("REST server stopped");
+                } catch (Exception e) {
+                    log.error("Unable to stop REST server", e);
+                } finally {
+                    jettyServer.destroy();
                 }
+                shutdownExecutor.shutdown();
+                return null;
             });
         }
     }

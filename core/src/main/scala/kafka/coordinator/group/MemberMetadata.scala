@@ -64,6 +64,7 @@ private[group] class MemberMetadata(val memberId: String,
   var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
+  var isNew: Boolean = false
 
   def protocols = supportedProtocols.map(_._1).toSet
 
@@ -76,6 +77,13 @@ private[group] class MemberMetadata(val memberId: String,
       case None =>
         throw new IllegalArgumentException("Member does not support protocol")
     }
+  }
+
+  def shouldKeepAlive(deadlineMs: Long): Boolean = {
+    if (awaitingJoinCallback != null)
+      !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+    else awaitingSyncCallback != null ||
+      latestHeartbeat + sessionTimeoutMs > deadlineMs
   }
 
   /**

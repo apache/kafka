@@ -241,13 +241,10 @@ public class VerifiableLog4jAppender {
         final VerifiableLog4jAppender appender = createFromArgs(args);
         boolean infinite = appender.maxMessages < 0;
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                // Trigger main thread to stop producing messages
-                appender.stopLogging = true;
-            }
-        });
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            // Trigger main thread to stop producing messages
+            appender.stopLogging = true;
+        }));
 
         long maxMessages = infinite ? Long.MAX_VALUE : appender.maxMessages;
         for (long i = 0; i < maxMessages; i++) {

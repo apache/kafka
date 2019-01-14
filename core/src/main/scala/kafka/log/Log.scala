@@ -1548,8 +1548,8 @@ class Log(@volatile var dir: File,
         in the header.
       */
       appendInfo.firstOffset match {
-        case Some(firstOffset) => roll(firstOffset)
-        case None => roll(maxOffsetInMessages - Integer.MAX_VALUE)
+        case Some(firstOffset) => roll(Some(firstOffset))
+        case None => roll(Some(maxOffsetInMessages - Integer.MAX_VALUE))
       }
     } else {
       segment
@@ -1562,22 +1562,45 @@ class Log(@volatile var dir: File,
    *
    * @return The newly rolled segment
    */
-  def roll(expectedNextOffset: Long = 0): LogSegment = {
+  def roll(expectedNextOffset: Option[Long] = None): LogSegment = {
     maybeHandleIOException(s"Error while rolling log segment for $topicPartition in dir ${dir.getParent}") {
       val start = time.hiResClockMs()
       lock synchronized {
         checkIfMemoryMappedBufferClosed()
-        val newOffset = math.max(expectedNextOffset, logEndOffset)
+        val newOffset = math.max(expectedNextOffset.getOrElse(0L), logEndOffset)
         val logFile = Log.logFile(dir, newOffset)
-        val offsetIdxFile = offsetIndexFile(dir, newOffset)
-        val timeIdxFile = timeIndexFile(dir, newOffset)
-        val txnIdxFile = transactionIndexFile(dir, newOffset)
-        for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
-          warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
-          Files.delete(file.toPath)
-        }
 
-        Option(segments.lastEntry).foreach(_.getValue.onBecomeInactiveSegment())
+        if (segments.containsKey(newOffset)) {
+          // segment with the same base offset already exists and loaded
+          if (activeSegment.baseOffset == newOffset && activeSegment.size == 0) {
+            // We have seen this happen (see KAFKA-6388) after shouldRoll() returns true for an
+            // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
+            warn(s"Trying to roll a new log segment with start offset $newOffset " +
+                 s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
+                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
+                 s" size of offset index: ${activeSegment.offsetIndex.entries}.")
+            deleteSegment(activeSegment)
+          } else {
+            throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +
+                                     s" =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already exists. Existing " +
+                                     s"segment is ${segments.get(newOffset)}.")
+          }
+        } else if (!segments.isEmpty && newOffset < activeSegment.baseOffset) {
+          throw new KafkaException(
+            s"Trying to roll a new log segment for topic partition $topicPartition with " +
+            s"start offset $newOffset =max(provided offset = $expectedNextOffset, LEO = $logEndOffset) lower than start offset of the active segment $activeSegment")
+        } else {
+          val offsetIdxFile = offsetIndexFile(dir, newOffset)
+          val timeIdxFile = timeIndexFile(dir, newOffset)
+          val txnIdxFile = transactionIndexFile(dir, newOffset)
+
+          for (file <- List(logFile, offsetIdxFile, timeIdxFile, txnIdxFile) if file.exists) {
+            warn(s"Newly rolled segment file ${file.getAbsolutePath} already exists; deleting it first")
+            Files.delete(file.toPath)
+          }
+
+          Option(segments.lastEntry).foreach(_.getValue.onBecomeInactiveSegment())
+        }
 
         // take a snapshot of the producer state to facilitate recovery. It is useful to have the snapshot
         // offset align with the new segment offset since this ensures we can recover the segment by beginning
@@ -1594,10 +1617,7 @@ class Log(@volatile var dir: File,
           fileAlreadyExists = false,
           initFileSize = initFileSize,
           preallocate = config.preallocate)
-        val prev = addSegment(segment)
-        if (prev != null)
-          throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with " +
-            s"start offset $newOffset while it already exists.")
+        addSegment(segment)
         // We need to update the segment base offset and append position data of the metadata when log rolls.
         // The next offset should not change.
         updateLogEndOffset(nextOffsetMetadata.messageOffset)

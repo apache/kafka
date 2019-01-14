@@ -50,8 +50,7 @@ public class CompositeReadOnlyWindowStoreTest {
     private CompositeReadOnlyWindowStore<String, String>
         windowStore;
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
-    private ReadOnlyWindowStoreStub<String, String>
-            otherUnderlyingStore;
+    private ReadOnlyWindowStoreStub<String, String> otherUnderlyingStore;
 
     @Rule
     public final ExpectedException windowStoreIteratorException = ExpectedException.none();

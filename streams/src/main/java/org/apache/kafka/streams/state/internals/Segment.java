@@ -54,10 +54,11 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
 
     @Override
     public boolean equals(final Object obj) {
-        if (obj == null || getClass() != obj.getClass()) return false;
-
+        if (obj == null || getClass() != obj.getClass()) {
+            return false;
+        }
         final Segment segment = (Segment) obj;
-        return Long.compare(id, segment.id) == 0;
+        return id == segment.id;
     }
 
     @Override

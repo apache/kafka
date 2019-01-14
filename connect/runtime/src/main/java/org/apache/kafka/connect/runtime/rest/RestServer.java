@@ -45,6 +45,7 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -171,6 +172,7 @@ public class RestServer {
         resourceConfig.register(new ConnectorPluginsResource(herder));
 
         resourceConfig.register(ConnectExceptionMapper.class);
+        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
         registerRestExtensions(herder, resourceConfig);
 

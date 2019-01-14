@@ -49,9 +49,10 @@ public class ControlledShutdownResponse extends AbstractResponse {
                     "that the broker still leads."));
 
     private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V1 = CONTROLLED_SHUTDOWN_RESPONSE_V0;
+    private static final Schema CONTROLLED_SHUTDOWN_RESPONSE_V2 = CONTROLLED_SHUTDOWN_RESPONSE_V1;
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1};
+        return new Schema[]{CONTROLLED_SHUTDOWN_RESPONSE_V0, CONTROLLED_SHUTDOWN_RESPONSE_V1, CONTROLLED_SHUTDOWN_RESPONSE_V2};
     }
 
     /**

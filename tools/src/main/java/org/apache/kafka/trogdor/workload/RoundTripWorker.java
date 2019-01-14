@@ -25,11 +25,9 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -248,16 +246,13 @@ public class RoundTripWorker implements TaskWorker {
                     ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(partition.topic(),
                         partition.partition(), KEY_GENERATOR.generate(messageIndex),
                         spec.valueGenerator().generate(messageIndex));
-                    producer.send(record, new Callback() {
-                        @Override
-                        public void onCompletion(RecordMetadata metadata, Exception exception) {
-                            if (exception == null) {
-                                unackedSends.countDown();
-                            } else {
-                                log.info("{}: Got exception when sending message {}: {}",
-                                    id, messageIndex, exception.getMessage());
-                                toSendTracker.addFailed(messageIndex);
-                            }
+                    producer.send(record, (metadata, exception) -> {
+                        if (exception == null) {
+                            unackedSends.countDown();
+                        } else {
+                            log.info("{}: Got exception when sending message {}: {}",
+                                id, messageIndex, exception.getMessage());
+                            toSendTracker.addFailed(messageIndex);
                         }
                     });
                 }

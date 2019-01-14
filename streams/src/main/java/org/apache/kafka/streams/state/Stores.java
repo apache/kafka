@@ -34,6 +34,8 @@ import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import java.time.Duration;
 import java.util.Objects;
 
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
+
 /**
  * Factory for creating state stores in Kafka Streams.
  * <p>
@@ -195,12 +197,14 @@ public class Stores {
                                                                  final Duration windowSize,
                                                                  final boolean retainDuplicates) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
-        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
-        ApiUtils.validateMillisecondDuration(windowSize, "windowSize");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
 
-        final long defaultSegmentInterval = Math.max(retentionPeriod.toMillis() / 2, 60_000L);
+        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
 
-        return persistentWindowStore(name, retentionPeriod.toMillis(), windowSize.toMillis(), retainDuplicates, defaultSegmentInterval);
+        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval);
     }
 
     private static WindowBytesStoreSupplier persistentWindowStore(final String name,
@@ -259,8 +263,8 @@ public class Stores {
     @SuppressWarnings("deprecation")
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
-        ApiUtils.validateMillisecondDuration(retentionPeriod, "retentionPeriod");
-        return persistentSessionStore(name, retentionPeriod.toMillis());
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
     }
 
 

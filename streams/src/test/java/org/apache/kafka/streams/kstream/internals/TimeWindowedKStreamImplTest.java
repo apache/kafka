@@ -24,7 +24,6 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -55,28 +54,26 @@ public class TimeWindowedKStreamImplTest {
 
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
-    private final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<String, String> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private TimeWindowedKStream<String, String> windowedStream;
 
     @Before
     public void before() {
         final KStream<String, String> stream = builder.stream(TOPIC, Consumed.with(Serdes.String(), Serdes.String()));
-        windowedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
-                .windowedBy(TimeWindows.of(ofMillis(500L)));
+        windowedStream = stream.
+            groupByKey(Grouped.with(Serdes.String(), Serdes.String()))
+            .windowedBy(TimeWindows.of(ofMillis(500L)));
     }
 
     @Test
     public void shouldCountWindowed() {
         final Map<Windowed<String>, Long> results = new HashMap<>();
-        windowedStream.count()
-                .toStream()
-                .foreach(new ForeachAction<Windowed<String>, Long>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final Long value) {
-                        results.put(key, value);
-                    }
-                });
+        windowedStream
+            .count()
+            .toStream()
+            .foreach(results::put);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
@@ -90,14 +87,10 @@ public class TimeWindowedKStreamImplTest {
     @Test
     public void shouldReduceWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        windowedStream.reduce(MockReducer.STRING_ADDER)
-                .toStream()
-                .foreach(new ForeachAction<Windowed<String>, String>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final String value) {
-                        results.put(key, value);
-                    }
-                });
+        windowedStream
+            .reduce(MockReducer.STRING_ADDER)
+            .toStream()
+            .foreach(results::put);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
@@ -110,17 +103,14 @@ public class TimeWindowedKStreamImplTest {
     @Test
     public void shouldAggregateWindowed() {
         final Map<Windowed<String>, String> results = new HashMap<>();
-        windowedStream.aggregate(MockInitializer.STRING_INIT,
+        windowedStream
+            .aggregate(
+                MockInitializer.STRING_INIT,
                 MockAggregator.TOSTRING_ADDER,
-                Materialized.<String, String, WindowStore<Bytes, byte[]>>with(Serdes.String(), Serdes.String()
-        ))
-                .toStream()
-                .foreach(new ForeachAction<Windowed<String>, String>() {
-                    @Override
-                    public void apply(final Windowed<String> key, final String value) {
-                        results.put(key, value);
-                    }
-                });
+                Materialized.with(Serdes.String(), Serdes.String()))
+            .toStream()
+            .foreach(results::put);
+
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
         }
@@ -131,14 +121,16 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeCount() {
-        windowedStream.count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
-                                     .withKeySerde(Serdes.String())
-                                     .withValueSerde(Serdes.Long()));
+        windowedStream.count(
+            Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("count-store")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.Long()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
             final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
-            final List<KeyValue<Windowed<String>, Long>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+            final List<KeyValue<Windowed<String>, Long>> data =
+                StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
             assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 2L),
@@ -149,15 +141,17 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeReduced() {
-        windowedStream.reduce(MockReducer.STRING_ADDER,
-                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
-                                      .withKeySerde(Serdes.String())
-                                      .withValueSerde(Serdes.String()));
+        windowedStream.reduce(
+            MockReducer.STRING_ADDER,
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("reduced")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
             final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+            final List<KeyValue<Windowed<String>, String>> data =
+                StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
 
             assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "1+2"),
@@ -168,16 +162,19 @@ public class TimeWindowedKStreamImplTest {
 
     @Test
     public void shouldMaterializeAggregated() {
-        windowedStream.aggregate(MockInitializer.STRING_INIT,
-                                 MockAggregator.TOSTRING_ADDER,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
-                                         .withKeySerde(Serdes.String())
-                                         .withValueSerde(Serdes.String()));
+        windowedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.<String, String, WindowStore<Bytes, byte[]>>as("aggregated")
+                .withKeySerde(Serdes.String())
+                .withValueSerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
             processData(driver);
             final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
-            final List<KeyValue<Windowed<String>, String>> data = StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+            final List<KeyValue<Windowed<String>, String>> data =
+                StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+
             assertThat(data, equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
                     KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
@@ -202,36 +199,41 @@ public class TimeWindowedKStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedAggregateIfInitializerIsNull() {
-        windowedStream.aggregate(null,
-                                 MockAggregator.TOSTRING_ADDER,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        windowedStream.aggregate(
+            null,
+            MockAggregator.TOSTRING_ADDER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedAggregateIfAggregatorIsNull() {
-        windowedStream.aggregate(MockInitializer.STRING_INIT,
-                                 null,
-                                 Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        windowedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            null,
+            Materialized.as("store"));
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedAggregateIfMaterializedIsNull() {
-        windowedStream.aggregate(MockInitializer.STRING_INIT,
-                                 MockAggregator.TOSTRING_ADDER,
-                                 (Materialized) null);
+        windowedStream.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedReduceIfReducerIsNull() {
-        windowedStream.reduce(null,
-                              Materialized.<String, String, WindowStore<Bytes, byte[]>>as("store"));
+        windowedStream.reduce(
+            null,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnMaterializedReduceIfMaterializedIsNull() {
-        windowedStream.reduce(MockReducer.STRING_ADDER,
-                              null);
+        windowedStream.reduce(
+            MockReducer.STRING_ADDER,
+            null);
     }
 
     @Test(expected = NullPointerException.class)

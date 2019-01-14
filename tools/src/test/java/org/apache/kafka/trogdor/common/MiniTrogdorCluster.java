@@ -172,27 +172,24 @@ public class MiniTrogdorCluster implements AutoCloseable {
                 ThreadUtils.createThreadFactory("MiniTrogdorClusterStartupThread%d", false));
             final AtomicReference<Exception> failure = new AtomicReference<Exception>(null);
             for (final Map.Entry<String, NodeData> entry : nodes.entrySet()) {
-                executor.submit(new Callable<Void>() {
-                    @Override
-                    public Void call() throws Exception {
-                        String nodeName = entry.getKey();
-                        try {
-                            NodeData node = entry.getValue();
-                            node.platform = new BasicPlatform(nodeName, topology, scheduler, commandRunner);
-                            if (node.agentRestResource != null) {
-                                node.agent = new Agent(node.platform, scheduler, node.agentRestServer,
-                                    node.agentRestResource);
-                            }
-                            if (node.coordinatorRestResource != null) {
-                                node.coordinator = new Coordinator(node.platform, scheduler,
-                                    node.coordinatorRestServer, node.coordinatorRestResource, 0);
-                            }
-                        } catch (Exception e) {
-                            log.error("Unable to initialize {}", nodeName, e);
-                            failure.compareAndSet(null, e);
+                executor.submit((Callable<Void>) () -> {
+                    String nodeName = entry.getKey();
+                    try {
+                        NodeData node = entry.getValue();
+                        node.platform = new BasicPlatform(nodeName, topology, scheduler, commandRunner);
+                        if (node.agentRestResource != null) {
+                            node.agent = new Agent(node.platform, scheduler, node.agentRestServer,
+                                node.agentRestResource);
                         }
-                        return null;
+                        if (node.coordinatorRestResource != null) {
+                            node.coordinator = new Coordinator(node.platform, scheduler,
+                                node.coordinatorRestServer, node.coordinatorRestResource, 0);
+                        }
+                    } catch (Exception e) {
+                        log.error("Unable to initialize {}", nodeName, e);
+                        failure.compareAndSet(null, e);
                     }
+                    return null;
                 });
             }
             executor.shutdown();
@@ -213,17 +210,25 @@ public class MiniTrogdorCluster implements AutoCloseable {
                     coordinator = node.coordinator;
                 }
             }
-            return new MiniTrogdorCluster(agents, coordinator);
+            return new MiniTrogdorCluster(scheduler, agents, nodes, coordinator);
         }
     }
 
     private final TreeMap<String, Agent> agents;
 
+    private final TreeMap<String, Builder.NodeData> nodesByAgent;
+
     private final Coordinator coordinator;
 
-    private MiniTrogdorCluster(TreeMap<String, Agent> agents,
+    private final Scheduler scheduler;
+
+    private MiniTrogdorCluster(Scheduler scheduler,
+                               TreeMap<String, Agent> agents,
+                               TreeMap<String, Builder.NodeData> nodesByAgent,
                                Coordinator coordinator) {
+        this.scheduler = scheduler;
         this.agents = agents;
+        this.nodesByAgent = nodesByAgent;
         this.coordinator = coordinator;
     }
 
@@ -243,6 +248,17 @@ public class MiniTrogdorCluster implements AutoCloseable {
             maxTries(10).
             target("localhost", coordinator.port()).
             build();
+    }
+
+    /**
+     * Mimic a restart of a Trogdor agent, essentially cleaning out all of its active workers
+     */
+    public void restartAgent(String nodeName) {
+        if (!agents.containsKey(nodeName)) {
+            throw new RuntimeException("There is no agent on node " + nodeName);
+        }
+        Builder.NodeData node = nodesByAgent.get(nodeName);
+        agents.put(nodeName, new Agent(node.platform, scheduler, node.agentRestServer, node.agentRestResource));
     }
 
     public AgentClient agentClient(String nodeName) {
