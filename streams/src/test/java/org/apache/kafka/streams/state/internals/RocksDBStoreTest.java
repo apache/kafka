@@ -87,11 +87,14 @@ public class RocksDBStoreTest {
         restoreListener.onRestoreStart(null, rocksDBStore.name(), 0L, 0L);
 
         assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(1 << 30));
+        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(1 << 30));
 
         restoreListener.onRestoreEnd(null, rocksDBStore.name(), 0L);
 
         assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(10));
-    }
+        assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(20));
+        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));    }
 
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {
