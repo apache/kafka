@@ -100,7 +100,7 @@ public final class Agent {
     }
 
     public UptimeResponse uptime() {
-        return new UptimeResponse(time.milliseconds() - serverStartMs);
+        return new UptimeResponse(serverStartMs, time.milliseconds());
     }
 
     public void createWorker(CreateWorkerRequest req) throws Throwable {

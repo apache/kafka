@@ -96,7 +96,7 @@ public final class Coordinator {
     }
 
     public UptimeResponse uptime() {
-        return new UptimeResponse(time.milliseconds() - startTimeMs);
+        return new UptimeResponse(startTimeMs, time.milliseconds());
     }
 
     public void createTask(CreateTaskRequest request) throws Throwable {

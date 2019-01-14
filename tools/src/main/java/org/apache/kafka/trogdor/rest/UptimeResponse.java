@@ -25,15 +25,23 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public class UptimeResponse extends Message {
 
-    private long uptime;
+    private long serverStartMs;
+    private long nowMs;
 
     @JsonCreator
-    public UptimeResponse(@JsonProperty("uptime") long uptime) {
-        this.uptime = uptime;
+    public UptimeResponse(@JsonProperty("serverStartMs") long serverStartMs,
+                          @JsonProperty("nowMs") long nowMs) {
+        this.serverStartMs = serverStartMs;
+        this.nowMs = nowMs;
     }
 
     @JsonProperty
-    public long uptime() {
-        return uptime;
+    public long serverStartMs() {
+        return serverStartMs;
+    }
+
+    @JsonProperty
+    public long nowMs() {
+        return nowMs;
     }
 }

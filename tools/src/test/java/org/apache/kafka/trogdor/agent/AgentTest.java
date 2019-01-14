@@ -60,6 +60,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class AgentTest {
     @Rule
@@ -158,6 +159,9 @@ public class AgentTest {
 
         UptimeResponse uptime = client.uptime();
         assertEquals(agent.uptime(), uptime);
+
+        time.setCurrentTimeMs(150);
+        assertNotEquals(agent.uptime(), uptime);
         agent.beginShutdown();
         agent.waitForShutdown();
     }

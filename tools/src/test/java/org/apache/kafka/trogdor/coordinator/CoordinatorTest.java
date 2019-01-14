@@ -63,6 +63,7 @@ import java.util.List;
 import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.fail;
@@ -93,6 +94,9 @@ public class CoordinatorTest {
             build()) {
             UptimeResponse uptime = cluster.coordinatorClient().uptime();
             assertEquals(cluster.coordinator().uptime(), uptime);
+
+            time.setCurrentTimeMs(250);
+            assertNotEquals(cluster.coordinator().uptime(), uptime);
         }
     }
 
