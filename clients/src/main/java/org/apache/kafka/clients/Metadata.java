@@ -192,7 +192,6 @@ public class Metadata implements Closeable {
         if (oldEpoch == null || epochTest.test(oldEpoch)) {
             log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, epoch, topicPartition);
             lastSeenLeaderEpochs.put(topicPartition, epoch);
-            cache.removePartition(topicPartition);
             if (setRequestUpdateFlag) {
                 this.needUpdate = true;
             }
@@ -209,6 +208,14 @@ public class Metadata implements Closeable {
      */
     public synchronized boolean updateRequested() {
         return this.needUpdate;
+    }
+
+    /**
+     * Return the cached partition info if it exists and a newer leader epoch isn't known about.
+     */
+    public synchronized Optional<PartitionInfo> getLeaderInfo(TopicPartition topicPartition) {
+        return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition))
+                .flatMap(epoch -> cache.getPartitionInfoHavingEpoch(topicPartition, epoch));
     }
 
     /**
@@ -356,7 +363,7 @@ public class Metadata implements Closeable {
      */
     private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse, Predicate<String> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
-        List<PartitionInfo> partitions = new ArrayList<>();
+        List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
             if (!topicsToRetain.test(metadata.topic()))
                 continue;
@@ -365,7 +372,9 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitions::add);
+                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, partitionMetadata.leaderEpoch().orElse(-1)));
+                    });
                 }
             }
         }

@@ -547,28 +547,35 @@ public class MetadataTest {
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
 
-        // Simulate a leader epoch from another response, like a fetch response (future)
+        // Simulate a leader epoch from another response, like a fetch response (not yet implemented)
         assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 101));
 
-        // Cache of partition goes away
-        assertNull(metadata.fetch().partition(tp));
+        // Cache of partition stays, but leader partition info is not available since it's stale
+        assertNotNull(metadata.fetch().partition(tp));
+        assertFalse(metadata.getLeaderInfo(tp).isPresent());
 
         // Last-seen is updated
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
-        // Old metadata, rejected
+        // Metadata with older epoch is rejected
         metadata.update(metadataResponse, 20L);
-        assertNull(metadata.fetch().partition(tp));
+        assertNotNull(metadata.fetch().partition(tp));
+        assertFalse(metadata.getLeaderInfo(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
-        // Up-to-date metadata, accepted
+        // Metadata with newer epoch is accepted
         metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
             (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
                     new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(102), replicas, isr, offlineReplicas));
         metadata.update(metadataResponse, 30L);
         assertNotNull(metadata.fetch().partition(tp));
+        assertTrue(metadata.getLeaderInfo(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 102);
 
+        // Change topic subscription, still have old metadata cached until next metadata update
+        metadata.setTopics(Collections.singletonList("topic-2"));
+        assertNotNull(metadata.fetch().partition(tp));
+        assertFalse(metadata.getLeaderInfo(tp).isPresent());
     }
 
     @Test

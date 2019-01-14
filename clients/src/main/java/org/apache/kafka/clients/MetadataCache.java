@@ -28,7 +28,10 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
@@ -41,13 +44,13 @@ class MetadataCache {
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, PartitionInfo> partitionsByTopicPartition;
+    private final Map<TopicPartition, PartitionInfoAndEpoch> partitionsByTopicPartition;
 
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
                   List<Node> nodes,
-                  Collection<PartitionInfo> partitions,
+                  Collection<PartitionInfoAndEpoch> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
@@ -57,7 +60,7 @@ class MetadataCache {
 
     MetadataCache(String clusterId,
                   List<Node> nodes,
-                  Collection<PartitionInfo> partitions,
+                  Collection<PartitionInfoAndEpoch> partitions,
                   Set<String> unauthorizedTopics,
                   Set<String> invalidTopics,
                   Set<String> internalTopics,
@@ -71,14 +74,33 @@ class MetadataCache {
         this.controller = controller;
 
         this.partitionsByTopicPartition = new HashMap<>(partitions.size());
-        for (PartitionInfo p : partitions) {
-            this.partitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
+        for (PartitionInfoAndEpoch p : partitions) {
+            this.partitionsByTopicPartition.put(new TopicPartition(p.partitionInfo().topic(), p.partitionInfo().partition()), p);
         }
 
         if (clusterInstance == null) {
-            updateClusterView();
+            computeClusterView();
         } else {
             this.clusterInstance = clusterInstance;
+        }
+    }
+
+    /**
+     * Return the cached PartitionInfo iff it was for the given epoch
+     * @param topicPartition
+     * @param epoch
+     * @return
+     */
+    Optional<PartitionInfo> getPartitionInfoHavingEpoch(TopicPartition topicPartition, int epoch) {
+        PartitionInfoAndEpoch infoAndEpoch = partitionsByTopicPartition.get(topicPartition);
+        if (infoAndEpoch == null) {
+            return Optional.empty();
+        } else {
+            if (infoAndEpoch.epoch() == epoch) {
+                return Optional.of(infoAndEpoch.partitionInfo());
+            } else {
+                return Optional.empty();
+            }
         }
     }
 
@@ -90,17 +112,21 @@ class MetadataCache {
         }
     }
 
-    synchronized boolean removePartition(TopicPartition topicPartition) {
+    /*synchronized boolean removePartition(TopicPartition topicPartition) {
         if (partitionsByTopicPartition.remove(topicPartition) != null) {
-            updateClusterView();
+            //updateClusterView();
             return true;
         } else {
             return false;
         }
-    }
+    }*/
 
-    private void updateClusterView() {
-        this.clusterInstance = new Cluster(clusterId, nodes, partitionsByTopicPartition.values(), unauthorizedTopics, invalidTopics, internalTopics, controller);
+    private void computeClusterView() {
+        List<PartitionInfo> partitionInfos = partitionsByTopicPartition.values()
+                .stream()
+                .map(PartitionInfoAndEpoch::partitionInfo)
+                .collect(Collectors.toList());
+        this.clusterInstance = new Cluster(clusterId, nodes, partitionInfos, unauthorizedTopics, invalidTopics, internalTopics, controller);
     }
 
     static MetadataCache bootstrap(List<InetSocketAddress> addresses) {
@@ -122,5 +148,45 @@ class MetadataCache {
         return "MetadataCache{" +
                 "cluster=" + cluster() +
                 '}';
+    }
+
+    static class PartitionInfoAndEpoch {
+        private final PartitionInfo partitionInfo;
+        private final int epoch;
+
+        PartitionInfoAndEpoch(PartitionInfo partitionInfo, int epoch) {
+            this.partitionInfo = partitionInfo;
+            this.epoch = epoch;
+        }
+
+        public PartitionInfo partitionInfo() {
+            return partitionInfo;
+        }
+
+        public int epoch() {
+            return epoch;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            PartitionInfoAndEpoch that = (PartitionInfoAndEpoch) o;
+            return epoch == that.epoch &&
+                    Objects.equals(partitionInfo, that.partitionInfo);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(partitionInfo, epoch);
+        }
+
+        @Override
+        public String toString() {
+            return "PartitionInfoAndEpoch{" +
+                    "partitionInfo=" + partitionInfo +
+                    ", epoch=" + epoch +
+                    '}';
+        }
     }
 }
