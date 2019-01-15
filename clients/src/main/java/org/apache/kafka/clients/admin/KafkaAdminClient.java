@@ -126,6 +126,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -439,8 +440,10 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public void close(long duration, TimeUnit unit) {
-        long waitTimeMs = unit.toMillis(duration);
+    public void close(Duration timeout) {
+        long waitTimeMs = timeout.toMillis();
+        if (waitTimeMs < 0)
+            throw new IllegalArgumentException("The timeout cannot be negative.");
         waitTimeMs = Math.min(TimeUnit.DAYS.toMillis(365), waitTimeMs); // Limit the timeout to a year.
         long now = time.milliseconds();
         long newHardShutdownTimeMs = now + waitTimeMs;

@@ -41,6 +41,7 @@ object RequestChannel extends Logging {
 
   val RequestQueueSizeMetric = "RequestQueueSize"
   val ResponseQueueSizeMetric = "ResponseQueueSize"
+  val ControlPlaneMetricPrefix = "ControlPlane"
   val ProcessorMetricTag = "processor"
 
   def isRequestLoggingEnabled: Boolean = requestLogger.underlying.isDebugEnabled
@@ -272,17 +273,19 @@ object RequestChannel extends Logging {
   }
 }
 
-class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
+class RequestChannel(val queueSize: Int, val metricNamePrefix : String = "") extends KafkaMetricsGroup {
   import RequestChannel._
   val metrics = new RequestChannel.Metrics
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
+  val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
+  val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
 
-  newGauge(RequestQueueSizeMetric, new Gauge[Int] {
+  newGauge(requestQueueSizeMetricName, new Gauge[Int] {
       def value = requestQueue.size
   })
 
-  newGauge(ResponseQueueSizeMetric, new Gauge[Int]{
+  newGauge(responseQueueSizeMetricName, new Gauge[Int]{
     def value = processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
@@ -292,7 +295,7 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    newGauge(ResponseQueueSizeMetric,
+    newGauge(responseQueueSizeMetricName,
       new Gauge[Int] {
         def value = processor.responseQueueSize
       },
@@ -302,7 +305,7 @@ class RequestChannel(val queueSize: Int) extends KafkaMetricsGroup {
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    removeMetric(ResponseQueueSizeMetric, Map(ProcessorMetricTag -> processorId.toString))
+    removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString))
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */

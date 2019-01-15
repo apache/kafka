@@ -835,7 +835,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -855,7 +855,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
-          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
+          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>

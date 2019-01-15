@@ -17,6 +17,7 @@
 
 package kafka.coordinator.group
 
+import kafka.admin.ConsumerGroupCommand.GroupState
 import kafka.common.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
@@ -238,16 +239,17 @@ class GroupMetadataTest extends JUnitSuite {
   @Test
   def testSupportsProtocols() {
     // by default, the group supports everything
-    assertTrue(group.supportsProtocols(Set("roundrobin", "range")))
+    assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "range")))
 
     val memberId = "memberId"
     val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     group.add(member)
-    assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
-    assertTrue(group.supportsProtocols(Set("range", "foo")))
-    assertFalse(group.supportsProtocols(Set("foo", "bar")))
+    group.transitionTo(PreparingRebalance)
+    assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "foo")))
+    assertTrue(group.supportsProtocols(protocolType, Set("range", "foo")))
+    assertFalse(group.supportsProtocols(protocolType, Set("foo", "bar")))
 
     val otherMemberId = "otherMemberId"
     val otherMember = new MemberMetadata(otherMemberId, groupId, clientId, clientHost, rebalanceTimeoutMs,
@@ -255,8 +257,9 @@ class GroupMetadataTest extends JUnitSuite {
 
     group.add(otherMember)
 
-    assertTrue(group.supportsProtocols(Set("roundrobin", "foo")))
-    assertFalse(group.supportsProtocols(Set("range", "foo")))
+    assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "foo")))
+    assertFalse(group.supportsProtocols("invalid_type", Set("roundrobin", "foo")))
+    assertFalse(group.supportsProtocols(protocolType, Set("range", "foo")))
   }
 
   @Test
