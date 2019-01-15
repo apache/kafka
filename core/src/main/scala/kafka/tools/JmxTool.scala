@@ -139,8 +139,7 @@ object JmxTool extends Logging {
         }
         // password authentication enable
         if (enablePasswordAuth) {
-          val userPassword = options.valueOf(jmxAuthPropOpt).split("=", 2)
-          val credentials = Array(userPassword(0), userPassword(1))
+          val credentials = options.valueOf(jmxAuthPropOpt).split("=", 2)
           env.put(JMXConnector.CREDENTIALS, credentials)
         }
         jmxc = JMXConnectorFactory.connect(url, env)
