@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import java.net.InetSocketAddress;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -424,7 +425,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             log.debug("Kafka producer started");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
-            close(0, TimeUnit.MILLISECONDS, true);
+            close(Duration.ofMillis(0), true);
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka producer", t);
         }
@@ -1107,7 +1108,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     @Override
     public void close() {
-        close(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+        close(Duration.ofMillis(Long.MAX_VALUE));
     }
 
     /**
@@ -1117,25 +1118,24 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * any unsent and unacknowledged records immediately.
      * <p>
      * If invoked from within a {@link Callback} this method will not block and will be equivalent to
-     * <code>close(0, TimeUnit.MILLISECONDS)</code>. This is done since no further sending will happen while
+     * <code>close(Duration.ofMillis(0))</code>. This is done since no further sending will happen while
      * blocking the I/O thread of the producer.
      *
      * @param timeout The maximum time to wait for producer to complete any pending requests. The value should be
      *                non-negative. Specifying a timeout of zero means do not wait for pending send requests to complete.
-     * @param timeUnit The time unit for the <code>timeout</code>
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     *
      */
     @Override
-    public void close(long timeout, TimeUnit timeUnit) {
-        close(timeout, timeUnit, false);
+    public void close(Duration timeout) {
+        close(timeout, false);
     }
 
-    private void close(long timeout, TimeUnit timeUnit, boolean swallowException) {
-        if (timeout < 0)
+    private void close(Duration timeout, boolean swallowException) {
+        long timeoutMs = timeout.toMillis();
+        if (timeoutMs < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
-
-        long timeoutMs = timeUnit.toMillis(timeout);
         log.info("Closing the Kafka producer with timeoutMillis = {} ms.", timeoutMs);
 
         // this will keep track of the first encountered exception
