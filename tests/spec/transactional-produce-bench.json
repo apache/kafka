@@ -1,0 +1,24 @@
+{
+  "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+  "durationMs": 10000000,
+  "producerNode": "node0",
+  "bootstrapServers": "localhost:9092",
+  "targetMessagesPerSec": 100,
+  "maxMessages": 500,
+  "transactionGenerator" : {
+    "type" : "uniform",
+    "messagesPerTransaction" : 50
+  },
+  "activeTopics": {
+      "foo[1-3]": {
+          "numPartitions": 3,
+          "replicationFactor": 1
+      }
+  },
+  "inactiveTopics": {
+      "foo[4-5]": {
+          "numPartitions": 3,
+          "replicationFactor": 1
+      }
+  }
+}
