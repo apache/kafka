@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.io.File;
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -57,6 +55,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -118,8 +118,6 @@ public class TopologyTestDriverTest {
         new StringSerializer(),
         new LongSerializer());
 
-    private final boolean eosEnabled;
-
     @Parameterized.Parameters(name = "Eos enabled = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
@@ -130,7 +128,6 @@ public class TopologyTestDriverTest {
     }
 
     public TopologyTestDriverTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
         if (eosEnabled) {
             config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }

@@ -73,11 +73,10 @@ public class EosIntegrationTest {
     private static final int MAX_WAIT_TIME_MS = 60 * 1000;
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
-        {
-            put("auto.create.topics.enable", false);
-        }
-    });
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
+        NUM_BROKERS,
+        Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "false"))
+    );
 
     private static String applicationId;
     private final static int NUM_TOPIC_PARTITIONS = 2;
@@ -154,23 +153,22 @@ public class EosIntegrationTest {
         }
         output.to(outputTopic);
 
+        final Properties properties = new Properties();
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
+        properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
+
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
                 applicationId,
                 CLUSTER.bootstrapServers(),
                 Serdes.LongSerde.class.getName(),
                 Serdes.LongSerde.class.getName(),
-                new Properties() {
-                    {
-                        put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
-                        put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
-                        put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
-                        put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
-                        put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
-                    }
-                });
+                properties);
 
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
                 streams.start();
@@ -275,11 +273,10 @@ public class EosIntegrationTest {
                         CONSUMER_GROUP_ID,
                         LongDeserializer.class,
                         LongDeserializer.class,
-                        new Properties() {
-                            {
-                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                            }
-                        }),
+                        Utils.mkProperties(Collections.singletonMap(
+                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
+                        ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     firstBurstOfData.size()
                 );
@@ -300,11 +297,10 @@ public class EosIntegrationTest {
                         CONSUMER_GROUP_ID,
                         LongDeserializer.class,
                         LongDeserializer.class,
-                        new Properties() {
-                            {
-                                put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                            }
-                        }),
+                        Utils.mkProperties(Collections.singletonMap(
+                            ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                            IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))
+                        ),
                     SINGLE_PARTITION_OUTPUT_TOPIC,
                     secondBurstOfData.size()
                 );
@@ -691,11 +687,9 @@ public class EosIntegrationTest {
                     groupId,
                     LongDeserializer.class,
                     LongDeserializer.class,
-                    new Properties() {
-                        {
-                            put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
-                        }
-                    }),
+                    Utils.mkProperties(Collections.singletonMap(
+                        ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
                 SINGLE_PARTITION_OUTPUT_TOPIC,
                 numberOfRecords
             );

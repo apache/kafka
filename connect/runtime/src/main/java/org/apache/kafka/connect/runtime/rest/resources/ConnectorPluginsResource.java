@@ -18,7 +18,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorPluginInfo;
@@ -49,7 +49,7 @@ import java.util.Map;
 public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
-    private final Herder herder;
+    private final HerderProvider herderProvider;
     private final List<ConnectorPluginInfo> connectorPlugins;
 
     private static final List<Class<? extends Connector>> CONNECTOR_EXCLUDES = Arrays.asList(
@@ -58,8 +58,8 @@ public class ConnectorPluginsResource {
             SchemaSourceConnector.class
     );
 
-    public ConnectorPluginsResource(Herder herder) {
-        this.herder = herder;
+    public ConnectorPluginsResource(HerderProvider herderProvider) {
+        this.herderProvider = herderProvider;
         this.connectorPlugins = new ArrayList<>();
     }
 
@@ -78,7 +78,7 @@ public class ConnectorPluginsResource {
             );
         }
 
-        return herder.validateConnectorConfig(connectorConfig);
+        return herderProvider.get().validateConnectorConfig(connectorConfig);
     }
 
     @GET
@@ -90,7 +90,7 @@ public class ConnectorPluginsResource {
     // TODO: improve once plugins are allowed to be added/removed during runtime.
     private synchronized List<ConnectorPluginInfo> getConnectorPlugins() {
         if (connectorPlugins.isEmpty()) {
-            for (PluginDesc<Connector> plugin : herder.plugins().connectors()) {
+            for (PluginDesc<Connector> plugin : herderProvider.get().plugins().connectors()) {
                 if (!CONNECTOR_EXCLUDES.contains(plugin.pluginClass())) {
                     connectorPlugins.add(new ConnectorPluginInfo(plugin));
                 }
