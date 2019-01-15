@@ -64,7 +64,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 
 import kafka.tools.StreamsResetter;
 
@@ -86,7 +85,7 @@ public abstract class AbstractResetIntegrationTest {
     @AfterClass
     public static void afterClassCleanup() {
         if (adminClient != null) {
-            adminClient.close(10, TimeUnit.SECONDS);
+            adminClient.close(Duration.ofSeconds(10));
             adminClient = null;
         }
     }
