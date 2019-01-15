@@ -699,6 +699,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
+                partitionsToRetry.add(tp);
             } else if (currentInfo.get().leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
