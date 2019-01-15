@@ -164,7 +164,7 @@ public class StreamsResetter {
             e.printStackTrace(System.err);
         } finally {
             if (kafkaAdminClient != null) {
-                kafkaAdminClient.close(60, TimeUnit.SECONDS);
+                kafkaAdminClient.close(java.time.Duration.ofSeconds(60));
             }
         }
 
