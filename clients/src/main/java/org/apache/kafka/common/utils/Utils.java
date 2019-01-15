@@ -593,16 +593,16 @@ public final class Utils {
         Map<Object, Object> flattened = multiMap.entrySet().stream().collect(
                 Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get(entry.getValue().size() - 1)));
 
-        for (Object key : flattened.keySet()) {
-            List<Object> values = multiMap.get(key);
+        for (Map.Entry<Object, Object> entry : flattened.entrySet()) {
+            List<Object> values = multiMap.get(entry.getKey());
             for (int i = 0; i < values.size() - 1; i++) {
                 foundDuplicates = true;
                 msg.append("\n\tOverwriting ")
-                        .append(key)
+                        .append(entry.getKey())
                         .append(" = ")
                         .append(values.get(i))
                         .append(" with ")
-                        .append(flattened.get(key));
+                        .append(flattened.get(entry.getValue()));
             }
         }
 
