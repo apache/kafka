@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
-
-import org.apache.kafka.streams.state.internals.ThreadCache;
+package org.apache.kafka.streams.state.internals;
 
 /**
  * Listen to cache flush events
@@ -30,6 +28,7 @@ public interface CacheFlushListener<K, V> {
      * @param key         key of the entry
      * @param newValue    current value
      * @param oldValue    previous value
+     * @param timestamp   timestamp of new value
      */
-    void apply(final K key, final V newValue, final V oldValue);
+    void apply(final K key, final V newValue, final V oldValue, final long timestamp);
 }
