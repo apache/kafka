@@ -920,7 +920,7 @@
         <p>Typical steps for delegation token usage are:</p>
         <ol>
         <li>User authenticates with the Kafka cluster via SASL or SSL, and obtains a delegation token. This can be done
-            using AdminClient APIs or using <tt>kafka-delegation-token.sh</tt> script.</li>
+            using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.</li>
         <li>User securely passes the delegation token to Kafka clients for authenticating with the Kafka cluster.</li>
         <li>Token owner/renewer can renew/expire the delegation tokens.</li>
         </ol>
@@ -944,10 +944,10 @@
         </li>
 
         <li><h5><a id="security_sasl_create_tokens" href="#security_sasl_create_tokens">Creating Delegation Tokens</a></h5>
-        <p>Tokens can be created by using AdminClient APIs or using <tt>kafka-delegation-token.sh</tt> script.
+        <p>Tokens can be created by using AdminClient APIs or using <tt>kafka-delegation-tokens.sh</tt> script.
             Delegation token requests (create/renew/expire/describe) should be issued only on SASL or SSL authenticated channels.
             Tokens can not be requests if the initial authentication is done through delegation token.
-            <tt>kafka-delegation-token.sh</tt> script examples are given below.</p>
+            <tt>kafka-delegation-tokens.sh</tt> script examples are given below.</p>
         <p>Create a delegation token:
         <pre class="brush: bash;">
     > bin/kafka-delegation-tokens.sh --bootstrap-server localhost:9092 --create   --max-life-time-period -1 --command-config client.properties --renewer-principal User:user1
