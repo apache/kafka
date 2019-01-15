@@ -50,22 +50,6 @@ public class ThreadMetadata {
                           final String mainConsumerClientId,
                           final String restoreConsumerClientId,
                           final Set<String> producerClientIds,
-                          final String adminClientId) {
-        this(threadName,
-            threadState,
-            mainConsumerClientId,
-            restoreConsumerClientId,
-            producerClientIds,
-            adminClientId,
-            Collections.emptySet(),
-            Collections.emptySet());
-    }
-
-    public ThreadMetadata(final String threadName,
-                          final String threadState,
-                          final String mainConsumerClientId,
-                          final String restoreConsumerClientId,
-                          final Set<String> producerClientIds,
                           final String adminClientId,
                           final Set<TaskMetadata> activeTasks,
                           final Set<TaskMetadata> standbyTasks) {

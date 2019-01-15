@@ -751,6 +751,7 @@ public class StreamThread extends Thread {
         return threadClientId + "-restore-consumer";
     }
 
+    // currently admin client is shared among all threads
     public static String getSharedAdminClientId(final String clientId) {
         return clientId + "-admin";
     }
@@ -1247,7 +1248,9 @@ public class StreamThread extends Thread {
             getThreadConsumerClientId(this.getName()),
             getThreadRestoreConsumerClientId(this.getName()),
             producer == null ? Collections.emptySet() : Collections.singleton(getThreadProducerClientId(this.getName())),
-            adminClientId);
+            adminClientId,
+            Collections.emptySet(),
+            Collections.emptySet());
 
         return this;
     }

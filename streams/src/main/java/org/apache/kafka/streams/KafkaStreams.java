@@ -387,7 +387,7 @@ public class KafkaStreams implements AutoCloseable {
         if (globalStreamThread != null) {
             result.putAll(globalStreamThread.consumerMetrics());
         }
-        // own streams metrics
+        // self streams metrics
         result.putAll(metrics.metrics());
         return Collections.unmodifiableMap(result);
     }
