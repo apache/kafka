@@ -14,19 +14,25 @@
 package kafka.api
 
 import java.util.concurrent._
+import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collection, Collections, Properties}
 
+import util.control.Breaks._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor, Future => SFuture}
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
@@ -35,17 +41,23 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
+  val maxGroupSize = 5
 
   // Time to process commit and leave group requests in tests when brokers are available
   val gracefulCloseTimeMs = 1000
   val executor = Executors.newScheduledThreadPool(2)
 
   override def generateConfigs = {
+    generateKafkaConfigs()
+  }
+
+  private def generateKafkaConfigs(maxGroupSize: String = maxGroupSize.toString): Seq[KafkaConfig] = {
     val properties = new Properties
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
     properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
 
@@ -188,14 +200,14 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     }
 
     sendRecords(numRecords, newtopic)
-    receiveRecords(consumer, numRecords, newtopic, 10000)
+    receiveRecords(consumer, numRecords, 10000)
 
     servers.foreach(server => killBroker(server.config.brokerId))
     Thread.sleep(500)
     restartDeadBrokers()
 
     val future = executor.submit(new Runnable {
-      def run() = receiveRecords(consumer, numRecords, newtopic, 10000)
+      def run() = receiveRecords(consumer, numRecords, 10000)
     })
     sendRecords(numRecords, newtopic)
     future.get
@@ -277,6 +289,179 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   }
 
   /**
+    * If we have a running consumer group of size N, configure consumer.group.max.size=N-1 and restart all brokers,
+    * the group should be forced to rebalance when it becomes hosted on a Coordinator with the new config.
+    * Then, 1 consumer should be left out of the group
+    */
+  @Test
+  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
+    val topic = "group-max-size-test"
+    val maxGroupSize = 2
+    val consumerCount = maxGroupSize + 1
+    var recordsProduced = maxGroupSize * 100
+    val partitionCount = consumerCount * 2
+    if (recordsProduced % partitionCount != 0) {
+      // ensure even record distribution per partition
+      recordsProduced += partitionCount - recordsProduced % partitionCount
+    }
+    val executor = Executors.newScheduledThreadPool(consumerCount * 2)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val producer = createProducer()
+    createTopic(topic, numPartitions = partitionCount, replicationFactor = numBrokers)
+    val stableConsumers = createConsumersWithGroupId("group2", consumerCount, executor, topic = topic)
+
+    // assert group is stable and working
+    sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+    stableConsumers.foreach(cons => {
+      receiveAtLeastRecords(cons, recordsProduced / consumerCount, 10000)
+    })
+
+    // roll all brokers with a lesser max group size to make sure coordinator has the new config
+    val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
+    val receivedExceptions = new ArrayBuffer[Exception]()
+    var receivedInitialException: Option[Exception] = None
+    var kickedOutConsumerIdx: Option[Int] = None
+    val lock = new ReentrantLock
+    breakable { for (broker <- servers.indices) {
+      killBroker(broker)
+      sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+
+      var successfulConsumes = 0
+
+      implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
+      // compute consumptions in a non-blocking way in order to account for the rebalance once the group.size takes effect
+      val consumeFutures = new ArrayBuffer[SFuture[Any]]
+      stableConsumers.indices.foreach(idx => {
+        val currentConsumer = stableConsumers(idx)
+        val consumeFuture: SFuture[Any] = SFuture {
+          var receivedExc: Option[Exception] = None
+          receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000,
+          new ExceptionCallback(onException = e => {
+            receivedExc = Some(e) // save exception to map later
+          }))
+
+          CoreUtils.inLock(lock) {
+            receivedExc match {
+              case Some(received) =>
+                if (received.isInstanceOf[GroupMaxSizeReachedException]) {
+                  kickedOutConsumerIdx = Some(idx)
+                }
+                receivedExceptions += received
+              case None => successfulConsumes += 1
+            }
+          }
+
+        }(ExecutionContext.fromExecutor(executor))
+
+        consumeFutures += consumeFuture
+      })
+      Await.result(SFuture.sequence(consumeFutures), Duration("25sec"))
+
+      if (receivedExceptions.nonEmpty && (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException]))) {
+        fail(s"Expected to only receive one exception of type ${classOf[GroupMaxSizeReachedException]}" +
+          s"during consumption. Received: $receivedExceptions")
+      } else if (receivedExceptions.nonEmpty) {
+        receivedInitialException = Some(receivedExceptions(0))
+        // validate N-1 consumers consumed
+        assertEquals(maxGroupSize, successfulConsumes)
+        break
+      }
+
+      val config = newConfigs(broker)
+      servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+      restartDeadBrokers()
+    }}
+    if (receivedExceptions.isEmpty)
+      fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
+
+
+    stableConsumers.remove(kickedOutConsumerIdx.get)
+    sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+    // should be only maxGroupSize consumers left in the group
+    stableConsumers.foreach(cons => {
+      receiveExactRecords(cons, recordsProduced / maxGroupSize, 10000)
+    })
+  }
+
+  /**
+    * When we have the consumer group max size configured to X, the X+1th consumer trying to join should receive a fatal exception
+    */
+  @Test
+  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(): Unit = {
+    val topic = "group-max-size-test"
+    createTopic(topic, maxGroupSize, numBrokers)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val stableConsumers = checkExceptionDuringRebalance("group1", topic, Executors.newScheduledThreadPool(maxGroupSize * 2), true)
+    // assert group continues to live
+    val producer = createProducer()
+    sendRecords(producer, maxGroupSize * 100, topic, numPartitions = Some(maxGroupSize))
+    stableConsumers.foreach(cons => {
+        receiveExactRecords(cons, 100, 10000)
+    })
+  }
+
+  /**
+    * Creates N consumers with the same group ID and ensures the group rebalances properly at each step
+    */
+  private def createConsumersWithGroupId(groupId: String, consumerCount: Int, executor: ExecutorService, topic: String = topic): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
+    val stableConsumers = ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    for (i <- 1.to(consumerCount)) {
+      val newConsumer = createConsumerWithGroupId(groupId)
+      waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = () => {}, topic = topic),
+        executor = executor, stableConsumers:_*)
+      stableConsumers += newConsumer
+    }
+    stableConsumers
+  }
+
+  def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], executor: ExecutorService, revokeSemaphore: Option[Semaphore] = None, onException: () => Unit, topic: String = topic): Future[Any] = {
+    executor.submit(CoreUtils.runnable {
+      try {
+        consumer.subscribe(Collections.singletonList(topic))
+        consumer.poll(0)
+      } catch {
+        case e: Exception => onException.apply()
+      }
+    }, 0)
+  }
+
+  def waitForRebalance(timeoutMs: Long, future: Future[Any], executor: ExecutorService, otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+    val startMs = System.currentTimeMillis
+    while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone) {
+      otherConsumers.foreach(consumer => {
+        executor.submit(CoreUtils.runnable {
+          consumer.poll(1000)
+        })
+      })
+      Thread.sleep(50)
+    }
+    Thread.sleep(1000) // wait for the poll() calls to complete
+
+    assertTrue("Rebalance did not complete in time", future.isDone)
+  }
+
+  /**
+    * Creates N+1 consumers in the same consumer group, where N is the maximum size of a single consumer group.
+    * Asserts that the N+1th consumer receives a fatal error when it tries to join the group
+    */
+  private def checkExceptionDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
+    val stableConsumers = createConsumersWithGroupId(groupId, maxGroupSize, executor, topic)
+
+    // next consumer should raise an exception
+    val newConsumer = createConsumerWithGroupId(groupId)
+    var failedRebalance = false
+    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = () => {failedRebalance = true}), executor = executor, stableConsumers:_*)
+    assertTrue("Rebalance did not fail as expected", failedRebalance)
+
+    stableConsumers
+  }
+
+
+  /**
    * Consumer is closed during rebalance. Close should leave group and close
    * immediately if rebalance is in progress. If brokers are not available,
    * close should terminate immediately without sending leave group.
@@ -323,7 +508,6 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       assertFalse("Rebalance completed too early", future.isDone)
       future
     }
-
     val consumer1 = createConsumerWithGroupId(groupId)
     waitForRebalance(2000, subscribeAndPoll(consumer1))
     val consumer2 = createConsumerWithGroupId(groupId)
@@ -360,16 +544,50 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       consumer.assign(Collections.singleton(tp))
     else
       consumer.subscribe(Collections.singleton(topic))
-    receiveRecords(consumer, numRecords)
+    receiveExactRecords(consumer, numRecords)
     consumer
   }
 
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000) {
+  class ExceptionCallback(val onException: Exception => Unit = e => throw e) {
+    var called: Boolean = false
+
+    def call(e: Exception): Unit = {
+      called = true
+      onException(e)
+    }
+  }
+
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000,
+                             exceptionCallback: ExceptionCallback = new ExceptionCallback()): Long = {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
-    while (received < numRecords && System.currentTimeMillis < endTimeMs)
-      received += consumer.poll(1000).count()
+    try {
+      while (received < numRecords && System.currentTimeMillis < endTimeMs)
+        received += consumer.poll(100).count()
+    } catch {
+      case e: Exception => exceptionCallback.call(e)
+    }
+
+    received
+  }
+
+  private def receiveExactRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000,
+                                  exceptionCallback: ExceptionCallback = new ExceptionCallback()): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs, exceptionCallback)
+    if (exceptionCallback.called)
+      return
+
     assertEquals(numRecords, received)
+  }
+
+  private def receiveAtLeastRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long,
+                                    exceptionCallback: ExceptionCallback = new ExceptionCallback()): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs, exceptionCallback)
+    if (exceptionCallback.called)
+      return
+
+    assertTrue(s"Received $received, expected at least $numRecords", numRecords <= received)
+    consumer.commitSync()
   }
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
@@ -427,9 +645,21 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
   private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
                           numRecords: Int,
-                          topic: String = this.topic) {
+                          topic: String = this.topic,
+                          numPartitions: Option[Int] = None) {
+    var partitionIndex = 0
+    def getPartition: Int = {
+      numPartitions match {
+        case Some(partitions) =>
+          val nextPart = partitionIndex % partitions
+          partitionIndex += 1
+          nextPart
+        case None => part
+      }
+    }
+
     val futures = (0 until numRecords).map { i =>
-      producer.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+      producer.send(new ProducerRecord(topic, getPartition, i.toString.getBytes, i.toString.getBytes))
     }
     futures.map(_.get)
   }

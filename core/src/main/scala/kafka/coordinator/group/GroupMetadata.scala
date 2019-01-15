@@ -201,6 +201,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def not(groupState: GroupState) = state != groupState
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
+  def size() = members.size
 
   def isLeader(memberId: String): Boolean = leaderId.contains(memberId)
   def leaderOrNull: String = leaderId.orNull
@@ -250,7 +251,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
-  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty
+  def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 
@@ -268,6 +269,33 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     assertValidTransition(groupState)
     state = groupState
     currentStateTimestamp = Some(time.milliseconds())
+  }
+
+  /**
+    * Shrinks the consumer group to the given size by removing members while maintaining the leader
+    */
+  def shrinkTo(maxSize: Int): Unit = {
+    if (members.size < maxSize)
+      throw new IllegalArgumentException(s"Cannot shrink group $groupId to $maxSize as it's current count ${members.size} is smaller.")
+
+    var leaderWasAdded = leaderId.isEmpty
+    val newMembers = new mutable.HashMap[String, MemberMetadata]
+    val maxSizeWithoutLeader = maxSize - 1
+
+    members.foreach(memberEntry => {
+      val memberId = memberEntry._1
+      val member = memberEntry._2
+      if (!leaderWasAdded && isLeader(memberId)) {
+        newMembers.put(memberId, member)
+        leaderWasAdded = true
+      } else if (newMembers.size < maxSizeWithoutLeader || (leaderWasAdded && newMembers.size < maxSize)) {
+        newMembers.put(memberId, member)
+      }
+    })
+    members.clear()
+    supportedProtocols.clear()
+    members ++= newMembers
+    members.values.foreach(member => member.supportedProtocols.foreach{ case (proto, _) => supportedProtocols(proto) += 1 })
   }
 
   def selectProtocol: String = {

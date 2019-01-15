@@ -22,6 +22,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
@@ -561,6 +562,8 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
                 future.raise(Errors.MEMBER_ID_REQUIRED);
+            } else if (error == Errors.GROUP_MAX_SIZE_REACHED) {
+                future.raise(new GroupMaxSizeReachedException("Consumer group " + groupId + " is at full capacity. There is no room for this consumer."));
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));

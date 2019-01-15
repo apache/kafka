@@ -48,6 +48,7 @@ import scala.math.max
  * since the delayed operation is completed only if the group lock can be acquired.
  */
 class GroupCoordinator(val brokerId: Int,
+                       val groupMaxSize: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
                        val groupManager: GroupMetadataManager,
@@ -159,8 +160,12 @@ class GroupCoordinator(val brokerId: Int,
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
-        val newMemberId = clientId + "-" + group.generateMemberIdSuffix
+        if (groupIsFull(group)) {
+          responseCallback(joinError(NoMemberId, Errors.GROUP_MAX_SIZE_REACHED))
+          return
+        }
 
+        val newMemberId = clientId + "-" + group.generateMemberIdSuffix
         if (requireKnownMemberId) {
           // If member id required, register the member in the pending member list
           // and send back a response to call for another join group request with allocated member id.
@@ -651,6 +656,11 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
       assert(group.is(Stable) || group.is(Empty))
+      if (groupIsOverCapacity(group)) {
+        group.shrinkTo(groupMaxSize)
+        prepareRebalance(group, s"Freshly-loaded group was over capacity ($groupMaxSize).")
+      }
+
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
     }
   }
@@ -743,7 +753,8 @@ class GroupCoordinator(val brokerId: Int,
                                     protocolType: String,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
-                                    callback: JoinCallback): MemberMetadata = {
+                                    callback: JoinCallback): Unit = {
+    val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
 
@@ -765,7 +776,6 @@ class GroupCoordinator(val brokerId: Int,
 
     maybePrepareRebalance(group, s"Adding new member $memberId")
     group.removePendingMember(memberId)
-    member
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
@@ -921,6 +931,14 @@ class GroupCoordinator(val brokerId: Int,
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
 
+  private def groupIsFull(group: GroupMetadata): Boolean = {
+    group.size == groupMaxSize || groupIsOverCapacity(group)
+  }
+
+  private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
+    group.size > groupMaxSize
+  }
+
   private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
 
   private def isCoordinatorLoadInProgress(groupId: String) = groupManager.isGroupLoading(groupId)
@@ -974,7 +992,7 @@ object GroupCoordinator {
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, zkClient, time)
-    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
+    new GroupCoordinator(config.brokerId, config.groupMaxSize, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
 }
