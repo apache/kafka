@@ -213,7 +213,7 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    public synchronized Optional<PartitionInfo> getLeaderInfo(TopicPartition topicPartition) {
+    public synchronized Optional<PartitionInfo> partitionInfoIfCurrent(TopicPartition topicPartition) {
         return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition))
                 .flatMap(epoch -> cache.getPartitionInfoHavingEpoch(topicPartition, epoch));
     }

@@ -552,7 +552,7 @@ public class MetadataTest {
 
         // Cache of partition stays, but leader partition info is not available since it's stale
         assertNotNull(metadata.fetch().partition(tp));
-        assertFalse(metadata.getLeaderInfo(tp).isPresent());
+        assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
 
         // Last-seen is updated
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
@@ -560,7 +560,7 @@ public class MetadataTest {
         // Metadata with older epoch is rejected
         metadata.update(metadataResponse, 20L);
         assertNotNull(metadata.fetch().partition(tp));
-        assertFalse(metadata.getLeaderInfo(tp).isPresent());
+        assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Metadata with newer epoch is accepted
@@ -569,13 +569,13 @@ public class MetadataTest {
                     new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(102), replicas, isr, offlineReplicas));
         metadata.update(metadataResponse, 30L);
         assertNotNull(metadata.fetch().partition(tp));
-        assertTrue(metadata.getLeaderInfo(tp).isPresent());
+        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 102);
 
         // Change topic subscription, still have old metadata cached until next metadata update
         metadata.setTopics(Collections.singletonList("topic-2"));
         assertNotNull(metadata.fetch().partition(tp));
-        assertFalse(metadata.getLeaderInfo(tp).isPresent());
+        assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
     }
 
     @Test
