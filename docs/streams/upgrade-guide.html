@@ -72,7 +72,7 @@
     <p>
         We've simplified the <code>KafkaStreams#state</code> transition diagram during the starting up phase a bit in 2.2.0: in older versions the state will transit from <code>CREATED</code> to <code>RUNNING</code>, and then to <code>REBALANCING</code> to get the first
         stream task assignment, and then back to <code>RUNNING</code>; starting in 2.2.0 it will transit from <code>CREATED</code> directly to <code>REBALANCING</code> and then to <code>RUNNING</code>.
-        If you have registered a <code>StateListener</code> that captures state transition events, you may need to adjust your listener implementation accordingly for this simplification (in practice, your listener logic should very likely to not be affected at all).
+        If you have registered a <code>StateListener</code> that captures state transition events, you may need to adjust your listener implementation accordingly for this simplification (in practice, your listener logic should be very unlikely to be affected at all).
     </p>
 
     <p>
