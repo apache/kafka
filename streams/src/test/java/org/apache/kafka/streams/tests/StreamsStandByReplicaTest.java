@@ -17,16 +17,15 @@
 
 package org.apache.kafka.streams.tests;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
@@ -36,6 +35,7 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.Stores;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -44,7 +44,8 @@ public class StreamsStandByReplicaTest {
 
     public static void main(final String[] args) throws IOException {
         if (args.length < 2) {
-            System.err.println("StreamsStandByReplicaTest are expecting two parameters: propFile, additionalConfigs; but only see " + args.length + " parameter");
+            System.err.println("StreamsStandByReplicaTest are expecting two parameters: " +
+                "propFile, additionalConfigs; but only see " + args.length + " parameter");
             System.exit(1);
         }
 
@@ -83,7 +84,11 @@ public class StreamsStandByReplicaTest {
         final String sinkTopic2 = updated.remove("sinkTopic2");
 
         if (sourceTopic == null || sinkTopic1 == null || sinkTopic2 == null) {
-            System.err.println(String.format("one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]", sourceTopic, sinkTopic1, sinkTopic2));
+            System.err.println(String.format(
+                "one or more required topics null sourceTopic[%s], sinkTopic1[%s], sinkTopic2[%s]",
+                sourceTopic,
+                sinkTopic1,
+                sinkTopic2));
             System.err.flush();
             System.exit(1);
         }
@@ -109,42 +114,32 @@ public class StreamsStandByReplicaTest {
         final KeyValueBytesStoreSupplier persistentStoreSupplier = Stores.persistentKeyValueStore(persistentMemoryStoreName);
 
         final Serde<String> stringSerde = Serdes.String();
+        final ValueMapper<Long, String> countMapper = Object::toString;
 
         final KStream<String, String> inputStream = builder.stream(sourceTopic, Consumed.with(stringSerde, stringSerde));
 
-        final ValueMapper<Long, String> countMapper = new ValueMapper<Long, String>() {
-            @Override
-            public String apply(final Long value) {
-                return value.toString();
-            }
-        };
-
-        inputStream.groupByKey().count(Materialized.<String, Long>as(inMemoryStoreSupplier)).toStream().mapValues(countMapper)
+        inputStream.groupByKey().count(Materialized.as(inMemoryStoreSupplier)).toStream().mapValues(countMapper)
             .to(sinkTopic1, Produced.with(stringSerde, stringSerde));
 
-        inputStream.groupByKey().count(Materialized.<String, Long>as(persistentStoreSupplier)).toStream().mapValues(countMapper)
+        inputStream.groupByKey().count(Materialized.as(persistentStoreSupplier)).toStream().mapValues(countMapper)
             .to(sinkTopic2, Produced.with(stringSerde, stringSerde));
 
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsProperties);
 
-        streams.setUncaughtExceptionHandler(new Thread.UncaughtExceptionHandler() {
-            @Override
-            public void uncaughtException(final Thread t, final Throwable e) {
-                System.err.println("FATAL: An unexpected exception " + e);
-                e.printStackTrace(System.err);
-                System.err.flush();
-                shutdown(streams);
-            }
+        streams.setUncaughtExceptionHandler((t, e) -> {
+            System.err.println("FATAL: An unexpected exception " + e);
+            e.printStackTrace(System.err);
+            System.err.flush();
+            shutdown(streams);
         });
 
-        streams.setStateListener(new KafkaStreams.StateListener() {
-            @Override
-            public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
-                if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
-                    final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
-                    for (final ThreadMetadata threadMetadatum : threadMetadata) {
-                        System.out.println("ACTIVE_TASKS:" + threadMetadatum.activeTasks().size() + " STANDBY_TASKS:" + threadMetadatum.standbyTasks().size());
-                    }
+        streams.setStateListener((newState, oldState) -> {
+            if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
+                final Set<ThreadMetadata> threadMetadata = streams.localThreadsMetadata();
+                for (final ThreadMetadata threadMetadatum : threadMetadata) {
+                    System.out.println(
+                        "ACTIVE_TASKS:" + threadMetadatum.activeTasks().size()
+                        + " STANDBY_TASKS:" + threadMetadatum.standbyTasks().size());
                 }
             }
         });
@@ -152,15 +147,10 @@ public class StreamsStandByReplicaTest {
         System.out.println("Start Kafka Streams");
         streams.start();
 
-        Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run() {
-                shutdown(streams);
-                System.out.println("Shut down streams now");
-            }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            shutdown(streams);
+            System.out.println("Shut down streams now");
         }));
-
-
     }
 
     private static void shutdown(final KafkaStreams streams) {

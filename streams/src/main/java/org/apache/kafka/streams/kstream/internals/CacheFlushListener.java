@@ -20,8 +20,8 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 /**
  * Listen to cache flush events
- * @param <K>
- * @param <V>
+ * @param <K> key type
+ * @param <V> value type
  */
 public interface CacheFlushListener<K, V> {
 

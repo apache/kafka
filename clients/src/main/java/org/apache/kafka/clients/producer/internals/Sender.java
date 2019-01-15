@@ -174,8 +174,9 @@ public class Sender implements Runnable {
      */
     private List<ProducerBatch> getExpiredInflightBatches(long now) {
         List<ProducerBatch> expiredBatches = new ArrayList<>();
-        for (Map.Entry<TopicPartition, List<ProducerBatch>> entry : inFlightBatches.entrySet()) {
-            TopicPartition topicPartition = entry.getKey();
+
+        for (Iterator<Map.Entry<TopicPartition, List<ProducerBatch>>> batchIt = inFlightBatches.entrySet().iterator(); batchIt.hasNext();) {
+            Map.Entry<TopicPartition, List<ProducerBatch>> entry = batchIt.next();
             List<ProducerBatch> partitionInFlightBatches = entry.getValue();
             if (partitionInFlightBatches != null) {
                 Iterator<ProducerBatch> iter = partitionInFlightBatches.iterator();
@@ -197,8 +198,9 @@ public class Sender implements Runnable {
                         break;
                     }
                 }
-                if (partitionInFlightBatches.isEmpty())
-                    inFlightBatches.remove(topicPartition);
+                if (partitionInFlightBatches.isEmpty()) {
+                    batchIt.remove();
+                }
             }
         }
         return expiredBatches;
@@ -492,7 +494,7 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForProducerId() {
-        while (!transactionManager.hasProducerId() && !transactionManager.hasError()) {
+        while (running && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
             Node node = null;
             try {
                 node = awaitLeastLoadedNodeReady(requestTimeoutMs);

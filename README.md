@@ -4,7 +4,7 @@ See our [web site](http://kafka.apache.org) for details on the project.
 
 You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-Kafka requires Gradle 4.7 or higher.
+Kafka requires Gradle 5.0 or higher.
 
 Java 8 should be used for building in order to support both Java 8 and Java 11 at runtime.
 
@@ -45,7 +45,7 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
     ./gradlew cleanTest integrationTest
 
 ### Running a particular unit/integration test ###
-    ./gradlew -Dtest.single=RequestResponseSerializationTest core:test
+    ./gradlew clients:test --tests RequestResponseTest
 
 ### Running a particular test method within a unit/integration test ###
     ./gradlew core:test --tests kafka.api.ProducerFailureHandlingTest.testCannotSendToInternalTopic
@@ -54,7 +54,7 @@ Follow instructions in http://kafka.apache.org/documentation.html#quickstart
 ### Running a particular unit/integration test with log4j output ###
 Change the log4j setting in either `clients/src/test/resources/log4j.properties` or `core/src/test/resources/log4j.properties`
 
-    ./gradlew -i -Dtest.single=RequestResponseSerializationTest core:test
+    ./gradlew clients:test --tests RequestResponseTest
 
 ### Generating test coverage reports ###
 Generate coverage reports for the whole project:

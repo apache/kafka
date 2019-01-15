@@ -280,7 +280,8 @@ public final class WorkerManager {
         void transitionToRunning() {
             state = State.RUNNING;
             timeoutFuture = scheduler.schedule(stateChangeExecutor,
-                new StopWorker(workerId, false), spec.durationMs());
+                new StopWorker(workerId, false),
+                Math.max(0, spec.endMs() - time.milliseconds()));
         }
 
         void transitionToStopping() {
@@ -316,22 +317,25 @@ public final class WorkerManager {
                     "a worker with that id.", nodeName, workerId);
                 return;
             }
+            if (worker.spec.endMs() <= time.milliseconds()) {
+                log.info("{}: Will not run worker {} as it has expired.", nodeName, worker);
+                stateChangeExecutor.submit(new HandleWorkerHalting(worker,
+                    "worker expired", true));
+                return;
+            }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();
-            haltFuture.thenApply(new KafkaFuture.BaseFunction<String, Void>() {
-                @Override
-                public Void apply(String errorString) {
-                    if (errorString == null)
-                        errorString = "";
-                    if (errorString.isEmpty()) {
-                        log.info("{}: Worker {} is halting.", nodeName, worker);
-                    } else {
-                        log.info("{}: Worker {} is halting with error {}",
-                            nodeName, worker, errorString);
-                    }
-                    stateChangeExecutor.submit(
-                        new HandleWorkerHalting(worker, errorString, false));
-                    return null;
+            haltFuture.thenApply((KafkaFuture.BaseFunction<String, Void>) errorString -> {
+                if (errorString == null)
+                    errorString = "";
+                if (errorString.isEmpty()) {
+                    log.info("{}: Worker {} is halting.", nodeName, worker);
+                } else {
+                    log.info("{}: Worker {} is halting with error {}",
+                        nodeName, worker, errorString);
                 }
+                stateChangeExecutor.submit(
+                    new HandleWorkerHalting(worker, errorString, false));
+                return null;
             });
             try {
                 worker.taskWorker.start(platform, worker.status, haltFuture);

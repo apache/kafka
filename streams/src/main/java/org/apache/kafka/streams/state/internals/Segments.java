@@ -110,8 +110,9 @@ class Segments {
                 final String[] list = dir.list();
                 if (list != null) {
                     final long[] segmentIds = new long[list.length];
-                    for (int i = 0; i < list.length; i++)
+                    for (int i = 0; i < list.length; i++) {
                         segmentIds[i] = segmentIdFromSegmentName(list[i], dir);
+                    }
 
                     // open segments in the id order
                     Arrays.sort(segmentIds);

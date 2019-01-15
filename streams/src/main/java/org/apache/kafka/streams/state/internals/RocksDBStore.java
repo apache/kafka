@@ -42,6 +42,8 @@ import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
 import org.rocksdb.WriteBatch;
 import org.rocksdb.WriteOptions;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
@@ -66,6 +68,8 @@ import java.util.regex.Pattern;
  */
 public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
+    private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
+
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
 
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
@@ -78,7 +82,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<KeyValueIterator>());
+    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     File dbDir;
     private RocksDB db;
@@ -99,7 +103,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(final String name, final String parentDir) {
+    RocksDBStore(final String name,
+                 final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
     }
@@ -218,7 +223,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
             // for bulk loading
@@ -422,12 +426,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         synchronized (openIterators) {
             iterators = new HashSet<>(openIterators);
         }
-        for (final KeyValueIterator iterator : iterators) {
-            iterator.close();
+        if (iterators.size() != 0) {
+            log.warn("Closing {} open iterators for store {}", iterators.size(), name);
+            for (final KeyValueIterator iterator : iterators) {
+                iterator.close();
+            }
         }
     }
 
-    private class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
+    private class RocksDbIterator
+        extends AbstractIterator<KeyValue<Bytes, byte[]>>
+        implements KeyValueIterator<Bytes, byte[]> {
+
         private final String storeName;
         private final RocksIterator iter;
 
@@ -444,7 +454,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         @Override
         public synchronized boolean hasNext() {
             if (!open) {
-                throw new InvalidStateStoreException(String.format("RocksDB store %s has closed", storeName));
+                throw new InvalidStateStoreException(String.format("RocksDB iterator for store %s has closed", storeName));
             }
             return super.hasNext();
         }
@@ -516,10 +526,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             if (next == null) {
                 return allDone();
             } else {
-                if (comparator.compare(next.key.get(), rawToKey) <= 0)
+                if (comparator.compare(next.key.get(), rawToKey) <= 0) {
                     return next;
-                else
+                } else {
                     return allDone();
+                }
             }
         }
     }

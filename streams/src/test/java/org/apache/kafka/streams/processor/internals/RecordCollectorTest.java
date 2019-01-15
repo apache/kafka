@@ -230,7 +230,7 @@ public class RecordCollectorTest {
         });
         collector.send("topic1", "3", "0", null, null, stringSerializer, stringSerializer, streamPartitioner);
         assertEquals(1.0, metrics.metrics().get(metricName).metricValue());
-        assertTrue(logCaptureAppender.getMessages().contains("test Error sending records (key=[3] value=[0] timestamp=[null]) to topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error."));
+        assertTrue(logCaptureAppender.getMessages().contains("test Error sending records topic=[topic1] and partition=[0]; The exception handler chose to CONTINUE processing in spite of this error. Enable TRACE logging to view failed messages key and value."));
         LogCaptureAppender.unregister(logCaptureAppender);
     }
 
@@ -385,6 +385,18 @@ public class RecordCollectorTest {
             assertEquals(new RecordHeader("key", "key".getBytes()), headers.lastHeader("key"));
             assertEquals(new RecordHeader("value", "value".getBytes()), headers.lastHeader("value"));
         }
+    }
+
+    @Test
+    public void testShouldNotThrowNPEOnCloseIfProducerIsNotInitialized() {
+        final RecordCollectorImpl collector = new RecordCollectorImpl(
+                "NoNPE",
+                logContext,
+                new DefaultProductionExceptionHandler(),
+                new Metrics().sensor("skipped-records")
+        );
+
+        collector.close();
     }
 
     private static class CustomStringSerializer extends StringSerializer {

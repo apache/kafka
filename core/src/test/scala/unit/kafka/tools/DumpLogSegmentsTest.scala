@@ -41,7 +41,9 @@ class DumpLogSegmentsTest {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
 
-    /* append two messages */
+    /* append four messages */
+    log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
+      new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.NONE, 0,
       new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
     log.flush()
@@ -59,16 +61,19 @@ class DumpLogSegmentsTest {
       val output = runDumpLogSegments(args)
       val lines = output.split("\n")
       assertTrue(s"Data not printed: $output", lines.length > 2)
-      // Verify that the last two lines are message records
-      (0 until 2).foreach { i =>
-        val line = lines(lines.length - 2 + i)
-        assertTrue(s"Not a valid message record: $line", line.startsWith(s"offset: $i position:"))
+      // For every three message records, verify that the first line is batch-level message record and the last two lines are message records
+      (0 until 6 ).foreach { i =>
+        val line = lines(lines.length - 6 + i)
+        if (i % 3 == 0)
+          assertTrue(s"Not a valid batch-level message record: $line", line.startsWith(s"baseOffset: ${i / 3 * 2} lastOffset: "))
+        else
+          assertTrue(s"Not a valid message record: $line", line.startsWith(s"${DumpLogSegments.RECORD_INDENT} offset: ${i - 1 - i / 3}"))
       }
     }
 
     def verifyNoRecordsInOutput(args: Array[String]): Unit = {
       val output = runDumpLogSegments(args)
-      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* position.*"))
+      assertFalse(s"Data should not have been printed: $output", output.matches("(?s).*offset: [0-9]* isvalid.*"))
     }
 
     // Verify that records are printed with --print-data-log even if --deep-iteration is not specified

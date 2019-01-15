@@ -1,0 +1,37 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 3,
+  "type": "request",
+  "name": "MetadataRequest",
+  "validVersions": "0-7",
+  "fields": [
+    // In version 0, an empty array indicates "request metadata for all topics."  In version 1 and
+    // higher, an empty array indicates "request metadata for no topics," and a null array is used to
+    // indiate "request metadata for all topics."
+    //
+    // Version 2 and 3 are the same as version 1.
+    //
+    // Version 4 adds AllowAutoTopicCreation.
+    { "name": "Topics", "type": "[]MetadataRequestTopic", "versions": "0+", "nullableVersions": "1+",
+      "about": "The topics to fetch metadata for.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+",
+        "about": "The topic name." }
+    ]},
+    { "name": "AllowAutoTopicCreation", "type": "bool", "versions": "4+", "default": "true", "ignorable": false,
+      "about": "If this is true, the broker may auto-create topics that we requested which do not already exist, if it is configured to do so." }
+  ]
+}

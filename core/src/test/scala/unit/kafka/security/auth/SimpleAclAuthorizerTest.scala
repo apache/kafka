@@ -630,6 +630,18 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testSingleCharacterResourceAcls(): Unit = {
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Topic, "f", LITERAL))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "f", LITERAL)))
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "foo", LITERAL)))
+
+    simpleAclAuthorizer.addAcls(Set[Acl](allowReadAcl), Resource(Topic, "_", PREFIXED))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "_foo", LITERAL)))
+    assertTrue(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "_", LITERAL)))
+    assertFalse(simpleAclAuthorizer.authorize(session, Read, Resource(Topic, "foo_", LITERAL)))
+  }
+
+  @Test
   def testGetAclsPrincipal(): Unit = {
     val aclOnSpecificPrincipal = new Acl(principal, Allow, WildCardHost, Write)
     simpleAclAuthorizer.addAcls(Set[Acl](aclOnSpecificPrincipal), resource)

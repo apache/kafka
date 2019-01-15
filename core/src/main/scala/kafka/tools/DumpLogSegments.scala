@@ -20,7 +20,6 @@ package kafka.tools
 import java.io._
 import java.nio.ByteBuffer
 
-import joptsimple.OptionParser
 import kafka.coordinator.group.{GroupMetadataKey, GroupMetadataManager, OffsetKey}
 import kafka.coordinator.transaction.TransactionLog
 import kafka.log._
@@ -36,6 +35,9 @@ import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
 
 object DumpLogSegments {
+
+  // visible for testing
+  private[tools] val RECORD_INDENT = "|"
 
   def main(args: Array[String]) {
     val opts = new DumpLogSegmentsOptions(args)
@@ -278,6 +280,7 @@ object DumpLogSegments {
     var lastOffset = -1L
 
     for (batch <- messageSet.batches.asScala) {
+      printBatchLevel(batch, validBytes)
       if (isDeepIteration) {
         for (record <- batch.asScala) {
           if (lastOffset == -1)
@@ -289,17 +292,13 @@ object DumpLogSegments {
           }
           lastOffset = record.offset
 
-          print("offset: " + record.offset + " position: " + validBytes +
-            " " + batch.timestampType + ": " + record.timestamp + " isvalid: " + record.isValid +
-            " keysize: " + record.keySize + " valuesize: " + record.valueSize + " magic: " + batch.magic +
-            " compresscodec: " + batch.compressionType)
+          print(s"$RECORD_INDENT offset: ${record.offset} ${batch.timestampType}: ${record.timestamp} " +
+            s"keysize: ${record.keySize} valuesize: ${record.valueSize}")
 
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
-            print(" producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch + " sequence: " + record.sequence +
-              " isTransactional: " + batch.isTransactional +
-              " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
+            print(" sequence: " + record.sequence + " headerKeys: " + record.headers.map(_.key).mkString("[", ",", "]"))
           } else {
-            print(" crc: " + record.checksumOrNull)
+            print(s" crc: ${record.checksumOrNull} isvalid: ${record.isValid}")
           }
 
           if (batch.isControlBatch) {
@@ -318,26 +317,27 @@ object DumpLogSegments {
           }
           println()
         }
-      } else {
-        if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-          print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset + " count: " + batch.countOrNull +
-            " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
-            " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
-            " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional +
-            " isControl: " + batch.isControlBatch)
-        else
-          print("offset: " + batch.lastOffset)
-
-        println(" position: " + validBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
-          " isvalid: " + batch.isValid +
-          " size: " + batch.sizeInBytes + " magic: " + batch.magic +
-          " compresscodec: " + batch.compressionType + " crc: " + batch.checksum)
       }
       validBytes += batch.sizeInBytes
     }
     val trailingBytes = messageSet.sizeInBytes - validBytes
     if(trailingBytes > 0)
       println("Found %d invalid bytes at the end of %s".format(trailingBytes, file.getName))
+  }
+
+  private def printBatchLevel(batch: FileLogInputStream.FileChannelRecordBatch, accumulativeBytes: Long): Unit = {
+    if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+      print("baseOffset: " + batch.baseOffset + " lastOffset: " + batch.lastOffset + " count: " + batch.countOrNull +
+        " baseSequence: " + batch.baseSequence + " lastSequence: " + batch.lastSequence +
+        " producerId: " + batch.producerId + " producerEpoch: " + batch.producerEpoch +
+        " partitionLeaderEpoch: " + batch.partitionLeaderEpoch + " isTransactional: " + batch.isTransactional +
+        " isControl: " + batch.isControlBatch)
+    else
+      print("offset: " + batch.lastOffset)
+
+    println(" position: " + accumulativeBytes + " " + batch.timestampType + ": " + batch.maxTimestamp +
+      " size: " + batch.sizeInBytes + " magic: " + batch.magic +
+      " compresscodec: " + batch.compressionType + " crc: " + batch.checksum + " isvalid: " + batch.isValid)
   }
 
   class TimeIndexDumpErrors {

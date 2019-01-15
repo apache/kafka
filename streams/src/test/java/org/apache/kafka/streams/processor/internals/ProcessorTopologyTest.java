@@ -662,11 +662,6 @@ public class ProcessorTopologyTest {
         public void process(final String key, final String value) {
             store.put(key, value);
         }
-
-        @Override
-        public void close() {
-            store.close();
-        }
     }
 
     private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
@@ -682,11 +677,13 @@ public class ProcessorTopologyTest {
 
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
-            if (record.value().toString().matches(".*@[0-9]+"))
+            if (record.value().toString().matches(".*@[0-9]+")) {
                 return Long.parseLong(record.value().toString().split("@")[1]);
+            }
 
-            if (record.timestamp() >= 0L)
+            if (record.timestamp() >= 0L) {
                 return record.timestamp();
+            }
 
             return DEFAULT_TIMESTAMP;
         }

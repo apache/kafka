@@ -47,11 +47,9 @@ public class CompositeReadOnlyWindowStoreTest {
     private final String storeName = "window-store";
     private StateStoreProviderStub stubProviderOne;
     private StateStoreProviderStub stubProviderTwo;
-    private CompositeReadOnlyWindowStore<String, String>
-        windowStore;
+    private CompositeReadOnlyWindowStore<String, String> windowStore;
     private ReadOnlyWindowStoreStub<String, String> underlyingWindowStore;
-    private ReadOnlyWindowStoreStub<String, String>
-            otherUnderlyingStore;
+    private ReadOnlyWindowStoreStub<String, String> otherUnderlyingStore;
 
     @Rule
     public final ExpectedException windowStoreIteratorException = ExpectedException.none();

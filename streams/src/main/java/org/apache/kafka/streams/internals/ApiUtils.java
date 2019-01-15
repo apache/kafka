@@ -18,43 +18,61 @@ package org.apache.kafka.streams.internals;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.Objects;
+
+import static java.lang.String.format;
 
 public final class ApiUtils {
+
+    private static final String MILLISECOND_VALIDATION_FAIL_MSG_FRMT = "Invalid value for parameter \"%s\" (value was: %s). ";
+    private static final String VALIDATE_MILLISECOND_NULL_SUFFIX = "It shouldn't be null.";
+    private static final String VALIDATE_MILLISECOND_OVERFLOW_SUFFIX = "It can't be converted to milliseconds.";
+
     private ApiUtils() {
     }
 
     /**
      * Validates that milliseconds from {@code duration} can be retrieved.
      * @param duration Duration to check.
-     * @param name Name of params for an error message.
+     * @param messagePrefix Prefix text for an error message.
      * @return Milliseconds from {@code duration}.
      */
-    public static long validateMillisecondDuration(final Duration duration, final String name) {
+    public static long validateMillisecondDuration(final Duration duration, final String messagePrefix) {
         try {
-            if (duration == null)
-                throw new IllegalArgumentException("[" + Objects.toString(name) + "] shouldn't be null.");
+            if (duration == null) {
+                throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_NULL_SUFFIX);
+            }
 
             return duration.toMillis();
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("[" + name + "] can't be converted to milliseconds. ", e);
+            throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_OVERFLOW_SUFFIX, e);
         }
     }
 
     /**
      * Validates that milliseconds from {@code instant} can be retrieved.
      * @param instant Instant to check.
-     * @param name Name of params for an error message.
+     * @param messagePrefix Prefix text for an error message.
      * @return Milliseconds from {@code instant}.
      */
-    public static long validateMillisecondInstant(final Instant instant, final String name) {
+    public static long validateMillisecondInstant(final Instant instant, final String messagePrefix) {
         try {
-            if (instant == null)
-                throw new IllegalArgumentException("[" + name + "] shouldn't be null.");
+            if (instant == null) {
+                throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_NULL_SUFFIX);
+            }
 
             return instant.toEpochMilli();
         } catch (final ArithmeticException e) {
-            throw new IllegalArgumentException("[" + name + "] can't be converted to milliseconds. ", e);
+            throw new IllegalArgumentException(messagePrefix + VALIDATE_MILLISECOND_OVERFLOW_SUFFIX, e);
         }
+    }
+
+    /**
+     * Generates the prefix message for validateMillisecondXXXXXX() utility
+     * @param value Object to be converted to milliseconds
+     * @param name Object name
+     * @return Error message prefix to use in exception
+     */
+    public static String prepareMillisCheckFailMsgPrefix(final Object value, final String name) {
+        return format(MILLISECOND_VALIDATION_FAIL_MSG_FRMT, name, value);
     }
 }

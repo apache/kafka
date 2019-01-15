@@ -16,9 +16,10 @@
  */
 package org.apache.kafka.streams.state;
 
-import java.time.Instant;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Windowed;
+
+import java.time.Instant;
 
 /**
  * A window store that only supports read operations
@@ -47,7 +48,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -62,7 +62,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", 10, 20)} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
@@ -73,7 +73,7 @@ public interface ReadOnlyWindowStore<K, V> {
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
-     * @deprecated Use {@link #fetch(K, Instant, Instant)} instead
+     * @deprecated Use {@link #fetch(Object, Instant, Instant)} instead
      */
     @Deprecated
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
@@ -85,7 +85,6 @@ public interface ReadOnlyWindowStore<K, V> {
      * <p>
      * The time range is inclusive and applies to the starting timestamp of the window.
      * For example, if we have the following windows:
-     * <p>
      * <pre>
      * +-------------------------------+
      * |  key  | start time | end time |
@@ -100,14 +99,14 @@ public interface ReadOnlyWindowStore<K, V> {
      * +--------------------------------
      * </pre>
      * And we call {@code store.fetch("A", Instant.ofEpochMilli(10), Instant.ofEpochMilli(20))} then the results will contain the first
-     * three windows from the table above, i.e., all those where 10 <= start time <= 20.
+     * three windows from the table above, i.e., all those where 10 &lt;= start time &lt;= 20.
      * <p>
      * For each key, the iterator guarantees ordering of windows, starting from the oldest/earliest
      * available window to the newest/latest window.
      *
      * @param key       the key to fetch
      * @param from      time range start (inclusive)
-     * @param from      time range end (inclusive)
+     * @param to        time range end (inclusive)
      * @return an iterator over key-value pairs {@code <timestamp, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException If {@code null} is used for key.
