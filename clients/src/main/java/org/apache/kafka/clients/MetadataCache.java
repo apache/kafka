@@ -109,6 +109,10 @@ class MetadataCache {
                 .map(PartitionInfoAndEpoch::partitionInfo);
     }
 
+    void removePartitionInfo(TopicPartition topicPartition) {
+        partitionsByTopicPartition.entrySet().removeIf(entry -> entry.getKey().equals(topicPartition));
+    }
+
     Cluster cluster() {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");

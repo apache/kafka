@@ -272,7 +272,7 @@ public class Metadata implements Closeable {
                 .filter(tp -> !topics.contains(tp.topic()))
                 .collect(Collectors.toSet());
         toRemove.forEach(lastSeenLeaderEpochs::remove);
-
+        toRemove.forEach(cache::removePartitionInfo);
         if (!this.topics.keySet().containsAll(topics)) {
             requestUpdateForNewTopics();
         }
