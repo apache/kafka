@@ -579,6 +579,25 @@ public class MetadataTest {
     }
 
     @Test
+    public void testNoEpoch() {
+        metadata.update(emptyMetadataResponse(), 0L);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1),
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.empty(), replicas, isr, offlineReplicas));
+        metadata.update(metadataResponse, 10L);
+
+        TopicPartition tp = new TopicPartition("topic-1", 0);
+
+        // no epoch
+        assertFalse(metadata.lastSeenLeaderEpoch(tp).isPresent());
+
+        // still works
+        assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
+        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partition(), 0);
+        assertEquals(metadata.partitionInfoIfCurrent(tp).get().leader().id(), 0);
+    }
+
+    @Test
     public void testClusterCopy() {
         Map<String, Integer> counts = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();

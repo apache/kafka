@@ -214,8 +214,13 @@ public class Metadata implements Closeable {
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
     public synchronized Optional<PartitionInfo> partitionInfoIfCurrent(TopicPartition topicPartition) {
-        return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition))
-                .flatMap(epoch -> cache.getPartitionInfoHavingEpoch(topicPartition, epoch));
+        Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
+        if (epoch == null) {
+            // old cluster format (no epochs)
+            return cache.getPartitionInfo(topicPartition);
+        } else {
+            return cache.getPartitionInfoHavingEpoch(topicPartition, epoch);
+        }
     }
 
     /**

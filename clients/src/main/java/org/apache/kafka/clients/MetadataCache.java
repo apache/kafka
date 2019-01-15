@@ -104,6 +104,11 @@ class MetadataCache {
         }
     }
 
+    Optional<PartitionInfo> getPartitionInfo(TopicPartition topicPartition) {
+        return Optional.ofNullable(partitionsByTopicPartition.get(topicPartition))
+                .map(PartitionInfoAndEpoch::partitionInfo);
+    }
+
     Cluster cluster() {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
@@ -111,15 +116,6 @@ class MetadataCache {
             return clusterInstance;
         }
     }
-
-    /*synchronized boolean removePartition(TopicPartition topicPartition) {
-        if (partitionsByTopicPartition.remove(topicPartition) != null) {
-            //updateClusterView();
-            return true;
-        } else {
-            return false;
-        }
-    }*/
 
     private void computeClusterView() {
         List<PartitionInfo> partitionInfos = partitionsByTopicPartition.values()
