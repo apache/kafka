@@ -156,7 +156,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // joining without the specified member id.
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
-      } else if (group.protocolNotMatch(protocolType, protocols)) {
+      } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
@@ -191,7 +191,7 @@ class GroupCoordinator(val brokerId: Int,
         // coordinator OR the group is in a transient unstable phase. Let the member retry
         // joining without the specified member id.
         responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
-      } else if (group.protocolNotMatch(protocolType, protocols)) {
+      } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted.

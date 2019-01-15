@@ -213,7 +213,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
-    assert(supportsProtocols(member.protocols))
+    assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
@@ -264,14 +264,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 
-  def protocolNotMatch(memberProtocolType: String,
-                       memberProtocols: List[(String, Array[Byte])]): Boolean = {
-    if (is(Empty))
-      memberProtocolType.isEmpty || memberProtocols.isEmpty
-    else
-      !protocolType.contains(memberProtocolType) || !supportsProtocols(memberProtocols.map(_._1).toSet)
-  }
-
   def transitionTo(groupState: GroupState) {
     assertValidTransition(groupState)
     state = groupState
@@ -301,9 +293,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
   }
 
-  def supportsProtocols(memberProtocols: Set[String]) = {
-    val numMembers = members.size
-    members.isEmpty || memberProtocols.exists(supportedProtocols(_) == numMembers)
+  def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]) = {
+    if (is(Empty))
+      !memberProtocolType.isEmpty && memberProtocols.nonEmpty
+    else
+      protocolType.contains(memberProtocolType) && memberProtocols.exists(supportedProtocols(_) == members.size)
   }
 
   def updateMember(member: MemberMetadata,

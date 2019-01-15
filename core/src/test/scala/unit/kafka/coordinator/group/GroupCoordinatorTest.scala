@@ -60,7 +60,6 @@ class GroupCoordinatorTest extends JUnitSuite {
   val GroupMaxSessionTimeout = 10 * 60 * 1000
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
-  var DefaultRequireKnownMemberIdInSendJoinGroup = false
   val GroupInitialRebalanceDelay = 50
   var timer: MockTimer = null
   var groupCoordinator: GroupCoordinator = null
