@@ -113,11 +113,18 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testInvalidConfigOptWithBootstrapServers(): Unit = {
+  def testConfigOptWithBootstrapServers(): Unit = {
     assertCheckArgsExitCode(1,
       new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--alter", "--topic", testTopicName, "--partitions", "3", "--config", "cleanup.policy=compact")))
     assertCheckArgsExitCode(1,
       new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--alter", "--topic", testTopicName, "--partitions", "3", "--delete-config", "cleanup.policy")))
+    val opts =
+      new TopicCommandOptions(Array("--bootstrap-server", brokerList ,"--create", "--topic", testTopicName, "--partitions", "3", "--replication-factor", "3", "--config", "cleanup.policy=compact"))
+    opts.checkArgs()
+    assertTrue(opts.hasCreateOption)
+    assertEquals(brokerList, opts.bootstrapServer.get)
+    assertEquals("cleanup.policy=compact", opts.topicConfig.get.get(0))
+
   }
 
   @Test
