@@ -56,6 +56,7 @@ import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -1461,7 +1462,7 @@ public class KafkaAdminClient extends AdminClient {
                         continue;
                     }
                     if (!cluster.topics().contains(topicName)) {
-                        future.completeExceptionally(new InvalidTopicException("Topic " + topicName + " not found."));
+                        future.completeExceptionally(new UnknownTopicOrPartitionException("Topic " + topicName + " not found."));
                         continue;
                     }
                     boolean isInternal = cluster.internalTopics().contains(topicName);

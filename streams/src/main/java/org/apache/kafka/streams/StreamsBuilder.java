@@ -113,7 +113,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.<K, V>with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null, null, null));
     }
 
     /**
@@ -155,7 +155,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for topics matching the regex pattern.
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern) {
-        return stream(topicPattern, Consumed.<K, V>with(null, null));
+        return stream(topicPattern, Consumed.with(null, null));
     }
 
     /**
@@ -199,7 +199,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -250,7 +250,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<K, V>());
+        return table(topic, new ConsumedInternal<>());
     }
 
     /**
@@ -356,7 +356,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return globalTable(topic, Consumed.<K, V>with(null, null));
+        return globalTable(topic, Consumed.with(null, null));
     }
 
     /**
@@ -372,7 +372,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via

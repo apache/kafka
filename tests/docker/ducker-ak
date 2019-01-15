@@ -41,6 +41,9 @@ docker_run_memory_limit="2000m"
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
+# The default OpenJDK base image.
+default_jdk="openjdk:8"
+
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
 
@@ -215,7 +218,7 @@ ducker_build() {
 
     must_pushd "${ducker_dir}"
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
-        --build-arg "ducker_creator=${user_name}" -t "${image_name}" \
+        --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
     must_popd
@@ -264,11 +267,13 @@ ducker_up() {
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
+            -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
-    [[ -n "${image_name}" ]] || image_name=ducker-ak
+    [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+    [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
         die "ducker_up: the number of nodes must be an integer."
     [[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."

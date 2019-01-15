@@ -17,8 +17,10 @@
 
 package org.apache.kafka.trogdor.coordinator;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import com.fasterxml.jackson.databind.node.LongNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -150,7 +152,13 @@ public final class TaskManager {
         final private String id;
 
         /**
-         * The task specification.
+         * The original task specification as submitted when the task was created.
+         */
+        final private TaskSpec originalSpec;
+
+        /**
+         * The effective task specification.
+         * The start time will be adjusted to reflect the time when the task was submitted.
          */
         final private TaskSpec spec;
 
@@ -195,8 +203,10 @@ public final class TaskManager {
          */
         private String error = "";
 
-        ManagedTask(String id, TaskSpec spec, TaskController controller, TaskStateType state) {
+        ManagedTask(String id, TaskSpec originalSpec, TaskSpec spec,
+                    TaskController controller, TaskStateType state) {
             this.id = id;
+            this.originalSpec = originalSpec;
             this.spec = spec;
             this.controller = controller;
             this.state = state;
@@ -297,7 +307,7 @@ public final class TaskManager {
             throws Throwable {
         try {
             executor.submit(new CreateTask(id, spec)).get();
-        } catch (ExecutionException e) {
+        } catch (ExecutionException | JsonProcessingException e) {
             log.info("createTask(id={}, spec={}) error", id, spec, e);
             throw e.getCause();
         }
@@ -308,11 +318,15 @@ public final class TaskManager {
      */
     class CreateTask implements Callable<Void> {
         private final String id;
+        private final TaskSpec originalSpec;
         private final TaskSpec spec;
 
-        CreateTask(String id, TaskSpec spec) {
+        CreateTask(String id, TaskSpec spec) throws JsonProcessingException {
             this.id = id;
-            this.spec = spec;
+            this.originalSpec = spec;
+            ObjectNode node = JsonUtil.JSON_SERDE.valueToTree(originalSpec);
+            node.set("startMs", new LongNode(Math.max(time.milliseconds(), originalSpec.startMs())));
+            this.spec = JsonUtil.JSON_SERDE.treeToValue(node, TaskSpec.class);
         }
 
         @Override
@@ -322,11 +336,11 @@ public final class TaskManager {
             }
             ManagedTask task = tasks.get(id);
             if (task != null) {
-                if (!task.spec.equals(spec)) {
+                if (!task.originalSpec.equals(originalSpec)) {
                     throw new RequestConflictException("Task ID " + id + " already " +
-                        "exists, and has a different spec " + task.spec);
+                        "exists, and has a different spec " + task.originalSpec);
                 }
-                log.info("Task {} already exists with spec {}", id, spec);
+                log.info("Task {} already exists with spec {}", id, originalSpec);
                 return null;
             }
             TaskController controller = null;
@@ -339,13 +353,13 @@ public final class TaskManager {
             if (failure != null) {
                 log.info("Failed to create a new task {} with spec {}: {}",
                     id, spec, failure);
-                task = new ManagedTask(id, spec, null, TaskStateType.DONE);
+                task = new ManagedTask(id, originalSpec, spec, null, TaskStateType.DONE);
                 task.doneMs = time.milliseconds();
                 task.maybeSetError(failure);
                 tasks.put(id, task);
                 return null;
             }
-            task = new ManagedTask(id, spec, controller, TaskStateType.PENDING);
+            task = new ManagedTask(id, originalSpec, spec, controller, TaskStateType.PENDING);
             tasks.put(id, task);
             long delayMs = task.startDelayMs(time.milliseconds());
             task.startFuture = scheduler.schedule(executor, new RunTask(task), delayMs);

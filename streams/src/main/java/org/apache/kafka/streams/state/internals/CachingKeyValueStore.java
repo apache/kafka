@@ -59,7 +59,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
         initInternal(context);
         underlying.init(context, root);
         // save the stream thread as we only ever want to trigger a flush
@@ -76,17 +77,15 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
         this.cache = this.context.getCache();
         this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), underlying.name());
-        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (final ThreadCache.DirtyEntry entry : entries) {
-                    putAndMaybeForward(entry, (InternalProcessorContext) context);
-                }
+        cache.addDirtyEntryFlushListener(cacheName, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                putAndMaybeForward(entry, (InternalProcessorContext) context);
             }
         });
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
+                                    final InternalProcessorContext context) {
         final ProcessorRecordContext current = context.recordContext();
         try {
             context.setRecordContext(entry.entry().context());
@@ -190,7 +189,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                 final Bytes to) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = underlying.range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
@@ -217,7 +217,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key,
+                    final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();
@@ -229,7 +230,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
         }
     }
 
-    private void putInternal(final Bytes key, final byte[] value) {
+    private void putInternal(final Bytes key,
+                             final byte[] value) {
         cache.put(
             cacheName,
             key,
@@ -244,7 +246,8 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
     }
 
     @Override
-    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key,
+                              final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         lock.writeLock().lock();

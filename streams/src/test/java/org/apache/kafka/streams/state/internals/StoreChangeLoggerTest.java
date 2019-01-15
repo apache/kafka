@@ -42,8 +42,14 @@ public class StoreChangeLoggerTest {
     private final Map<Integer, String> logged = new HashMap<>();
     private final Map<Integer, Headers> loggedHeaders = new HashMap<>();
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
-        new RecordCollectorImpl("StoreChangeLoggerTest", new LogContext("StoreChangeLoggerTest "), new DefaultProductionExceptionHandler(), new Metrics().sensor("skipped-records")) {
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        StateSerdes.withBuiltinTypes(topic, Integer.class, String.class),
+        new RecordCollectorImpl(
+            "StoreChangeLoggerTest",
+            new LogContext("StoreChangeLoggerTest "),
+            new DefaultProductionExceptionHandler(),
+            new Metrics().sensor("skipped-records")) {
+
             @Override
             public <K1, V1> void send(final String topic,
                                       final K1 key,
@@ -71,7 +77,8 @@ public class StoreChangeLoggerTest {
         }
     );
 
-    private final StoreChangeLogger<Integer, String> changeLogger = new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
+    private final StoreChangeLogger<Integer, String> changeLogger =
+        new StoreChangeLogger<>(topic, context, StateSerdes.withBuiltinTypes(topic, Integer.class, String.class));
 
     @Test
     public void testAddRemove() {

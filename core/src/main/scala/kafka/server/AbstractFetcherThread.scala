@@ -181,8 +181,17 @@ abstract class AbstractFetcherThread(name: String,
       val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
       //Ensure we hold a lock during truncation.
       inLock(partitionMapLock) {
-        //Check no leadership changes happened whilst we were unlocked, fetching epochs
-        val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
+        //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
+        val leaderEpochs = fetchedEpochs.filter { case (tp, _) =>
+          val curPartitionState = partitionStates.stateValue(tp)
+          val partitionEpochRequest = epochRequests.get(tp).getOrElse {
+            throw new IllegalStateException(
+              s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
+          }
+          val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
+          curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
+        }
+
         val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
