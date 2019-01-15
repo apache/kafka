@@ -522,7 +522,6 @@ public class EosIntegrationTest {
                 MAX_WAIT_TIME_MS,
                 "Should have rebalanced.");
 
-
             writeInputData(dataAfterSecondRebalance);
 
             final List<KeyValue<Long, Long>> allCommittedRecords = readResult(

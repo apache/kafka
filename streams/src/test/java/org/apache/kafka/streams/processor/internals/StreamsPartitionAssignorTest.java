@@ -632,13 +632,8 @@ public class StreamsPartitionAssignorTest {
         assertEquals(allTasks, allStandbyTasks);
     }
 
-<<<<<<< HEAD
 
     public void testOnNewAssignment() {
-=======
-    @Test
-    public void testAssignment() {
->>>>>>> Removed partitionsByHost from AssignmentInfo & redesigned compression/decompression on encode/decode
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
         final List<TaskId> activeTaskList = asList(task0, task3);
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
@@ -651,14 +646,8 @@ public class StreamsPartitionAssignorTest {
         standbyTasks.put(task1, Utils.mkSet(t3p1));
         standbyTasks.put(task2, Utils.mkSet(t3p2));
 
-<<<<<<< HEAD
-        final AssignmentInfo info = new AssignmentInfo(hostState, activeTaskList, standbyTasks);
-        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(asList(t3p0, t3p3), info.encode());
-=======
         final AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
-        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(Utils.mkList(t3p0, t3p3), info.encode());
-
->>>>>>> Removed partitionsByHost from AssignmentInfo & redesigned compression/decompression on encode/decode
+        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(asList(t3p0, t3p3), info.encode());
 
         builder.addSource(null, "source1", null, null, null, "topic3");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
@@ -990,7 +979,6 @@ public class StreamsPartitionAssignorTest {
         final TaskId taskTwo = new TaskId(0, 2);
         final Map<HostInfo, Set<TaskId>> hostState = Collections.singletonMap(
                 new HostInfo("localhost", 9090), Utils.mkSet(taskOne, taskTwo));
-
         configurePartitionAssignor(Collections.emptyMap());
 
         builder.addSource(null, "source", null, null, null, "topic");
@@ -1259,15 +1247,10 @@ public class StreamsPartitionAssignorTest {
             AssignmentInfo.decode(assignment.get("consumer1").userData()),
             equalTo(new AssignmentInfo(
                 new ArrayList<>(activeTasks),
-<<<<<<< HEAD
-                standbyTaskMap)));
-        assertThat(assignment.get("consumer1").partitions(), equalTo(asList(t1p0, t1p1)));
-=======
                 standbyTaskMap,
                 Collections.emptyMap()
             )));
-        assertThat(assignment.get("consumer1").partitions(), equalTo(Utils.mkList(t1p0, t1p1)));
->>>>>>> Removed partitionsByHost from AssignmentInfo & redesigned compression/decompression on encode/decode
+        assertThat(assignment.get("consumer1").partitions(), equalTo(asList(t1p0, t1p1)));
 
         assertThat(AssignmentInfo.decode(assignment.get("future-consumer").userData()), equalTo(new AssignmentInfo()));
         assertThat(assignment.get("future-consumer").partitions().size(), equalTo(0));
