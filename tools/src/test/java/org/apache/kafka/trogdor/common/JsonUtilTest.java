@@ -27,7 +27,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 
@@ -45,7 +44,7 @@ public class JsonUtilTest {
     public void testOpenBraceComesFirst() {
         assertTrue(JsonUtil.openBraceComesFirst("{}"));
         assertTrue(JsonUtil.openBraceComesFirst(" \t{\"foo\":\"bar\"}"));
-        assertTrue(JsonUtil.openBraceComesFirst(" \t{\"foo\":\"bar\"}"));
+        assertTrue(JsonUtil.openBraceComesFirst(" { \"foo\": \"bar\" }"));
         assertFalse(JsonUtil.openBraceComesFirst("/my/file/path"));
         assertFalse(JsonUtil.openBraceComesFirst("mypath"));
         assertFalse(JsonUtil.openBraceComesFirst(" blah{}"));
@@ -74,11 +73,7 @@ public class JsonUtilTest {
             assertEquals(456, JsonUtil.<Foo>
                 objectFromCommandLineArgument(tempFile.getAbsolutePath(), Foo.class).bar);
         } finally {
-            try {
-                Files.delete(tempFile.toPath());
-            } catch (IOException e) {
-                log.error("Unable to delete " + tempFile, e);
-            }
+            Files.delete(tempFile.toPath());
         }
     }
 };

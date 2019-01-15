@@ -144,6 +144,11 @@ public final class Agent {
         workerManager.stopWorker(req.workerId(), true);
     }
 
+    /**
+     * Rebase the task spec time so that it is not earlier than the current time.
+     * This is only needed for tasks passed in with --exec.  Normally, the
+     * controller rebases the task spec time.
+     */
     TaskSpec rebaseTaskSpecTime(TaskSpec spec) throws Exception {
         ObjectNode node = JsonUtil.JSON_SERDE.valueToTree(spec);
         node.set("startMs", new LongNode(Math.max(time.milliseconds(), spec.startMs())));

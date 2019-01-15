@@ -188,6 +188,15 @@ public class AgentClient {
             .help("Show the full response as JSON.");
     }
 
+    private static void addWorkerIdArgument(ArgumentParser parser, String help) {
+        parser.addArgument("--workerId")
+            .action(storeTrue())
+            .type(Long.class)
+            .dest("workerId")
+            .metavar("WORKER_ID")
+            .help(help);
+    }
+
     public static void main(String[] args) throws Exception {
         ArgumentParser rootParser = ArgumentParsers
             .newArgumentParser("trogdor-agent-client")
@@ -206,13 +215,7 @@ public class AgentClient {
         Subparser createWorkerParser = subParsers.addParser("createWorker")
             .help("Create a new worker.");
         addTargetArgument(createWorkerParser);
-        createWorkerParser.addArgument("--workerId")
-            .action(store())
-            .required(true)
-            .type(Long.class)
-            .dest("workerId")
-            .metavar("WORKER_ID")
-            .help("The worker ID to create.");
+        addWorkerIdArgument(createWorkerParser, "The worker ID to create.");
         createWorkerParser.addArgument("--taskId")
             .action(store())
             .required(true)
@@ -230,23 +233,11 @@ public class AgentClient {
         Subparser stopWorkerParser = subParsers.addParser("stopWorker")
             .help("Stop a worker.");
         addTargetArgument(stopWorkerParser);
-        stopWorkerParser.addArgument("--workerId")
-            .action(store())
-            .required(true)
-            .type(Long.class)
-            .dest("workerId")
-            .metavar("WORKER_ID")
-            .help("The worker ID to stop.");
+        addWorkerIdArgument(stopWorkerParser, "The worker ID to stop.");
         Subparser destroyWorkerParser = subParsers.addParser("destroyWorker")
             .help("Destroy a worker.");
         addTargetArgument(destroyWorkerParser);
-        destroyWorkerParser.addArgument("--workerId")
-            .action(store())
-            .required(true)
-            .type(Long.class)
-            .dest("workerId")
-            .metavar("WORKER_ID")
-            .help("The worker ID to destroy.");
+        addWorkerIdArgument(destroyWorkerParser, "The worker ID to destroy.");
         Subparser shutdownParser = subParsers.addParser("shutdown")
             .help("Shut down the agent.");
         addTargetArgument(shutdownParser);

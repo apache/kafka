@@ -237,19 +237,19 @@ public class CoordinatorClient {
             .help("Show a coordinator task.");
         addTargetArgument(showTaskParser);
         addJsonArgument(showTaskParser);
-        showTaskParser .addArgument("--id", "-i")
+        showTaskParser.addArgument("--id", "-i")
             .action(store())
             .required(true)
             .type(String.class)
             .dest("taskId")
             .metavar("TASK_ID")
             .help("The task ID to show.");
-        showTaskParser .addArgument("--verbose", "-v")
+        showTaskParser.addArgument("--verbose", "-v")
             .action(storeTrue())
             .dest("verbose")
             .metavar("VERBOSE")
             .help("Print out everything.");
-        showTaskParser .addArgument("--show-status", "-S")
+        showTaskParser.addArgument("--show-status", "-S")
             .action(storeTrue())
             .dest("showStatus")
             .metavar("SHOW_STATUS")
@@ -272,7 +272,7 @@ public class CoordinatorClient {
             .dest("taskIdPattern")
             .metavar("TASK_ID_PATTERN")
             .help("Only display tasks which match the given ID pattern.");
-        showTasksParser.addArgument("--state")
+        showTasksParser.addArgument("--state", "-s")
             .type(TaskStateType.class)
             .dest("taskStateType")
             .metavar("TASK_STATE_TYPE")
@@ -476,7 +476,6 @@ public class CoordinatorClient {
         }
         return Formatter.prettyPrintGrid(lines);
     }
-
 
     static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {
         if (taskState instanceof TaskPending) {
