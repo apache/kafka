@@ -184,8 +184,6 @@ public class TopologyTestDriver implements Closeable {
     private final GlobalStateUpdateTask globalStateTask;
     private final GlobalStateManager globalStateManager;
 
-    private final InternalProcessorContext context;
-
     private final StateDirectory stateDirectory;
     private final Metrics metrics;
     final ProcessorTopology processorTopology;
@@ -353,11 +351,14 @@ public class TopologyTestDriver implements Closeable {
                 metrics.sensor("dummy"));
             task.initializeStateStores();
             task.initializeTopology();
-            context = (InternalProcessorContext) task.context();
-            context.setRecordContext(new ProcessorRecordContext(0L, -1L, -1, ProcessorContextImpl.NONEXIST_TOPIC, new RecordHeaders()));
+            ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(
+                0L,
+                -1L,
+                -1,
+                ProcessorContextImpl.NONEXIST_TOPIC,
+                new RecordHeaders()));
         } else {
             task = null;
-            context = null;
         }
         eosEnabled = streamsConfig.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG).equals(StreamsConfig.EXACTLY_ONCE);
     }
@@ -689,10 +690,6 @@ public class TopologyTestDriver implements Closeable {
             producer.close();
         }
         stateDirectory.clean();
-    }
-
-    private Producer<byte[], byte[]> get() {
-        return producer;
     }
 
     static class MockTime implements Time {

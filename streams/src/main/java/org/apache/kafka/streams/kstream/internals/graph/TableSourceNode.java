@@ -39,13 +39,13 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     private final String sourceName;
     private final boolean isGlobalKTable;
 
-    TableSourceNode(final String nodeName,
-                    final String sourceName,
-                    final String topic,
-                    final ConsumedInternal<K, V> consumedInternal,
-                    final MaterializedInternal<K, V, ?> materializedInternal,
-                    final ProcessorParameters<K, V> processorParameters,
-                    final boolean isGlobalKTable) {
+    private TableSourceNode(final String nodeName,
+                            final String sourceName,
+                            final String topic,
+                            final ConsumedInternal<K, V> consumedInternal,
+                            final MaterializedInternal<K, V, ?> materializedInternal,
+                            final ProcessorParameters<K, V> processorParameters,
+                            final boolean isGlobalKTable) {
 
         super(nodeName,
               Collections.singletonList(topic),

@@ -75,10 +75,19 @@ public class StreamThreadStateStoreProviderTest {
         final TopologyWrapper topology = new TopologyWrapper();
         topology.addSource("the-source", topicName);
         topology.addProcessor("the-processor", new MockProcessorSupplier(), "the-source");
-        topology.addStateStore(Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore("kv-store"), Serdes.String(), Serdes.String()), "the-processor");
+        topology.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.inMemoryKeyValueStore("kv-store"),
+                Serdes.String(),
+                Serdes.String()),
+            "the-processor");
         topology.addStateStore(
             Stores.windowStoreBuilder(
-                Stores.persistentWindowStore("window-store", Duration.ofMillis(10L), Duration.ofMillis(2L), false),
+                Stores.persistentWindowStore(
+                    "window-store",
+                    Duration.ofMillis(10L),
+                    Duration.ofMillis(2L),
+                    false),
                 Serdes.String(),
                 Serdes.String()),
             "the-processor"
@@ -101,11 +110,19 @@ public class StreamThreadStateStoreProviderTest {
         tasks = new HashMap<>();
         stateDirectory = new StateDirectory(streamsConfig, new MockTime(), true);
 
-        taskOne = createStreamsTask(streamsConfig, clientSupplier, processorTopology, new TaskId(0, 0));
+        taskOne = createStreamsTask(
+            streamsConfig,
+            clientSupplier,
+            processorTopology,
+            new TaskId(0, 0));
         taskOne.initializeStateStores();
         tasks.put(new TaskId(0, 0), taskOne);
 
-        final StreamTask taskTwo = createStreamsTask(streamsConfig, clientSupplier, processorTopology, new TaskId(0, 1));
+        final StreamTask taskTwo = createStreamsTask(
+            streamsConfig,
+            clientSupplier,
+            processorTopology,
+            new TaskId(0, 1));
         taskTwo.initializeStateStores();
         tasks.put(new TaskId(0, 1), taskTwo);
 
@@ -130,8 +147,7 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldFindWindowStores() {
         mockThread(true);
-        final List<ReadOnlyWindowStore<Object, Object>>
-            windowStores =
+        final List<ReadOnlyWindowStore<Object, Object>> windowStores =
             provider.stores("window-store", windowStore());
         assertEquals(2, windowStores.size());
     }
@@ -153,10 +169,10 @@ public class StreamThreadStateStoreProviderTest {
     @Test
     public void shouldReturnEmptyListIfNoStoresFoundWithName() {
         mockThread(true);
-        assertEquals(Collections.emptyList(), provider.stores("not-a-store", QueryableStoreTypes
-            .keyValueStore()));
+        assertEquals(
+            Collections.emptyList(),
+            provider.stores("not-a-store", QueryableStoreTypes.keyValueStore()));
     }
-
 
     @Test
     public void shouldReturnEmptyListIfStoreExistsButIsNotOfTypeValueStore() {
@@ -183,7 +199,11 @@ public class StreamThreadStateStoreProviderTest {
             Collections.singletonList(new TopicPartition(topicName, taskId.partition)),
             topology,
             clientSupplier.consumer,
-            new StoreChangelogReader(clientSupplier.restoreConsumer, Duration.ZERO, new MockStateRestoreListener(), new LogContext("test-stream-task ")),
+            new StoreChangelogReader(
+                clientSupplier.restoreConsumer,
+                Duration.ZERO,
+                new MockStateRestoreListener(),
+                new LogContext("test-stream-task ")),
             streamsConfig,
             new MockStreamsMetrics(metrics),
             stateDirectory,
