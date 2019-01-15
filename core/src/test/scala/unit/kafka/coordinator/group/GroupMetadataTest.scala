@@ -17,6 +17,7 @@
 
 package kafka.coordinator.group
 
+import kafka.admin.ConsumerGroupCommand.GroupState
 import kafka.common.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
@@ -245,6 +246,7 @@ class GroupMetadataTest extends JUnitSuite {
       sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
 
     group.add(member)
+    group.transitionTo(PreparingRebalance)
     assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "foo")))
     assertTrue(group.supportsProtocols(protocolType, Set("range", "foo")))
     assertFalse(group.supportsProtocols(protocolType, Set("foo", "bar")))
