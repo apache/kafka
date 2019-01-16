@@ -25,7 +25,7 @@ import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{NewTopic, AdminClient => JAdminClient}
+import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
@@ -72,6 +72,22 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions) {
     assertExitCode(expected, options.checkArgs)
+  }
+
+  def createAndWaitTopic(opts: TopicCommandOptions): Unit = {
+    topicService.createTopic(opts)
+    waitForTopicCreated(opts.topic.get)
+  }
+
+  def waitForTopicCreated(topicName: String, timeout: Int = 10000): Unit = {
+    val finishTime = System.currentTimeMillis() + timeout
+    var result = false
+    while (System.currentTimeMillis() < finishTime || !result) {
+      val topics = adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get()
+      result = topics.contains(topicName)
+      Thread.sleep(100)
+    }
+    assertTrue(s"Topic $topicName has not been created within the given $timeout time", result)
   }
 
   @Before
@@ -129,7 +145,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testCreate(): Unit = {
-    topicService.createTopic(new TopicCommandOptions(
+    createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "1", "--topic", testTopicName)))
 
     adminClient.listTopics().names().get().contains(testTopicName)
@@ -138,7 +154,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testCreateWithConfigs(): Unit = {
     val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
-    topicService.createTopic(new TopicCommandOptions(
+    createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", "delete.retention.ms=1000")))
 
     val configs = adminClient
@@ -154,8 +170,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create the topic
     val createOpts = new TopicCommandOptions(
       Array("--partitions", numPartitions.toString, "--replication-factor", "1", "--topic", testTopicName))
-    val topicService = AdminClientTopicService(adminClient)
-    topicService.createTopic(createOpts)
+    createAndWaitTopic(createOpts)
 
     // try to re-create the topic
     intercept[IllegalArgumentException] {
@@ -168,7 +183,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     // create the topic
     val createOpts = new TopicCommandOptions(
       Array("--replica-assignment", "5:4,3:2,1:0", "--topic", testTopicName))
-    topicService.createTopic(createOpts)
+    createAndWaitTopic(createOpts)
 
     val partitions = adminClient
       .describeTopics(Collections.singletonList(testTopicName))
@@ -247,7 +262,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testListTopics(): Unit = {
-    topicService.createTopic(new TopicCommandOptions(
+    createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     val output = TestUtils.grabConsoleOutput(
@@ -266,6 +281,9 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
         new NewTopic(topic2, 2, 2),
         new NewTopic(topic3, 2, 2)).asJavaCollection)
       .all().get()
+    waitForTopicCreated(topic1)
+    waitForTopicCreated(topic2)
+    waitForTopicCreated(topic3)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array("--topic", "kafka.*"))))
@@ -282,6 +300,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       List(new NewTopic(topic1, 2, 2),
         new NewTopic(Topic.GROUP_METADATA_TOPIC_NAME, 2, 2)).asJavaCollection)
       .all().get()
+    waitForTopicCreated(topic1)
 
     val output = TestUtils.grabConsoleOutput(
       topicService.listTopics(new TopicCommandOptions(Array("--exclude-internal"))))
@@ -294,6 +313,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testAlterPartitionCount(): Unit = {
     adminClient.createTopics(
       List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+    waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--partitions", "3")))
@@ -306,6 +326,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testAlterAssignment(): Unit = {
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, 2, 2))).all().get()
+    waitForTopicCreated(testTopicName)
 
     topicService.alterTopic(new TopicCommandOptions(
       Array("--topic", testTopicName, "--replica-assignment", "5:3,3:1,4:2", "--partitions", "3")))
@@ -319,6 +340,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testAlterAssignmentWithMoreAssignmentThanPartitions(): Unit = {
     adminClient.createTopics(
       List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+    waitForTopicCreated(testTopicName)
 
     intercept[ExecutionException] {
       topicService.alterTopic(new TopicCommandOptions(
@@ -330,6 +352,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testAlterAssignmentWithMorePartitionsThanAssignment(): Unit = {
     adminClient.createTopics(
       List(new NewTopic(testTopicName, 2, 2)).asJavaCollection).all().get()
+    waitForTopicCreated(testTopicName)
 
     intercept[ExecutionException] {
       topicService.alterTopic(new TopicCommandOptions(
@@ -339,7 +362,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testAlterWithInvalidPartitionCount(): Unit = {
-    topicService.createTopic(new TopicCommandOptions(
+    createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
     intercept[ExecutionException] {
@@ -381,8 +404,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       "--partitions", numPartitions.toString,
       "--replication-factor", replicationFactor.toString,
       "--topic", testTopicName))
-    val topicService = AdminClientTopicService(adminClient)
-    topicService.createTopic(createOpts)
+    createAndWaitTopic(createOpts)
 
     var assignment = zkClient.getReplicaAssignmentForTopics(Set(testTopicName)).map { case (tp, replicas) =>
       tp.partition -> replicas
@@ -412,7 +434,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       "--replication-factor", "1",
       "--config", cleanupKey + "=" + cleanupVal,
       "--topic", testTopicName))
-    topicService.createTopic(createOpts)
+    createAndWaitTopic(createOpts)
     val props = adminZkClient.fetchEntityConfig(ConfigType.Topic, testTopicName)
     assertTrue("Properties after creation don't contain " + cleanupKey, props.containsKey(cleanupKey))
     assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
@@ -435,7 +457,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val createOpts = new TopicCommandOptions(Array("--partitions", "1",
       "--replication-factor", "1",
       "--topic", testTopicName))
-    topicService.createTopic(createOpts)
+    createAndWaitTopic(createOpts)
 
     // delete the NormalTopic
     val deleteOpts = new TopicCommandOptions(Array("--topic", testTopicName))
@@ -452,7 +474,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val createOffsetTopicOpts = new TopicCommandOptions(Array("--partitions", "1",
       "--replication-factor", "1",
       "--topic", Topic.GROUP_METADATA_TOPIC_NAME))
-    topicService.createTopic(createOffsetTopicOpts)
+    createAndWaitTopic(createOffsetTopicOpts)
 
     // Try to delete the Topic.GROUP_METADATA_TOPIC_NAME which is allowed by default.
     // This is a difference between the new and the old command as the old one didn't allow internal topic deletion.
@@ -477,6 +499,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testDescribe(): Unit = {
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, 2, 2))).all().get()
+    waitForTopicCreated(testTopicName)
+
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
     val rows = output.split("\n")
@@ -488,6 +512,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testDescribeUnavailablePartitions(): Unit = {
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, 6, 1))).all().get()
+    waitForTopicCreated(testTopicName)
 
     try {
       killBroker(0)
@@ -505,6 +530,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   def testDescribeUnderreplicatedPartitions(): Unit = {
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, 1, 6))).all().get()
+    waitForTopicCreated(testTopicName)
 
     try {
       killBroker(0)
@@ -520,25 +546,24 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   @Test
   def testDescribeReportOverriddenConfigs(): Unit = {
     val config = "file.delete.delay.ms=1000"
-    val configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)
-    topicService.createTopic(new TopicCommandOptions(
+    createAndWaitTopic(new TopicCommandOptions(
       Array("--partitions", "2", "--replication-factor", "2", "--topic", testTopicName, "--config", config)))
     val output = TestUtils.grabConsoleOutput(
       topicService.describeTopic(new TopicCommandOptions(Array())))
-    assertTrue(output.contains(config))
+    assertTrue(s"Describe output should have contained $config", output.contains(config))
   }
 
   @Test
   def testDescribeAndListTopicsWithoutInternalTopics(): Unit = {
-    topicService.createTopic(
+    createAndWaitTopic(
       new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
     // create a internal topic
-    topicService.createTopic(
+    createAndWaitTopic(
       new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "1", "--topic", Topic.GROUP_METADATA_TOPIC_NAME)))
 
     // test describe
     var output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(Array("--describe", "--exclude-internal"))))
-    assertTrue(output.contains(testTopicName))
+    assertTrue(s"Output should have contained $testTopicName", output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
 
     // test list
