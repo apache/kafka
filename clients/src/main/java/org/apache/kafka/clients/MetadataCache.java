@@ -44,7 +44,7 @@ class MetadataCache {
     private final Set<String> invalidTopics;
     private final Set<String> internalTopics;
     private final Node controller;
-    private final Map<TopicPartition, PartitionInfoAndEpoch> partitionsByTopicPartition;
+    private final Map<TopicPartition, PartitionInfoAndEpoch> metadataByPartition;
 
     private Cluster clusterInstance;
 
@@ -73,9 +73,9 @@ class MetadataCache {
         this.internalTopics = internalTopics;
         this.controller = controller;
 
-        this.partitionsByTopicPartition = new HashMap<>(partitions.size());
+        this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionInfoAndEpoch p : partitions) {
-            this.partitionsByTopicPartition.put(new TopicPartition(p.partitionInfo().topic(), p.partitionInfo().partition()), p);
+            this.metadataByPartition.put(new TopicPartition(p.partitionInfo().topic(), p.partitionInfo().partition()), p);
         }
 
         if (clusterInstance == null) {
@@ -87,12 +87,9 @@ class MetadataCache {
 
     /**
      * Return the cached PartitionInfo iff it was for the given epoch
-     * @param topicPartition
-     * @param epoch
-     * @return
      */
     Optional<PartitionInfo> getPartitionInfoHavingEpoch(TopicPartition topicPartition, int epoch) {
-        PartitionInfoAndEpoch infoAndEpoch = partitionsByTopicPartition.get(topicPartition);
+        PartitionInfoAndEpoch infoAndEpoch = metadataByPartition.get(topicPartition);
         if (infoAndEpoch == null) {
             return Optional.empty();
         } else {
@@ -105,12 +102,13 @@ class MetadataCache {
     }
 
     Optional<PartitionInfo> getPartitionInfo(TopicPartition topicPartition) {
-        return Optional.ofNullable(partitionsByTopicPartition.get(topicPartition))
+        return Optional.ofNullable(metadataByPartition.get(topicPartition))
                 .map(PartitionInfoAndEpoch::partitionInfo);
     }
 
-    void removePartitionInfo(TopicPartition topicPartition) {
-        partitionsByTopicPartition.entrySet().removeIf(entry -> entry.getKey().equals(topicPartition));
+    synchronized void removePartitionInfosForTopic(String topic) {
+        metadataByPartition.entrySet().removeIf(entry -> entry.getKey().topic().equals(topic));
+        computeClusterView();
     }
 
     Cluster cluster() {
@@ -122,7 +120,7 @@ class MetadataCache {
     }
 
     private void computeClusterView() {
-        List<PartitionInfo> partitionInfos = partitionsByTopicPartition.values()
+        List<PartitionInfo> partitionInfos = metadataByPartition.values()
                 .stream()
                 .map(PartitionInfoAndEpoch::partitionInfo)
                 .collect(Collectors.toList());

@@ -573,10 +573,10 @@ public class MetadataTest {
         assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
-        // Change topic subscription, still have old metadata cached until next metadata update but current partition info isn't available
+        // Change topic subscription, remove metadata from old topic
         metadata.setTopics(Collections.singletonList("topic-2"));
-        assertNotNull(metadata.fetch().partition(tp));
-        assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
+        assertNull(metadata.fetch().partition(tp));
+        assertNull(metadata.fetch().partitionCountForTopic("topic-1"));
         assertFalse(metadata.partitionInfoIfCurrent(tp).isPresent());
     }
 

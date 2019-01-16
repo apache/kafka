@@ -267,12 +267,15 @@ public class Metadata implements Closeable {
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
-        Set<TopicPartition> toRemove = lastSeenLeaderEpochs.keySet()
+        Set<TopicPartition> partitionsToRemove = lastSeenLeaderEpochs.keySet()
                 .stream()
                 .filter(tp -> !topics.contains(tp.topic()))
                 .collect(Collectors.toSet());
-        toRemove.forEach(lastSeenLeaderEpochs::remove);
-        toRemove.forEach(cache::removePartitionInfo);
+        partitionsToRemove.forEach(lastSeenLeaderEpochs::remove);
+
+        Set<String> topicsToRemove = partitionsToRemove.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        topicsToRemove.forEach(cache::removePartitionInfosForTopic);
+
         if (!this.topics.keySet().containsAll(topics)) {
             requestUpdateForNewTopics();
         }
