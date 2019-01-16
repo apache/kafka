@@ -71,7 +71,7 @@ public class AssignmentInfoTest {
     @Test
     public void shouldEncodeAndDecodeVersion1() {
         final AssignmentInfo info = new AssignmentInfo(1, activeTasks, standbyTasks, globalTaskAssignment, 0);
-        final AssignmentInfo expectedInfo = new AssignmentInfo(1, AssignmentInfo.UNKNOWN, activeTasks, standbyTasks,  Collections.EMPTY_MAP, 0);
+        final AssignmentInfo expectedInfo = new AssignmentInfo(1, AssignmentInfo.UNKNOWN, activeTasks, standbyTasks,  Collections.<HostInfo, Set<TaskId>>emptyMap(), 0);
         assertEquals(expectedInfo, AssignmentInfo.decode(info.encode()));
     }
 
