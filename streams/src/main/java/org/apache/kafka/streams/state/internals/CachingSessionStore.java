@@ -30,9 +30,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.List;
 import java.util.Objects;
-
 
 class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, AGG> {
 
@@ -80,12 +78,9 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
         cacheName = context.taskId() + "-" + bytesStore.name();
         cache = context.getCache();
-        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (final ThreadCache.DirtyEntry entry : entries) {
-                    putAndMaybeForward(entry, context);
-                }
+        cache.addDirtyEntryFlushListener(cacheName, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                putAndMaybeForward(entry, context);
             }
         });
     }
@@ -140,7 +135,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     @Override
     public void put(final Windowed<Bytes> key, final byte[] value) {
         validateStoreOpen();
-        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
+        final Bytes binaryKey = SessionKeySchema.toBinary(key);
         final LRUCacheEntry entry =
             new LRUCacheEntry(
                 value,
@@ -151,6 +146,24 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                 context.partition(),
                 context.topic());
         cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+    }
+
+    @Override
+    public byte[] fetch(final Bytes key, final long startTime, final long endTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+        final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
+        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+        if (cache == null) {
+            return bytesStore.fetch(key, startTime, endTime);
+        }
+        final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
+        if (entry == null) {
+            return bytesStore.fetch(key, startTime, endTime);
+        } else {
+            return entry.value();
+        }
+
     }
 
     @Override
@@ -175,7 +188,9 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
-                final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
+                final AGG oldValue = newValue == null || sendOldValues ?
+                    serdes.valueFrom(bytesStore.fetch(rawKey, key.window().start(), key.window().end())) :
+                    null;
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);
                 }
@@ -183,15 +198,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());
         } finally {
             context.setRecordContext(current);
-        }
-    }
-
-    private AGG fetchPrevious(final Bytes rawKey, final Window window) {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.findSessions(rawKey, window.start(), window.end())) {
-            if (!iterator.hasNext()) {
-                return null;
-            }
-            return serdes.valueFrom(iterator.next().value);
         }
     }
 

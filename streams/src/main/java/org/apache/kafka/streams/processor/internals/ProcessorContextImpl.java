@@ -392,6 +392,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public AGG fetch(final K key, final long startTime, final long endTime) {
+            return getInner().fetch(key, startTime, endTime);
+        }
+
+        @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
             return getInner().fetch(key);
         }
@@ -567,6 +572,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final Windowed<K> sessionKey, final AGG aggregate) {
             wrapped().put(sessionKey, aggregate);
+        }
+
+        @Override
+        public AGG fetch(final K key, final long startTime, final long endTime) {
+            return wrapped().fetch(key, startTime, endTime);
         }
 
         @Override

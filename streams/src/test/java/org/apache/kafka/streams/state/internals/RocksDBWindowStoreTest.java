@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -45,8 +46,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -361,9 +362,27 @@ public class RocksDBWindowStoreTest {
         windowStore = createWindowStore(context, false);
         final long startTime = segmentInterval - 4L;
 
-        System.out.println(Arrays.toString("zero".getBytes("UTF8")));
+        final Integer data = 1;
+        System.out.println(Bytes.wrap(new byte[] {
+            (byte) (data >>> 24),
+            (byte) (data >>> 16),
+            (byte) (data >>> 8),
+            data.byteValue()
+        }));
+
+        long timestamp = ApiUtils.validateMillisecondInstant(ofEpochMilli(startTime + 0L - windowSize), "");
+
+        System.out.println(Bytes.wrap(ByteBuffer.allocate(8).putLong(timestamp).array()));
 
         putFirstBatch(windowStore, startTime, context);
+
+        timestamp = ApiUtils.validateMillisecondInstant(ofEpochMilli(startTime + 0L + windowSize), "");
+
+        System.out.println(Bytes.wrap(ByteBuffer.allocate(8).putLong(timestamp).array()));
+
+        putFirstBatch(windowStore, startTime, context);
+
+        System.out.println(Bytes.wrap(ByteBuffer.allocate(4).putInt(Integer.MAX_VALUE).array()));
 
         final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
         final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);

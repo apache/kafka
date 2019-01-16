@@ -37,9 +37,23 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
 
     public void put(final Windowed<K> sessionKey, final V value) {
         if (!sessions.containsKey(sessionKey.key())) {
-            sessions.put(sessionKey.key(), new ArrayList<KeyValue<Windowed<K>, V>>());
+            sessions.put(sessionKey.key(), new ArrayList<>());
         }
         sessions.get(sessionKey.key()).add(KeyValue.pair(sessionKey, value));
+    }
+
+    @Override
+    public V fetch(final K key, final long startTime, final long endTime) {
+        if (sessions.containsKey(key)) {
+            for (KeyValue<Windowed<K>, V> kv : sessions.get(key)) {
+                if (kv.key.window().start() == startTime && kv.key.window().end() == endTime) {
+                    return kv.value;
+                }
+            }
+
+        }
+
+        return null;
     }
 
     @Override

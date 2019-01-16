@@ -47,6 +47,10 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
             .putInt(Integer.MAX_VALUE)
             .array();
 
+        final Bytes ret = OrderedBytes.upperRange(key, maxSuffix);
+
+        System.out.println(ret);
+
         return OrderedBytes.upperRange(key, maxSuffix);
     }
 
