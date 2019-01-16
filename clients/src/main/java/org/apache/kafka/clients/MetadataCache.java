@@ -106,8 +106,10 @@ class MetadataCache {
                 .map(PartitionInfoAndEpoch::partitionInfo);
     }
 
-    synchronized void removePartitionInfosForTopic(String topic) {
-        metadataByPartition.entrySet().removeIf(entry -> entry.getKey().topic().equals(topic));
+    synchronized void retainTopics(Collection<String> topics) {
+        metadataByPartition.entrySet().removeIf(entry -> !topics.contains(entry.getKey().topic()));
+        unauthorizedTopics.retainAll(topics);
+        invalidTopics.retainAll(topics);
         computeClusterView();
     }
 

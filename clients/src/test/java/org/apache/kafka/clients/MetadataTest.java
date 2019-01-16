@@ -573,7 +573,7 @@ public class MetadataTest {
         assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
-        // Change topic subscription, remove metadata from old topic
+        // Change topic subscription, remove metadata for old topic
         metadata.setTopics(Collections.singletonList("topic-2"));
         assertNull(metadata.fetch().partition(tp));
         assertNull(metadata.fetch().partitionCountForTopic("topic-1"));

@@ -281,8 +281,7 @@ public class Metadata implements Closeable {
                 .collect(Collectors.toSet());
         partitionsToRemove.forEach(lastSeenLeaderEpochs::remove);
 
-        Set<String> topicsToRemove = partitionsToRemove.stream().map(TopicPartition::topic).collect(Collectors.toSet());
-        topicsToRemove.forEach(cache::removePartitionInfosForTopic);
+        cache.retainTopics(topics);
 
         if (!this.topics.keySet().containsAll(topics)) {
             requestUpdateForNewTopics();
@@ -429,6 +428,7 @@ public class Metadata implements Closeable {
             }
         } else {
             // Old cluster format (no epochs)
+            lastSeenLeaderEpochs.clear();
             partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
     }
