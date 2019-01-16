@@ -638,7 +638,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     * @param partitions The partitions to have their preferred leader elected
     * @param electionType The election type
     * @return A map of failed elections where keys are partitions which had an error and the corresponding value is
-    *         the exception that way thrown.
+    *         the exception that was thrown.
     */
   private def onPreferredReplicaElection(partitions: Set[TopicPartition],
                                          electionType: ElectionType): Map[TopicPartition, Throwable] = {
@@ -1544,7 +1544,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     eventManager.put(PreferredReplicaLeaderElection(Some(partitions), AdminClientTriggered, callback))
 
   case class PreferredReplicaLeaderElection(partitionsOpt: Option[Set[TopicPartition]],
-                                            //newPath: Boolean = false,
                                             electionType: ElectionType = ZkTriggered,
                                             callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = (_,_) =>{}) extends ControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
@@ -1572,7 +1571,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val (partitionsBeingDeleted, livePartitions) = validPartitions.partition(partition =>
             topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic))
           if (partitionsBeingDeleted.nonEmpty) {
-            error(s"Skipping preferred replica election for partitions $partitionsBeingDeleted " +
+            warn(s"Skipping preferred replica election for partitions $partitionsBeingDeleted " +
               s"since the respective topics are being deleted")
           }
           // partition those where preferred is already leader
@@ -1587,7 +1586,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val successfulPartitions = electablePartitions -- electionErrors.keySet
           val results = electionErrors.map { case (partition, ex) =>
             val apiError = if (ex.isInstanceOf[StateChangeFailedException])
-              new ApiError(Errors.LEADER_NOT_AVAILABLE, ex.getMessage)
+              new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE, ex.getMessage)
             else
               ApiError.fromThrowable(ex)
             partition -> apiError
