@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -182,11 +183,18 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Update the leader epoch for a partition if the given predicate passes. If updated, remove the stale metadata
-     * record from {@link Cluster}.
+     * Conditionally update the leader epoch for a partition
+     *
+     * @param topicPartition topic+partition to update the epoch for
+     * @param epoch the new epoch
+     * @param epochTest a predicate to determine if the old epoch should be replaced
+     * @param setRequestUpdateFlag sets the "needUpdate" flag to true if the epoch is updated
+     * @return true if the epoch was updated, false otherwise
      */
-    private synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition, int epoch, Predicate<Integer> epochTest,
-                                        boolean setRequestUpdateFlag) {
+    private synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition,
+                                                     int epoch,
+                                                     Predicate<Integer> epochTest,
+                                                     boolean setRequestUpdateFlag) {
         Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
         log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, epoch);
         if (oldEpoch == null || epochTest.test(oldEpoch)) {
@@ -365,9 +373,6 @@ public class Metadata implements Closeable {
 
     /**
      * Transform a MetadataResponse into a new MetadataCache instance.
-     * @param metadataResponse
-     * @param topicsToRetain
-     * @return
      */
     private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse, Predicate<String> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
@@ -381,7 +386,8 @@ public class Metadata implements Closeable {
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
                     updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
-                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, partitionMetadata.leaderEpoch().orElse(-1)));
+                        int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
                     });
                 }
             }
@@ -394,17 +400,17 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Compute the correct PartitionInfo to cache for a topic+partition.
-     * @param topic
-     * @param partitionMetadata
-     * @param partitionInfoConsumer
+     * Compute the correct PartitionInfo to cache for a topic+partition and pass to the given consumer.
      */
-    private void updatePartitionInfo(String topic, MetadataResponse.PartitionMetadata partitionMetadata, Consumer<PartitionInfo> partitionInfoConsumer) {
+    private void updatePartitionInfo(String topic,
+                                     MetadataResponse.PartitionMetadata partitionMetadata,
+                                     Consumer<PartitionInfo> partitionInfoConsumer) {
+
         TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
         if (partitionMetadata.leaderEpoch().isPresent()) {
             int newEpoch = partitionMetadata.leaderEpoch().get();
+            // If the received leader epoch is at least the same as the previous one, update the metadata
             if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
-                // If the received leader epoch is at least the same as the previous one, use the new partition info
                 partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
             } else {
                 // Otherwise ignore the new metadata and use the previously cached info
@@ -422,6 +428,7 @@ public class Metadata implements Closeable {
                 }
             }
         } else {
+            // Old cluster format (no epochs)
             partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
     }

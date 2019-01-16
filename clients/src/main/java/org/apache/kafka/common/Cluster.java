@@ -117,10 +117,10 @@ public final class Cluster {
         Map<Integer, List<PartitionInfo>> tmpPartitionsByNode = new HashMap<>();
         for (PartitionInfo p : partitions) {
             tmpPartitionsByTopicPartition.put(new TopicPartition(p.topic(), p.partition()), p);
-            tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
+            tmpPartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
             if (p.leader() != null) {
-                tmpAvailablePartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
-                tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::mergeUnmodifiableLists);
+                tmpAvailablePartitionsByTopic.merge(p.topic(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
+                tmpPartitionsByNode.merge(p.leader().id(), Collections.singletonList(p), Utils::concatListsUnmodifiable);
             }
         }
         this.partitionsByTopicPartition = Collections.unmodifiableMap(tmpPartitionsByTopicPartition);
