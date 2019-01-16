@@ -85,7 +85,8 @@ ssh [node-name|user-name@node-name] [command]
 
 down [-q|--quiet] [-f|--force]
     Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
-    only error messages are printed.
+    only error messages are printed. If --force or -f is specified, "docker rm -f"
+    will be used to remove the nodes, which kills currently running ducker-ak test.
 
 purge [--f|--force]
     Purge Docker images created by ducker-ak.  This will free disk space.
