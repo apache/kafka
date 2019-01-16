@@ -46,13 +46,13 @@ import org.junit.rules.TemporaryFolder;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -160,7 +160,7 @@ public abstract class AbstractJoinIntegrationTest {
 
     @After
     public void cleanup() throws InterruptedException {
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
         CLUSTER.deleteAllTopicsAndWait(120000);
     }
 

@@ -32,6 +32,7 @@ import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -117,6 +118,13 @@ public class AgentClient {
         return resp.body();
     }
 
+    public UptimeResponse uptime() throws Exception {
+        HttpResponse<UptimeResponse> resp =
+            JsonRestServer.httpRequest(url("/agent/uptime"), "GET",
+                null, new TypeReference<UptimeResponse>() { }, maxTries);
+        return resp.body();
+    }
+
     public void createWorker(CreateWorkerRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.<Empty>httpRequest(
@@ -168,6 +176,11 @@ public class AgentClient {
             .type(Boolean.class)
             .dest("status")
             .help("Get agent status.");
+        actions.addArgument("--uptime")
+            .action(storeTrue())
+            .type(Boolean.class)
+            .dest("uptime")
+            .help("Get agent uptime.");
         actions.addArgument("--create-worker")
             .action(store())
             .type(String.class)
@@ -212,6 +225,9 @@ public class AgentClient {
         if (res.getBoolean("status")) {
             System.out.println("Got agent status: " +
                 JsonUtil.toPrettyJsonString(client.status()));
+        } else if (res.getBoolean("uptime")) {
+            System.out.println("Got agent uptime: " +
+                JsonUtil.toPrettyJsonString(client.uptime()));
         } else if (res.getString("create_worker") != null) {
             CreateWorkerRequest req = JsonUtil.JSON_SERDE.
                 readValue(res.getString("create_worker"), CreateWorkerRequest.class);

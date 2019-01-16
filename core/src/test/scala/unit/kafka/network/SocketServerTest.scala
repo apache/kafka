@@ -28,6 +28,7 @@ import com.yammer.metrics.{Metrics => YammerMetrics}
 import javax.net.ssl._
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
+import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
@@ -188,7 +189,7 @@ class SocketServerTest extends JUnitSuite {
   @Test
   def testControlPlaneRequest(): Unit = {
     val testProps = new Properties
-    testProps.putAll(props)
+    testProps ++= props
     testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")

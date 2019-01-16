@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.MockProducer;
@@ -61,6 +57,10 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestName;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -215,7 +215,7 @@ public class KafkaStreamsTest {
     @Test
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         builder.globalTable("anyTopic");
-        final List<Node> nodes = asList(new Node(0, "localhost", 8121));
+        final List<Node> nodes = Collections.singletonList(new Node(0, "localhost", 8121));
         final Cluster cluster = new Cluster("mockClusterId", nodes,
                                             Collections.emptySet(), Collections.emptySet(),
                                             Collections.emptySet(), nodes.get(0));
@@ -326,14 +326,11 @@ public class KafkaStreamsTest {
 
         // make sure we have the global state thread running too
         builder.globalTable("anyTopic");
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        try {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             streams.start();
             fail("expected start() to time out and throw an exception.");
         } catch (final StreamsException expected) {
             // This is a result of not being able to connect to the broker.
-        } finally {
-            streams.close();
         }
         // There's nothing to assert... We're testing that this operation actually completes.
     }
@@ -349,11 +346,8 @@ public class KafkaStreamsTest {
 
         // make sure we have the global state thread running too
         builder.table("anyTopic");
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        try {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             streams.start();
-        } finally {
-            streams.close();
         }
         // There's nothing to assert... We're testing that this operation actually completes.
     }
@@ -362,9 +356,8 @@ public class KafkaStreamsTest {
     @Test
     public void testInitializesAndDestroysMetricsReporters() {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
 
-        try {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             final int newInitCount = MockMetricsReporter.INIT_COUNT.get();
             final int initDiff = newInitCount - oldInitCount;
             assertTrue("some reporters should be initialized by calling on construction", initDiff > 0);
@@ -373,8 +366,6 @@ public class KafkaStreamsTest {
             final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
             streams.close();
             assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
-        } finally {
-            streams.close();
         }
     }
 
@@ -584,8 +575,7 @@ public class KafkaStreamsTest {
 
         builder.table(topic, Materialized.as("store"));
 
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        try {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             final CountDownLatch latch = new CountDownLatch(1);
             streams.setStateListener((newState, oldState) -> {
                 if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
@@ -601,21 +591,16 @@ public class KafkaStreamsTest {
             verifyCleanupStateDir(appDir, oldTaskDir);
             assertTrue(oldTaskDir.mkdirs());
             verifyCleanupStateDir(appDir, oldTaskDir);
-        } finally {
-            streams.close();
         }
     }
 
     @Test
     public void shouldThrowOnNegativeTimeoutForClose() {
-        final KafkaStreams streams = new KafkaStreams(builder.build(), props);
-        try {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props)) {
             streams.close(Duration.ofMillis(-1L));
             fail("should not accept negative close parameter");
         } catch (final IllegalArgumentException e) {
             // expected
-        } finally {
-            streams.close();
         }
     }
 
@@ -684,9 +669,12 @@ public class KafkaStreamsTest {
                                          final String globalStoreName,
                                          final boolean isPersistentStore) throws Exception {
         CLUSTER.createTopics(inputTopic, outputTopic, globalTopicName);
-        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(isPersistentStore ?
-                Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName), 
-                Serdes.String(), Serdes.Long());
+        final StoreBuilder<KeyValueStore<String, Long>> storeBuilder = Stores.keyValueStoreBuilder(
+            isPersistentStore ?
+                Stores.persistentKeyValueStore(storeName)
+                : Stores.inMemoryKeyValueStore(storeName),
+            Serdes.String(),
+            Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
                 .addProcessor("process", () -> new AbstractProcessor<String, String>() {
@@ -769,7 +757,8 @@ public class KafkaStreamsTest {
         }
     }
 
-    private void verifyCleanupStateDir(final String appDir, final File oldTaskDir) throws InterruptedException {
+    private void verifyCleanupStateDir(final String appDir,
+                                       final File oldTaskDir) throws InterruptedException {
         final File taskDir = new File(appDir, "0_0");
         TestUtils.waitForCondition(
             () -> !oldTaskDir.exists() && taskDir.exists(),
@@ -785,7 +774,8 @@ public class KafkaStreamsTest {
         public Map<KafkaStreams.State, Long> mapStates = new HashMap<>();
 
         @Override
-        public void onChange(final KafkaStreams.State newState, final KafkaStreams.State oldState) {
+        public void onChange(final KafkaStreams.State newState,
+                             final KafkaStreams.State oldState) {
             final long prevCount = mapStates.containsKey(newState) ? mapStates.get(newState) : 0;
             numChanges++;
             this.oldState = oldState;

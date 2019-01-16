@@ -14,16 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.streams.kstream.Aggregator;
+public class MemberIdRequiredException extends ApiException {
 
-public class MockAggregator {
+    private static final long serialVersionUID = 1L;
 
-    public final static Aggregator<Object, Object, String> TOSTRING_ADDER = toStringInstance("+");
-    public final static Aggregator<Object, Object, String> TOSTRING_REMOVER = toStringInstance("-");
+    public MemberIdRequiredException(String message) {
+        super(message);
+    }
 
-    public static <K, V> Aggregator<K, V, String> toStringInstance(final String sep) {
-        return (aggKey, value, aggregate) -> aggregate + sep + value;
+    public MemberIdRequiredException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

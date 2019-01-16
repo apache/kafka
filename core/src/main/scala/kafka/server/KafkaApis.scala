@@ -1244,12 +1244,16 @@ class KafkaApis(val requestChannel: RequestChannel,
           Collections.emptyMap())
       )
     } else {
+      // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
+      val requireKnownMemberId = joinGroupRequest.version >= 4
+
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.groupProtocols().asScala.map(protocol =>
         (protocol.name, Utils.toArray(protocol.metadata))).toList
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.groupId,
         joinGroupRequest.memberId,
+        requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,
         joinGroupRequest.rebalanceTimeout,

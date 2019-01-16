@@ -52,18 +52,27 @@ public class RocksDBSessionStoreTest {
     public void before() {
         final SessionKeySchema schema = new SessionKeySchema();
 
-        final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", "metrics-scope", 10_000L, 60_000L, schema);
+        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
+            "session-store",
+            "metrics-scope",
+            10_000L,
+            60_000L,
+            schema);
 
-        sessionStore = new RocksDBSessionStore<>(bytesStore,
-                                                 Serdes.String(),
-                                                 Serdes.Long());
+        sessionStore = new RocksDBSessionStore<>(
+            bytesStore,
+            Serdes.String(),
+            Serdes.Long());
 
-        context = new InternalMockProcessorContext(TestUtils.tempDirectory(),
-                                           Serdes.String(),
-                                           Serdes.Long(),
-                                           new NoOpRecordCollector(),
-                                           new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())));
+        context = new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache(
+                new LogContext("testCache "),
+                0,
+                new MockStreamsMetrics(new Metrics())));
         sessionStore.init(context, sessionStore);
     }
 
@@ -85,7 +94,8 @@ public class RocksDBSessionStoreTest {
         final List<KeyValue<Windowed<String>, Long>> expected =
             Arrays.asList(KeyValue.pair(a1, 1L), KeyValue.pair(a2, 2L));
 
-        final KeyValueIterator<Windowed<String>, Long> values = sessionStore.findSessions(key, 0, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> values =
+            sessionStore.findSessions(key, 0, 1000L);
         assertEquals(expected, toList(values));
 
         final List<KeyValue<Windowed<String>, Long>> expected2 = Collections.singletonList(KeyValue.pair(a2, 2L));
@@ -96,11 +106,12 @@ public class RocksDBSessionStoreTest {
 
     @Test
     public void shouldFetchAllSessionsWithSameRecordKey() {
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
 
-        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
-                                                                                    KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
         for (final KeyValue<Windowed<String>, Long> kv : expected) {
             sessionStore.put(kv.key, kv.value);
         }
@@ -112,17 +123,18 @@ public class RocksDBSessionStoreTest {
         assertEquals(expected, results);
     }
 
-
     @Test
     public void shouldFindValuesWithinMergingSessionWindowRange() {
         final String key = "a";
         sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
         sessionStore.put(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L);
-        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions(key, -1, 1000L);
+        final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions(key, -1, 1000L);
 
         final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
                 KeyValue.pair(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L),
                 KeyValue.pair(new Windowed<>(key, new SessionWindow(1000L, 1000L)), 2L));
+
         assertEquals(expected, toList(results));
     }
 
@@ -149,7 +161,8 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(session3, 3L);
         sessionStore.put(session4, 4L);
         sessionStore.put(session5, 5L);
-        final KeyValueIterator<Windowed<String>, Long> results = sessionStore.findSessions("a", 150, 300);
+        final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 150, 300);
         assertEquals(session2, results.next().key);
         assertEquals(session3, results.next().key);
         assertFalse(results.hasNext());
@@ -157,12 +170,17 @@ public class RocksDBSessionStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
-        final RocksDBSegmentedBytesStore bytesStore =
-                new RocksDBSegmentedBytesStore("session-store", "metrics-scope", 0x7a00000000000000L, 0x7a00000000000000L, new SessionKeySchema());
+        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
+            "session-store",
+            "metrics-scope",
+            0x7a00000000000000L,
+            0x7a00000000000000L,
+            new SessionKeySchema());
 
-        sessionStore = new RocksDBSessionStore<>(bytesStore,
-                                                 Serdes.String(),
-                                                 Serdes.Long());
+        sessionStore = new RocksDBSessionStore<>(
+            bytesStore,
+            Serdes.String(),
+            Serdes.Long());
 
         sessionStore.init(context, sessionStore);
 
@@ -172,7 +190,8 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
         sessionStore.put(new Windowed<>("a", new SessionWindow(0x7a00000000000000L - 2, 0x7a00000000000000L - 1)), 5L);
 
-        KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0, Long.MAX_VALUE);
+        KeyValueIterator<Windowed<String>, Long> iterator =
+            sessionStore.findSessions("a", 0, Long.MAX_VALUE);
         List<Long> results = new ArrayList<>();
         while (iterator.hasNext()) {
             results.add(iterator.next().value);
@@ -190,7 +209,8 @@ public class RocksDBSessionStoreTest {
         assertThat(results, equalTo(Arrays.asList(2L, 4L)));
 
 
-        final KeyValueIterator<Windowed<String>, Long> rangeIterator = sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
+        final KeyValueIterator<Windowed<String>, Long> rangeIterator =
+            sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE);
         final List<Long> rangeResults = new ArrayList<>();
         while (rangeIterator.hasNext()) {
             rangeResults.add(rangeIterator.next().value);
@@ -245,6 +265,5 @@ public class RocksDBSessionStoreTest {
         }
         return results;
     }
-
 
 }

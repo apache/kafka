@@ -165,6 +165,8 @@
               files="KStreamKStreamJoinTest.java"/>
     <suppress checks="MethodLength"
               files="KStreamWindowAggregateTest.java"/>
+    <suppress checks="MethodLength"
+              files="RocksDBWindowStoreTest.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files=".*[/\\]streams[/\\].*test[/\\].*.java"/>

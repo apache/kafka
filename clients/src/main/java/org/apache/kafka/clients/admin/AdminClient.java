@@ -26,6 +26,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
@@ -84,8 +85,24 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param duration  The duration to use for the wait time.
      * @param unit      The time unit to use for the wait time.
+     * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
      */
-    public abstract void close(long duration, TimeUnit unit);
+    @Deprecated
+    public void close(long duration, TimeUnit unit) {
+        close(Duration.ofMillis(unit.toMillis(duration)));
+    }
+
+    /**
+     * Close the AdminClient and release all associated resources.
+     *
+     * The close operation has a grace period during which current operations will be allowed to
+     * complete, specified by the given duration.
+     * New operations will not be accepted during the grace period.  Once the grace period is over,
+     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     *
+     * @param timeout  The time to use for the wait time.
+     */
+    public abstract void close(Duration timeout);
 
     /**
      * Create a batch of new topics with the default options.
