@@ -46,6 +46,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -356,9 +357,11 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void testFetchRange() {
+    public void testFetchRange() throws Exception {
         windowStore = createWindowStore(context, false);
         final long startTime = segmentInterval - 4L;
+
+        System.out.println(Arrays.toString("zero".getBytes("UTF8")));
 
         putFirstBatch(windowStore, startTime, context);
 
