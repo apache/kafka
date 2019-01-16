@@ -20,38 +20,38 @@ set -ex
 # If you update this, also update tests/docker/Dockerfile
 export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
 
+path_to_jdk_cache() {
+  jdk_version=$1
+  echo "/var/cache/oracle-jdk8-installer/jdk-${jdk_version}-linux-64.tar.gz"
+}
+
+fetch_jdk_tgz() {
+  jdk_version=$1
+
+  if [ ! -e $(path_to_jdk_cache $jdk_version) ]; then
+    mkdir -p $(dirname $(path_to_jdk_cache $jdk_version))
+    # Grab a copy of the JDK since it has moved and original downloader won't work
+    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}-linux-x64.tar.gz" -o $(path_to_jdk_cache $jdk_version)
+  fi
+}
+
 if [ -z `which javac` ]; then
     apt-get -y update
-    apt-get install -y software-properties-common python-software-properties
-    add-apt-repository -y ppa:webupd8team/java
-    apt-get -y update
+    apt-get install -y software-properties-common python-software-properties binutils gsfonts gsfonts-x11 java-common libfontenc1 libxfont1 x11-common xfonts-encodings xfonts-utils
 
-    # Try to share cache. See Vagrantfile for details
-    mkdir -p /var/cache/oracle-jdk8-installer
-    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
-        find /tmp/oracle-jdk8-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk8-installer/ \;
-    fi
-    if [ ! -e "/var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz" ]; then
-      # Grab a copy of the JDK since it has moved and original downloader won't work
-      curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-8u171-linux-x64.tar.gz" -o /var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz
-    fi
-
-    /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-
-    # oracle-javaX-installer runs wget with a dot progress indicator which ends up
-    # as one line per dot in the build logs.
-    # To avoid this noise we redirect all output to a file that we only show if apt-get fails.
-    echo "Installing JDK..."
-    if ! apt-get -y install oracle-java8-installer oracle-java8-set-default >/tmp/jdk_install.log 2>&1 ; then
-        cat /tmp/jdk_install.log
-        echo "ERROR: JDK install failed"
-        exit 1
-    fi
+    echo "===> Installing JDK..." 
+    mkdir -p /opt/jdk/8
+    cd /opt/jdk/8
+    jdk_version='8u202'
+    fetch_jdk_tgz $jdk_version
+    tar zxf $(path_to_jdk_cache $jdk_version)
+    for bin in /opt/jdk/8/bin/* ; do 
+      name=$(basename $bin)
+      update-alternatives --install /usr/bin/$name $name $bin 1091 && update-alternatives --set $name $bin
+    done
+    echo "export JAVA_HOME=/opt/jdk/8\nexport PATH=\$PATH:\$JAVA_HOME/bin" > /etc/profile.d/jdk.sh
     echo "JDK installed: $(javac -version 2>&1)"
 
-    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
-        cp -R /var/cache/oracle-jdk8-installer/* /tmp/oracle-jdk8-installer-cache
-    fi
 fi
 
 chmod a+rw /opt
