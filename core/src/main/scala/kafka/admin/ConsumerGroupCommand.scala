@@ -21,7 +21,6 @@ import java.text.{ParseException, SimpleDateFormat}
 import java.util
 import java.util.{Date, Properties}
 
-import com.fasterxml.jackson.databind.{ObjectReader, ObjectWriter}
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
@@ -209,7 +208,7 @@ object ConsumerGroupCommand extends Logging {
     private def printOffsets(group: String, state: Option[String], assignments: Option[Seq[PartitionAssignmentState]]): Unit = {
       if (shouldPrintMemberState(group, state, size(assignments))) {
         // find proper columns width
-        var (maxGroupLen, maxTopicLen, maxConsumerIdLen, maxHostLen, maxClientIdLen) = (15, 15, 15, 15, 15)
+        var (maxGroupLen, maxTopicLen, maxConsumerIdLen, maxHostLen) = (15, 15, 15, 15)
         assignments match {
           case None => // do nothing
           case Some(consumerAssignments) =>
@@ -218,18 +217,17 @@ object ConsumerGroupCommand extends Logging {
               maxTopicLen = Math.max(maxTopicLen, consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE).length)
               maxConsumerIdLen = Math.max(maxConsumerIdLen, consumerAssignment.consumerId.getOrElse(MISSING_COLUMN_VALUE).length)
               maxHostLen = Math.max(maxHostLen, consumerAssignment.host.getOrElse(MISSING_COLUMN_VALUE).length)
-              maxClientIdLen = Math.max(maxClientIdLen, consumerAssignment.clientId.getOrElse(MISSING_COLUMN_VALUE).length)
             }
         }
 
-        println(s"\n%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s"
+        println(s"\n%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s"
           .format("GROUP", "TOPIC", "PARTITION", "CURRENT-OFFSET", "LOG-END-OFFSET", "LAG", "CONSUMER-ID", "HOST", "CLIENT-ID"))
 
         assignments match {
           case None => // do nothing
           case Some(consumerAssignments) =>
             consumerAssignments.foreach { consumerAssignment =>
-              println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s".format(
+              println(s"%${-maxGroupLen}s %${-maxTopicLen}s %-10s %-15s %-15s %-15s %${-maxConsumerIdLen}s %${-maxHostLen}s %s".format(
                 consumerAssignment.group,
                 consumerAssignment.topic.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.partition.getOrElse(MISSING_COLUMN_VALUE),
                 consumerAssignment.offset.getOrElse(MISSING_COLUMN_VALUE), consumerAssignment.logEndOffset.getOrElse(MISSING_COLUMN_VALUE),
@@ -786,7 +784,7 @@ object ConsumerGroupCommand extends Logging {
     val AllTopicsDoc = "Consider all topics assigned to a group in the `reset-offsets` process."
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
-    val AllDoc = "Apply to all consumer groups."
+    val AllGroupsDoc = "Apply to all consumer groups."
     val nl = System.getProperty("line.separator")
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2"
@@ -836,7 +834,7 @@ object ConsumerGroupCommand extends Logging {
     val allTopicsOpt = parser.accepts("all-topics", AllTopicsDoc)
     val listOpt = parser.accepts("list", ListDoc)
     val describeOpt = parser.accepts("describe", DescribeDoc)
-    val allGroupsOpt = parser.accepts("all-groups", AllDoc)
+    val allGroupsOpt = parser.accepts("all-groups", AllGroupsDoc)
     val deleteOpt = parser.accepts("delete", DeleteDoc)
     val timeoutMsOpt = parser.accepts("timeout", TimeoutMsDoc)
                              .withRequiredArg
