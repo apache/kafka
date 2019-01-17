@@ -134,8 +134,11 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public long streamTime() {
-        throw new RuntimeException("Stream time is not implemented for the global processor context.");
+        throw new UnsupportedOperationException("Stream-time is not defined for global tasks.");
     }
 }
