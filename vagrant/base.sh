@@ -40,11 +40,14 @@ if [ -z `which javac` ]; then
     apt-get install -y software-properties-common python-software-properties binutils gsfonts gsfonts-x11 java-common libfontenc1 libxfont1 x11-common xfonts-encodings xfonts-utils
 
     echo "===> Installing JDK..." 
-    mkdir -p /opt/jdk/8
-    cd /opt/jdk/8
+
+    mkdir -p /opt/jdk
+    cd /opt/jdk
+    rm -rf 8
     jdk_version='8u202'
     fetch_jdk_tgz $jdk_version
     tar zxf $(path_to_jdk_cache $jdk_version)
+    mv jdk1.8.0_202 8
     for bin in /opt/jdk/8/bin/* ; do 
       name=$(basename $bin)
       update-alternatives --install /usr/bin/$name $name $bin 1091 && update-alternatives --set $name $bin
