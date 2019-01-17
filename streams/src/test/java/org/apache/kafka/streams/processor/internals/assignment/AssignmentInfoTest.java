@@ -47,7 +47,7 @@ public class AssignmentInfoTest {
     private final Map<HostInfo, Set<TaskId>> globalTaskAssignment = new HashMap<HostInfo, Set<TaskId>>() {
         {
             put(new HostInfo("localhost", 80),
-            Utils.mkSet(new TaskId(1, 1), new TaskId(2, 3)));
+                Utils.mkSet(new TaskId(1, 1), new TaskId(2, 3)));
         }
     };
 

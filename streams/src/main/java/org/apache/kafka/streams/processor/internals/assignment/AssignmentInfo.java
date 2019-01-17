@@ -133,7 +133,7 @@ public class AssignmentInfo {
     public ByteBuffer encode() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-            try  {
+        try  {
             switch (usedVersion) {
                 case 1:
                     encodeVersionOne(baos);
@@ -195,20 +195,20 @@ public class AssignmentInfo {
 
     private void encodeTasksByHost(final DataOutputStream out) throws IOException {
         // encode partitions by host
-            out.writeInt(tasksByHost.size());
-            for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHost.entrySet()) {
+        out.writeInt(tasksByHost.size());
+        for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHost.entrySet()) {
             final HostInfo hostInfo = entry.getKey();
             out.writeUTF(hostInfo.host());
             out.writeInt(hostInfo.port());
             writeTaskIds(out, entry.getValue());
-            }
         }
+    }
 
-        private void writeTaskIds(final DataOutputStream out, final Set<TaskId> partitions) throws IOException {
-            out.writeInt(partitions.size());
-            for (final TaskId partition : partitions) {
-                out.writeInt(partition.topicGroupId);
-                out.writeInt(partition.partition);
+    private void writeTaskIds(final DataOutputStream out, final Set<TaskId> partitions) throws IOException {
+        out.writeInt(partitions.size());
+        for (final TaskId partition : partitions) {
+            out.writeInt(partition.topicGroupId);
+            out.writeInt(partition.partition);
         }
     }
 
@@ -345,7 +345,7 @@ public class AssignmentInfo {
     }
 
 
-        private static Set<TopicPartition> readTopicPartitions(final DataInputStream in) throws IOException {
+    private static Set<TopicPartition> readTopicPartitions(final DataInputStream in) throws IOException {
         final int numPartitions = in.readInt();
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
