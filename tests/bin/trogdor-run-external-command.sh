@@ -25,7 +25,7 @@ cat <<EOF
         "class": "org.apache.kafka.trogdor.workload.ExternalCommandSpec",
         "command": ["python", "./tests/bin/ExternalCommandExample.py"],
         "durationMs": 10000000,
-        "producerNode": "node0",
+        "commandNode": "node0",
         "workload":{
             "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
             "bootstrapServers": "localhost:9092",

@@ -17,6 +17,8 @@
 
 package org.apache.kafka.trogdor.workload;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeType;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -32,10 +34,10 @@ import org.slf4j.LoggerFactory;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
-import java.util.ArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
@@ -43,19 +45,24 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * ExternalCommandWorker drives the Trogdor task with an external command.
+ * ExternalCommandWorker runs the Trogdor task with an external command.
  *
  * ExternalCommandWorker starts an external process to execute the command. Communication between the external process
  * and ExternalCommandWorker should follow these APIs:
  *
- * Control API:
+ * Control API: {"action":"stop"|"start", "spec":ExternalCommandSpec}
  *
- * ExternalCommandWorker should pass one argument, --spec taskSpec, that shows the Trogdor task.
+ * ExternalCommandWorker can control the external process by sending commands to the process's stdin.
  *
- * ExternalCommandWorker can send a stop command to the external process's stdin, formatted as JSON object {"action":"stop"}.
+ * Start a task {"action":"start", "spec":ExternalCommandSpec}.
  *
- * Communication API:
+ * Stop a task {"action":"stop", "spec":ExternalCommandSpec}.
  *
+ *
+ * Communication API: {"status":val, "log":val, "error":"msg"}
+ *
+ * The external process can sends JSON object messages to the ExternalCommandWorker via the process's stduot, and error
+ * messages via the process's stderr.
  * ExternalCommandWorker should continuously monitor the stdout and the stderr of the external process line by line.
  *
  * For any JSON object the external process writes to its stdout, if the object has the "status" field, this worker should set
@@ -67,7 +74,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * error message with the line.
  */
 public class ExternalCommandWorker implements TaskWorker {
-    private static final Logger log = LoggerFactory.getLogger(ProduceBenchWorker.class);
+    private static final Logger log = LoggerFactory.getLogger(ExternalCommandWorker.class);
 
     private final String id;
 
@@ -77,7 +84,9 @@ public class ExternalCommandWorker implements TaskWorker {
 
     private ScheduledExecutorService executor;
 
-    private Process worker;
+    private Process process;
+
+    private PrintWriter controlChannel;
 
     private String errMsg = "";
 
@@ -97,60 +106,89 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new IllegalStateException("ExternalCommandWorker is already running.");
         }
         log.info("{}: Activating ExternalCommandWorker with {}", id, spec);
-        this.executor = Executors.newScheduledThreadPool(2,
+        this.executor = Executors.newScheduledThreadPool(3, // Prepare, updater and errorUpdater
             ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
-        executor.submit(new Prepare());
+        executor.submit(new ProcessMonitor());
     }
 
-    public class Prepare implements Runnable {
+    public class ProcessMonitor implements Runnable {
         @Override
         public void run() {
             try {
-                ArrayList<String> command = new ArrayList<String>(spec.command());
-                command.add("--spec");
-                command.add(spec.toString());
-                log.info("ExternalCommandWorker executes command: {}", command);
-                ProcessBuilder workerBuilder = new ProcessBuilder(command);
-                worker = workerBuilder.start();
+                if (spec.command().isEmpty()) {
+                    errMsg = "Empty Command";
+                    doneFuture.complete(errMsg);
+                    return;
+                }
+                ProcessBuilder processBuilder = new ProcessBuilder(spec.command());
+                process = processBuilder.start();
                 Future updater = executor.submit(new StatusUpdater());
                 Future errorUpdater = executor.submit(new ErrorUpdater());
-                worker.waitFor();
+                controlChannel = new PrintWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8), true);
+                new ControlCommand("start", spec).issue();
+                log.info("{}: Started the process {} to execute command: {}", id, process.toString(), spec.command());
+                process.waitFor();
                 updater.get();
                 errorUpdater.get();
-                int workerExitValue = worker.exitValue();
-                log.info("ExternalWorker finished with the exit value: {}.", workerExitValue);
+                int workerExitValue = process.exitValue();
+                log.info("{}: The process finished with the exit value: {}.", id, workerExitValue);
                 if (workerExitValue != 0 && errMsg.isEmpty()) {
-                    errMsg = "ExternalWorker exited with error code " + worker.exitValue();
+                    errMsg = "ExternalWorker exited with error code " + process.exitValue();
                 }
-                log.info("StatusUpdater terminated.");
+                log.info("{}: StatusUpdater is terminated.", id);
                 doneFuture.complete(errMsg);
             } catch (IOException e) {
-                log.info("Stdout of ExternalWorker is closed.");
+                log.info("{}: Stdout of the process is closed.", id);
             } catch (InterruptedException e) {
-                log.info("StatusUpdadter interrupted.");
+                log.info("{}: StatusUpdater is interrupted.", id);
             } catch (Exception e) {
                 WorkerUtils.abort(log, "Prepare", e, doneFuture);
+            } finally {
+                if (process != null && process.isAlive()) {
+                    process.destroy();
+                }
             }
         }
     }
 
-    public class ErrorUpdater implements Runnable {
-        BufferedReader br;
-        ErrorUpdater() {
-            br = new BufferedReader(new InputStreamReader(worker.getErrorStream(), StandardCharsets.UTF_8));
+    public class ControlCommand {
+        private final String action;
+        private final ExternalCommandSpec spec;
+        @JsonCreator
+        ControlCommand(@JsonProperty("action") String action,
+                       @JsonProperty("spec") ExternalCommandSpec spec) {
+            this.action = action;
+            this.spec = spec;
         }
+        @JsonProperty
+        public String action() {
+            return action;
+        }
+        @JsonProperty
+        public ExternalCommandSpec spec() {
+            return spec;
+        }
+
+        public void issue() {
+            String command = JsonUtil.toJsonString(this);
+            log.info("{}: Send out command: {} ", id, command);
+            controlChannel.println(command);
+        }
+    }
+
+    public class ErrorUpdater implements Runnable {
         @Override
         public void run() {
-            try {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    log.error("ExternalWorker (stderr):{}", line);
+                    log.error("{}: (stderr of the process):{}", id, line);
                     errMsg = line;
                 }
             } catch (IOException ioe) {
-                log.info("Stderr of ExternalWorker is closed.");
+                log.info("{}: Stderr of the process is closed.", id);
             } catch (Exception e) {
                 WorkerUtils.abort(log, "ErrorUpdater", e, doneFuture);
             }
@@ -162,25 +200,18 @@ public class ExternalCommandWorker implements TaskWorker {
      * the status with the JSON object.
      */
     public class StatusUpdater implements Runnable {
-
-        BufferedReader br;
-        StatusUpdater() {
-            br = new BufferedReader(new InputStreamReader(worker.getInputStream(), StandardCharsets.UTF_8));
-        }
-
         @Override
         public void run() {
-            try {
+            try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    log.info("Worker (stdout):{}", line);
                     try {
                         JsonNode resp = JsonUtil.JSON_SERDE.readTree(line);
                         if (resp.has("status")) {
                             status.update(resp.get("status"));
                         }
                         if (resp.has("log")) {
-                            log.info("External Worker: {}", resp.get("log").toString());
+                            log.info("{}: (stdout of the process): {}", id, resp.get("log").toString());
                         }
                         if (resp.has("error")) {
                             JsonNode errNode = resp.get("error");
@@ -192,6 +223,8 @@ public class ExternalCommandWorker implements TaskWorker {
                         // not a JSON string
                     }
                 }
+            } catch (IOException ioe) {
+                log.info("{}: Stdout f the process is closed.", id);
             } catch (Exception e) {
                 WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
@@ -205,22 +238,21 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new IllegalStateException("ExternalCommandWorker is not running.");
         }
         log.info("{}: Deactivating ExternalCommandWorker.", id);
-        if (worker.isAlive()) {
-            log.info("{}: Send the stop command to the external worker.", id);
-            PrintWriter p = new PrintWriter(worker.getOutputStream());
-            p.println("{\"action\" : \"stop\"}");
-            p.flush();
-        }
-        worker.waitFor(1, TimeUnit.MINUTES);
-        if (worker.isAlive()) {
-            log.info("{}: Destroy the external worker since it is still alive after 1 minute.");
-            worker.destroy();
+        if (process != null) {
+            if (process.isAlive()) {
+                new ControlCommand("stop", spec).issue();
+            }
+            process.waitFor(1, TimeUnit.MINUTES);
+            if (process.isAlive()) {
+                log.info("{}: Destroy the external process since it is still alive after 1 minute.");
+                process.destroy();
+            }
         }
         doneFuture.complete(errMsg);
         executor.shutdownNow();
         executor.awaitTermination(1, TimeUnit.DAYS);
         this.executor = null;
-        this.worker = null;
+        this.process = null;
         this.status = null;
         this.doneFuture = null;
     }

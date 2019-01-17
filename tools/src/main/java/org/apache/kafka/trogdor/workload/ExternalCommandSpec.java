@@ -20,10 +20,12 @@ package org.apache.kafka.trogdor.workload;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
+
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
@@ -59,7 +61,7 @@ import java.util.List;
  *   }
  */
 public class ExternalCommandSpec extends TaskSpec {
-    private final String producerNode;
+    private final String commandNode;
     private final List<String> command;
     private final JsonNode workload;
 
@@ -67,18 +69,18 @@ public class ExternalCommandSpec extends TaskSpec {
     public ExternalCommandSpec(
             @JsonProperty("startMs") long startMs,
             @JsonProperty("durationMs") long durationMs,
-            @JsonProperty("producerNode") String producerNode,
+            @JsonProperty("commandNode") String commandNode,
             @JsonProperty("command") List<String> command,
             @JsonProperty("workload") JsonNode workload) {
         super(startMs, durationMs);
-        this.producerNode = (producerNode == null) ? "" : producerNode;
-        this.command = command;
+        this.commandNode = (commandNode == null) ? "" : commandNode;
+        this.command = (command == null) ? new ArrayList<String>() : command;
         this.workload = workload;
     }
 
     @JsonProperty
-    public String producerNode() {
-        return producerNode;
+    public String commandNode() {
+        return commandNode;
     }
 
     @JsonProperty
@@ -93,7 +95,7 @@ public class ExternalCommandSpec extends TaskSpec {
 
     @Override
     public TaskController newController(String id) {
-        return topology -> Collections.singleton(producerNode);
+        return topology -> Collections.singleton(commandNode);
     }
 
     @Override

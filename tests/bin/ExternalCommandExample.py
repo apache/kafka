@@ -20,27 +20,36 @@ import time
 
 # ExternalCommandExample.py demonstrates how the external command process communicates with the agent.
 
-parser = argparse.ArgumentParser(description='Python Trogdor External Command Example.')
-parser.add_argument('--spec', dest='spec', required=True)
-args = parser.parse_args()
-
 if __name__ == '__main__':
-    task = json.loads(args.spec)
-    print(json.dumps({"status":"Python external command runner executes command  " + " ".join(task["command"])}))
-    sys.stdout.flush()
-
-    time.sleep(10)
-    print(json.dumps({"error":"Something is wrong.",
-                      "log":"Please show this line.",
-                      "status":{"totalSent":50000,"averageLatencyMs":10.83734,"p50LatencyMs":8,"p95LatencyMs":38,"p99LatencyMs":61,"transactionsCommitted":0}}))
+    print(json.dumps({"status":"ExternalCommandExample.py started."}))
     sys.stdout.flush()
 
     for line in sys.stdin:
-        print(json.dumps({"log":line}))
-        sys.stdout.flush()
         try:
             comm = json.loads(line)
-            if ("action" in comm and comm["action"] == "stop"):
-                exit(0)
+            if "action" in comm:
+                action = comm["action"]
+                if action == "stop":
+                    exit(0)
+                elif action == "start":
+                    if "spec" in comm:
+                        task = comm["spec"]
+                        print(json.dumps({"status":"Started to execute the workload."}))
+                        sys.stdout.flush()
+                        time.sleep(5)
+                        print(json.dumps({"error":"Something is wrong.",
+                                          "log":"Please show this line.",
+                                          "status":{"totalSent":50000,"averageLatencyMs":10.83734,"p50LatencyMs":8,"p95LatencyMs":38,"p99LatencyMs":61,"transactionsCommitted":0}}))
+                        sys.stdout.flush()
+                        exit(0)
+                    else:
+                        print(json.dumps({"error": "No spec in command " + line}))
+                        sys.stdout.flush()
+
+                else:
+                    print(json.dumps({"log": "Unknown command action " + action}))
+            else:
+                print(json.dumps({"error": "Unknown control command " + line }))
+                sys.stdout.flush();
         except ValueError:
             print(json.dumps({"log": "Input line " + line + " is not a valid external runner command."}))
