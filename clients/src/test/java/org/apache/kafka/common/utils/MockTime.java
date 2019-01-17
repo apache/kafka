@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.errors.TimeoutException;
+
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 
 /**
  * A clock that you can manually advance by calling sleep
@@ -81,6 +84,27 @@ public class MockTime implements Time {
         timeMs.addAndGet(ms);
         highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
         tick();
+    }
+
+    @Override
+    public void waitObject(Object obj, Predicate<Void> condition, long deadlineMs) throws InterruptedException {
+        MockTimeListener listener = () -> {
+            synchronized (obj) {
+                obj.notify();
+            }
+        };
+        listeners.add(listener);
+        try {
+            synchronized (obj) {
+                while (milliseconds() < deadlineMs && !condition.test(null)) {
+                    obj.wait();
+                }
+                if (!condition.test(null))
+                    throw new TimeoutException("Condition not satisfied before deadline");
+            }
+        } finally {
+            listeners.remove(listener);
+        }
     }
 
     public void setCurrentTimeMs(long newMs) {

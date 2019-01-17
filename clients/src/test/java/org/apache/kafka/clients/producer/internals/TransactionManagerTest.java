@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -102,7 +101,8 @@ public class TransactionManagerTest {
     private TopicPartition tp0 = new TopicPartition(topic, 0);
     private TopicPartition tp1 = new TopicPartition(topic, 1);
     private MockTime time = new MockTime();
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, true, new ClusterResourceListeners());
+    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, new LogContext(),
+            new ClusterResourceListeners(), time);
     private MockClient client = new MockClient(time, metadata);
 
     private ApiVersions apiVersions = new ApiVersions();
@@ -132,6 +132,7 @@ public class TransactionManagerTest {
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+        this.metadata.add("test");
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
     }
 

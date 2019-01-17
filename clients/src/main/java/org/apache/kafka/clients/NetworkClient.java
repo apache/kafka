@@ -940,6 +940,8 @@ public class NetworkClient implements KafkaClient {
         /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
         private boolean metadataFetchInProgress;
 
+        private int inProgressRequestVersion;
+
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
             this.metadataFetchInProgress = false;
@@ -1030,7 +1032,7 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now, null);
             } else {
-                this.metadata.update(response, now);
+                this.metadata.update(inProgressRequestVersion, response, now);
             }
         }
 
@@ -1064,14 +1066,9 @@ public class NetworkClient implements KafkaClient {
 
             if (canSendRequest(nodeConnectionId, now)) {
                 this.metadataFetchInProgress = true;
-                MetadataRequest.Builder metadataRequest;
-                if (metadata.needMetadataForAllTopics())
-                    metadataRequest = MetadataRequest.Builder.allTopics();
-                else
-                    metadataRequest = new MetadataRequest.Builder(new ArrayList<>(metadata.topics()),
-                            metadata.allowAutoTopicCreation());
-
-
+                Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion();
+                this.inProgressRequestVersion = requestAndVersion.requestVersion;
+                MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 return defaultRequestTimeoutMs;

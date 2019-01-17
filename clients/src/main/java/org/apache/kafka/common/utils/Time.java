@@ -18,6 +18,7 @@ package org.apache.kafka.common.utils;
 
 import java.time.Duration;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Predicate;
 
 /**
  * An interface abstracting the clock to use in unit testing classes that make use of clock time.
@@ -59,6 +60,14 @@ public interface Time {
     void sleep(long ms);
 
     /**
+     * Wait for a condition using the monitor of a given object. This avoids the implicit
+     * dependence on system time when calling {@link Object#wait()}.
+     *
+     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before the condition is satisfied
+     */
+    void waitObject(Object obj, Predicate<Void> condition, long timeoutMs) throws InterruptedException;
+
+    /**
      * Get a timer which is bound to this time instance and expires after the given timeout
      */
     default Timer timer(long timeoutMs) {
@@ -71,4 +80,5 @@ public interface Time {
     default Timer timer(Duration timeout) {
         return timer(timeout.toMillis());
     }
+
 }

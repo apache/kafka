@@ -20,6 +20,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -87,20 +88,20 @@ public class WorkerCoordinatorTest {
 
     @Before
     public void setup() {
-        LogContext loggerFactory = new LogContext();
+        LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
-        this.consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time, 100, 1000, heartbeatIntervalMs);
+        this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100, 1000, heartbeatIntervalMs);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
         this.configStorage = PowerMock.createMock(KafkaConfigBackingStore.class);
 
         this.coordinator = new WorkerCoordinator(
-                loggerFactory,
+                logContext,
                 consumerClient,
                 groupId,
                 rebalanceTimeoutMs,

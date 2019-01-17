@@ -350,7 +350,7 @@ class CompositeFuture[T](time: Time,
     val timeoutMs = unit.toMillis(timeout)
     var remaining: Long = timeoutMs
 
-    val observedResults = futures.flatMap{ future =>
+    val observedResults = futures.flatMap { future =>
       val elapsed = time.milliseconds() - start
       remaining = if (timeoutMs - elapsed > 0) timeoutMs - elapsed else 0L
 
@@ -429,9 +429,12 @@ object AdminClient {
   def create(props: Map[String, _]): AdminClient = create(new AdminConfig(props))
 
   def create(config: AdminConfig): AdminClient = {
+    val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
+    val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
     val time = Time.SYSTEM
     val metrics = new Metrics(time)
-    val metadata = new Metadata(100L, 60 * 60 * 1000L, true)
+    val metadata = new Metadata(100L, 60 * 60 * 1000L, logContext,
+      new ClusterResourceListeners)
     val channelBuilder = ClientUtils.createChannelBuilder(config, time)
     val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)
     val retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG)
@@ -441,15 +444,13 @@ object AdminClient {
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls, clientDnsLookup)
     metadata.bootstrap(brokerAddresses, time.milliseconds())
 
-    val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
-
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,
       metrics,
       time,
       "admin",
       channelBuilder,
-      new LogContext(String.format("[Producer clientId=%s] ", clientId)))
+      logContext)
 
     val networkClient = new NetworkClient(
       selector,
@@ -465,10 +466,10 @@ object AdminClient {
       time,
       true,
       new ApiVersions,
-      new LogContext(String.format("[NetworkClient clientId=%s] ", clientId)))
+      logContext)
 
     val highLevelClient = new ConsumerNetworkClient(
-      new LogContext(String.format("[ConsumerNetworkClient clientId=%s] ", clientId)),
+      logContext,
       networkClient,
       metadata,
       time,

@@ -159,9 +159,6 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timer);
-            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
-            if (ex != null)
-                throw ex;
         } while (this.metadata.version() == version && timer.notExpired());
         return this.metadata.version() > version;
     }
@@ -295,6 +292,8 @@ public class ConsumerNetworkClient implements Closeable {
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
         firePendingCompletedRequests();
+
+        metadata.maybeThrowException();
     }
 
     /**
