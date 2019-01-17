@@ -36,6 +36,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 public class AssignmentInfo {
 
@@ -49,7 +51,7 @@ public class AssignmentInfo {
     private int errCode;
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
-    private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
+    private Map<HostInfo, Set<TaskId>> tasksByHost;
 
     // used for decoding; don't apply version checks
     private AssignmentInfo(final int version,
@@ -61,8 +63,8 @@ public class AssignmentInfo {
 
     public AssignmentInfo(final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> hostState) {
-        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, 0);
+                          final Map<HostInfo, Set<TaskId>> tasksByHost) {
+        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, 0);
     }
 
     public AssignmentInfo() {
@@ -76,9 +78,9 @@ public class AssignmentInfo {
     public AssignmentInfo(final int version,
                           final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                          final Map<HostInfo, Set<TopicPartition>> hostState,
+                          final Map<HostInfo, Set<TaskId>> tasksByHost,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, hostState, errCode);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, errCode);
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
@@ -90,13 +92,13 @@ public class AssignmentInfo {
                    final int latestSupportedVersion,
                    final List<TaskId> activeTasks,
                    final Map<TaskId, Set<TopicPartition>> standbyTasks,
-                   final Map<HostInfo, Set<TopicPartition>> hostState,
+                   final Map<HostInfo, Set<TaskId>> tasksByHost,
                    final int errCode) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
-        this.partitionsByHost = hostState;
+        this.tasksByHost = tasksByHost;
         this.errCode = errCode;
     }
 
@@ -120,8 +122,8 @@ public class AssignmentInfo {
         return standbyTasks;
     }
 
-    public Map<HostInfo, Set<TopicPartition>> partitionsByHost() {
-        return partitionsByHost;
+    public Map<HostInfo, Set<TaskId>> tasksByHost() {
+        return tasksByHost;
     }
 
     /**
@@ -131,27 +133,24 @@ public class AssignmentInfo {
     public ByteBuffer encode() {
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
 
-        try (final DataOutputStream out = new DataOutputStream(baos)) {
+            try  {
             switch (usedVersion) {
                 case 1:
-                    encodeVersionOne(out);
+                    encodeVersionOne(baos);
                     break;
                 case 2:
-                    encodeVersionTwo(out);
+                    encodeVersionTwo(baos);
                     break;
                 case 3:
-                    encodeVersionThree(out);
+                    encodeVersionThree(baos);
                     break;
                 case 4:
-                    encodeVersionFour(out);
+                    encodeVersionFour(baos);
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
                         + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
             }
-
-            out.flush();
-            out.close();
 
             return ByteBuffer.wrap(baos.toByteArray());
         } catch (final IOException ex) {
@@ -159,9 +158,12 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeVersionOne(final DataOutputStream out) throws IOException {
+    private void encodeVersionOne(final ByteArrayOutputStream baos) throws IOException {
+        final DataOutputStream out = new DataOutputStream(baos);
         out.writeInt(1); // version
         encodeActiveAndStandbyTaskAssignment(out);
+        out.flush();
+        out.close();
     }
 
     private void encodeActiveAndStandbyTaskAssignment(final DataOutputStream out) throws IOException {
@@ -182,20 +184,31 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeVersionTwo(final DataOutputStream out) throws IOException {
+    private void encodeVersionTwo(final ByteArrayOutputStream baos) throws IOException {
+        final DataOutputStream out = new DataOutputStream(baos);
         out.writeInt(2); // version
         encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
+        encodeTasksByHost(out);
+        out.flush();
+        out.close();
     }
 
-    private void encodePartitionsByHost(final DataOutputStream out) throws IOException {
+    private void encodeTasksByHost(final DataOutputStream out) throws IOException {
         // encode partitions by host
-        out.writeInt(partitionsByHost.size());
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHost.entrySet()) {
+            out.writeInt(tasksByHost.size());
+            for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHost.entrySet()) {
             final HostInfo hostInfo = entry.getKey();
             out.writeUTF(hostInfo.host());
             out.writeInt(hostInfo.port());
-            writeTopicPartitions(out, entry.getValue());
+            writeTaskIds(out, entry.getValue());
+            }
+        }
+
+        private void writeTaskIds(final DataOutputStream out, final Set<TaskId> partitions) throws IOException {
+            out.writeInt(partitions.size());
+            for (final TaskId partition : partitions) {
+                out.writeInt(partition.topicGroupId);
+                out.writeInt(partition.partition);
         }
     }
 
@@ -208,19 +221,28 @@ public class AssignmentInfo {
         }
     }
 
-    private void encodeVersionThree(final DataOutputStream out) throws IOException {
+    private void encodeVersionThree(final ByteArrayOutputStream baos) throws IOException {
+        final DataOutputStream out = new DataOutputStream(baos);
         out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
+        encodeTasksByHost(out);
+        out.flush();
+        out.close();
     }
 
-    private void encodeVersionFour(final DataOutputStream out) throws IOException {
+    private void encodeVersionFour(final ByteArrayOutputStream baos) throws IOException {
+        final DataOutputStream out = new DataOutputStream(baos);
         out.writeInt(4);
-        out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
-        out.writeInt(errCode);
+        out.flush();
+        out.close();
+        final DataOutputStream compressedOut = new DataOutputStream(new GZIPOutputStream(baos));
+        compressedOut.writeInt(LATEST_SUPPORTED_VERSION);
+        encodeActiveAndStandbyTaskAssignment(compressedOut);
+        encodeTasksByHost(compressedOut);
+        compressedOut.writeInt(errCode);
+        compressedOut.flush();
+        compressedOut.close();
     }
 
     /**
@@ -230,7 +252,9 @@ public class AssignmentInfo {
         // ensure we are at the beginning of the ByteBuffer
         data.rewind();
 
-        try (final DataInputStream in = new DataInputStream(new ByteBufferInputStream(data))) {
+        try  {
+            final ByteBufferInputStream bios = new ByteBufferInputStream(data);
+            final DataInputStream in = new DataInputStream(bios);
             final AssignmentInfo assignmentInfo;
 
             final int usedVersion = in.readInt();
@@ -250,9 +274,10 @@ public class AssignmentInfo {
                     decodeVersionThreeData(assignmentInfo, in);
                     break;
                 case 4:
-                    latestSupportedVersion = in.readInt();
+                    final DataInputStream compressedIn = new DataInputStream(new GZIPInputStream(bios));
+                    latestSupportedVersion = compressedIn.readInt();
                     assignmentInfo = new AssignmentInfo(usedVersion, latestSupportedVersion);
-                    decodeVersionFourData(assignmentInfo, in);
+                    decodeVersionFourData(assignmentInfo, compressedIn);
                     break;
                 default:
                     final TaskAssignmentException fatalException = new TaskAssignmentException("Unable to decode assignment data: " +
@@ -271,7 +296,7 @@ public class AssignmentInfo {
                                              final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        assignmentInfo.partitionsByHost = new HashMap<>();
+        assignmentInfo.tasksByHost = new HashMap<>();
     }
 
     private static void decodeActiveTasks(final AssignmentInfo assignmentInfo,
@@ -297,20 +322,30 @@ public class AssignmentInfo {
                                              final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        decodeGlobalAssignmentData(assignmentInfo, in);
+        decodeGlobalTasksAssignmentData(assignmentInfo, in);
     }
 
-    private static void decodeGlobalAssignmentData(final AssignmentInfo assignmentInfo,
+    private static void decodeGlobalTasksAssignmentData(final AssignmentInfo assignmentInfo,
                                                    final DataInputStream in) throws IOException {
-        assignmentInfo.partitionsByHost = new HashMap<>();
+        assignmentInfo.tasksByHost = new HashMap<>();
         final int numEntries = in.readInt();
         for (int i = 0; i < numEntries; i++) {
             final HostInfo hostInfo = new HostInfo(in.readUTF(), in.readInt());
-            assignmentInfo.partitionsByHost.put(hostInfo, readTopicPartitions(in));
+            assignmentInfo.tasksByHost.put(hostInfo, readTaskIds(in));
         }
     }
 
-    private static Set<TopicPartition> readTopicPartitions(final DataInputStream in) throws IOException {
+    private static Set<TaskId> readTaskIds(final DataInputStream in) throws IOException {
+        final int numPartitions = in.readInt();
+        final Set<TaskId> partitions = new HashSet<>(numPartitions);
+        for (int j = 0; j < numPartitions; j++) {
+            partitions.add(new TaskId(in.readInt(), in.readInt()));
+        }
+        return partitions;
+    }
+
+
+        private static Set<TopicPartition> readTopicPartitions(final DataInputStream in) throws IOException {
         final int numPartitions = in.readInt();
         final Set<TopicPartition> partitions = new HashSet<>(numPartitions);
         for (int j = 0; j < numPartitions; j++) {
@@ -323,31 +358,34 @@ public class AssignmentInfo {
                                                final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        decodeGlobalAssignmentData(assignmentInfo, in);
+        decodeGlobalTasksAssignmentData(assignmentInfo, in);
     }
 
     private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
                                               final DataInputStream in) throws IOException {
-        decodeVersionThreeData(assignmentInfo, in);
+        decodeActiveTasks(assignmentInfo, in);
+        decodeStandbyTasks(assignmentInfo, in);
+        decodeGlobalTasksAssignmentData(assignmentInfo, in);
         assignmentInfo.errCode = in.readInt();
     }
 
     @Override
     public int hashCode() {
-        return usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode()
-            ^ partitionsByHost.hashCode() ^ errCode;
+        final int result = usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ errCode;
+        return result ^ tasksByHost.hashCode();
     }
 
     @Override
     public boolean equals(final Object o) {
         if (o instanceof AssignmentInfo) {
             final AssignmentInfo other = (AssignmentInfo) o;
-            return usedVersion == other.usedVersion &&
+            final boolean result = usedVersion == other.usedVersion &&
                     latestSupportedVersion == other.latestSupportedVersion &&
                     errCode == other.errCode &&
                     activeTasks.equals(other.activeTasks) &&
-                    standbyTasks.equals(other.standbyTasks) &&
-                    partitionsByHost.equals(other.partitionsByHost);
+                    standbyTasks.equals(other.standbyTasks);
+
+            return result && tasksByHost.equals(other.tasksByHost);
         } else {
             return false;
         }
@@ -359,7 +397,7 @@ public class AssignmentInfo {
             + ", supported version=" + latestSupportedVersion
             + ", active tasks=" + activeTasks
             + ", standby tasks=" + standbyTasks
-            + ", global assignment=" + partitionsByHost + "]";
+            + ", global task assignment=" + tasksByHost + "]";
     }
 
 }
