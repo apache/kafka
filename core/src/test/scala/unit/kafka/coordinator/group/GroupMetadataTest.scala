@@ -339,7 +339,7 @@ class GroupMetadataTest extends JUnitSuite {
     group.shrinkTo(1)
     assertEquals(1, group.allMemberMetadata.size)
     assertEquals(leaderId.get, group.allMemberMetadata.head.memberId)
-    assertTrue(group.supportsProtocols(Set(leaderId.get)))
+    assertTrue(group.supportsProtocols(protocolType, Set(leaderId.get)))
   }
 
   @Test(expected = classOf[IllegalArgumentException])
