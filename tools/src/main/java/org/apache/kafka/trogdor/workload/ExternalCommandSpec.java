@@ -21,6 +21,7 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.JsonNode;
 
+import com.fasterxml.jackson.databind.node.NullNode;
 import org.apache.kafka.trogdor.task.TaskController;
 import org.apache.kafka.trogdor.task.TaskSpec;
 import org.apache.kafka.trogdor.task.TaskWorker;
@@ -74,8 +75,8 @@ public class ExternalCommandSpec extends TaskSpec {
             @JsonProperty("workload") JsonNode workload) {
         super(startMs, durationMs);
         this.commandNode = (commandNode == null) ? "" : commandNode;
-        this.command = (command == null) ? new ArrayList<String>() : command;
-        this.workload = workload;
+        this.command = (command == null) ? Collections.unmodifiableList(new ArrayList<String>()) : command;
+        this.workload = (workload == null) ? NullNode.instance : workload;
     }
 
     @JsonProperty

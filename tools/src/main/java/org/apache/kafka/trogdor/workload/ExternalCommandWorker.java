@@ -40,7 +40,7 @@ import java.nio.charset.StandardCharsets;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -82,7 +82,7 @@ public class ExternalCommandWorker implements TaskWorker {
 
     private final AtomicBoolean running = new AtomicBoolean(false);
 
-    private ScheduledExecutorService executor;
+    private ExecutorService executor;
 
     private Process process;
 
@@ -106,8 +106,8 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new IllegalStateException("ExternalCommandWorker is already running.");
         }
         log.info("{}: Activating ExternalCommandWorker with {}", id, spec);
-        this.executor = Executors.newScheduledThreadPool(3, // processMonitor, updater and errorUpdater
-            ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
+        this.executor = Executors.newCachedThreadPool(
+                ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
         executor.submit(new ProcessMonitor());
@@ -118,7 +118,7 @@ public class ExternalCommandWorker implements TaskWorker {
         public void run() {
             try {
                 if (spec.command().isEmpty()) {
-                    errMsg = "Empty Command";
+                    errMsg = "No command specified";
                     doneFuture.complete(errMsg);
                     return;
                 }
@@ -185,7 +185,6 @@ public class ExternalCommandWorker implements TaskWorker {
                 String line;
                 while ((line = br.readLine()) != null) {
                     log.error("{}: (stderr of the process):{}", id, line);
-                    errMsg = line;
                 }
             } catch (IOException ioe) {
                 log.info("{}: Stderr of the process is closed.", id);
