@@ -1527,7 +1527,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
         acquireAndEnsureOpen();
         try {
-            if(offsetAndMetadata.leaderEpoch().isPresent()) {
+            if (offsetAndMetadata.leaderEpoch().isPresent()) {
                 log.debug("Seeking to offset {} for partition {} with epoch {}",
                         offset, partition, offsetAndMetadata.leaderEpoch().get());
             } else {
