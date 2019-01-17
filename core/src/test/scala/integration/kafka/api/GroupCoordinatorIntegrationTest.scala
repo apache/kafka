@@ -18,7 +18,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.junit.{Before, Test}
+import org.junit.Test
 import org.junit.Assert._
 
 import scala.collection.JavaConverters._
@@ -31,7 +31,6 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-//  TODO: Put max config overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.id.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false).map {
@@ -60,7 +59,4 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
     consumer.close()
   }
-//
-//  @Test
-//  def test
 }
