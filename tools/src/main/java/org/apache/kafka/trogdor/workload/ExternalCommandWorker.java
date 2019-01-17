@@ -106,7 +106,7 @@ public class ExternalCommandWorker implements TaskWorker {
             throw new IllegalStateException("ExternalCommandWorker is already running.");
         }
         log.info("{}: Activating ExternalCommandWorker with {}", id, spec);
-        this.executor = Executors.newScheduledThreadPool(3, // Prepare, updater and errorUpdater
+        this.executor = Executors.newScheduledThreadPool(3, // processMonitor, updater and errorUpdater
             ThreadUtils.createThreadFactory("ExternalCommandWorkerThread%d", false));
         this.status = status;
         this.doneFuture = doneFuture;
@@ -137,14 +137,14 @@ public class ExternalCommandWorker implements TaskWorker {
                 if (workerExitValue != 0 && errMsg.isEmpty()) {
                     errMsg = "ExternalWorker exited with error code " + process.exitValue();
                 }
-                log.info("{}: StatusUpdater is terminated.", id);
+                log.info("{}: StatusUpdater and errorUpdater are terminated.", id);
                 doneFuture.complete(errMsg);
             } catch (IOException e) {
                 log.info("{}: Stdout of the process is closed.", id);
             } catch (InterruptedException e) {
-                log.info("{}: StatusUpdater is interrupted.", id);
+                log.info("{}: ProcessMonitor is interrupted.", id);
             } catch (Exception e) {
-                WorkerUtils.abort(log, "Prepare", e, doneFuture);
+                WorkerUtils.abort(log, "ProcessMonitor", e, doneFuture);
             } finally {
                 if (process != null && process.isAlive()) {
                     process.destroy();
@@ -208,6 +208,7 @@ public class ExternalCommandWorker implements TaskWorker {
                     try {
                         JsonNode resp = JsonUtil.JSON_SERDE.readTree(line);
                         if (resp.has("status")) {
+                            log.info("{}: Update the status: {}", id, resp.get("status").toString());
                             status.update(resp.get("status"));
                         }
                         if (resp.has("log")) {
@@ -217,6 +218,7 @@ public class ExternalCommandWorker implements TaskWorker {
                             JsonNode errNode = resp.get("error");
                             if (errNode.getNodeType() == JsonNodeType.STRING) {
                                 errMsg = errNode.asText();
+                                log.error("{}: (stdout of the process):{}", id, errMsg);
                             }
                         }
                     } catch (IOException e) {
