@@ -358,31 +358,11 @@ public class RocksDBWindowStoreTest {
     }
 
     @Test
-    public void testFetchRange() throws Exception {
+    public void testFetchRange() {
         windowStore = createWindowStore(context, false);
         final long startTime = segmentInterval - 4L;
 
-        final Integer data = 1;
-        System.out.println(Bytes.wrap(new byte[] {
-            (byte) (data >>> 24),
-            (byte) (data >>> 16),
-            (byte) (data >>> 8),
-            data.byteValue()
-        }));
-
-        long timestamp = ApiUtils.validateMillisecondInstant(ofEpochMilli(startTime + 0L - windowSize), "");
-
-        System.out.println(Bytes.wrap(ByteBuffer.allocate(8).putLong(timestamp).array()));
-
         putFirstBatch(windowStore, startTime, context);
-
-        timestamp = ApiUtils.validateMillisecondInstant(ofEpochMilli(startTime + 0L + windowSize), "");
-
-        System.out.println(Bytes.wrap(ByteBuffer.allocate(8).putLong(timestamp).array()));
-
-        putFirstBatch(windowStore, startTime, context);
-
-        System.out.println(Bytes.wrap(ByteBuffer.allocate(4).putInt(Integer.MAX_VALUE).array()));
 
         final KeyValue<Windowed<Integer>, String> zero = windowedPair(0, "zero", startTime + 0);
         final KeyValue<Windowed<Integer>, String> one = windowedPair(1, "one", startTime + 1);
