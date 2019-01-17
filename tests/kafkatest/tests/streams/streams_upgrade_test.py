@@ -15,30 +15,67 @@
 
 import random
 import time
-from ducktape.mark import ignore
 from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
+from ducktape.utils.util import wait_until
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, StreamsUpgradeTestJobRunnerService
+from kafkatest.services.streams import StreamsSmokeTestDriverService, StreamsSmokeTestJobRunnerService, \
+    StreamsUpgradeTestJobRunnerService
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, DEV_BRANCH, DEV_VERSION, KafkaVersion
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, \
+    LATEST_2_0, LATEST_2_1, DEV_BRANCH, DEV_VERSION, KafkaVersion
 
 # broker 0.10.0 is not compatible with newer Kafka Streams versions
-broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(DEV_BRANCH)]
+broker_upgrade_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0), str(LATEST_2_1), str(DEV_BRANCH)]
 
 metadata_1_versions = [str(LATEST_0_10_0)]
 metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 # once 0.10.1.2 is available backward_compatible_metadata_2_versions
 # can be replaced with metadata_2_versions
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
-metadata_3_or_higher_versions = [str(LATEST_2_0), str(DEV_VERSION)]
+metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
+
+"""
+After each release one should first check that the released version has been uploaded to 
+https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
+anyone can verify that by calling 
+curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
+and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
+
+This test needs to get updated, but this requires several steps
+which are outlined here:
+
+1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
+   release and bumping all relevant already released versions.
+   
+2. Add the new version to the "kafkatest.version" import above and include the version in the 
+   broker_upgrade_versions list above.  You'll also need to add the new version to the 
+   "StreamsUpgradeTestJobRunnerService" on line 484 to make sure the correct arguments are passed
+   during the system test run.
+   
+3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
+   and all point releases for existing releases.  You only need to list the latest version in 
+   this file.
+   
+4. Then update all relevant versions in the tests/docker/Dockerfile
+
+5. Add a new "upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
+   latest system test module from the last release.  Just make sure to update the systout print
+   statement in StreamsUpgradeTest to the version for the release.  After you add the new module
+   you'll need to update settings.gradle file to include the name of the module you just created
+   for gradle to recognize the newly added module
+   
+6. Then you'll need to update any version changes in gradle/dependencies.gradle
+
+"""
 
 class StreamsUpgradeTest(Test):
     """
     Test upgrading Kafka Streams (all version combination)
     If metadata was changes, upgrade is more difficult
-    Metadata version was bumped in 0.10.1.0
+    Metadata version was bumped in 0.10.1.0 and
+    subsequently bumped in 2.0.0
     """
 
     def __init__(self, test_context):
@@ -50,6 +87,8 @@ class StreamsUpgradeTest(Test):
         self.leader = None
         self.leader_counter = {}
 
+    processed_msg = "processed [0-9]* records"
+
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
         for node in self.kafka.nodes:
@@ -57,7 +96,6 @@ class StreamsUpgradeTest(Test):
             node.version = KafkaVersion(to_version)
             self.kafka.start_node(node)
 
-    @ignore
     @cluster(num_nodes=6)
     @matrix(from_version=broker_upgrade_versions, to_version=broker_upgrade_versions)
     def test_upgrade_downgrade_brokers(self, from_version, to_version):
@@ -69,6 +107,7 @@ class StreamsUpgradeTest(Test):
             return
 
         self.replication = 3
+        self.num_kafka_nodes = 3
         self.partitions = 1
         self.isr = 2
         self.topics = {
@@ -99,31 +138,53 @@ class StreamsUpgradeTest(Test):
         self.zk.start()
 
         # number of nodes needs to be >= 3 for the smoke test
-        self.kafka = KafkaService(self.test_context, num_nodes=3,
+        self.kafka = KafkaService(self.test_context, num_nodes=self.num_kafka_nodes,
                                   zk=self.zk, version=KafkaVersion(from_version), topics=self.topics)
         self.kafka.start()
 
         # allow some time for topics to be created
-        time.sleep(10)
+        wait_until(lambda: self.get_topics_count() >= (len(self.topics) * self.num_kafka_nodes),
+                   timeout_sec=60,
+                   err_msg="Broker did not create all topics in 60 seconds ")
 
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
-        self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
-        
-        self.driver.start()
-        self.processor1.start()
-        time.sleep(15)
 
-        self.perform_broker_upgrade(to_version)
+        processor = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
 
-        time.sleep(15)
-        self.driver.wait()
+        with self.driver.node.account.monitor_log(self.driver.STDOUT_FILE) as driver_monitor:
+            self.driver.start()
+
+            with processor.node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+                processor.start()
+                monitor.wait_until(self.processed_msg,
+                                   timeout_sec=60,
+                                   err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node))
+
+            connected_message = "Discovered group coordinator"
+            with processor.node.account.monitor_log(processor.LOG_FILE) as log_monitor:
+                with processor.node.account.monitor_log(processor.STDOUT_FILE) as stdout_monitor:
+                    self.perform_broker_upgrade(to_version)
+
+                    log_monitor.wait_until(connected_message,
+                                           timeout_sec=120,
+                                           err_msg=("Never saw output '%s' on " % connected_message) + str(processor.node.account))
+
+                    stdout_monitor.wait_until(self.processed_msg,
+                                              timeout_sec=60,
+                                              err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
+
+            # SmokeTestDriver allows up to 6 minutes to consume all
+            # records for the verification step so this timeout is set to
+            # 6 minutes (360 seconds) for consuming of verification records
+            # and a very conservative additional 2 minutes (120 seconds) to process
+            # the records in the verification step
+            driver_monitor.wait_until('ALL-RECORDS-DELIVERED\|PROCESSED-MORE-THAN-GENERATED',
+                                      timeout_sec=480,
+                                      err_msg="Never saw output '%s' on" % 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' + str(self.driver.node.account))
+
         self.driver.stop()
-
-        self.processor1.stop()
-
-        node = self.driver.node
-        node.account.ssh("grep -E 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' %s" % self.driver.STDOUT_FILE, allow_fail=False)
-        self.processor1.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % self.processor1.STDOUT_FILE, allow_fail=False)
+        processor.stop()
+        processor.node.account.ssh_capture("grep SMOKE-TEST-CLIENT-CLOSED %s" % processor.STDOUT_FILE, allow_fail=False)
 
     @matrix(from_version=metadata_2_versions, to_version=metadata_2_versions)
     def test_simple_upgrade_downgrade(self, from_version, to_version):
@@ -163,7 +224,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -173,8 +233,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     @matrix(from_version=metadata_1_versions, to_version=backward_compatible_metadata_2_versions)
     @matrix(from_version=metadata_1_versions, to_version=metadata_3_or_higher_versions)
@@ -219,7 +277,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -229,8 +286,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     def test_version_probing_upgrade(self):
         """
@@ -276,7 +331,6 @@ class StreamsUpgradeTest(Test):
 
         # shutdown
         self.driver.stop()
-        self.driver.wait()
 
         random.shuffle(self.processors)
         for p in self.processors:
@@ -286,8 +340,6 @@ class StreamsUpgradeTest(Test):
                 monitor.wait_until("UPGRADE-TEST-CLIENT-CLOSED",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'UPGRADE-TEST-CLIENT-CLOSED' on" + str(node.account))
-
-        self.driver.stop()
 
     def update_leader(self):
         self.leader = None
@@ -329,7 +381,7 @@ class StreamsUpgradeTest(Test):
                 log_monitor.wait_until(kafka_version_str,
                                        timeout_sec=60,
                                        err_msg="Could not detect Kafka Streams version " + version + " " + str(node1.account))
-                monitor.wait_until("processed 100 records from topic",
+                monitor.wait_until("processed [0-9]* records from topic",
                                    timeout_sec=60,
                                    err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
 
@@ -343,10 +395,10 @@ class StreamsUpgradeTest(Test):
                     log_monitor.wait_until(kafka_version_str,
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + version + " " + str(node2.account))
-                    first_monitor.wait_until("processed 100 records from topic",
+                    first_monitor.wait_until("processed [0-9]* records from topic",
                                              timeout_sec=60,
                                              err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
-                    second_monitor.wait_until("processed 100 records from topic",
+                    second_monitor.wait_until("processed [0-9]* records from topic",
                                               timeout_sec=60,
                                               err_msg="Never saw output 'processed 100 records from topic' on" + str(node2.account))
 
@@ -361,13 +413,13 @@ class StreamsUpgradeTest(Test):
                         log_monitor.wait_until(kafka_version_str,
                                                timeout_sec=60,
                                                err_msg="Could not detect Kafka Streams version " + version + " " + str(node3.account))
-                        first_monitor.wait_until("processed 100 records from topic",
+                        first_monitor.wait_until("processed [0-9]* records from topic",
                                                  timeout_sec=60,
                                                  err_msg="Never saw output 'processed 100 records from topic' on" + str(node1.account))
-                        second_monitor.wait_until("processed 100 records from topic",
+                        second_monitor.wait_until("processed [0-9]* records from topic",
                                                   timeout_sec=60,
                                                   err_msg="Never saw output 'processed 100 records from topic' on" + str(node2.account))
-                        third_monitor.wait_until("processed 100 records from topic",
+                        third_monitor.wait_until("processed [0-9]* records from topic",
                                                   timeout_sec=60,
                                                   err_msg="Never saw output 'processed 100 records from topic' on" + str(node3.account))
 
@@ -582,3 +634,11 @@ class StreamsUpgradeTest(Test):
             found = list(p.node.account.ssh_capture("grep \"Sent a version 4 subscription and group leader.s latest supported version is 5. Upgrading subscription metadata version to 5 for next rebalance.\" " + p.LOG_FILE, allow_fail=True))
             if len(found) > 0:
                 raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
+
+    def get_topics_count(self):
+        count = 0
+        for node in self.kafka.nodes:
+            topic_list = self.kafka.list_topics("placeholder", node)
+            for topic in topic_list:
+                count += 1
+        return count

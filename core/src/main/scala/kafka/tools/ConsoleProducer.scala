@@ -91,19 +91,30 @@ object ConsoleProducer {
 
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, config.brokerList)
     props.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, config.compressionCodec)
-    props.put(ProducerConfig.SEND_BUFFER_CONFIG, config.socketBuffer.toString)
-    props.put(ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.retryBackoffMs.toString)
-    props.put(ProducerConfig.METADATA_MAX_AGE_CONFIG, config.metadataExpiryMs.toString)
-    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, config.maxBlockMs.toString)
-    props.put(ProducerConfig.ACKS_CONFIG, config.requestRequiredAcks)
-    props.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.requestTimeoutMs.toString)
-    props.put(ProducerConfig.RETRIES_CONFIG, config.messageSendMaxRetries.toString)
-    props.put(ProducerConfig.LINGER_MS_CONFIG, config.sendTimeout.toString)
-    props.put(ProducerConfig.BUFFER_MEMORY_CONFIG, config.maxMemoryBytes.toString)
-    props.put(ProducerConfig.BATCH_SIZE_CONFIG, config.maxPartitionMemoryBytes.toString)
     props.put(ProducerConfig.CLIENT_ID_CONFIG, "console-producer")
     props.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
     props.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer")
+
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.LINGER_MS_CONFIG, config.options, config.sendTimeoutOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.ACKS_CONFIG, config.options, config.requestRequiredAcksOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, config.options, config.requestTimeoutMsOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.RETRIES_CONFIG, config.options, config.messageSendMaxRetriesOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.RETRY_BACKOFF_MS_CONFIG, config.options, config.retryBackoffMsOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.SEND_BUFFER_CONFIG, config.options, config.socketBufferSizeOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.BUFFER_MEMORY_CONFIG, config.options, config.maxMemoryBytesOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.BATCH_SIZE_CONFIG, config.options, config.maxPartitionMemoryBytesOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.METADATA_MAX_AGE_CONFIG, config.options, config.metadataExpiryMsOpt)
+    CommandLineUtils.maybeMergeOptions(
+      props, ProducerConfig.MAX_BLOCK_MS_CONFIG, config.options, config.maxBlockMsOpt)
 
     props
   }
@@ -218,19 +229,9 @@ object ConsoleProducer {
                              else compressionCodecOptionValue
                            else NoCompressionCodec.name
     val batchSize = options.valueOf(batchSizeOpt)
-    val sendTimeout = options.valueOf(sendTimeoutOpt)
-    val requestRequiredAcks = options.valueOf(requestRequiredAcksOpt)
-    val requestTimeoutMs = options.valueOf(requestTimeoutMsOpt)
-    val messageSendMaxRetries = options.valueOf(messageSendMaxRetriesOpt)
-    val retryBackoffMs = options.valueOf(retryBackoffMsOpt)
     val readerClass = options.valueOf(messageReaderOpt)
-    val socketBuffer = options.valueOf(socketBufferSizeOpt)
     val cmdLineProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(propertyOpt).asScala)
     val extraProducerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(producerPropertyOpt).asScala)
-    val maxMemoryBytes = options.valueOf(maxMemoryBytesOpt)
-    val maxPartitionMemoryBytes = options.valueOf(maxPartitionMemoryBytesOpt)
-    val metadataExpiryMs = options.valueOf(metadataExpiryMsOpt)
-    val maxBlockMs = options.valueOf(maxBlockMsOpt)
   }
 
   class LineMessageReader extends MessageReader {

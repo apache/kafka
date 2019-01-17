@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -27,6 +28,7 @@ import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -57,6 +59,12 @@ public class RestServerTest {
     @MockStrict
     private Plugins plugins;
     private RestServer server;
+
+    @Before
+    public void setUp() {
+        // To be able to set the Origin, we need to toggle this flag
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+    }
 
     @After
     public void tearDown() {
@@ -170,7 +178,7 @@ public class RestServerTest {
         PowerMock.replayAll();
 
         server = new RestServer(workerConfig);
-        server.start(herder);
+        server.start(new HerderProvider(herder), herder.plugins());
 
         Response response = request("/connectors")
             .accept(MediaType.WILDCARD)
@@ -185,13 +193,10 @@ public class RestServerTest {
     }
 
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
-        // To be able to set the Origin, we need to toggle this flag
-
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
-        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
@@ -210,7 +215,7 @@ public class RestServerTest {
 
 
         server = new RestServer(workerConfig);
-        server.start(herder);
+        server.start(new HerderProvider(herder), herder.plugins());
 
         Response response = request("/connectors")
                 .header("Referer", origin + "/page")
