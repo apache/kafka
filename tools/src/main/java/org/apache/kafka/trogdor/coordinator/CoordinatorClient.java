@@ -36,6 +36,7 @@ import org.apache.kafka.trogdor.rest.TaskRequest;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -120,6 +121,13 @@ public class CoordinatorClient {
         return resp.body();
     }
 
+    public UptimeResponse uptime() throws Exception {
+        HttpResponse<UptimeResponse> resp =
+            JsonRestServer.httpRequest(url("/coordinator/uptime"), "GET",
+                null, new TypeReference<UptimeResponse>() { }, maxTries);
+        return resp.body();
+    }
+
     public void createTask(CreateTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/create"), "POST",
@@ -188,6 +196,11 @@ public class CoordinatorClient {
             .type(Boolean.class)
             .dest("status")
             .help("Get coordinator status.");
+        actions.addArgument("--uptime")
+            .action(storeTrue())
+            .type(Boolean.class)
+            .dest("uptime")
+            .help("Get coordinator uptime.");
         actions.addArgument("--show-tasks")
             .action(storeTrue())
             .type(Boolean.class)
@@ -243,6 +256,9 @@ public class CoordinatorClient {
         if (res.getBoolean("status")) {
             System.out.println("Got coordinator status: " +
                 JsonUtil.toPrettyJsonString(client.status()));
+        } else if (res.getBoolean("uptime")) {
+            System.out.println("Got coordinator uptime: " +
+                JsonUtil.toPrettyJsonString(client.uptime()));
         } else if (res.getBoolean("show_tasks")) {
             System.out.println("Got coordinator tasks: " +
                 JsonUtil.toPrettyJsonString(client.tasks(
