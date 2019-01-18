@@ -17,110 +17,62 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
-import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class ElectPreferredLeadersResponse extends AbstractResponse {
 
-    private static final String REPLICA_ELECTION_RESULT_KEY_NAME = "replica_election_result";
-    private static final String PARTITION_RESULTS_KEY_NAME = "partition_results";
+    private final ElectPreferredLeadersResponseData data;
 
-    public static final Schema ELECT_PREFERRED_LEADERS_RESPONSE_V0 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(REPLICA_ELECTION_RESULT_KEY_NAME, new ArrayOf(new Schema(
-                    TOPIC_NAME,
-                    new Field(PARTITION_RESULTS_KEY_NAME, new ArrayOf(
-                            new Schema(
-                                    PARTITION_ID,
-                                    ERROR_CODE,
-                                    ERROR_MESSAGE)),
-                            "The results for each partition")))));
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{ELECT_PREFERRED_LEADERS_RESPONSE_V0};
+    public ElectPreferredLeadersResponse(ElectPreferredLeadersResponseData data) {
+        this.data = data;
     }
 
-    private final int throttleTimeMs;
-    private final Map<TopicPartition, ApiError> errors;
-
-    public ElectPreferredLeadersResponse(int throttleTimeMs, Map<TopicPartition, ApiError> errors) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
+    public ElectPreferredLeadersResponse(Struct struct, short version) {
+        this.data = new ElectPreferredLeadersResponseData(struct, version);
     }
 
-    public ElectPreferredLeadersResponse(Struct struct) {
-        throttleTimeMs = struct.get(THROTTLE_TIME_MS);
-        Object[] resourcesArray = struct.getArray(REPLICA_ELECTION_RESULT_KEY_NAME);
-        errors = new HashMap<>(resourcesArray.length);
-        for (Object partitionObj : resourcesArray) {
-            Struct topicStruct = (Struct) partitionObj;
-            String topicName = topicStruct.get(TOPIC_NAME);
-            Object[] partitionResults = topicStruct.getArray(PARTITION_RESULTS_KEY_NAME);
-            for (Object partitionResult : partitionResults) {
-                Struct partitionStruct = (Struct) partitionResult;
-                int partitionId = partitionStruct.get(PARTITION_ID);
-                ApiError error = new ApiError(partitionStruct);
-                errors.put(new TopicPartition(topicName, partitionId), error);
-            }
-        }
-    }
-
-    public Map<TopicPartition, ApiError> errors() {
-        return errors;
-    }
-
-    public int throttleTimeMs() {
-        return throttleTimeMs;
-    }
-
-    @Override
-    public Map<Errors, Integer> errorCounts() {
-        return apiErrorCounts(errors);
+    public ElectPreferredLeadersResponseData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.ELECT_PREFERRED_LEADERS.responseSchema(version));
-        struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        Map<String, Map<Integer, ApiError>> groupedErrors = CollectionUtils.groupPartitionDataByTopic(errors);
-        List<Struct> replicaElectionResultList = new ArrayList<>(errors.size());
-        for (Map.Entry<String, Map<Integer, ApiError>> topicToErrors : groupedErrors.entrySet()) {
-            Struct topicStruct = struct.instance(REPLICA_ELECTION_RESULT_KEY_NAME);
-            topicStruct.set(TOPIC_NAME, topicToErrors.getKey());
-            List<Struct> partitionResultList = new ArrayList<>(topicToErrors.getValue().size());
-            for (Map.Entry<Integer, ApiError> partitionToError : topicToErrors.getValue().entrySet()) {
-                Struct partitionResultStruct = topicStruct.instance(PARTITION_RESULTS_KEY_NAME);
-                partitionResultStruct.set(PARTITION_ID, partitionToError.getKey());
-                partitionToError.getValue().write(partitionResultStruct);
-                partitionResultList.add(partitionResultStruct);
+        return data.toStruct(version);
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
+    }
+
+    @Override
+    public Map<Errors, Integer> errorCounts() {
+        HashMap<Errors, Integer> counts = new HashMap<>();
+        for (ReplicaElectionResult result : data.replicaElectionResults()) {
+            for (PartitionResult partitionResult : result.partitionResult()) {
+                Errors error = Errors.forCode(partitionResult.errorCode());
+                counts.put(error, counts.getOrDefault(error, 0) + 1);
             }
-            topicStruct.set(PARTITION_RESULTS_KEY_NAME, partitionResultList.toArray());
-            replicaElectionResultList.add(topicStruct);
         }
-        struct.set(REPLICA_ELECTION_RESULT_KEY_NAME, replicaElectionResultList.toArray(new Struct[0]));
-        return struct;
+        return counts;
     }
 
     public static ElectPreferredLeadersResponse parse(ByteBuffer buffer, short version) {
-        return new ElectPreferredLeadersResponse(ApiKeys.ELECT_PREFERRED_LEADERS.parseResponse(version, buffer));
+        return new ElectPreferredLeadersResponse(
+                ApiKeys.ELECT_PREFERRED_LEADERS.responseSchema(version).read(buffer), version);
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
+    }
 }

@@ -288,7 +288,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       PreferredReplicaLeaderElectionCommand.run(Array(
         "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath),
-        timeout = 10000)
+        timeout = 2000)
       fail();
     } catch {
       case e: AdminCommandFailedException =>

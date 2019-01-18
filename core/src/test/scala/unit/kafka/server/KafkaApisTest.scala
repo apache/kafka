@@ -524,7 +524,7 @@ class KafkaApisTest {
     channel.buffer.getInt() // read the size
     ResponseHeader.parse(channel.buffer)
     val struct = api.responseSchema(request.version).read(channel.buffer)
-    AbstractResponse.parseResponse(api, struct)
+    AbstractResponse.parseResponse(api, struct, request.version)
   }
 
   private def expectNoThrottling(): Capture[RequestChannel.Response] = {

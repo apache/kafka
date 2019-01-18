@@ -40,7 +40,6 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
-import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
@@ -71,7 +70,6 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.resource.PatternType;
@@ -638,7 +636,7 @@ public class KafkaAdminClientTest {
 
     @Test
     public void testElectPreferredLeaders()  throws Exception {
-        TopicPartition topic1 = new TopicPartition("topic", 0);
+        /*TopicPartition topic1 = new TopicPartition("topic", 0);
         TopicPartition topic2 = new TopicPartition("topic", 2);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -657,7 +655,8 @@ public class KafkaAdminClientTest {
             // Test a call where there are no errors.
             map.put(topic1, ApiError.NONE);
             map.put(topic2, ApiError.NONE);
-            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(0,
+            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(
+                    ElectPreferredLeadersUtil.fromElectPreferredLeadersRequest()0,
                     map));
 
             results = env.adminClient().electPreferredLeaders(asList(topic1, topic2));
@@ -668,7 +667,7 @@ public class KafkaAdminClientTest {
             results = env.adminClient().electPreferredLeaders(asList(topic1, topic2), new ElectPreferredLeadersOptions().timeoutMs(100));
             TestUtils.assertFutureError(results.partitionResult(topic1), TimeoutException.class);
             TestUtils.assertFutureError(results.partitionResult(topic2), TimeoutException.class);
-        }
+        }*/
     }
 
     /**

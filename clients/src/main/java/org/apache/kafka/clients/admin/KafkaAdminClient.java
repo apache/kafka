@@ -105,14 +105,14 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
+import org.apache.kafka.common.requests.ElectPreferredLeadersRequest;
+import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
-import org.apache.kafka.common.requests.ElectPreferredLeadersRequest;
-import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -2791,13 +2791,15 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ElectPreferredLeadersRequest.Builder(partitions, timeoutMs);
+                return new ElectPreferredLeadersRequest.Builder(
+                        ElectPreferredLeadersRequest.toRequestData(partitions, timeoutMs));
             }
 
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 ElectPreferredLeadersResponse response = (ElectPreferredLeadersResponse) abstractResponse;
-                electionFuture.complete(response.errors());
+                electionFuture.complete(
+                        ElectPreferredLeadersRequest.fromResponseData(response.data()));
             }
 
             @Override
@@ -2807,4 +2809,5 @@ public class KafkaAdminClient extends AdminClient {
         }, now);
         return new ElectPreferredLeadersResult(electionFuture, partitionSet);
     }
+
 }
