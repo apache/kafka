@@ -240,7 +240,7 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def printMembers(members: Map[String, (Option[String], Option[Seq[ConsumerGroupCommand.MemberAssignmentState]])], verbose: Boolean): Unit = {
+    private def printMembers(members: Map[String, (Option[String], Option[Seq[MemberAssignmentState]])], verbose: Boolean): Unit = {
       for ((groupId, (state, assignments)) <- members) {
         if (shouldPrintMemberState(groupId, state, size(assignments))) {
           // find proper columns width
@@ -285,7 +285,7 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    private def printStates(states: Map[String, ConsumerGroupCommand.GroupState]): Unit = {
+    private def printStates(states: Map[String, GroupState]): Unit = {
       for ((groupId, state) <- states) {
         if (shouldPrintMemberState(groupId, Some(state.state), Some(1))) {
           val coordinator = s"${state.coordinator.host}:${state.coordinator.port} (${state.coordinator.idString})"
