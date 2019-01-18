@@ -13,6 +13,7 @@
 
 package kafka.api
 
+import java.time
 import java.util.concurrent._
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collection, Collections, Properties}
@@ -340,19 +341,18 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
             receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000)
             CoreUtils.inLock(lock) { successfulConsumes += 1 }
           } catch {
-            case e: Throwable => {
+            case e: Throwable =>
               if (e.isInstanceOf[GroupMaxSizeReachedException]) {
                 kickedOutConsumerIdx = Some(idx)
               }
 
               CoreUtils.inLock(lock) { receivedExceptions += e }
-            }
           }
-        }(ExecutionContext.fromExecutor(executor))
+        }
 
         consumeFutures += consumeFuture
       })
-      Await.result(SFuture.sequence(consumeFutures), Duration("25sec"))
+      Await.result(SFuture.sequence(consumeFutures), Duration("12sec"))
 
       if (receivedExceptions.nonEmpty) {
         if (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException])) {
@@ -370,6 +370,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     if (receivedExceptions.isEmpty)
       fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
 
+    // assert that the group has gone through a rebalance and shed off one consumer
     stableConsumers.remove(kickedOutConsumerIdx.get)
     sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
     // should be only maxGroupSize consumers left in the group
@@ -402,7 +403,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     */
   private def createConsumersWithGroupId(groupId: String, consumerCount: Int, executor: ExecutorService, topic: String = topic): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
     val stableConsumers = ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
-    for (i <- 1.to(consumerCount)) {
+    for (_ <- 1.to(consumerCount)) {
       val newConsumer = createConsumerWithGroupId(groupId)
       waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, topic = topic),
         executor = executor, stableConsumers:_*)
@@ -425,15 +426,14 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
   def waitForRebalance(timeoutMs: Long, future: Future[Any], executor: ExecutorService, otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
     val startMs = System.currentTimeMillis
+    implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
+
     while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone) {
-      otherConsumers.foreach(consumer => {
-        executor.submit(CoreUtils.runnable {
-          consumer.poll(1000)
-        })
+      val consumeFutures = otherConsumers.map(consumer => SFuture {
+        consumer.poll(time.Duration.ofMillis(1000))
       })
-      Thread.sleep(50)
+      Await.result(SFuture.sequence(consumeFutures), Duration("1500ms"))
     }
-    Thread.sleep(1000) // wait for the poll() calls to complete
 
     assertTrue("Rebalance did not complete in time", future.isDone)
   }
@@ -547,7 +547,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
     while (received < numRecords && System.currentTimeMillis < endTimeMs)
-      received += consumer.poll(100).count()
+      received += consumer.poll(time.Duration.ofMillis(100)).count()
 
     received
   }
