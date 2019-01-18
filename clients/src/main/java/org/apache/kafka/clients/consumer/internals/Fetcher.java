@@ -582,6 +582,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", partition);
         } else {
             log.info("Resetting offset for partition {} to offset {}.", partition, offsetData.offset);
+            offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
             subscriptions.seek(partition, offsetData.offset);
         }
     }
@@ -693,27 +694,27 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            PartitionInfo info = metadata.fetch().partition(tp);
-            if (info == null) {
+            Optional<PartitionInfo> currentInfo = metadata.partitionInfoIfCurrent(tp);
+            if (!currentInfo.isPresent()) {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (info.leader() == null) {
+            } else if (currentInfo.get().leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (client.isUnavailable(info.leader())) {
-                client.maybeThrowAuthFailure(info.leader());
+            } else if (client.isUnavailable(currentInfo.get().leader())) {
+                client.maybeThrowAuthFailure(currentInfo.get().leader());
 
                 // The connection has failed and we need to await the blackout period before we can
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
                 log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                          info.leader(), tp);
+                        currentInfo.get().leader(), tp);
                 partitionsToRetry.add(tp);
             } else {
-                Node node = info.leader();
+                Node node = currentInfo.get().leader();
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
                         timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
                 ListOffsetRequest.PartitionData partitionData = new ListOffsetRequest.PartitionData(
@@ -867,10 +868,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * that have no existing requests in flight.
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
-        Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
-            Node node = cluster.leaderFor(partition);
+            Node node = metadata.partitionInfoIfCurrent(partition).map(PartitionInfo::leader).orElse(null);
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
