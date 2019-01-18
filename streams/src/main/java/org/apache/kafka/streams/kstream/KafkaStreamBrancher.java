@@ -30,10 +30,10 @@ import java.util.function.Consumer;
  * <pre>
  * {@code
  * new KafkaStreamsBrancher<String, String>()
- *    .addBranch((key, value) -> value.contains("A"), ks->ks.to("A"))
- *    .addBranch((key, value) -> value.contains("B"), ks->ks.to("B"))
+ *    .branch((key, value) -> value.contains("A"), ks->ks.to("A"))
+ *    .branch((key, value) -> value.contains("B"), ks->ks.to("B"))
  *    //default branch should not necessarily be defined in the end
- *    .addDefaultBranch(ks->ks.to("C"))
+ *    .defaultBranch(ks->ks.to("C"))
  *    .onTopOf(builder.stream("source"))
  * }
  * </pre>
@@ -41,56 +41,57 @@ import java.util.function.Consumer;
  * @param <K> Type of keys
  * @param <V> Type of values
  * @author Ivan Ponomarev
- * @since 2.2.4
  */
 public final class KafkaStreamBrancher<K, V> {
 
-	private final List<Predicate<? super K, ? super V>> predicateList = new ArrayList<>();
-	private final List<Consumer<? super KStream<K, V>>> consumerList = new ArrayList<>();
-	private Consumer<? super KStream<K, V>> defaultConsumer;
+    private final List<Predicate<? super K, ? super V>> predicateList = new ArrayList<>();
+    private final List<Consumer<? super KStream<K, V>>> consumerList = new ArrayList<>();
+    private Consumer<? super KStream<K, V>> defaultConsumer;
 
-	/**
-	 * Defines a new branch.
-	 *
-	 * @param predicate {@link Predicate} instance
-	 * @param consumer  The consumer of this branch's {@code KStream}
-	 * @return {@code this}
-	 */
-	public KafkaStreamBrancher<K, V> addBranch(Predicate<? super K, ? super V> predicate,
-											Consumer<? super KStream<K, V>> consumer) {
-		this.predicateList.add(Objects.requireNonNull(predicate));
-		this.consumerList.add(Objects.requireNonNull(consumer));
-		return this;
-	}
+    /**
+     * Defines a new branch.
+     *
+     * @param predicate {@link Predicate} instance
+     * @param consumer  The consumer of this branch's {@code KStream}
+     * @return {@code this}
+     */
+    public KafkaStreamBrancher<K, V> branch(final Predicate<? super K, ? super V> predicate,
+                                            final Consumer<? super KStream<K, V>> consumer) {
+        this.predicateList.add(Objects.requireNonNull(predicate));
+        this.consumerList.add(Objects.requireNonNull(consumer));
+        return this;
+    }
 
-	/**
-	 * Defines a default branch. To this stream will be directed all the messages that
-	 * were not dispatched to other branches. This method should not necessarily be called in the end
-	 * of chain.
-	 *
-	 * @param consumer The consumer of this branch's {@code KStream}
-	 * @return {@code this}
-	 */
-	public KafkaStreamBrancher<K, V> addDefaultBranch(Consumer<? super KStream<K, V>> consumer) {
-		this.defaultConsumer = Objects.requireNonNull(consumer);
-		return this;
-	}
+    /**
+     * Defines a default branch. All the messages that were not dispatched to other branches will be directed
+     * to this stream. This method should not necessarily be called in the end
+     * of chain.
+     *
+     * @param consumer The consumer of this branch's {@code KStream}
+     * @return {@code this}
+     */
+    public KafkaStreamBrancher<K, V> defaultBranch(final Consumer<? super KStream<K, V>> consumer) {
+        this.defaultConsumer = Objects.requireNonNull(consumer);
+        return this;
+    }
 
-	/**
-	 * Terminating method that builds branches on top of given {@code KStream}.
-	 *
-	 * @param stream {@code KStream} to split
-	 */
-	public void onTopOf(KStream<K, V> stream) {
-		if (this.defaultConsumer != null) {
-			this.predicateList.add((k, v) -> true);
-			this.consumerList.add(this.defaultConsumer);
-		}
-		@SuppressWarnings({"unchecked", "rawtypes"})
-		Predicate<? super K, ? super V>[] predicates = this.predicateList.toArray(new Predicate[0]);
-		KStream<K, V>[] result = stream.branch(predicates);
-		for (int i = 0; i < this.consumerList.size(); i++) {
-			this.consumerList.get(i).accept(result[i]);
-		}
-	}
+    /**
+     * Terminating method that builds branches on top of given {@code KStream}.
+     *
+     * @param stream {@code KStream} to split
+     * @return the provided stream
+     */
+    public KStream<K, V> onTopOf(final KStream<K, V> stream) {
+        if (this.defaultConsumer != null) {
+            this.predicateList.add((k, v) -> true);
+            this.consumerList.add(this.defaultConsumer);
+        }
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        final Predicate<? super K, ? super V>[] predicates = this.predicateList.toArray(new Predicate[0]);
+        final KStream<K, V>[] result = stream.branch(predicates);
+        for (int i = 0; i < this.consumerList.size(); i++) {
+            this.consumerList.get(i).accept(result[i]);
+        }
+        return stream;
+    }
 }

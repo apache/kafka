@@ -26,36 +26,36 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertSame;
 
-class KafkaStreamsBrancherTest {
-	@Test
-	@SuppressWarnings({"unchecked", "rawtypes"})
-	void correctConsumersAreCalled() {
-		Predicate p1 = Mockito.mock(Predicate.class);
-		Predicate p2 = Mockito.mock(Predicate.class);
-		KStream input = Mockito.mock(KStream.class);
-		KStream[] result = new KStream[]{Mockito.mock(KStream.class),
-				Mockito.mock(KStream.class), Mockito.mock(KStream.class)};
-		Mockito.when(input.branch(Mockito.eq(p1), Mockito.eq(p2), Mockito.any()))
-				.thenReturn(result);
-		AtomicInteger invocations = new AtomicInteger(0);
-		new KafkaStreamBrancher()
-				.addBranch(
-						p1,
-						ks -> {
-							assertSame(result[0], ks);
-							assertEquals(0, invocations.getAndIncrement());
-						})
-				.addDefaultBranch(ks -> {
-					assertSame(result[2], ks);
-					assertEquals(2, invocations.getAndIncrement());
-				})
-				.addBranch(p2,
-						ks -> {
-							assertSame(result[1], ks);
-							assertEquals(1, invocations.getAndIncrement());
-						})
-				.onTopOf(input);
+public class KafkaStreamsBrancherTest {
+    @Test
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    public void correctConsumersAreCalled() {
+        Predicate p1 = Mockito.mock(Predicate.class);
+        Predicate p2 = Mockito.mock(Predicate.class);
+        KStream input = Mockito.mock(KStream.class);
+        KStream[] result = new KStream[]{Mockito.mock(KStream.class),
+                Mockito.mock(KStream.class), Mockito.mock(KStream.class)};
+        Mockito.when(input.branch(Mockito.eq(p1), Mockito.eq(p2), Mockito.any()))
+                .thenReturn(result);
+        AtomicInteger invocations = new AtomicInteger(0);
+        assertSame(input, new KafkaStreamBrancher()
+                .branch(
+                        p1,
+                        ks -> {
+                            assertSame(result[0], ks);
+                            assertEquals(0, invocations.getAndIncrement());
+                        })
+                .defaultBranch(ks -> {
+                    assertSame(result[2], ks);
+                    assertEquals(2, invocations.getAndIncrement());
+                })
+                .branch(p2,
+                        ks -> {
+                            assertSame(result[1], ks);
+                            assertEquals(1, invocations.getAndIncrement());
+                        })
+                .onTopOf(input));
 
-		assertEquals(3, invocations.get());
-	}
+        assertEquals(3, invocations.get());
+    }
 }
