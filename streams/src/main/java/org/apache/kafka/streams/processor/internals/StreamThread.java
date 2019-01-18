@@ -609,7 +609,7 @@ public class StreamThread extends Thread {
         final Logger log = logContext.logger(StreamThread.class);
 
         log.info("Creating restore consumer client");
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getThreadRestoreConsumerClientId(threadClientId));
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadClientId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
@@ -663,7 +663,7 @@ public class StreamThread extends Thread {
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getThreadConsumerClientId(threadClientId));
+        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadClientId));
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
@@ -743,11 +743,11 @@ public class StreamThread extends Thread {
         return threadClientId + "-producer";
     }
 
-    private static String getThreadConsumerClientId(final String threadClientId) {
+    private static String getConsumerClientId(final String threadClientId) {
         return threadClientId + "-consumer";
     }
 
-    private static String getThreadRestoreConsumerClientId(final String threadClientId) {
+    private static String getRestoreConsumerClientId(final String threadClientId) {
         return threadClientId + "-restore-consumer";
     }
 
@@ -1245,8 +1245,8 @@ public class StreamThread extends Thread {
         threadMetadata = new ThreadMetadata(
             this.getName(),
             this.state().name(),
-            getThreadConsumerClientId(this.getName()),
-            getThreadRestoreConsumerClientId(this.getName()),
+            getConsumerClientId(this.getName()),
+            getRestoreConsumerClientId(this.getName()),
             producer == null ? Collections.emptySet() : Collections.singleton(getThreadProducerClientId(this.getName())),
             adminClientId,
             Collections.emptySet(),
@@ -1272,8 +1272,8 @@ public class StreamThread extends Thread {
         threadMetadata = new ThreadMetadata(
             this.getName(),
             this.state().name(),
-            getThreadConsumerClientId(this.getName()),
-            getThreadRestoreConsumerClientId(this.getName()),
+            getConsumerClientId(this.getName()),
+            getRestoreConsumerClientId(this.getName()),
             producer == null ? producerClientIds : Collections.singleton(getThreadProducerClientId(this.getName())),
             adminClientId,
             activeTasksMetadata,

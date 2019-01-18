@@ -116,7 +116,15 @@ public class ThreadMetadata {
 
     @Override
     public int hashCode() {
-        return Objects.hash(threadName, threadState, activeTasks, standbyTasks, mainConsumerClientId, restoreConsumerClientId, producerClientIds, adminClientId);
+        return Objects.hash(
+            threadName,
+            threadState,
+            activeTasks,
+            standbyTasks,
+            mainConsumerClientId,
+            restoreConsumerClientId,
+            producerClientIds,
+            adminClientId);
     }
 
     @Override
