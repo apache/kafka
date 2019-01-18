@@ -20,6 +20,7 @@ import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -50,7 +51,6 @@ public class Connect {
             Runtime.getRuntime().addShutdownHook(shutdownHook);
 
             herder.start();
-            rest.start(herder);
 
             log.info("Kafka Connect started");
         } finally {
@@ -80,6 +80,11 @@ public class Connect {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for Kafka Connect to shutdown");
         }
+    }
+
+    // Visible for testing
+    public URI restUrl() {
+        return rest.serverUrl();
     }
 
     private class ShutdownHook extends Thread {
