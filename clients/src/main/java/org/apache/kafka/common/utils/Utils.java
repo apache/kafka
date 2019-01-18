@@ -564,10 +564,7 @@ public final class Utils {
         Properties duplicateCheckingProps = new Properties() {
             @Override
             public synchronized Object put(Object key, Object value) {
-                propertiesMap.merge(key, new ArrayList<>(Collections.singletonList(value)), (left, right) -> {
-                    left.addAll(right);
-                    return left;
-                });
+                propertiesMap.merge(key, Collections.singletonList(value), Utils::concatLists);
                 return super.put(key, value);
             }
         };
@@ -1063,6 +1060,10 @@ public final class Utils {
 
     public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
         return concatLists(left, right, Collections::unmodifiableList);
+    }
+
+    public static <T> List<T> concatLists(List<T> left, List<T> right) {
+        return concatLists(left, right, Function.identity());
     }
 
     public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
