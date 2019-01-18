@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 import java.util.List;
 import java.util.Map;
@@ -96,10 +97,22 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
      * @throws InterruptedException
      */
     public void commitRecord(SourceRecord record) throws InterruptedException {
+        // This space intentionally left blank.
+    }
+
+    /**
+     * Hook called when a {@link SourceRecord} is successfully sent via the producer and ACK'd by a broker.
+     *
+     * This indicates the record has been safely stored in Kafka, and has not been filtered by a transformation or skipped due to failure.
+     *
+     * @param record {@link SourceRecord} that was successfully sent via the producer
+     * @throws InterruptedException
+     */
+    public void recordLogged(SourceRecord record, RecordMetadata metadata) {
         // This space intentionally left blank.
     }
 }

@@ -334,6 +334,7 @@ class WorkerSourceTask extends WorkerTask {
                                             WorkerSourceTask.this,
                                             recordMetadata.topic(), recordMetadata.partition(),
                                             recordMetadata.offset());
+                                    recordLogged(preTransformRecord, recordMetadata);
                                     commitTaskRecord(preTransformRecord);
                                 }
                                 recordSent(producerRecord);
@@ -375,6 +376,14 @@ class WorkerSourceTask extends WorkerTask {
             task.commitRecord(record);
         } catch (Throwable t) {
             log.error("{} Exception thrown while calling task.commitRecord()", this, t);
+        }
+    }
+
+    private void recordLogged(SourceRecord record, RecordMetadata metadata) {
+        try {
+            task.recordLogged(record, metadata);
+        } catch (Throwable t) {
+            log.error("{} Exception thrown while calling task.recordLogged()", this, t);
         }
     }
 
