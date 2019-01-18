@@ -34,21 +34,21 @@ import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshControlFile;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshFilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
 import org.junit.Assert;
 import org.junit.Rule;
-import org.junit.rules.Timeout;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.io.File;
 import java.io.IOException;
@@ -60,6 +60,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class AgentTest {
     @Rule
@@ -132,6 +133,7 @@ public class AgentTest {
         AgentClient client = new AgentClient.Builder().
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
+
         assertEquals(Collections.emptyMap(), status.workers());
         new ExpectedTasks().waitFor(client);
 
@@ -145,6 +147,23 @@ public class AgentTest {
             taskState(new TaskDone(fooSpec, actualStartTimeMs, doneMs, "worker expired", false, null)).
             build()).
             waitFor(client);
+    }
+
+    @Test
+    public void testAgentGetUptime() throws Exception {
+        MockTime time = new MockTime(0, 111, 0);
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+
+        UptimeResponse uptime = client.uptime();
+        assertEquals(agent.uptime(), uptime);
+
+        time.setCurrentTimeMs(150);
+        assertNotEquals(agent.uptime(), uptime);
+        agent.beginShutdown();
+        agent.waitForShutdown();
     }
 
     @Test
