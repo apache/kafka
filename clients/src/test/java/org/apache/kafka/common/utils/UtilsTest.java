@@ -473,32 +473,31 @@ public class UtilsTest {
 
     @Test
     public void testDuplicateProperties() throws Exception {
-        {
-            URL url = getClass().getResource("/properties/no-duplicates.properties");
-            File propFile = new File(url.toURI());
-            String absPath = propFile.getAbsolutePath();
-            Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
-            propMap.values().forEach(values -> assertEquals(values.size(), 1));
+        URL url = getClass().getResource("/properties/duplicates.properties");
+        File propFile = new File(url.toURI());
+        String absPath = propFile.getAbsolutePath();
+        Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
+        assertEquals(propMap.get("prop1").size(), 2);
+        assertEquals(propMap.get("prop2").size(), 3);
+        assertEquals(propMap.get("prop3").size(), 1);
 
-            Properties props = Utils.stripDuplicateProps(propMap);
-            assertEquals(props.getProperty("prop1"), "value1");
-            assertEquals(props.getProperty("prop2"), "value2");
-            assertEquals(props.getProperty("prop3"), "value3");
-        }
+        Properties props = Utils.stripDuplicateProps(propMap);
+        assertEquals(props.getProperty("prop1"), "value1-overwrite1");
+        assertEquals(props.getProperty("prop2"), "value2-overwrite2");
+        assertEquals(props.getProperty("prop3"), "value3");
+    }
 
-        {
-            URL url = getClass().getResource("/properties/duplicates.properties");
-            File propFile = new File(url.toURI());
-            String absPath = propFile.getAbsolutePath();
-            Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
-            assertEquals(propMap.get("prop1").size(), 2);
-            assertEquals(propMap.get("prop2").size(), 3);
-            assertEquals(propMap.get("prop3").size(), 1);
+    @Test
+    public void testNoDuplicateProperties() throws Exception {
+        URL url = getClass().getResource("/properties/no-duplicates.properties");
+        File propFile = new File(url.toURI());
+        String absPath = propFile.getAbsolutePath();
+        Map<Object, List<Object>> propMap = Utils.loadPropsMap(absPath);
+        propMap.values().forEach(values -> assertEquals(values.size(), 1));
 
-            Properties props = Utils.stripDuplicateProps(propMap);
-            assertEquals(props.getProperty("prop1"), "value1-overwrite1");
-            assertEquals(props.getProperty("prop2"), "value2-overwrite2");
-            assertEquals(props.getProperty("prop3"), "value3");
-        }
+        Properties props = Utils.stripDuplicateProps(propMap);
+        assertEquals(props.getProperty("prop1"), "value1");
+        assertEquals(props.getProperty("prop2"), "value2");
+        assertEquals(props.getProperty("prop3"), "value3");
     }
 }
