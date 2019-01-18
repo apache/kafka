@@ -27,7 +27,7 @@ import java.util.List;
 /**
  * Utilities for formatting strings.
  */
-public class Formatter {
+public class StringFormatter {
     /**
      * Pretty-print a date string.
      *

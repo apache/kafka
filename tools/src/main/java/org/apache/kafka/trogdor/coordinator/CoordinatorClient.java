@@ -25,8 +25,8 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.trogdor.common.Formatter;
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.StringFormatter;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
@@ -65,8 +65,8 @@ import java.util.regex.PatternSyntaxException;
 import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
-import static org.apache.kafka.trogdor.common.Formatter.dateString;
-import static org.apache.kafka.trogdor.common.Formatter.durationString;
+import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 
 /**
  * A client for the Trogdor coordinator.
@@ -474,7 +474,7 @@ public class CoordinatorClient {
             cols.add(prettyPrintTaskInfo(taskState, zoneOffset));
             lines.add(cols);
         }
-        return Formatter.prettyPrintGrid(lines);
+        return StringFormatter.prettyPrintGrid(lines);
     }
 
     static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {

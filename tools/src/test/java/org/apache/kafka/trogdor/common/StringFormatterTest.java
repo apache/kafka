@@ -28,8 +28,11 @@ import java.util.Arrays;
 
 import static org.junit.Assert.assertEquals;
 
-public class FormatterTest {
-    private static final Logger log = LoggerFactory.getLogger(FormatterTest.class);
+import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
+import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+
+public class StringFormatterTest {
+    private static final Logger log = LoggerFactory.getLogger(StringFormatterTest.class);
 
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
@@ -37,18 +40,18 @@ public class FormatterTest {
     @Test
     public void testDateString() {
         assertEquals("2019-01-08T20:59:29.85Z",
-            Formatter.dateString(1546981169850L, ZoneOffset.UTC));
+            dateString(1546981169850L, ZoneOffset.UTC));
     }
 
     @Test
     public void testDurationString() {
-        assertEquals("1m", Formatter.durationString(60000));
-        assertEquals("1m1s", Formatter.durationString(61000));
-        assertEquals("1m1s", Formatter.durationString(61200));
-        assertEquals("5s", Formatter.durationString(5000));
-        assertEquals("2h", Formatter.durationString(7200000));
-        assertEquals("2h1s", Formatter.durationString(7201000));
-        assertEquals("2h5m3s", Formatter.durationString(7503000));
+        assertEquals("1m", durationString(60000));
+        assertEquals("1m1s", durationString(61000));
+        assertEquals("1m1s", durationString(61200));
+        assertEquals("5s", durationString(5000));
+        assertEquals("2h", durationString(7200000));
+        assertEquals("2h1s", durationString(7201000));
+        assertEquals("2h5m3s", durationString(7503000));
     }
 
     @Test
@@ -57,7 +60,7 @@ public class FormatterTest {
                 "ANIMAL  NUMBER INDEX %n" +
                 "lion    1      12345 %n" +
                 "manatee 50     1     %n"),
-            Formatter.prettyPrintGrid(
+            StringFormatter.prettyPrintGrid(
                 Arrays.asList(Arrays.asList("ANIMAL", "NUMBER", "INDEX"),
                     Arrays.asList("lion", "1", "12345"),
                     Arrays.asList("manatee", "50", "1"))));

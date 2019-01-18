@@ -24,8 +24,8 @@ import net.sourceforge.argparse4j.inf.Namespace;
 import net.sourceforge.argparse4j.inf.Subparser;
 import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.trogdor.common.Formatter;
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.StringFormatter;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
@@ -50,8 +50,8 @@ import java.util.Map;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
-import static org.apache.kafka.trogdor.common.Formatter.dateString;
-import static org.apache.kafka.trogdor.common.Formatter.durationString;
+import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 
 /**
  * A client for the Trogdor agent.
@@ -285,7 +285,7 @@ public class AgentClient {
                         cols.add(entry.getValue().spec().getClass().getCanonicalName());
                         lines.add(cols);
                     }
-                    System.out.print(Formatter.prettyPrintGrid(lines));
+                    System.out.print(StringFormatter.prettyPrintGrid(lines));
                 }
                 break;
             }
