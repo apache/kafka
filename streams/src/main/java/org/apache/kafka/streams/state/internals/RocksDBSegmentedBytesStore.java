@@ -25,7 +25,6 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
@@ -163,8 +162,6 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
             "expired-window-record-drop"
         );
-
-        keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
 
         segments.openExisting(this.context);
 

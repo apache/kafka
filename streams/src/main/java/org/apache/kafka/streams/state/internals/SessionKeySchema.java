@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
@@ -36,31 +34,24 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
-    private String topic;
-    private final Serde<Bytes> bytesSerdes = Serdes.Bytes();
-
-    @Override
-    public void init(final String topic) {
-        this.topic = topic;
-    }
-
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
+        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey));
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey, bytesSerdes.serializer(), topic));
+        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey));
     }
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-            .putLong(to)
-            // start can at most be equal to end
+            // the end timestamp can be as large as possible as long as it's larger than start time
+            .putLong(Long.MAX_VALUE)
+            // this is the start timestamp
             .putLong(to)
             .array();
         return OrderedBytes.upperRange(key, maxSuffix);

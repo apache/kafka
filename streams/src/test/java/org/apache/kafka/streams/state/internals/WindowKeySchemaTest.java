@@ -28,7 +28,6 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.KeyValueIteratorStub;
-import org.junit.Before;
 import org.junit.Test;
 
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -54,11 +53,6 @@ public class WindowKeySchemaTest {
     final private WindowKeySchema windowKeySchema = new WindowKeySchema();
     final private Serde<Windowed<String>> keySerde = new WindowedSerdes.TimeWindowedSerde<>(serde);
     final private StateSerdes<String, byte[]> stateSerdes = new StateSerdes<>("dummy", serde, Serdes.ByteArray());
-
-    @Before
-    public void before() {
-        windowKeySchema.init("topic");
-    }
 
     @Test
     public void testHasNextConditionUsingNullKeys() {
