@@ -148,17 +148,17 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
-    public byte[] fetch(final Bytes key, final long startTime, final long endTime) {
+    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
         if (cache == null) {
-            return bytesStore.fetch(key, startTime, endTime);
+            return bytesStore.fetchSession(key, startTime, endTime);
         }
         final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
         if (entry == null) {
-            return bytesStore.fetch(key, startTime, endTime);
+            return bytesStore.fetchSession(key, startTime, endTime);
         } else {
             return entry.value();
         }
@@ -188,7 +188,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             if (flushListener != null) {
                 final AGG newValue = serdes.valueFrom(entry.newValue());
                 final AGG oldValue = newValue == null || sendOldValues ?
-                    serdes.valueFrom(bytesStore.fetch(rawKey, key.window().start(), key.window().end())) :
+                    serdes.valueFrom(bytesStore.fetchSession(rawKey, key.window().start(), key.window().end())) :
                     null;
                 if (!(newValue == null && oldValue == null)) {
                     flushListener.apply(key, newValue, oldValue);

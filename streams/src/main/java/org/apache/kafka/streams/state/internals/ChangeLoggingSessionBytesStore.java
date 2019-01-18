@@ -77,8 +77,8 @@ class ChangeLoggingSessionBytesStore extends WrappedStateStore.AbstractStateStor
     }
 
     @Override
-    public byte[] fetch(final Bytes key, final long startTime, final long endTime) {
-        return bytesStore.fetch(key, startTime, endTime);
+    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+        return bytesStore.fetchSession(key, startTime, endTime);
     }
 
     @Override

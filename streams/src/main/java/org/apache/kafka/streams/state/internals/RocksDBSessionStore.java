@@ -89,7 +89,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore.AbstractState
     }
 
     @Override
-    public AGG fetch(final K key, final long startTime, final long endTime) {
+    public AGG fetchSession(final K key, final long startTime, final long endTime) {
         return serdes.valueFrom(bytesStore.get(SessionKeySchema.toBinary(Bytes.wrap(serdes.rawKey(key)), startTime, endTime)));
     }
 

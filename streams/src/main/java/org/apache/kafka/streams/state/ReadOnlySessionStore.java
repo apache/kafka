@@ -29,18 +29,6 @@ import org.apache.kafka.streams.kstream.Windowed;
  */
 public interface ReadOnlySessionStore<K, AGG> {
     /**
-     * Get the value of key from a single session.
-     *
-     * @param key            the key to fetch
-     * @param startTime      start timestamp of the session
-     * @param endTime        end timestamp of the session
-     * @return The value or {@code null} if no session associated with the key can be found
-     * @throws NullPointerException If {@code null} is used for any key.
-     */
-    AGG fetch(K key, long startTime, long endTime);
-
-
-    /**
      * Retrieve all aggregated sessions for the provided key.
      * This iterator must be closed after use.
      *

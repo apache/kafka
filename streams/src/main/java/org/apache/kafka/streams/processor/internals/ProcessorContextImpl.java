@@ -392,8 +392,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public AGG fetch(final K key, final long startTime, final long endTime) {
-            return getInner().fetch(key, startTime, endTime);
+        public AGG fetchSession(final K key, final long startTime, final long endTime) {
+            return getInner().fetchSession(key, startTime, endTime);
         }
 
         @Override
@@ -575,8 +575,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public AGG fetch(final K key, final long startTime, final long endTime) {
-            return wrapped().fetch(key, startTime, endTime);
+        public AGG fetchSession(final K key, final long startTime, final long endTime) {
+            return wrapped().fetchSession(key, startTime, endTime);
         }
 
         @Override

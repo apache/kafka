@@ -184,7 +184,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         @Override
         public Agg get(final Windowed<K> key) {
-            return store.fetch(key.key(), key.window().start(), key.window().end());
+            return store.fetchSession(key.key(), key.window().start(), key.window().end());
         }
 
         @Override
