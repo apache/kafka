@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.clients.producer.RecordMetadata;
 
 import java.util.List;
 import java.util.Map;
@@ -88,7 +89,7 @@ public abstract class SourceTask implements Task {
 
     /**
      * <p>
-     * Commit an individual {@link SourceRecord} when the callback from the producer client is received, or if a record is filtered by a transformation.
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
      * </p>
      * <p>
      * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
@@ -96,10 +97,28 @@ public abstract class SourceTask implements Task {
      * in their own system.
      * </p>
      *
-     * @param record {@link SourceRecord} that was successfully sent via the producer.
+     * @param record {@link SourceRecord} that was successfully sent via the producer or filtered by a transformation
      * @throws InterruptedException
      */
     public void commitRecord(SourceRecord record) throws InterruptedException {
+        // This space intentionally left blank.
+    }
+
+    /**
+     * <p>
+     * Commit an individual {@link SourceRecord} when the callback from the producer client is received.
+     * </p>
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * </p>
+     *
+     * @param record {@link SourceRecord} that was successfully sent via the producer
+     * @param metadata {@link RecordMetadata} record metadata returned from the broker
+     * @throws InterruptedException
+     */
+    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         // This space intentionally left blank.
     }
 }
