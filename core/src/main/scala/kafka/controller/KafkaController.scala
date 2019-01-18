@@ -516,73 +516,76 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
    * CR = Current assigned replicas
    * TR = Target replicas, that is CR + NR - DR.
    *
-   *  1. Wait until CR is entirely in ISR. This will make sure that we're starting off with a solid base for reassignment.
-   *  2. Calculate the next reassignment step based on the reassignment context.
-   *  3. Wait until all target brokers are alive. This will make sure that reassignment starts only when the target
-   *     brokers can perform the actual reassignment step.
-   *  4. All new replicas -> OnlineReplica when they are in ISR
-   *  5. Update CR in Zookeeper with TR.
-   *  6. Send LeaderAndIsr request to all replicas in CR + NR.
-   *  7. Start new replicas in NR by moving them to NewReplica state.
-   *  8. Set CR to TR in memory.
-   *  9. Send LeaderAndIsr request with a potential new leader (if current leader not in TR) and
+   *  1. Calculate the next reassignment step
+   *  2. Wait until this step is not identical to the current assignment and there is at least one ISR.
+   *  3. All new replicas -> OnlineReplica when they are in ISR
+   *  4. Update CR in Zookeeper with TR.
+   *  5. Send LeaderAndIsr request to all replicas in CR + NR.
+   *  6. Start new replicas in NR by moving them to NewReplica state.
+   *  7. Set CR to TR in memory.
+   *  8. Send LeaderAndIsr request with a potential new leader (if current leader not in TR) and
    *     a new CR (using TR) and same isr to every broker in TR
-   * 10. Replicas in DR -> Offline (force those replicas out of isr)
-   * 11. Replicas in DR -> NonExistentReplica (force those replicas to be deleted)
-   * 12. Update the /admin/reassign_partitions path in ZK to remove this partition.
-   * 13. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
+   *  9. Replicas in DR -> Offline (force those replicas out of isr)
+   * 10. Replicas in DR -> NonExistentReplica (force those replicas to be deleted)
+   * 11. Update the /admin/reassign_partitions path in ZK to remove this partition.
+   * 12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
    */
   def onPartitionReassignment(topicPartition: TopicPartition, reassignedPartitionContext: ReassignedPartitionsContext): Unit = {
     val currentReplicas = getCurrentReplicas(topicPartition)
-    // 1. Wait until all current replicas are in ISR
-    if (atLeastOneReplicaInIsr(topicPartition, currentReplicas)) {
-      // 2. Calculate the next reassigment step
-      val reassignedReplicas = reassignedPartitionContext.newReplicas
-      val reassignmentStep = calculateReassignmentStep(topicPartition, reassignedReplicas)
+    val reassignedReplicas = reassignedPartitionContext.newReplicas
 
-      // 3. Wait until all target brokers are alive
-      val deadTargetReplicas = reassignmentStep.targetReplicas.toSet -- controllerContext.liveBrokerIds
-      if (deadTargetReplicas.isEmpty) {
-        info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
-        "caught up with the leader")
-        // 4. Update AR in ZK with TR: added and removed replicas will be reflected in Zookeeper
-        updateAssignedReplicasForPartition(topicPartition, reassignmentStep.targetReplicas)
-        // 5. Send LeaderAndIsr request to every replica in AR + NR: add or remove will be sent out to the brokers
-        val currentAndAddedReplicas = currentReplicas ++ Seq(reassignmentStep.add).flatten
-        updateLeaderEpochAndSendRequest(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
-        // 6. Replicas in NR -> NewReplica
-        if (reassignmentStep.add.nonEmpty) {
-          startNewReplicasForReassignedPartition(topicPartition, reassignmentStep.add.toSet)
-          info(s"Starting new replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being " +
-          "reassigned to catch up with the leader")
-        }
-        val newReplicasInIsr = selectIsr(replicaStateMachine.replicasInState(topicPartition.topic, NewReplica).toSeq)
-        // 7. All new replicas -> OnlineReplica when they are in ISR
-        replicaStateMachine.handleStateChanges(newReplicasInIsr, OnlineReplica)
-        if (reassignmentStep.drop.nonEmpty) {
-          // 8. Set AR to TR in memory.
-          // 9. Send LeaderAndIsr request with a potential new leader (if current leader not in TR) and
-          //   a new AR (using TR) and same isr to every broker in TR
-          debug(s"Leader election, if needed, using remaining live replicas ${reassignmentStep.targetReplicas}")
-          moveReassignedPartitionLeaderIfRequired(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
-          // 10. replicas in DR -> Offline (force those replicas out of isr)
-          // 11. replicas in DR -> NonExistentReplica (force those replicas to be deleted)
-          if (!reassignmentStep.drop.contains(zkClient.getLeaderForPartition(topicPartition).get)) {
-            debug(s"Stopping [${reassignmentStep.drop.mkString(",")}] when leader is ${zkClient.getLeaderForPartition(topicPartition).get}")
-            stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, reassignmentStep.drop.toSet)
-          }
-        }
-        val allNewReplicasInISR = areReplicasInIsr(topicPartition, reassignedReplicas)
-        if (allNewReplicasInISR) {
-          info("All replicas are in sync, reassign finished")
-          // 12. Update the /admin/reassign_partitions path in ZK to remove this partition.
-          removePartitionsFromReassignedPartitions(Set(topicPartition))
-          // 13. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
-          sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
-          // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
-          topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
+    // 1. Calculate the next reassignment step
+    val reassignmentStep = calculateReassignmentStep(topicPartition, reassignedReplicas)
+    val canProceed = {
+      val isStepAhead = reassignmentStep.currentReplicas != reassignmentStep.targetReplicas
+      val haveAtLeastOneIsr = atLeastOneReplicaInIsr(topicPartition, currentReplicas)
+      isStepAhead && haveAtLeastOneIsr
+    }
+
+    // 2. Wait until we can proceed:
+    //    - The step adds new replicas or removes old ones. Calculation may return the same steps if a broker that needs
+    //      to be reassigned is offline because it can't proceed by adding/removing that broker.
+    //    - Have at least one ISR replica.
+    if (canProceed) {
+      info(s"New replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being reassigned not yet " +
+      "caught up with the leader")
+      // 3. Update AR in ZK with TR: added and removed replicas will be reflected in Zookeeper
+      updateAssignedReplicasForPartition(topicPartition, reassignmentStep.targetReplicas)
+      // 4. Send LeaderAndIsr request to every replica in AR + NR: add or remove will be sent out to the brokers
+      val currentAndAddedReplicas = currentReplicas ++ Seq(reassignmentStep.add).flatten
+      updateLeaderEpochAndSendRequest(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
+      // 5. Replicas in NR -> NewReplica
+      if (reassignmentStep.add.nonEmpty) {
+        startNewReplicasForReassignedPartition(topicPartition, reassignmentStep.add.toSet)
+        info(s"Starting new replicas ${reassignedReplicas.mkString(",")} for partition $topicPartition being " +
+        "reassigned to catch up with the leader")
+      }
+      val newReplicasInIsr = selectIsr(replicaStateMachine.replicasInState(topicPartition.topic, NewReplica).toSeq)
+      // 6. All new replicas -> OnlineReplica when they are in ISR
+      replicaStateMachine.handleStateChanges(newReplicasInIsr, OnlineReplica)
+      if (reassignmentStep.drop.nonEmpty) {
+        // 7. Set AR to TR in memory.
+        // 8. Send LeaderAndIsr request with a potential new leader (if current leader not in TR) and
+        //   a new AR (using TR) and same isr to every broker in TR
+        info(s"Leader election, if needed, using remaining live replicas ${reassignmentStep.targetReplicas}")
+        moveReassignedPartitionLeaderIfRequired(topicPartition, currentAndAddedReplicas, reassignmentStep.targetReplicas)
+        // 9. replicas in DR -> Offline (force those replicas out of isr)
+        // 10. replicas in DR -> NonExistentReplica (force those replicas to be deleted)
+        if (!reassignmentStep.drop.contains(zkClient.getLeaderForPartition(topicPartition).get)) {
+          info(s"Stopping [${reassignmentStep.drop.mkString(",")}] when leader is ${zkClient.getLeaderForPartition(topicPartition).get}")
+          stopOldReplicasOfReassignedPartition(topicPartition, reassignedPartitionContext, reassignmentStep.drop.toSet)
         }
       }
+    }
+    val allNewReplicasInISR = areReplicasInIsr(topicPartition, reassignedReplicas)
+    if (allNewReplicasInISR) {
+      info("All replicas are in sync, reassign finished")
+      // 11. Update the /admin/reassign_partitions path in ZK to remove this partition.
+      removePartitionsFromReassignedPartitions(Set(topicPartition))
+      // 12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
+      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
+      // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
+      topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
     }
   }
 
@@ -1693,7 +1696,7 @@ object ReassignmentHelper {
   // Rules
   // - in the last step order should match the requested order
   def calculateReassignmentStep(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int, liveBrokerIds: Set[Int], minIsrSize: Int): ReassignmentStep = {
-    val drop: Seq[Int] = calculateExcessISRs(finalTargetReplicas, currentReplicas, leader)
+    val drop: Seq[Int] = calculateExcessReplicas(finalTargetReplicas, currentReplicas, leader)
     val add = calculateReplicasToAdd(finalTargetReplicas, currentReplicas, liveBrokerIds, minIsrSize)
     val targetReplicasInThisStep = currentReplicas.filterNot(drop.contains) ++ add
     val isLastStep = targetReplicasInThisStep.toSet == finalTargetReplicas.toSet
@@ -1701,15 +1704,15 @@ object ReassignmentHelper {
     ReassignmentStep(currentReplicas, drop, add, targetReplicasInThisStepInOrder)
   }
 
-  private def calculateExcessISRs(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int) = {
-    val numberOfExcessISRs = currentReplicas.size - finalTargetReplicas.size
+  private def calculateExcessReplicas(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int) = {
+    val numberOfExcessReplicas = currentReplicas.size - finalTargetReplicas.size
     // TODO: what if it's empty
     val notInReassigned = currentReplicas.filterNot(finalTargetReplicas.contains)
     val notInReassignedPreferredOrder = notInReassigned.sortBy(brokerId => if (brokerId == leader) 1 else 0)
-    println(s"calculated_size: $numberOfExcessISRs, ordered_set_size: ${notInReassignedPreferredOrder.size}, " +
+    println(s"calculated_size: $numberOfExcessReplicas, ordered_set_size: ${notInReassignedPreferredOrder.size}, " +
       s"finalTargetReplicas: $finalTargetReplicas, currentReplicas: $currentReplicas, " +
-      s"notInReassignedPreferredOrder: $notInReassignedPreferredOrder, dropped: ${notInReassignedPreferredOrder.take(numberOfExcessISRs)}")
-    notInReassignedPreferredOrder.take(numberOfExcessISRs)
+      s"notInReassignedPreferredOrder: $notInReassignedPreferredOrder, dropped: ${notInReassignedPreferredOrder.take(numberOfExcessReplicas)}")
+    notInReassignedPreferredOrder.take(numberOfExcessReplicas)
   }
 
   // Selects the final leader first if the broker is alive and if it's not yet reassigned, otherwise the next few replica that is
@@ -1731,7 +1734,7 @@ case class ReassignmentStep(currentReplicas: Seq[Int], drop: Seq[Int], add: Seq[
   override def toString: String = {
     val currentFragment = currentReplicas.mkString("current replicas=", ","," ")
     val dropFragment = if (drop.isEmpty) "" else drop.mkString("-", ","," ")
-    val addFragment = if (add.isEmpty) "" else s"+${add.mkString(",+")} "
+    val addFragment = if (add.isEmpty) "" else s"+${add.mkString(",")} "
     val targetFragment = targetReplicas.mkString("target replicas=", ",", "")
     s"$currentFragment$dropFragment$addFragment$targetFragment"
   }

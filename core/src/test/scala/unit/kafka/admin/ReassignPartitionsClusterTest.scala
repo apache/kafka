@@ -23,7 +23,9 @@ import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin.{AdminClientConfig, AdminClient => JAdminClient}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
@@ -105,6 +107,33 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localReplicaOrException(topicPartition)
       .highWatermark.messageOffset == 100,
       "partition follower's highWatermark should be 100")
+  }
+
+  @Test
+  def testReassignmentWithReplicasOfflineExceptOne(): Unit = {
+    startBrokers(Seq(100, 101, 102, 103))
+    adminClient = createAdminClient(servers)
+    createTopic(zkClient, topicName, Map(0 -> Seq(100, 101, 102, 103)), servers = servers)
+
+    val numMessages = 100
+    val msgSize = 100 * 100
+    produceMessages(topicName, numMessages, acks = 0, msgSize)
+
+    servers
+      .filter(s => s.config.brokerId == 100 || s.config.brokerId == 102)
+      .foreach { s =>
+        s.shutdown()
+        s.awaitShutdown()
+      }
+
+    val newAssignment = s"""{"version":1,"partitions":[{"topic":"$topicName","partition":0,"replicas":[103]}]}"""
+    ReassignPartitionsCommand.executeAssignment(zkClient, None, newAssignment, NoThrottle)
+    waitForReassignmentToComplete()
+    val newIsr = zkClient.getInSyncReplicasForPartition(new TopicPartition(topicName, 0)).get
+    println("isr:" + newIsr.mkString(","))
+
+    assertTrue("Only 1 broker should be in the ISR", newIsr.size == 1)
+    assertTrue("Only broker 103 should be in ISR", newIsr.contains(103))
   }
 
   @Test

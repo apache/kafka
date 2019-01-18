@@ -106,6 +106,7 @@ class ReplicaStateMachine(config: KafkaConfig,
           doHandleStateChanges(replicaId, partitions, targetState, callbacks)
         }
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+        info(s"Setting partition ${replicas.mkString(",")} to OnlineReplica because it has caught up with the leader")
       } catch {
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some replicas to $targetState state", e)
