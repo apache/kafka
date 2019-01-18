@@ -43,20 +43,6 @@ public class ReadOnlySessionStoreStub<K, V> implements ReadOnlySessionStore<K, V
     }
 
     @Override
-    public V fetch(final K key, final long startTime, final long endTime) {
-        if (sessions.containsKey(key)) {
-            for (KeyValue<Windowed<K>, V> kv : sessions.get(key)) {
-                if (kv.key.window().start() == startTime && kv.key.window().end() == endTime) {
-                    return kv.value;
-                }
-            }
-
-        }
-
-        return null;
-    }
-
-    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         if (!open) {
             throw new InvalidStateStoreException("not open");
