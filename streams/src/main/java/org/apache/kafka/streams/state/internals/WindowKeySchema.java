@@ -36,11 +36,6 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
     @Override
-    public void init(final String topic) {
-        // nothing to do
-    }
-
-    @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
             .putLong(to)

@@ -69,7 +69,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     public void init(final ProcessorContext context, final StateStore root) {
         initInternal(context);
         underlying.init(context, root);
-        keySchema.init(context.applicationId());
     }
 
     @SuppressWarnings("unchecked")
