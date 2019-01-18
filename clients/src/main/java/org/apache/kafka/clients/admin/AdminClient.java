@@ -389,14 +389,17 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
-     * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that have already been created after
-     * KIP-113 is fully implemented.
+     * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
+     * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
+     * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
+     * log directory if it is not already there.
+     *
+     * This operation is not transactional so it may succeed for some replicas while fail for others.
      *
      * This is a convenience method for #{@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
      * See the overload for more details.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @return                   The AlterReplicaLogDirsResult
@@ -406,13 +409,14 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that have already been created after
-     * KIP-113 is fully implemented.
+     * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
+     * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
+     * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
+     * log directory if it is not already there.
      *
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir

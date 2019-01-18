@@ -18,9 +18,13 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,14 +33,17 @@ import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
+import java.util.stream.Collectors;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -63,8 +70,7 @@ public class Metadata implements Closeable {
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
-    private Cluster cluster;
-    private Set<String> unavailableTopics = Collections.emptySet();
+    private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
     /* Topics with expiry time */
     private final Map<String, Long> topics;
@@ -74,6 +80,7 @@ public class Metadata implements Closeable {
     private final boolean allowAutoTopicCreation;
     private final boolean topicExpiryEnabled;
     private boolean isClosed;
+    private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
 
     public Metadata(long refreshBackoffMs,
                     long metadataExpireMs,
@@ -103,20 +110,20 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
         this.version = 0;
-        this.cluster = Cluster.empty();
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
         this.clusterResourceListeners = clusterResourceListeners;
         this.needMetadataForAllTopics = false;
         this.isClosed = false;
+        this.lastSeenLeaderEpochs = new HashMap<>();
     }
 
     /**
      * Get the current cluster info without blocking
      */
     public synchronized Cluster fetch() {
-        return this.cluster;
+        return cache.cluster();
     }
 
     /**
@@ -162,11 +169,66 @@ public class Metadata implements Closeable {
     }
 
     /**
+     * Request an update for the partition metadata iff the given leader epoch is at newer than the last seen leader epoch
+     */
+    public synchronized boolean updateLastSeenEpochIfNewer(TopicPartition topicPartition, int leaderEpoch) {
+        Objects.requireNonNull(topicPartition, "TopicPartition cannot be null");
+        return updateLastSeenEpoch(topicPartition, leaderEpoch, oldEpoch -> leaderEpoch > oldEpoch, true);
+    }
+
+
+    // Visible for testing
+    Optional<Integer> lastSeenLeaderEpoch(TopicPartition topicPartition) {
+        return Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition));
+    }
+
+    /**
+     * Conditionally update the leader epoch for a partition
+     *
+     * @param topicPartition topic+partition to update the epoch for
+     * @param epoch the new epoch
+     * @param epochTest a predicate to determine if the old epoch should be replaced
+     * @param setRequestUpdateFlag sets the "needUpdate" flag to true if the epoch is updated
+     * @return true if the epoch was updated, false otherwise
+     */
+    private synchronized boolean updateLastSeenEpoch(TopicPartition topicPartition,
+                                                     int epoch,
+                                                     Predicate<Integer> epochTest,
+                                                     boolean setRequestUpdateFlag) {
+        Integer oldEpoch = lastSeenLeaderEpochs.get(topicPartition);
+        log.trace("Determining if we should replace existing epoch {} with new epoch {}", oldEpoch, epoch);
+        if (oldEpoch == null || epochTest.test(oldEpoch)) {
+            log.debug("Updating last seen epoch from {} to {} for partition {}", oldEpoch, epoch, topicPartition);
+            lastSeenLeaderEpochs.put(topicPartition, epoch);
+            if (setRequestUpdateFlag) {
+                this.needUpdate = true;
+            }
+            return true;
+        } else {
+            log.debug("Not replacing existing epoch {} with new epoch {}", oldEpoch, epoch);
+            return false;
+        }
+    }
+
+    /**
      * Check whether an update has been explicitly requested.
      * @return true if an update was requested, false otherwise
      */
     public synchronized boolean updateRequested() {
         return this.needUpdate;
+    }
+
+    /**
+     * Return the cached partition info if it exists and a newer leader epoch isn't known about.
+     */
+    public synchronized Optional<PartitionInfo> partitionInfoIfCurrent(TopicPartition topicPartition) {
+        Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
+        if (epoch == null) {
+            // old cluster format (no epochs)
+            return cache.getPartitionInfo(topicPartition);
+        } else {
+            return cache.getPartitionInfoHavingEpoch(topicPartition, epoch);
+        }
     }
 
     /**
@@ -213,6 +275,14 @@ public class Metadata implements Closeable {
      * @param topics
      */
     public synchronized void setTopics(Collection<String> topics) {
+        Set<TopicPartition> partitionsToRemove = lastSeenLeaderEpochs.keySet()
+                .stream()
+                .filter(tp -> !topics.contains(tp.topic()))
+                .collect(Collectors.toSet());
+        partitionsToRemove.forEach(lastSeenLeaderEpochs::remove);
+
+        cache.retainTopics(topics);
+
         if (!this.topics.keySet().containsAll(topics)) {
             requestUpdateForNewTopics();
         }
@@ -242,7 +312,7 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.version += 1;
-        this.cluster = Cluster.bootstrap(addresses);
+        this.cache = MetadataCache.bootstrap(addresses);
     }
 
     /**
@@ -276,27 +346,91 @@ public class Metadata implements Closeable {
             }
         }
 
-        String previousClusterId = cluster.clusterResource().clusterId();
+        String previousClusterId = cache.cluster().clusterResource().clusterId();
 
-        this.cluster = metadataResponse.cluster();
-        this.unavailableTopics = metadataResponse.unavailableTopics();
-
-        fireListeners(cluster, unavailableTopics);
+        this.cache = handleMetadataResponse(metadataResponse, topic -> true);
+        Set<String> unavailableTopics = metadataResponse.unavailableTopics();
+        Cluster clusterForListeners = this.cache.cluster();
+        fireListeners(clusterForListeners, unavailableTopics);
 
         if (this.needMetadataForAllTopics) {
             // the listener may change the interested topics, which could cause another metadata refresh.
             // If we have already fetched all topics, however, another fetch should be unnecessary.
             this.needUpdate = false;
-            this.cluster = metadataResponse.cluster(topics.keySet());
+            this.cache = handleMetadataResponse(metadataResponse, topics.keySet()::contains);
         }
 
-        String newClusterId = cluster.clusterResource().clusterId();
-        if (newClusterId == null ? previousClusterId != null : !newClusterId.equals(previousClusterId))
+        String newClusterId = cache.cluster().clusterResource().clusterId();
+        if (!Objects.equals(previousClusterId, newClusterId)) {
             log.info("Cluster ID: {}", newClusterId);
-        clusterResourceListeners.onUpdate(cluster.clusterResource());
+        }
+        clusterResourceListeners.onUpdate(clusterForListeners.clusterResource());
 
         notifyAll();
-        log.debug("Updated cluster metadata version {} to {}", this.version, this.cluster);
+        log.debug("Updated cluster metadata version {} to {}", this.version, this.cache);
+    }
+
+    /**
+     * Transform a MetadataResponse into a new MetadataCache instance.
+     */
+    private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse, Predicate<String> topicsToRetain) {
+        Set<String> internalTopics = new HashSet<>();
+        List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
+        for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
+            if (!topicsToRetain.test(metadata.topic()))
+                continue;
+
+            if (metadata.error() == Errors.NONE) {
+                if (metadata.isInternal())
+                    internalTopics.add(metadata.topic());
+                for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                        int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
+                    });
+                }
+            }
+        }
+
+        return new MetadataCache(metadataResponse.clusterId(), new ArrayList<>(metadataResponse.brokers()), partitions,
+                metadataResponse.topicsByError(Errors.TOPIC_AUTHORIZATION_FAILED),
+                metadataResponse.topicsByError(Errors.INVALID_TOPIC_EXCEPTION),
+                internalTopics, metadataResponse.controller());
+    }
+
+    /**
+     * Compute the correct PartitionInfo to cache for a topic+partition and pass to the given consumer.
+     */
+    private void updatePartitionInfo(String topic,
+                                     MetadataResponse.PartitionMetadata partitionMetadata,
+                                     Consumer<PartitionInfo> partitionInfoConsumer) {
+
+        TopicPartition tp = new TopicPartition(topic, partitionMetadata.partition());
+        if (partitionMetadata.leaderEpoch().isPresent()) {
+            int newEpoch = partitionMetadata.leaderEpoch().get();
+            // If the received leader epoch is at least the same as the previous one, update the metadata
+            if (updateLastSeenEpoch(tp, newEpoch, oldEpoch -> newEpoch >= oldEpoch, false)) {
+                partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+            } else {
+                // Otherwise ignore the new metadata and use the previously cached info
+                PartitionInfo previousInfo = cache.cluster().partition(tp);
+                if (previousInfo != null) {
+                    partitionInfoConsumer.accept(previousInfo);
+                } else {
+                    if (containsTopic(topic)) {
+                        log.debug("Got an older epoch in partition metadata response for {}, but we are not tracking this topic. " +
+                                "Ignoring metadata update for this partition", tp);
+                    } else {
+                        log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
+                                "info to use. Refusing to update metadata for this partition", tp);
+                    }
+                }
+            }
+        } else {
+            // Old cluster format (no epochs)
+            lastSeenLeaderEpochs.clear();
+            partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+        }
     }
 
     private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {
