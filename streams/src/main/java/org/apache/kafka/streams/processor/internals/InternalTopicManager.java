@@ -204,9 +204,7 @@ public class InternalTopicManager {
             } catch (final ExecutionException couldNotDescribeTopicException) {
                 final Throwable cause = couldNotDescribeTopicException.getCause();
                 if (cause instanceof UnknownTopicOrPartitionException ||
-                    cause instanceof LeaderNotAvailableException ||
-                    (cause instanceof InvalidTopicException &&
-                        cause.getMessage().equals("Topic " + topicName + " not found."))) {
+                    cause instanceof LeaderNotAvailableException) {
                     // This topic didn't exist or leader is not known yet, proceed to try to create it
                     log.debug("Topic {} is unknown or not found, hence not existed yet.", topicName);
                 } else {
