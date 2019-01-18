@@ -249,10 +249,11 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
-    useJUnit {
-      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    if (it.path != ':generator') {
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+      }
     }
-    
   }
 
   jar {
