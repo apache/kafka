@@ -18,14 +18,14 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.hamcrest.core.IsInstanceOf;
 import org.junit.Before;
 import org.junit.Test;
 
-import static java.util.Arrays.asList;
+import java.util.Collections;
+
 import static org.easymock.EasyMock.anyString;
 import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
@@ -38,13 +38,11 @@ import static org.junit.Assert.assertThat;
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
     private static final String UNKNOWN_STORE = "unknown-store";
-    private static final String CHILD_ONE = "childOne";
-    private static final String CHILD_TWO = "childOne";
+    private static final String CHILD_PROCESSOR = "child";
 
     private GlobalProcessorContextImpl globalContext;
 
-    private ProcessorNode childOne;
-    private ProcessorNode childTwo;
+    private ProcessorNode child;
     private ProcessorRecordContext recordContext;
 
     @Before
@@ -69,16 +67,13 @@ public class GlobalProcessorContextImplTest {
         final ProcessorNode processorNode = mock(ProcessorNode.class);
         globalContext.setCurrentNode(processorNode);
 
-        childOne = mock(ProcessorNode.class);
-        childTwo = mock(ProcessorNode.class);
+        child = mock(ProcessorNode.class);
 
         expect(processorNode.children())
-            .andReturn(asList(childOne, childTwo))
+            .andReturn(Collections.singletonList(child))
             .anyTimes();
-        expect(processorNode.getChild(CHILD_ONE))
-            .andReturn(childOne);
-        expect(processorNode.getChild(CHILD_TWO))
-            .andReturn(childTwo);
+        expect(processorNode.getChild(CHILD_PROCESSOR))
+            .andReturn(child);
         expect(processorNode.getChild(anyString()))
             .andReturn(null);
         replay(processorNode);
@@ -95,46 +90,18 @@ public class GlobalProcessorContextImplTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldForwardToAllChildren() {
-        childOne.process(null, null);
-        expectLastCall();
-        childTwo.process(null, null);
+    public void shouldForwardToSingleChild() {
+        child.process(null, null);
         expectLastCall();
 
-        replay(childOne, childTwo, recordContext);
+        replay(child, recordContext);
         globalContext.forward(null, null);
-        verify(childOne, childTwo, recordContext);
+        verify(child, recordContext);
     }
 
-    @Test(expected = StreamsException.class)
-    public void shouldFailToForwardToUnknownChild() {
-        globalContext.forward(null, null, To.child("unknownProcessorName"));
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldForwardToSpecifiedChild() {
-        childOne.process(null, null);
-        expectLastCall();
-
-        replay(childOne, childTwo, recordContext);
-        globalContext.forward(null, null, To.child(CHILD_ONE));
-        verify(childOne, childTwo, recordContext);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldSetTimestampOnForward() {
-        childOne.process(null, null);
-        expectLastCall();
-        childTwo.process(null, null);
-        expectLastCall();
-        recordContext.setTimestamp(42L);
-        expectLastCall();
-
-        replay(childOne, childTwo, recordContext);
-        globalContext.forward(null, null, To.all().withTimestamp(42L));
-        verify(childOne, childTwo, recordContext);
+    @Test(expected = IllegalStateException.class)
+    public void shouldFailToForwardUsingToParameter() {
+        globalContext.forward(null, null, To.all());
     }
 
     @Test(expected = UnsupportedOperationException.class)
