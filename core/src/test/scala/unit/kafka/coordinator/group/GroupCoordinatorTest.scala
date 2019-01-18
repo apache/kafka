@@ -198,13 +198,14 @@ class GroupCoordinatorTest extends JUnitSuite {
     var futures = ArrayBuffer[Future[JoinGroupResult]]()
     val rebalanceTimeout = GroupInitialRebalanceDelay * 2
 
-    for (_ <- 1.to(GroupMaxSize)) {
+    for (i <- 1.to(GroupMaxSize)) {
       futures += sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
-      timer.advanceClock(GroupInitialRebalanceDelay)
+      if (i != 1)
+        timer.advanceClock(GroupInitialRebalanceDelay)
       EasyMock.reset(replicaManager)
     }
     // advance clock beyond rebalanceTimeout
-    timer.advanceClock(1)
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
     for (future <- futures) {
       assertEquals(Errors.NONE, await(future, 1).error)
     }

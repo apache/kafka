@@ -48,7 +48,6 @@ import scala.math.max
  * since the delayed operation is completed only if the group lock can be acquired.
  */
 class GroupCoordinator(val brokerId: Int,
-                       val groupMaxSize: Int,
                        val groupConfig: GroupConfig,
                        val offsetConfig: OffsetConfig,
                        val groupManager: GroupMetadataManager,
@@ -159,12 +158,9 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
+      } else if (groupIsFull(group)) {
+        responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
       } else {
-        if (groupIsFull(group)) {
-          responseCallback(joinError(NoMemberId, Errors.GROUP_MAX_SIZE_REACHED))
-          return
-        }
-
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
         if (requireKnownMemberId) {
           // If member id required, register the member in the pending member list
@@ -657,8 +653,8 @@ class GroupCoordinator(val brokerId: Int,
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
       assert(group.is(Stable) || group.is(Empty))
       if (groupIsOverCapacity(group)) {
-        group.shrinkTo(groupMaxSize)
-        prepareRebalance(group, s"Freshly-loaded group was over capacity ($groupMaxSize).")
+        group.shrinkTo(groupConfig.groupMaxSize)
+        prepareRebalance(group, s"Freshly-loaded group was over capacity ($groupConfig.groupMaxSize).")
       }
 
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
@@ -754,7 +750,6 @@ class GroupCoordinator(val brokerId: Int,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback): Unit = {
-    val memberId = clientId + "-" + group.generateMemberIdSuffix
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
 
@@ -932,11 +927,11 @@ class GroupCoordinator(val brokerId: Int,
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
 
   private def groupIsFull(group: GroupMetadata): Boolean = {
-    group.size == groupMaxSize || groupIsOverCapacity(group)
+    group.size == groupConfig.groupMaxSize || groupIsOverCapacity(group)
   }
 
   private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
-    group.size > groupMaxSize
+    group.size > groupConfig.groupMaxSize
   }
 
   private def isCoordinatorForGroup(groupId: String) = groupManager.isGroupLocal(groupId)
@@ -988,17 +983,19 @@ object GroupCoordinator {
     val offsetConfig = this.offsetConfig(config)
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
+      groupMaxSize = config.groupMaxSize,
       groupInitialRebalanceDelayMs = config.groupInitialRebalanceDelay)
 
     val groupMetadataManager = new GroupMetadataManager(config.brokerId, config.interBrokerProtocolVersion,
       offsetConfig, replicaManager, zkClient, time)
-    new GroupCoordinator(config.brokerId, config.groupMaxSize, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
+    new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
 }
 
 case class GroupConfig(groupMinSessionTimeoutMs: Int,
                        groupMaxSessionTimeoutMs: Int,
+                       groupMaxSize: Int,
                        groupInitialRebalanceDelayMs: Int)
 
 case class JoinGroupResult(members: Map[String, Array[Byte]],
