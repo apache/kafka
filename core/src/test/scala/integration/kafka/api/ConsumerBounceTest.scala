@@ -320,8 +320,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
-    val receivedExceptions = new ArrayBuffer[Exception]()
-    var receivedInitialException: Option[Exception] = None
+    val receivedExceptions = new ArrayBuffer[Throwable]()
     var kickedOutConsumerIdx: Option[Int] = None
     val lock = new ReentrantLock
     breakable { for (broker <- servers.indices) {
@@ -333,49 +332,43 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
       // compute consumptions in a non-blocking way in order to account for the rebalance once the group.size takes effect
       val consumeFutures = new ArrayBuffer[SFuture[Any]]
+      // roll clusters until the group moves to a Coordinator with the new config
       stableConsumers.indices.foreach(idx => {
         val currentConsumer = stableConsumers(idx)
         val consumeFuture: SFuture[Any] = SFuture {
-          var receivedExc: Option[Exception] = None
-          receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000,
-          new ExceptionCallback(onException = e => {
-            receivedExc = Some(e) // save exception to map later
-          }))
+          try {
+            receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000)
+            CoreUtils.inLock(lock) { successfulConsumes += 1 }
+          } catch {
+            case e: Throwable => {
+              if (e.isInstanceOf[GroupMaxSizeReachedException]) {
+                kickedOutConsumerIdx = Some(idx)
+              }
 
-          CoreUtils.inLock(lock) {
-            receivedExc match {
-              case Some(received) =>
-                if (received.isInstanceOf[GroupMaxSizeReachedException]) {
-                  kickedOutConsumerIdx = Some(idx)
-                }
-                receivedExceptions += received
-              case None => successfulConsumes += 1
+              CoreUtils.inLock(lock) { receivedExceptions += e }
             }
           }
-
         }(ExecutionContext.fromExecutor(executor))
 
         consumeFutures += consumeFuture
       })
       Await.result(SFuture.sequence(consumeFutures), Duration("25sec"))
 
-      if (receivedExceptions.nonEmpty && (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException]))) {
-        fail(s"Expected to only receive one exception of type ${classOf[GroupMaxSizeReachedException]}" +
-          s"during consumption. Received: $receivedExceptions")
-      } else if (receivedExceptions.nonEmpty) {
-        receivedInitialException = Some(receivedExceptions(0))
+      if (receivedExceptions.nonEmpty) {
+        if (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException])) {
+          fail(s"Expected to only receive one exception of type ${classOf[GroupMaxSizeReachedException]}" +
+            s"during consumption. Received: $receivedExceptions")
+        }
         // validate N-1 consumers consumed
         assertEquals(maxGroupSize, successfulConsumes)
         break
       }
-
       val config = newConfigs(broker)
       servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
       restartDeadBrokers()
     }}
     if (receivedExceptions.isEmpty)
       fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
-
 
     stableConsumers.remove(kickedOutConsumerIdx.get)
     sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
@@ -411,20 +404,21 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val stableConsumers = ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
     for (i <- 1.to(consumerCount)) {
       val newConsumer = createConsumerWithGroupId(groupId)
-      waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = () => {}, topic = topic),
+      waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, topic = topic),
         executor = executor, stableConsumers:_*)
       stableConsumers += newConsumer
     }
     stableConsumers
   }
 
-  def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], executor: ExecutorService, revokeSemaphore: Option[Semaphore] = None, onException: () => Unit, topic: String = topic): Future[Any] = {
+  def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], executor: ExecutorService, revokeSemaphore: Option[Semaphore] = None,
+                       onException: Exception => Unit = e => { throw e }, topic: String = topic): Future[Any] = {
     executor.submit(CoreUtils.runnable {
       try {
         consumer.subscribe(Collections.singletonList(topic))
         consumer.poll(0)
       } catch {
-        case e: Exception => onException.apply()
+        case e: Exception => onException.apply(e)
       }
     }, 0)
   }
@@ -454,7 +448,8 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     // next consumer should raise an exception
     val newConsumer = createConsumerWithGroupId(groupId)
     var failedRebalance = false
-    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = () => {failedRebalance = true}), executor = executor, stableConsumers:_*)
+    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = _ => {failedRebalance = true}),
+      executor = executor, stableConsumers:_*)
     assertTrue("Rebalance did not fail as expected", failedRebalance)
 
     stableConsumers
@@ -548,44 +543,22 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     consumer
   }
 
-  class ExceptionCallback(val onException: Exception => Unit = e => throw e) {
-    var called: Boolean = false
-
-    def call(e: Exception): Unit = {
-      called = true
-      onException(e)
-    }
-  }
-
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000,
-                             exceptionCallback: ExceptionCallback = new ExceptionCallback()): Long = {
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000): Long = {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
-    try {
-      while (received < numRecords && System.currentTimeMillis < endTimeMs)
-        received += consumer.poll(100).count()
-    } catch {
-      case e: Exception => exceptionCallback.call(e)
-    }
+    while (received < numRecords && System.currentTimeMillis < endTimeMs)
+      received += consumer.poll(100).count()
 
     received
   }
 
-  private def receiveExactRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000,
-                                  exceptionCallback: ExceptionCallback = new ExceptionCallback()): Unit = {
-    val received = receiveRecords(consumer, numRecords, timeoutMs, exceptionCallback)
-    if (exceptionCallback.called)
-      return
-
+  private def receiveExactRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs)
     assertEquals(numRecords, received)
   }
 
-  private def receiveAtLeastRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long,
-                                    exceptionCallback: ExceptionCallback = new ExceptionCallback()): Unit = {
-    val received = receiveRecords(consumer, numRecords, timeoutMs, exceptionCallback)
-    if (exceptionCallback.called)
-      return
-
+  private def receiveAtLeastRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs)
     assertTrue(s"Received $received, expected at least $numRecords", numRecords <= received)
     consumer.commitSync()
   }
