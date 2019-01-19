@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class InMemoryKeyValueWithTimestampStore<K, V> implements KeyValueWithTimestampStore<K, V> {
+public class InMemoryTimestampedKeyValueStore<K, V> implements TimestampedKeyValueStore<K, V> {
     private final String name;
     private final Serde<K> keySerde;
     private final ValueAndTimestampSerde<V> valueAndTimestampSerde;
@@ -41,9 +41,9 @@ public class InMemoryKeyValueWithTimestampStore<K, V> implements KeyValueWithTim
 
     private StateSerdes<K, ValueAndTimestamp<V>> serdes;
 
-    public InMemoryKeyValueWithTimestampStore(final String name,
-                                              final Serde<K> keySerde,
-                                              final ValueAndTimestampSerde<V> valueAndTimestampSerde) {
+    public InMemoryTimestampedKeyValueStore(final String name,
+                                            final Serde<K> keySerde,
+                                            final ValueAndTimestampSerde<V> valueAndTimestampSerde) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueAndTimestampSerde = valueAndTimestampSerde;

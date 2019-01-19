@@ -31,7 +31,7 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.KeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -85,8 +85,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueWithTimestampStore) {
-                return new KeyValueWithTimestampStoreReadOnlyDecorator((KeyValueWithTimestampStore) global);
+            if (global instanceof TimestampedKeyValueStore) {
+                return new TimestampedKeyValueStoreReadOnlyDecorator((TimestampedKeyValueStore) global);
             } else if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
             } else if (global instanceof WindowStore) {
@@ -109,8 +109,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         final StateStore store = stateManager.getStore(name);
-        if (store instanceof KeyValueWithTimestampStore) {
-            return new KeyValueWithTimestampStoreReadWriteDecorator((KeyValueWithTimestampStore) store);
+        if (store instanceof TimestampedKeyValueStore) {
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
         } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof WindowStore) {
@@ -301,11 +301,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class KeyValueWithTimestampStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<KeyValueWithTimestampStore<K, V>>
-        implements KeyValueWithTimestampStore<K, V> {
+    private static class TimestampedKeyValueStoreReadOnlyDecorator<K, V>
+        extends StateStoreReadOnlyDecorator<TimestampedKeyValueStore<K, V>>
+        implements TimestampedKeyValueStore<K, V> {
 
-        private KeyValueWithTimestampStoreReadOnlyDecorator(final KeyValueWithTimestampStore<K, V> inner) {
+        private TimestampedKeyValueStoreReadOnlyDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
         }
 
@@ -546,11 +546,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class KeyValueWithTimestampStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<KeyValueWithTimestampStore<K, V>>
-        implements KeyValueWithTimestampStore<K, V> {
+    private static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
+        extends StateStoreReadWriteDecorator<TimestampedKeyValueStore<K, V>>
+        implements TimestampedKeyValueStore<K, V> {
 
-        private KeyValueWithTimestampStoreReadWriteDecorator(final KeyValueWithTimestampStore<K, V> inner) {
+        private TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
         }
 
