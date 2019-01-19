@@ -19,7 +19,6 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -27,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -175,9 +175,14 @@ public class EmbeddedConnectCluster {
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
         try {
             return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
-        } catch (NotFoundException e) {
+        } catch (ConnectRestException e) {
             //  the connector doesn't exist in the cluster yet
-            return null;
+            if (e.statusCode() == Response.Status.NOT_FOUND.getStatusCode()) {
+                log.warn("Could not find connector '{}' in cluster.", connectorName);
+                return null;
+            } else {
+                throw e;
+            }
         } catch (IOException e) {
             log.error("Could not read connector state", e);
             throw new ConnectException("Could not read connector state", e);
@@ -224,7 +229,7 @@ public class EmbeddedConnectCluster {
      *
      * @param url the HTTP endpoint
      * @return response body encoded as a String
-     * @throws NotFoundException if the HTTP request returns a 404
+     * @throws ConnectRestException if the HTTP request fails with a valid status code
      * @throws IOException for any other I/O error.
      */
     public String executeGet(String url) throws IOException {
@@ -241,10 +246,12 @@ public class EmbeddedConnectCluster {
             log.debug("Get response for URL={} is {}", url, response);
             return response.toString();
         } catch (IOException e) {
-            if (httpCon.getResponseCode() == 404) {
-                throw new NotFoundException("Invalid endpoint: " + url, e);
+            Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());
+            if (status != null) {
+                throw new ConnectRestException(status, "Invalid endpoint: " + url, e);
+            } else {
+                throw e;
             }
-            throw e;
         }
     }
 
