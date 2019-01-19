@@ -21,6 +21,8 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
+import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -33,11 +35,11 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
 
     private final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal;
 
+    @SuppressWarnings("unchecked")
     MaterializedKTableKTableJoinNode(final String nodeName,
                          final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner,
                          final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
                          final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
                          final String thisJoinSide,
                          final String otherJoinSide,
                          final Serde<K> keySerde,
@@ -48,7 +50,12 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
             valueJoiner,
             joinThisProcessorParameters,
             joinOtherProcessorParameters,
-            joinMergeProcessorParameters,
+            new ProcessorParameters<>(
+                KTableKTableJoinMerger.of(
+                    (KTableProcessorSupplier<K, V1, VR>) (joinThisProcessorParameters.processorSupplier()),
+                    (KTableProcessorSupplier<K, V2, VR>) (joinOtherProcessorParameters.processorSupplier()),
+                    materializedInternal.storeName()),
+                nodeName),
             thisJoinSide,
             otherJoinSide,
             keySerde,
@@ -68,6 +75,11 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
     public Serde<VR> valueSerde() {
         // Use materialization valueSerde, instead of default valueSerde.
         return materializedInternal.valueSerde();
+    }
+
+    @Override
+    public String queryableStoreName() {
+        return materializedInternal.storeName();
     }
 
     @Override

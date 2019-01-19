@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
+import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -75,6 +76,18 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
         return joinOtherStoreNames;
     }
 
+    /**
+     * The name of queryableStore, which stores the join results.
+     */
+    public abstract String queryableStoreName();
+
+    /**
+     * The supplier which provides processor with KTable-KTable join merge functionality.
+     */
+    public KTableKTableJoinMerger<K, VR> joinMerger() {
+        return (KTableKTableJoinMerger<K, VR>) mergeProcessorParameters().processorSupplier();
+    }
+
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String thisProcessorName = thisProcessorParameters().processorName();
@@ -110,7 +123,6 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
         private String nodeName;
         private ProcessorParameters<K, Change<V1>> joinThisProcessorParameters;
         private ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters;
-        private ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters;
         private ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner;
         private String thisJoinSide;
         private String otherJoinSide;
@@ -140,11 +152,6 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
 
         public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
-            return this;
-        }
-
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinMergeProcessorParameters(final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters) {
-            this.joinMergeProcessorParameters = joinMergeProcessorParameters;
             return this;
         }
 
@@ -186,7 +193,6 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
                     valueJoiner,
                     joinThisProcessorParameters,
                     joinOtherProcessorParameters,
-                    joinMergeProcessorParameters,
                     thisJoinSide,
                     otherJoinSide,
                     keySerde,
@@ -197,7 +203,6 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
                     valueJoiner,
                     joinThisProcessorParameters,
                     joinOtherProcessorParameters,
-                    joinMergeProcessorParameters,
                     thisJoinSide,
                     otherJoinSide,
                     keySerde,

@@ -465,9 +465,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                           final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
-        final String internalQueryableName = materializedInternal == null ? null : materializedInternal.storeName();
-        final String joinMergeName = builder.newProcessorName(MERGE_NAME);
 
+        final String joinMergeName = builder.newProcessorName(MERGE_NAME);
         final Set<String> allSourceNodes = ensureJoinableWith((AbstractStream<K, VO>) other);
 
         if (leftOuter) {
@@ -476,9 +475,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         if (rightOuter) {
             ((KTableImpl) other).enableSendingOldValues();
         }
-
-        final String joinThisName = builder.newProcessorName(JOINTHIS_NAME);
-        final String joinOtherName = builder.newProcessorName(JOINOTHER_NAME);
 
         final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
         final KTableKTableAbstractJoin<K, VR, VO, V> joinOther;
@@ -494,37 +490,35 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
         }
 
-        final KTableKTableJoinMerger<K, VR> joinMerge = new KTableKTableJoinMerger<>(joinThis, joinOther, internalQueryableName);
+        final String joinThisName = builder.newProcessorName(JOINTHIS_NAME);
+        final String joinOtherName = builder.newProcessorName(JOINOTHER_NAME);
+
+        final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
+        final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
 
         final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, V, VO, VR> kTableJoinNodeBuilder =
             KTableKTableJoinNode.kTableKTableJoinNodeBuilder(builder);
 
-        final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
-        final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters = new ProcessorParameters<>(joinMerge, joinMergeName);
-
-        kTableJoinNodeBuilder.withNodeName(joinMergeName)
+        final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode = kTableJoinNodeBuilder.withNodeName(joinMergeName)
             .withJoinThisProcessorParameters(joinThisProcessorParameters)
             .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
-            .withJoinMergeProcessorParameters(joinMergeProcessorParameters)
             .withThisJoinSideNodeName(name)
             .withOtherJoinSideNodeName(((KTableImpl) other).name)
             .withKeySerde(keySerde)
             .withJoinThisStoreNames(valueGetterSupplier().storeNames())
             .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
-            .withMaterializedInternal(materializedInternal);
-
-        final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
+            .withMaterializedInternal(materializedInternal)
+            .build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
         // we can inherit parent key serde if user do not provide specific overrides
         return new KTableImpl<K, Change<VR>, VR>(
-            joinMergeName,
+            kTableKTableJoinNode.nodeName(),
             kTableKTableJoinNode.keySerde(),
             kTableKTableJoinNode.valueSerde(),
             allSourceNodes,
-            internalQueryableName,
-            joinMerge,
+            kTableKTableJoinNode.queryableStoreName(),
+            kTableKTableJoinNode.joinMerger(),
             kTableKTableJoinNode,
             builder
         );

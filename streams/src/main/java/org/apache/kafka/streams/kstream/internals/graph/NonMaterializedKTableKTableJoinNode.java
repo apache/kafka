@@ -20,16 +20,18 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
+import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 
 import java.util.Arrays;
 
 public class NonMaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTableJoinNode<K, V1, V2, VR> {
 
+    @SuppressWarnings("unchecked")
     NonMaterializedKTableKTableJoinNode(final String nodeName,
                          final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner,
                          final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
                          final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
                          final String thisJoinSide,
                          final String otherJoinSide,
                          final Serde<K> keySerde,
@@ -40,12 +42,21 @@ public class NonMaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKT
             valueJoiner,
             joinThisProcessorParameters,
             joinOtherProcessorParameters,
-            joinMergeProcessorParameters,
+            new ProcessorParameters<>(
+                KTableKTableJoinMerger.of(
+                    (KTableProcessorSupplier<K, V1, VR>) (joinThisProcessorParameters.processorSupplier()),
+                    (KTableProcessorSupplier<K, V2, VR>) (joinOtherProcessorParameters.processorSupplier())),
+                nodeName),
             thisJoinSide,
             otherJoinSide,
             keySerde,
             joinThisStoreNames,
             joinOtherStoreNames);
+    }
+
+    @Override
+    public String queryableStoreName() {
+        return null;
     }
 
     @Override

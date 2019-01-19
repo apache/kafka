@@ -25,7 +25,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     private final KTableProcessorSupplier<K, ?, V> parent1;
     private final KTableProcessorSupplier<K, ?, V> parent2;
@@ -76,6 +76,17 @@ class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
         parent1.enableSendingOldValues();
         parent2.enableSendingOldValues();
         sendOldValues = true;
+    }
+
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, V> parent2) {
+        return of(parent1, parent2, null);
+    }
+
+    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
+                                                         final KTableProcessorSupplier<K, ?, V> parent2,
+                                                         final String queryableName) {
+        return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
     }
 
     private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
