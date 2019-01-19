@@ -27,9 +27,12 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampImpl;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -55,35 +58,44 @@ public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
     private static final String KEY = "key";
-    private static final long VAL = 42L;
+    private static final long VALUE = 42L;
+    private static final ValueAndTimestamp<Long> VALUE_AND_TIMESTAMP = new ValueAndTimestampImpl<>(42L, 21L);
     private static final String STORE_NAME = "underlying-store";
 
     private boolean flushExecuted;
     private boolean putExecuted;
+    private boolean putWithTimestampExecuted;
     private boolean putIfAbsentExecuted;
+    private boolean putIfAbsentWithTimestampExecuted;
     private boolean putAllExecuted;
     private boolean deleteExecuted;
     private boolean removeExecuted;
     private boolean put3argExecuted;
 
     private KeyValueIterator<String, Long> rangeIter;
+    private KeyValueIterator<String, ValueAndTimestamp<Long>> timestampedRangeIter;
     private KeyValueIterator<String, Long> allIter;
+    private KeyValueIterator<String, ValueAndTimestamp<Long>> timestampedAllIter;
 
-    private List<KeyValueIterator<Windowed<String>, Long>> iters = new ArrayList<>(7);
+    private final List<KeyValueIterator<Windowed<String>, Long>> iters = new ArrayList<>(7);
     private WindowStoreIterator<Long> windowStoreIter;
 
     @Before
     public void setup() {
         flushExecuted = false;
         putExecuted = false;
+        putWithTimestampExecuted = false;
         putIfAbsentExecuted = false;
+        putIfAbsentWithTimestampExecuted = false;
         putAllExecuted = false;
         deleteExecuted = false;
         removeExecuted = false;
         put3argExecuted = false;
 
         rangeIter = mock(KeyValueIterator.class);
+        timestampedRangeIter = mock(KeyValueIterator.class);
         allIter = mock(KeyValueIterator.class);
+        timestampedAllIter = mock(KeyValueIterator.class);
         windowStoreIter = mock(WindowStoreIterator.class);
 
         for (int i = 0; i < 7; i++) {
@@ -99,11 +111,13 @@ public class ProcessorContextImplTest {
         final ProcessorStateManager stateManager = mock(ProcessorStateManager.class);
 
         expect(stateManager.getGlobalStore("GlobalKeyValueStore")).andReturn(keyValueStoreMock());
+        expect(stateManager.getGlobalStore("GlobalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
         expect(stateManager.getGlobalStore("GlobalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getGlobalStore("GlobalSessionStore")).andReturn(sessionStoreMock());
         expect(stateManager.getGlobalStore(anyString())).andReturn(null);
 
         expect(stateManager.getStore("LocalKeyValueStore")).andReturn(keyValueStoreMock());
+        expect(stateManager.getStore("LocalTimestampedKeyValueStore")).andReturn(timestampedKeyValueStoreMock());
         expect(stateManager.getStore("LocalWindowStore")).andReturn(windowStoreMock());
         expect(stateManager.getStore("LocalSessionStore")).andReturn(sessionStoreMock());
 
@@ -120,7 +134,7 @@ public class ProcessorContextImplTest {
         );
 
         context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
-            new HashSet<>(asList("LocalKeyValueStore", "LocalWindowStore", "LocalSessionStore"))));
+            new HashSet<>(asList("LocalKeyValueStore", "LocalTimestampedKeyValueStore", "LocalWindowStore", "LocalSessionStore"))));
     }
 
     @Test
@@ -134,10 +148,30 @@ public class ProcessorContextImplTest {
             checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
             checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
 
-            assertEquals((Long) VAL, store.get(KEY));
+            assertEquals((Long) VALUE, store.get(KEY));
             assertEquals(rangeIter, store.range("one", "two"));
             assertEquals(allIter, store.all());
-            assertEquals(VAL, store.approximateNumEntries());
+            assertEquals(VALUE, store.approximateNumEntries());
+        });
+    }
+
+    @Test
+    public void globalTimestampedKeyValueStoreShouldBeReadOnly() {
+        doTest("GlobalTimestampedKeyValueStore", (Consumer<TimestampedKeyValueStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            checkThrowsUnsupportedOperation(store::flush, "flush()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", 1L, 1L), "put()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", new ValueAndTimestampImpl<>(1L, 1L)), "put()");
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", 1L, 1L), "putIfAbsent()");
+            checkThrowsUnsupportedOperation(() -> store.putIfAbsent("1", new ValueAndTimestampImpl<>(1L, 1L)), "putIfAbsent()");
+            checkThrowsUnsupportedOperation(() -> store.putAll(Collections.emptyList()), "putAll()");
+            checkThrowsUnsupportedOperation(() -> store.delete("1"), "delete()");
+
+            assertEquals(VALUE_AND_TIMESTAMP, store.get(KEY));
+            assertEquals(timestampedRangeIter, store.range("one", "two"));
+            assertEquals(timestampedAllIter, store.all());
+            assertEquals(VALUE, store.approximateNumEntries());
         });
     }
 
@@ -153,7 +187,7 @@ public class ProcessorContextImplTest {
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
             assertEquals(iters.get(1), store.fetch(KEY, KEY, 0L, 1L));
-            assertEquals((Long) VAL, store.fetch(KEY, 1L));
+            assertEquals((Long) VALUE, store.fetch(KEY, 1L));
             assertEquals(iters.get(2), store.all());
         });
     }
@@ -194,10 +228,43 @@ public class ProcessorContextImplTest {
             store.delete("1");
             assertTrue(deleteExecuted);
 
-            assertEquals((Long) VAL, store.get(KEY));
+            assertEquals((Long) VALUE, store.get(KEY));
             assertEquals(rangeIter, store.range("one", "two"));
             assertEquals(allIter, store.all());
-            assertEquals(VAL, store.approximateNumEntries());
+            assertEquals(VALUE, store.approximateNumEntries());
+        });
+    }
+
+    @Test
+    public void localTimestampedKeyValueStoreShouldNotAllowInitOrClose() {
+        doTest("LocalTimestampedKeyValueStore", (Consumer<TimestampedKeyValueStore<String, Long>>) store -> {
+            verifyStoreCannotBeInitializedOrClosed(store);
+
+            store.flush();
+            assertTrue(flushExecuted);
+
+            store.put("1", 1L, 1L);
+            assertTrue(putExecuted);
+
+            store.put("1", new ValueAndTimestampImpl<>(1L, 1L));
+            assertTrue(putWithTimestampExecuted);
+
+            store.putIfAbsent("1", 1L, 1L);
+            assertTrue(putIfAbsentExecuted);
+
+            store.putIfAbsent("1", new ValueAndTimestampImpl<>(1L, 1L));
+            assertTrue(putIfAbsentWithTimestampExecuted);
+
+            store.putAll(Collections.emptyList());
+            assertTrue(putAllExecuted);
+
+            store.delete("1");
+            assertTrue(deleteExecuted);
+
+            assertEquals(VALUE_AND_TIMESTAMP, store.get(KEY));
+            assertEquals(timestampedRangeIter, store.range("one", "two"));
+            assertEquals(timestampedAllIter, store.all());
+            assertEquals(VALUE, store.approximateNumEntries());
         });
     }
 
@@ -218,7 +285,7 @@ public class ProcessorContextImplTest {
             assertEquals(iters.get(0), store.fetchAll(0L, 0L));
             assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
             assertEquals(iters.get(1), store.fetch(KEY, KEY, 0L, 1L));
-            assertEquals((Long) VAL, store.fetch(KEY, 1L));
+            assertEquals((Long) VALUE, store.fetch(KEY, 1L));
             assertEquals(iters.get(2), store.all());
         });
     }
@@ -250,8 +317,8 @@ public class ProcessorContextImplTest {
 
         initStateStoreMock(keyValueStoreMock);
 
-        expect(keyValueStoreMock.get(KEY)).andReturn(VAL);
-        expect(keyValueStoreMock.approximateNumEntries()).andReturn(VAL);
+        expect(keyValueStoreMock.get(KEY)).andReturn(VALUE);
+        expect(keyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
 
         expect(keyValueStoreMock.range("one", "two")).andReturn(rangeIter);
         expect(keyValueStoreMock.all()).andReturn(allIter);
@@ -286,6 +353,60 @@ public class ProcessorContextImplTest {
         return keyValueStoreMock;
     }
 
+    @SuppressWarnings("unchecked")
+    private TimestampedKeyValueStore<String, Long> timestampedKeyValueStoreMock() {
+        final TimestampedKeyValueStore<String, Long> timestampedKeyValueStoreMock = mock(TimestampedKeyValueStore.class);
+
+        initStateStoreMock(timestampedKeyValueStoreMock);
+
+        expect(timestampedKeyValueStoreMock.get(KEY)).andReturn(VALUE_AND_TIMESTAMP);
+        expect(timestampedKeyValueStoreMock.approximateNumEntries()).andReturn(VALUE);
+
+        expect(timestampedKeyValueStoreMock.range("one", "two")).andReturn(timestampedRangeIter);
+        expect(timestampedKeyValueStoreMock.all()).andReturn(timestampedAllIter);
+
+
+        timestampedKeyValueStoreMock.put(anyString(), anyLong(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putExecuted = true;
+            return null;
+        });
+
+        timestampedKeyValueStoreMock.put(anyString(), anyObject(ValueAndTimestamp.class));
+        expectLastCall().andAnswer(() -> {
+            putWithTimestampExecuted = true;
+            return null;
+        });
+
+        timestampedKeyValueStoreMock.putIfAbsent(anyString(), anyLong(), anyLong());
+        expectLastCall().andAnswer(() -> {
+            putIfAbsentExecuted = true;
+            return null;
+        });
+
+        timestampedKeyValueStoreMock.putIfAbsent(anyString(), anyObject(ValueAndTimestamp.class));
+        expectLastCall().andAnswer(() -> {
+            putIfAbsentWithTimestampExecuted = true;
+            return null;
+        });
+
+        timestampedKeyValueStoreMock.putAll(anyObject(List.class));
+        expectLastCall().andAnswer(() -> {
+            putAllExecuted = true;
+            return null;
+        });
+
+        timestampedKeyValueStoreMock.delete(anyString());
+        expectLastCall().andAnswer(() -> {
+            deleteExecuted = true;
+            return null;
+        });
+
+        replay(timestampedKeyValueStoreMock);
+
+        return timestampedKeyValueStoreMock;
+    }
+
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
@@ -294,7 +415,7 @@ public class ProcessorContextImplTest {
         expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(iters.get(0));
         expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(iters.get(1));
         expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
-        expect(windowStore.fetch(anyString(), anyLong())).andReturn(VAL);
+        expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE);
         expect(windowStore.all()).andReturn(iters.get(2));
 
         windowStore.put(anyString(), anyLong());
