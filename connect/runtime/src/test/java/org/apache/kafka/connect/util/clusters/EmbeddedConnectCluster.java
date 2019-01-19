@@ -250,7 +250,6 @@ public class EmbeddedConnectCluster {
             if (status != null) {
                 throw new ConnectRestException(status, "Invalid endpoint: " + url, e);
             }
-
             // invalid response code, re-throw the IOException.
             throw e;
         }

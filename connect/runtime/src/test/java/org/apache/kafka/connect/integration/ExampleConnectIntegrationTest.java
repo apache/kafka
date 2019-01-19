@@ -120,7 +120,7 @@ public class ExampleConnectIntegrationTest {
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(this::partitionsAssigned,
+        waitForCondition(this::checkForPartitionAssignment,
                 CONNECTOR_SETUP_DURATION_MS,
                 "Connector tasks were not assigned a partition each.");
 
@@ -140,13 +140,22 @@ public class ExampleConnectIntegrationTest {
         connect.deleteConnector(CONNECTOR_NAME);
     }
 
-    private boolean partitionsAssigned() {
+    /**
+     * Check if a partition was assigned to each task. This method swallows exceptions since it is invoked from from a
+     * {@link org.apache.kafka.test.TestUtils#waitForCondition} in this test that throws errors if this
+     * method continues to return false after the specified duration has elapsed.
+     *
+     * @return true if each task was assigned a partition each, false if this was not true or an error occurred when
+     * executing this operation.
+     */
+    private boolean checkForPartitionAssignment() {
         try {
             ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
             return info != null && info.tasks().size() == NUM_TASKS
                     && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
         } catch (Exception e) {
-            log.error("Could not check connector state info. Swallowing exception.", e);
+            // Log the exception and return that the partitions were not assigned
+            log.error("Could not check connector state info.", e);
             return false;
         }
     }
