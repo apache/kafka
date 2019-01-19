@@ -34,12 +34,6 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
 
-
-    @Override
-    public void init(final String topic) {
-        // nothing
-    }
-
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
@@ -55,8 +49,9 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
         final byte[] maxSuffix = ByteBuffer.allocate(SUFFIX_SIZE)
-            .putLong(to)
-            // start can at most be equal to end
+            // the end timestamp can be as large as possible as long as it's larger than start time
+            .putLong(Long.MAX_VALUE)
+            // this is the start timestamp
             .putLong(to)
             .array();
         return OrderedBytes.upperRange(key, maxSuffix);
