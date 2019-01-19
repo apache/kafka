@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
 
@@ -31,6 +32,7 @@ public class NonMaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKT
                          final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
                          final String thisJoinSide,
                          final String otherJoinSide,
+                         final Serde<K> keySerde,
                          final String[] joinThisStoreNames,
                          final String[] joinOtherStoreNames) {
 
@@ -41,6 +43,7 @@ public class NonMaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKT
             joinMergeProcessorParameters,
             thisJoinSide,
             otherJoinSide,
+            keySerde,
             joinThisStoreNames,
             joinOtherStoreNames);
     }

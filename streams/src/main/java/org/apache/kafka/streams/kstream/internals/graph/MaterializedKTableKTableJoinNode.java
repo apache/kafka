@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import java.util.Arrays;
 
 public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTableJoinNode<K, V1, V2, VR> {
+
     private final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal;
 
     MaterializedKTableKTableJoinNode(final String nodeName,
@@ -36,11 +38,11 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
                          final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
                          final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
                          final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
-                         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                          final String thisJoinSide,
                          final String otherJoinSide,
+                         final Serde<K> keySerde,
                          final String[] joinThisStoreNames,
-                         final String[] joinOtherStoreNames) {
+                         final String[] joinOtherStoreNames, final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
 
         super(nodeName,
             valueJoiner,
@@ -49,10 +51,21 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
             joinMergeProcessorParameters,
             thisJoinSide,
             otherJoinSide,
+            keySerde,
             joinThisStoreNames,
             joinOtherStoreNames);
 
         this.materializedInternal = materializedInternal;
+    }
+
+    @Override
+    public Serde<K> getKeySerde() {
+        return materializedInternal.keySerde() != null ? materializedInternal.keySerde() : super.getKeySerde();
+    }
+
+    @Override
+    public Serde<VR> getValueSerde() {
+        return materializedInternal.valueSerde();
     }
 
     @Override

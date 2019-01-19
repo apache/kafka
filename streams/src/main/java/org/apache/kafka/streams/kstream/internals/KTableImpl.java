@@ -504,14 +504,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters = new ProcessorParameters<>(joinMerge, joinMergeName);
 
         kTableJoinNodeBuilder.withNodeName(joinMergeName)
-            .withMaterializedInternal(materializedInternal)
-            .withJoinMergeProcessorParameters(joinMergeProcessorParameters)
-            .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
             .withJoinThisProcessorParameters(joinThisProcessorParameters)
+            .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
+            .withJoinMergeProcessorParameters(joinMergeProcessorParameters)
+            .withThisJoinSideNodeName(name)
+            .withOtherJoinSideNodeName(((KTableImpl) other).name)
+            .withKeySerde(keySerde)
             .withJoinThisStoreNames(valueGetterSupplier().storeNames())
             .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
-            .withOtherJoinSideNodeName(((KTableImpl) other).name)
-            .withThisJoinSideNodeName(name);
+            .withMaterializedInternal(materializedInternal);
 
         final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
@@ -519,8 +520,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // we can inherit parent key serde if user do not provide specific overrides
         return new KTableImpl<K, Change<VR>, VR>(
             joinMergeName,
-            materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
-            materializedInternal != null ? materializedInternal.valueSerde() : null,
+            kTableKTableJoinNode.getKeySerde(),
+            kTableKTableJoinNode.getValueSerde(),
             allSourceNodes,
             internalQueryableName,
             joinMerge,
