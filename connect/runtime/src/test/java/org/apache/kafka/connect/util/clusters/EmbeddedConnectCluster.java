@@ -19,6 +19,7 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.connect.cli.ConnectDistributed;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.NotFoundException;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -174,6 +175,9 @@ public class EmbeddedConnectCluster {
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
         try {
             return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
+        } catch (NotFoundException e) {
+            //  the connector doesn't exist in the cluster yet
+            return null;
         } catch (IOException e) {
             log.error("Could not read connector state", e);
             throw new ConnectException("Could not read connector state", e);
@@ -215,6 +219,14 @@ public class EmbeddedConnectCluster {
         return httpCon.getResponseCode();
     }
 
+    /**
+     * Execute a GET request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @return response body encoded as a String
+     * @throws NotFoundException if the HTTP request returns a 404
+     * @throws IOException for any other I/O error.
+     */
     public String executeGet(String url) throws IOException {
         log.debug("Executing GET request to URL={}.", url);
         HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
@@ -228,6 +240,11 @@ public class EmbeddedConnectCluster {
             }
             log.debug("Get response for URL={} is {}", url, response);
             return response.toString();
+        } catch (IOException e) {
+            if (httpCon.getResponseCode() == 404) {
+                throw new NotFoundException("Invalid endpoint: " + url, e);
+            }
+            throw e;
         }
     }
 

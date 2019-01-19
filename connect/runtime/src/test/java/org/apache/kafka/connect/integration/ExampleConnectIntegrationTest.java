@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -51,6 +52,7 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
     private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
+    private static final int NUM_TASKS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
 
     private EmbeddedConnectCluster connect;
@@ -103,7 +105,7 @@ public class ExampleConnectIntegrationTest {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
-        props.put(TASKS_MAX_CONFIG, "3");
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -114,8 +116,7 @@ public class ExampleConnectIntegrationTest {
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 3
-                        && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1),
+        waitForCondition(this::partitionsAssigned,
                 CONNECTOR_SETUP_DURATION_MS,
                 "Connector tasks were not assigned a partition each.");
 
@@ -133,5 +134,11 @@ public class ExampleConnectIntegrationTest {
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
+    }
+
+    private boolean partitionsAssigned() {
+        ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
+        return info != null && info.tasks().size() == NUM_TASKS
+                && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
     }
 }
