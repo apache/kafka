@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.internals.ApiUtils;
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 
@@ -26,7 +27,10 @@ import java.time.Instant;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
- * A windowed store interface extending {@link StateStore}.
+ * Interface for storing the aggregated values of fixed-size time windows.
+ * <p>
+ * The key is internally represented as {@link Windowed Windowed&lt;K&gt;} that comprises the plain key
+ * and the {@link Window} that represents window start- and end-timestamp.
  *
  * @param <K> Type of keys
  * @param <V> Type of values
