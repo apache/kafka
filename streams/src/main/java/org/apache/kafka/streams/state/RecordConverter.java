@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.state;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
@@ -22,7 +22,6 @@ import org.apache.kafka.streams.KeyValue;
 /**
  * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
  */
-// TODO: move this class to public API
 public interface RecordConverter {
 
     /**

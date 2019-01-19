@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.state.internals.RecordConverter;
+import org.apache.kafka.streams.state.RecordConverter;
 
 public class DefaultRecordConverter implements RecordConverter {
 
