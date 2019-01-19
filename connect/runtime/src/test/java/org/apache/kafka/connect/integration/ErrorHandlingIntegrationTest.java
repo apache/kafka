@@ -174,9 +174,14 @@ public class ErrorHandlingIntegrationTest {
     }
 
     private boolean partitionsAssigned() {
-        ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
-        return info != null && info.tasks().size() == NUM_TASKS
-                && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1;
+        try {
+            ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
+            return info != null && info.tasks().size() == NUM_TASKS
+                    && connectorHandle.taskHandle(TASK_ID).partitionsAssigned() == 1;
+        }  catch (Exception e) {
+            log.error("Could not check connector state info. Swallowing exception.", e);
+            return false;
+        }
     }
 
     private void assertValue(String expected, Headers headers, String headerKey) {

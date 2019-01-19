@@ -170,19 +170,19 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    /**
+     * Get the status for a connector running in this cluster.
+     *
+     * @param connectorName name of the connector
+     * @return an instance of {@link ConnectorStateInfo} populated with state informaton of the connector and it's tasks.
+     * @throws ConnectRestException if the HTTP request to the REST API failed with a valid status code.
+     * @throws ConnectException for any other error.
+     */
     public ConnectorStateInfo connectorStatus(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
         try {
             return mapper.readerFor(ConnectorStateInfo.class).readValue(executeGet(url));
-        } catch (ConnectRestException e) {
-            //  the connector doesn't exist in the cluster yet
-            if (e.statusCode() == Response.Status.NOT_FOUND.getStatusCode()) {
-                log.warn("Could not find connector '{}' in cluster.", connectorName);
-                return null;
-            } else {
-                throw e;
-            }
         } catch (IOException e) {
             log.error("Could not read connector state", e);
             throw new ConnectException("Could not read connector state", e);
@@ -249,9 +249,10 @@ public class EmbeddedConnectCluster {
             Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());
             if (status != null) {
                 throw new ConnectRestException(status, "Invalid endpoint: " + url, e);
-            } else {
-                throw e;
             }
+
+            // invalid response code, re-throw the IOException.
+            throw e;
         }
     }
 

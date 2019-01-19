@@ -24,6 +24,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -47,6 +49,8 @@ import static org.junit.Assert.assertEquals;
  */
 @Category(IntegrationTest.class)
 public class ExampleConnectIntegrationTest {
+
+    private static final Logger log = LoggerFactory.getLogger(ExampleConnectIntegrationTest.class);
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
@@ -137,8 +141,13 @@ public class ExampleConnectIntegrationTest {
     }
 
     private boolean partitionsAssigned() {
-        ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
-        return info != null && info.tasks().size() == NUM_TASKS
-                && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
+        try {
+            ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
+            return info != null && info.tasks().size() == NUM_TASKS
+                    && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
+        } catch (Exception e) {
+            log.error("Could not check connector state info. Swallowing exception.", e);
+            return false;
+        }
     }
 }
