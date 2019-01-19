@@ -139,7 +139,7 @@ public class SessionKeySchemaTest {
         final Bytes upper = sessionKeySchema.upperRange(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), 0);
 
         assertThat(upper, equalTo(SessionKeySchema.toBinary(
-            new Windowed<>(Bytes.wrap(new byte[]{0xA, 0xB, 0xC}), new SessionWindow(0, 0))))
+            new Windowed<>(Bytes.wrap(new byte[]{0xA}), new SessionWindow(0, Long.MAX_VALUE))))
         );
     }
 
