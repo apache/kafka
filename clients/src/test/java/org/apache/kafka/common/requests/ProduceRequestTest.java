@@ -182,47 +182,47 @@ public class ProduceRequestTest {
 
     @Test
     public void testMixedTransactionalData() {
-        long producerId = 15L;
-        short producerEpoch = 5;
-        int sequence = 10;
-        String transactionalId = "txnlId";
+        final long producerId = 15L;
+        final short producerEpoch = 5;
+        final int sequence = 10;
+        final String transactionalId = "txnlId";
 
-        MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
+        final MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
                 new SimpleRecord("foo".getBytes()));
-        MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
+        final MemoryRecords txnRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId,
                 producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
 
-        Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
+        final Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
         recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
         recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
+        final ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
                 recordsByPartition, transactionalId);
 
-        ProduceRequest request = builder.build();
+        final ProduceRequest request = builder.build();
         assertTrue(request.hasTransactionalRecords());
         assertTrue(request.hasIdempotentRecords());
     }
 
     @Test
     public void testMixedIdempotentData() {
-        long producerId = 15L;
-        short producerEpoch = 5;
-        int sequence = 10;
+        final long producerId = 15L;
+        final short producerEpoch = 5;
+        final int sequence = 10;
 
-        MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
+        final MemoryRecords nonTxnRecords = MemoryRecords.withRecords(CompressionType.NONE,
                 new SimpleRecord("foo".getBytes()));
-        MemoryRecords txnRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
+        final MemoryRecords txnRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId,
                 producerEpoch, sequence, new SimpleRecord("bar".getBytes()));
 
-        Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
+        final Map<TopicPartition, MemoryRecords> recordsByPartition = new LinkedHashMap<>();
         recordsByPartition.put(new TopicPartition("foo", 0), txnRecords);
         recordsByPartition.put(new TopicPartition("foo", 1), nonTxnRecords);
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
+        final ProduceRequest.Builder builder = ProduceRequest.Builder.forMagic(RecordVersion.current().value, (short) -1, 5000,
                 recordsByPartition, null);
 
-        ProduceRequest request = builder.build();
+        final ProduceRequest request = builder.build();
         assertFalse(request.hasTransactionalRecords());
         assertTrue(request.hasIdempotentRecords());
     }
