@@ -59,12 +59,14 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
     }
 
     @Override
-    public Serde<K> getKeySerde() {
-        return materializedInternal.keySerde() != null ? materializedInternal.keySerde() : super.getKeySerde();
+    public Serde<K> keySerde() {
+        // Override default keySerde if materialization keySerde is defined.
+        return materializedInternal.keySerde() != null ? materializedInternal.keySerde() : super.keySerde();
     }
 
     @Override
-    public Serde<VR> getValueSerde() {
+    public Serde<VR> valueSerde() {
+        // Use materialization valueSerde, instead of default valueSerde.
         return materializedInternal.valueSerde();
     }
 
@@ -81,8 +83,8 @@ public class MaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKTabl
     @Override
     public String toString() {
         return "MaterializedKTableKTableJoinNode{" +
-            "joinThisStoreNames=" + Arrays.toString(getJoinThisStoreNames()) +
-            ", joinOtherStoreNames=" + Arrays.toString(getJoinOtherStoreNames()) +
+            "joinThisStoreNames=" + Arrays.toString(joinThisStoreNames()) +
+            ", joinOtherStoreNames=" + Arrays.toString(joinOtherStoreNames()) +
             ", materializedInternal=" + materializedInternal +
             "} " + super.toString();
     }

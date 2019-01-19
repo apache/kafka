@@ -520,8 +520,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // we can inherit parent key serde if user do not provide specific overrides
         return new KTableImpl<K, Change<VR>, VR>(
             joinMergeName,
-            kTableKTableJoinNode.getKeySerde(),
-            kTableKTableJoinNode.getValueSerde(),
+            kTableKTableJoinNode.keySerde(),
+            kTableKTableJoinNode.valueSerde(),
             allSourceNodes,
             internalQueryableName,
             joinMerge,

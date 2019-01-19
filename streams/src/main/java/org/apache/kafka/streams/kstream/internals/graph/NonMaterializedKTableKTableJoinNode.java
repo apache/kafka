@@ -51,8 +51,8 @@ public class NonMaterializedKTableKTableJoinNode<K, V1, V2, VR> extends KTableKT
     @Override
     public String toString() {
         return "NonMaterializedKTableKTableJoinNode{" +
-            "joinThisStoreNames=" + Arrays.toString(getJoinThisStoreNames()) +
-            ", joinOtherStoreNames=" + Arrays.toString(getJoinOtherStoreNames()) +
+            "joinThisStoreNames=" + Arrays.toString(joinThisStoreNames()) +
+            ", joinOtherStoreNames=" + Arrays.toString(joinOtherStoreNames()) +
             "} " + super.toString();
     }
 }

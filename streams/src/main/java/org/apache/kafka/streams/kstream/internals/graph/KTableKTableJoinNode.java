@@ -59,20 +59,20 @@ public abstract class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProces
         this.joinOtherStoreNames = joinOtherStoreNames;
     }
 
-    public String[] getJoinThisStoreNames() {
-        return joinThisStoreNames;
-    }
-
-    public String[] getJoinOtherStoreNames() {
-        return joinOtherStoreNames;
-    }
-
-    public Serde<K> getKeySerde() {
+    public Serde<K> keySerde() {
         return keySerde;
     }
 
-    public Serde<VR> getValueSerde() {
+    public Serde<VR> valueSerde() {
         return null;
+    }
+
+    public String[] joinThisStoreNames() {
+        return joinThisStoreNames;
+    }
+
+    public String[] joinOtherStoreNames() {
+        return joinOtherStoreNames;
     }
 
     @Override
