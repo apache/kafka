@@ -79,8 +79,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
-  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", "socket-server-metrics")
-  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", "socket-server-metrics")
+  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", SocketServerMetricsGroup)
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", SocketServerMetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   // data-plane
@@ -124,7 +124,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
         def value = SocketServer.this.synchronized {
           val ioWaitRatioMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+            metrics.metricName("io-wait-ratio", SocketServerMetricsGroup, p.metricTags)
           }
           ioWaitRatioMetricNames.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
@@ -137,7 +137,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
         def value = SocketServer.this.synchronized {
           val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-            metrics.metricName("io-wait-ratio", "socket-server-metrics", p.metricTags)
+            metrics.metricName("io-wait-ratio", SocketServerMetricsGroup, p.metricTags)
           }
           ioWaitRatioMetricName.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
@@ -160,7 +160,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
         def value = SocketServer.this.synchronized {
           val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
+            metrics.metricName("expired-connections-killed-count", SocketServerMetricsGroup, p.metricTags)
           }
           expiredConnectionsKilledCountMetricNames.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
@@ -173,7 +173,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
         def value = SocketServer.this.synchronized {
           val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-            metrics.metricName("expired-connections-killed-count", "socket-server-metrics", p.metricTags)
+            metrics.metricName("expired-connections-killed-count", SocketServerMetricsGroup, p.metricTags)
           }
           expiredConnectionsKilledCountMetricNames.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
@@ -594,6 +594,7 @@ private[kafka] object Processor {
   val IdlePercentMetricName = "IdlePercent"
   val NetworkProcessorMetricTag = "networkProcessor"
   val ListenerMetricTag = "listener"
+  val SocketServerMetricsGroup = "socket-server-metrics"
 }
 
 /**
@@ -643,7 +644,7 @@ private[kafka] class Processor(val id: Int,
   newGauge(IdlePercentMetricName,
     new Gauge[Double] {
       def value = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", "socket-server-metrics", metricTags)))
+        Option(metrics.metric(metrics.metricName("io-wait-ratio", SocketServerMetricsGroup, metricTags)))
           .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }
     },
@@ -653,7 +654,7 @@ private[kafka] class Processor(val id: Int,
   )
 
   val expiredConnectionsKilledCount = new Total()
-  private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", "socket-server-metrics", metricTags)
+  private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", SocketServerMetricsGroup, metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
   private val selector = createSelector(
@@ -1005,7 +1006,7 @@ private[kafka] class Processor(val id: Int,
 
   override def shutdown(): Unit = {
     super.shutdown()
-    removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+    removeMetric(IdlePercentMetricName, Map(NetworkProcessorMetricTag -> id.toString))
     metrics.removeMetric(expiredConnectionsKilledCountMetricName)
   }
 
