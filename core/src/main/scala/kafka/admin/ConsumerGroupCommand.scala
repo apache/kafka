@@ -457,7 +457,8 @@ object ConsumerGroupCommand extends Logging {
       TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state.toString
         val memberAssignmentStates = consumerGroup.members().asScala.map(consumer =>
-          MemberAssignmentState(groupId,
+          MemberAssignmentState(
+            groupId,
             consumer.consumerId,
             consumer.host,
             consumer.clientId,
