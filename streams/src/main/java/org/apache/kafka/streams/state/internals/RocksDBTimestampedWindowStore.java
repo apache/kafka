@@ -16,21 +16,14 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
-import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
+class RocksDBTimestampedWindowStore extends RocksDBWindowStore implements TimestampedBytesStore {
 
-class StoreProxyUtils {
-
-    static byte[] getValueWithUnknownTimestamp(final byte[] rawValue) {
-        if (rawValue == null) {
-            return null;
-        }
-        return ByteBuffer
-            .allocate(8 + rawValue.length)
-            .putLong(NO_TIMESTAMP)
-            .put(rawValue)
-            .array();
+    RocksDBTimestampedWindowStore(final SegmentedBytesStore bytesStore,
+                                  final boolean retainDuplicates,
+                                  final long windowSize) {
+        super(bytesStore, retainDuplicates, windowSize);
     }
 
 }

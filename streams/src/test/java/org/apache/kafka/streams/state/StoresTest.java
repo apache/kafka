@@ -45,6 +45,11 @@ public class StoresTest {
     }
 
     @Test(expected = NullPointerException.class)
+    public void shouldThrowIfPersistentTimestampedKeyValueStoreStoreNameIsNull() {
+        Stores.persistentTimestampedKeyValueStore(null);
+    }
+
+    @Test(expected = NullPointerException.class)
     public void shouldThrowIfIMemoryKeyValueStoreStoreNameIsNull() {
         //noinspection ResultOfMethodCallIgnored
         Stores.inMemoryKeyValueStore(null);
@@ -65,9 +70,19 @@ public class StoresTest {
         Stores.persistentWindowStore(null, ZERO, ZERO, false);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowIfIPersistentTimestampedWindowStoreStoreNameIsNull() {
+        Stores.persistentTimestampedWindowStore(null, ZERO, ZERO, false);
+    }
+
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreRetentionPeriodIsNegative() {
         Stores.persistentWindowStore("anyName", ofMillis(-1L), ZERO, false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentTimestampedWindowStoreRetentionPeriodIsNegative() {
+        Stores.persistentTimestampedWindowStore("anyName", ofMillis(-1L), ZERO, false);
     }
 
     @Deprecated
@@ -79,6 +94,11 @@ public class StoresTest {
     @Test(expected = IllegalArgumentException.class)
     public void shouldThrowIfIPersistentWindowStoreIfWindowSizeIsNegative() {
         Stores.persistentWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
+    }
+
+    @Test(expected = IllegalArgumentException.class)
+    public void shouldThrowIfIPersistentTimestampedWindowStoreIfWindowSizeIsNegative() {
+        Stores.persistentTimestampedWindowStore("anyName", ofMillis(0L), ofMillis(-1L), false);
     }
 
     @Test(expected = NullPointerException.class)
@@ -125,6 +145,11 @@ public class StoresTest {
     }
 
     @Test
+    public void shouldCreateRocksDbTimestampedStore() {
+        assertThat(Stores.persistentTimestampedKeyValueStore("store").get(), instanceOf(RocksDBTimestampedStore.class));
+    }
+
+    @Test
     public void shouldCreateRocksDbWindowStore() {
         final WindowStore store = Stores.persistentWindowStore("store", ofMillis(1L), ofMillis(1L), false).get();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
@@ -133,8 +158,46 @@ public class StoresTest {
     }
 
     @Test
+    public void shouldCreateRocksDbTimestampedWindowStore() {
+        final WindowStore store = Stores.persistentTimestampedWindowStore("store", ofMillis(1L), ofMillis(1L), false).get();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
+        assertThat(store, instanceOf(RocksDBWindowStore.class));
+        assertThat(wrapped, instanceOf(RocksDBTimestampedSegmentedBytesStore.class));
+    }
+
+    @Test
     public void shouldCreateRocksDbSessionStore() {
         assertThat(Stores.persistentSessionStore("store", ofMillis(1)).get(), instanceOf(RocksDBSessionStore.class));
+    }
+
+    @Test
+    public void shouldBuildKeyValueStore() {
+        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedKeyValueStore() {
+        final TimestampedKeyValueStore<String, String> store = Stores.timestampedKeyValueStoreBuilder(
+            Stores.persistentTimestampedKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
+    }
+
+    @Test
+    public void shouldBuildTimestampedKeyValueStoreThatWrapsKeyValueStore() {
+        final TimestampedKeyValueStore<String, String> store = Stores.timestampedKeyValueStoreBuilder(
+            Stores.persistentKeyValueStore("name"),
+            Serdes.String(),
+            Serdes.String()
+        ).build();
+        assertThat(store, not(nullValue()));
     }
 
     @Test
@@ -148,9 +211,9 @@ public class StoresTest {
     }
 
     @Test
-    public void shouldBuildKeyValueStore() {
-        final KeyValueStore<String, String> store = Stores.keyValueStoreBuilder(
-            Stores.persistentKeyValueStore("name"),
+    public void shouldBuildTimestampedWindowStore() {
+        final TimestampedWindowStore<String, String> store = Stores.timestampedWindowStoreBuilder(
+            Stores.persistentTimestampedWindowStore("store", ofMillis(3L), ofMillis(3L), true),
             Serdes.String(),
             Serdes.String()
         ).build();
