@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.NoOpProcessorContext;
@@ -141,6 +142,28 @@ public class ProcessorStateManagerTest {
         final Integer intKey = 1;
 
         final MockKeyValueStore persistentStore = getPersistentStore();
+        final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
+
+        try {
+            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.updateStandbyStates(
+                persistentStorePartition,
+                singletonList(consumerRecord),
+                consumerRecord.offset()
+            );
+            assertThat(persistentStore.keys.size(), is(1));
+            assertTrue(persistentStore.keys.contains(intKey));
+        } finally {
+            stateMgr.close(Collections.emptyMap());
+        }
+    }
+
+    @Test
+    public void shouldConvertDataOnRestoreIfStoreImplementsRecordConverter() throws Exception {
+        final TaskId taskId = new TaskId(0, 2);
+        final Integer intKey = 2;
+
+        final MockKeyValueStore persistentStore = getConverterStore();
         final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
 
         try {
@@ -768,6 +791,25 @@ public class ProcessorStateManagerTest {
 
     private MockKeyValueStore getPersistentStore() {
         return new MockKeyValueStore("persistentStore", true);
+    }
+
+    private MockKeyValueStore getConverterStore() {
+        return new ConverterStore("persistentStore", true);
+    }
+
+
+
+    private class ConverterStore extends MockKeyValueStore implements RecordConverter {
+
+        ConverterStore(final String name,
+                       final boolean persistent) {
+            super(name, persistent);
+        }
+
+        @Override
+        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
+            return new ConsumerRecord<>("", 0, 0L, new byte[]{0x0, 0x0, 0x0, 0x2}, "".getBytes());
+        }
     }
 
 }
