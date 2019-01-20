@@ -174,9 +174,9 @@ public class ErrorHandlingIntegrationTest {
     }
 
     /**
-     * Check if a partition was assigned to each task. This method swallows exceptions since it is invoked from from a
-     * {@link org.apache.kafka.test.TestUtils#waitForCondition} in this test that throws errors if this
-     * method continues to return false after the specified duration has elapsed.
+     * Check if a partition was assigned to each task. This method swallows exceptions since it is invoked from a
+     * {@link org.apache.kafka.test.TestUtils#waitForCondition} that will throw an error if this method continued
+     * to return false after the specified duration has elapsed.
      *
      * @return true if each task was assigned a partition each, false if this was not true or an error occurred when
      * executing this operation.
