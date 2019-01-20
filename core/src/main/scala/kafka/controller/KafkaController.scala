@@ -269,9 +269,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
     onPreferredReplicaElection(pendingPreferredReplicaElections)
-    info("Starting the controller scheduler")
-    kafkaScheduler.startup()
+    info("auto leader rebalance enable:" + config.autoLeaderRebalanceEnable)
     if (config.autoLeaderRebalanceEnable) {
+      info("Starting the controller scheduler")
+      kafkaScheduler.startup()
       scheduleAutoLeaderRebalanceTask(delay = 5, unit = TimeUnit.SECONDS)
     }
 
@@ -307,7 +308,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     topicDeletionManager.reset()
 
     // shutdown leader rebalance scheduler
-    kafkaScheduler.shutdown()
+    if (kafkaScheduler.isStarted)
+      kafkaScheduler.shutdown()
     offlinePartitionCount = 0
     preferredReplicaImbalanceCount = 0
     globalTopicCount = 0
