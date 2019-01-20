@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util.Optional
 
-import kafka.api
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo

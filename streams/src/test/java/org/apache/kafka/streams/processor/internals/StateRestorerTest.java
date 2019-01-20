@@ -41,7 +41,8 @@ public class StateRestorerTest {
         null,
         OFFSET_LIMIT,
         true,
-        "storeName");
+        "storeName",
+        new DefaultRecordConverter());
 
     @Before
     public void setUp() {
@@ -77,7 +78,8 @@ public class StateRestorerTest {
             null,
             0,
             true,
-            "storeName");
+            "storeName",
+            new DefaultRecordConverter());
         assertTrue(restorer.hasCompleted(0, 10));
     }
 

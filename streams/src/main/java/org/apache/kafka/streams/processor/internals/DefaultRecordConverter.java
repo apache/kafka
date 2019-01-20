@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.streams.processor.internals;
 
-public interface CachedStateStore<K, V> {
-    /**
-     * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
-     * cache to the underlying {@link org.apache.kafka.streams.processor.StateStore}
-     * @param listener
-     * @param sendOldValues
-     */
-    void setFlushListener(final CacheFlushListener<K, V> listener,
-                          final boolean sendOldValues);
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.state.RecordConverter;
+
+public class DefaultRecordConverter implements RecordConverter {
+
+    @Override
+    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
+        return record;
+    }
+
 }

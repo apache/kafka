@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -190,7 +189,11 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
                     serdes.valueFrom(bytesStore.fetchSession(rawKey, key.window().start(), key.window().end())) :
                     null;
                 if (!(newValue == null && oldValue == null)) {
-                    flushListener.apply(key, newValue, oldValue);
+                    flushListener.apply(
+                        key,
+                        newValue,
+                        oldValue,
+                        entry.entry().context().timestamp());
                 }
             }
             bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());
