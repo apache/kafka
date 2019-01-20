@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, Set, mutable}
 import scala.util.{Failure, Success, Try}
