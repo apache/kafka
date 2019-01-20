@@ -149,18 +149,18 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
-        final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
         if (cache == null) {
             return bytesStore.fetchSession(key, startTime, endTime);
-        }
-        final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
-        if (entry == null) {
-            return bytesStore.fetchSession(key, startTime, endTime);
         } else {
-            return entry.value();
+            final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
+            final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+            final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
+            if (entry == null) {
+                return bytesStore.fetchSession(key, startTime, endTime);
+            } else {
+                return entry.value();
+            }
         }
-
     }
 
     @Override
