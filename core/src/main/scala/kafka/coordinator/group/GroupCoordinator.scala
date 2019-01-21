@@ -654,8 +654,7 @@ class GroupCoordinator(val brokerId: Int,
       info(s"Loading group metadata for ${group.groupId} with generation ${group.generationId}")
       assert(group.is(Stable) || group.is(Empty))
       if (groupIsOverCapacity(group)) {
-        group.shrinkTo(groupConfig.groupMaxSize)
-        prepareRebalance(group, s"Freshly-loaded group was over capacity ($groupConfig.groupMaxSize).")
+        prepareRebalance(group, s"Freshly-loaded group is over capacity ($groupConfig.groupMaxSize). Rebalacing in order to give a chance for consumers to commit offsets")
       }
 
       group.allMemberMetadata.foreach(completeAndScheduleNextHeartbeatExpiration(group, _))
@@ -866,6 +865,14 @@ class GroupCoordinator(val brokerId: Int,
         } else {
           info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
             s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+
+          // a group larger than the max size just finished a rebalance - this is only possible if it has just been loaded by the coordinator
+          // shrink and rebalance the oversized group right after they have been given a chance to commit offsets.
+          if (groupIsOverCapacity(group)) {
+            info(s"Shrinking group ${group.groupId} to ${groupConfig.groupMaxSize} members.")
+            group.shrinkTo(groupConfig.groupMaxSize)
+            prepareRebalance(group, s"Freshly-loaded group that is over capacity just finished rebalancing. Shrank it to ${groupConfig.groupMaxSize} members.")
+          }
 
           // trigger the awaiting join group response callback for all the members after rebalancing
           for (member <- group.allMemberMetadata) {

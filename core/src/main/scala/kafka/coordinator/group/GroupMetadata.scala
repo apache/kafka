@@ -278,24 +278,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     assert(members.size >= maxGroupSize,
       s"Cannot shrink group $groupId to $maxGroupSize as it's current count ${members.size} is smaller.")
 
-    var leaderWasAdded = leaderId.isEmpty
-    val newMembers = new mutable.HashMap[String, MemberMetadata]
-    val maxSizeWithoutLeader = maxGroupSize - 1
-
-    members.foreach(memberEntry => {
-      val memberId = memberEntry._1
-      val member = memberEntry._2
-      if (!leaderWasAdded && isLeader(memberId)) {
-        newMembers.put(memberId, member)
-        leaderWasAdded = true
-      } else if (newMembers.size < maxSizeWithoutLeader || (leaderWasAdded && newMembers.size < maxGroupSize)) {
-        newMembers.put(memberId, member)
+    val membersToRemove = members.size - maxGroupSize
+    members.keys.take(membersToRemove + 1).foreach(memberId => {
+      if (membersToRemove != 0 && !isLeader(memberId)) {
+        remove(memberId)
       }
     })
-    members.clear()
-    supportedProtocols.clear()
-    members ++= newMembers
-    members.values.foreach(member => member.supportedProtocols.foreach{ case (proto, _) => supportedProtocols(proto) += 1 })
   }
 
   def selectProtocol: String = {

@@ -375,7 +375,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
     // should be only maxGroupSize consumers left in the group
     stableConsumers.foreach(cons => {
-      receiveExactRecords(cons, recordsProduced / maxGroupSize, 10000)
+      receiveAtLeastRecords(cons, recordsProduced / maxGroupSize, 10000)
     })
   }
 

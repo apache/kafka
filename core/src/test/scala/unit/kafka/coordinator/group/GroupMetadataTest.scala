@@ -342,7 +342,7 @@ class GroupMetadataTest extends JUnitSuite {
     assertTrue(group.supportsProtocols(protocolType, Set(leaderId.get)))
   }
 
-  @Test(expected = classOf[IllegalArgumentException])
+  @Test(expected = classOf[AssertionError])
   def testShrinkThrowsExceptionOnSizeInconsistency(): Unit = {
     for (i <- 1.to(2)) {
       val memberId = s"memberId-$i"
