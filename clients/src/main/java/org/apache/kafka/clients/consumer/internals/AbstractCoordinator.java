@@ -563,7 +563,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 }
                 future.raise(Errors.MEMBER_ID_REQUIRED);
             } else if (error == Errors.GROUP_MAX_SIZE_REACHED) {
-                future.raise(new GroupMaxSizeReachedException("Consumer group " + groupId + " is at full capacity. There is no room for this consumer."));
+                future.raise(new GroupMaxSizeReachedException(groupId));
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));

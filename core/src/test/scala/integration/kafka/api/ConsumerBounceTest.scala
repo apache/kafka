@@ -290,9 +290,9 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   }
 
   /**
-    * If we have a running consumer group of size N, configure consumer.group.max.size=N-1 and restart all brokers,
+    * If we have a running consumer group of size N, configure consumer.group.max.size = N-1 and restart all brokers,
     * the group should be forced to rebalance when it becomes hosted on a Coordinator with the new config.
-    * Then, 1 consumer should be left out of the group
+    * Then, 1 consumer should be left out of the group.
     */
   @Test
   def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
@@ -385,11 +385,21 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   @Test
   def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(): Unit = {
     val topic = "group-max-size-test"
+    val groupId = "group1"
+    val executor = Executors.newScheduledThreadPool(maxGroupSize * 2)
     createTopic(topic, maxGroupSize, numBrokers)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val stableConsumers = checkExceptionDuringRebalance("group1", topic, Executors.newScheduledThreadPool(maxGroupSize * 2), true)
+
+    // Create N+1 consumers in the same consumer group and assert that the N+1th consumer receives a fatal error when it tries to join the group
+    val stableConsumers = createConsumersWithGroupId(groupId, maxGroupSize, executor, topic)
+    val newConsumer = createConsumerWithGroupId(groupId)
+    var failedRebalance = false
+    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = _ => {failedRebalance = true}),
+      executor = executor, stableConsumers:_*)
+    assertTrue("Rebalance did not fail as expected", failedRebalance)
+
     // assert group continues to live
     val producer = createProducer()
     sendRecords(producer, maxGroupSize * 100, topic, numPartitions = Some(maxGroupSize))
@@ -437,24 +447,6 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
     assertTrue("Rebalance did not complete in time", future.isDone)
   }
-
-  /**
-    * Creates N+1 consumers in the same consumer group, where N is the maximum size of a single consumer group.
-    * Asserts that the N+1th consumer receives a fatal error when it tries to join the group
-    */
-  private def checkExceptionDuringRebalance(groupId: String, topic: String, executor: ExecutorService, brokersAvailableDuringClose: Boolean): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
-    val stableConsumers = createConsumersWithGroupId(groupId, maxGroupSize, executor, topic)
-
-    // next consumer should raise an exception
-    val newConsumer = createConsumerWithGroupId(groupId)
-    var failedRebalance = false
-    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = _ => {failedRebalance = true}),
-      executor = executor, stableConsumers:_*)
-    assertTrue("Rebalance did not fail as expected", failedRebalance)
-
-    stableConsumers
-  }
-
 
   /**
    * Consumer is closed during rebalance. Close should leave group and close

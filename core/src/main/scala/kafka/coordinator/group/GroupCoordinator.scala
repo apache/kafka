@@ -162,6 +162,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
+
         if (requireKnownMemberId) {
           // If member id required, register the member in the pending member list
           // and send back a response to call for another join group request with allocated member id.
@@ -749,7 +750,7 @@ class GroupCoordinator(val brokerId: Int,
                                     protocolType: String,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
-                                    callback: JoinCallback): Unit = {
+                                    callback: JoinCallback) {
     val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
 

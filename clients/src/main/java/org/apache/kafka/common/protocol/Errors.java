@@ -302,7 +302,7 @@ public enum Errors {
             MemberIdRequiredException::new),
     PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
             PreferredLeaderNotAvailableException::new),
-    GROUP_MAX_SIZE_REACHED(81, "Consumer group is already at its full capacity.", GroupMaxSizeReachedException::new);
+    GROUP_MAX_SIZE_REACHED(81, "", GroupMaxSizeReachedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

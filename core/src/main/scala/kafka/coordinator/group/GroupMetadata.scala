@@ -274,13 +274,13 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   /**
     * Shrinks the consumer group to the given size by removing members while maintaining the leader
     */
-  def shrinkTo(maxSize: Int): Unit = {
-    if (members.size < maxSize)
-      throw new IllegalArgumentException(s"Cannot shrink group $groupId to $maxSize as it's current count ${members.size} is smaller.")
+  def shrinkTo(maxGroupSize: Int): Unit = {
+    assert(members.size >= maxGroupSize,
+      s"Cannot shrink group $groupId to $maxGroupSize as it's current count ${members.size} is smaller.")
 
     var leaderWasAdded = leaderId.isEmpty
     val newMembers = new mutable.HashMap[String, MemberMetadata]
-    val maxSizeWithoutLeader = maxSize - 1
+    val maxSizeWithoutLeader = maxGroupSize - 1
 
     members.foreach(memberEntry => {
       val memberId = memberEntry._1
@@ -288,7 +288,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       if (!leaderWasAdded && isLeader(memberId)) {
         newMembers.put(memberId, member)
         leaderWasAdded = true
-      } else if (newMembers.size < maxSizeWithoutLeader || (leaderWasAdded && newMembers.size < maxSize)) {
+      } else if (newMembers.size < maxSizeWithoutLeader || (leaderWasAdded && newMembers.size < maxGroupSize)) {
         newMembers.put(memberId, member)
       }
     })
