@@ -16,6 +16,7 @@
  */
 package kafka.controller
 
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Gauge
@@ -38,7 +39,7 @@ import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
 import scala.collection._
-import scala.util.Try
+import scala.util.{Failure, Try}
 
 object KafkaController extends Logging {
   val InitialControllerEpoch = 0
@@ -1045,11 +1046,15 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends ControllerEvent {
+  case class ControlledShutdown(id: Int, brokerEpoch: Long, controlledShutdownCallback: Try[Set[TopicPartition]] => Unit) extends PreemptableControllerEvent {
 
     def state = ControllerState.ControlledShutdown
 
-    override def process(): Unit = {
+    override def handlePreempt(): Unit = {
+      controlledShutdownCallback(Failure(new ControllerMovedException("Controller moved to another broker")))
+    }
+
+    override def handleProcess(): Unit = {
       val controlledShutdownResult = Try { doControlledShutdown(id) }
       controlledShutdownCallback(controlledShutdownResult)
     }
@@ -1545,10 +1550,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   case class PreferredReplicaLeaderElection(partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
                                             electionType: ElectionType = ZkTriggered,
-                                            callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = (_,_) =>{}) extends ControllerEvent {
+                                            callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = (_,_) =>{}) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
-    override def process(): Unit = {
+    override def handlePreempt(): Unit = {
+      callback(Set(), partitionsFromAdminClientOpt match {
+        case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
+        case None => Map.empty
+      })
+    }
+
+    override def handleProcess(): Unit = {
       if (!isActive) {
         callback(Set(), partitionsFromAdminClientOpt match {
           case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
@@ -1776,4 +1788,28 @@ sealed trait ControllerEvent {
 
   def state: ControllerState
   def process(): Unit
+}
+
+/**
+  * A `ControllerEvent`, such as one with a client callback, which needs specific handing in the event of ZK session expiration.
+  */
+sealed trait PreemptableControllerEvent extends ControllerEvent {
+
+  val spent = new AtomicBoolean(false)
+
+  final def preempt(): Unit = {
+    if (!spent.getAndSet(true)) {
+      handlePreempt()
+    }
+  }
+
+  final def process(): Unit = {
+    if (!spent.getAndSet(true)) {
+      handleProcess()
+    }
+  }
+
+  def handlePreempt(): Unit
+
+  def handleProcess(): Unit
 }
