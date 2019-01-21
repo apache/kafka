@@ -30,6 +30,7 @@ import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.Processor._
+import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
 import kafka.server.KafkaConfig
 import kafka.utils._
@@ -80,8 +81,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
-  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", SocketServerMetricsGroup)
-  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", SocketServerMetricsGroup)
+  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
   private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   // data-plane
@@ -125,7 +126,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
         def value = SocketServer.this.synchronized {
           val ioWaitRatioMetricNames = dataPlaneProcessors.values.asScala.map { p =>
-            metrics.metricName("io-wait-ratio", SocketServerMetricsGroup, p.metricTags)
+            metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
           }
           ioWaitRatioMetricNames.map { metricName =>
             Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
@@ -369,6 +370,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
 }
 
+object SocketServer {
+  val MetricsGroup = "socket-server-metrics"
+}
+
 /**
  * A base class with some helper variables and methods
  */
@@ -439,7 +444,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
                               val recvBufferSize: Int,
                               brokerId: Int,
                               connectionQuotas: ConnectionQuotas,
-                              metricPrefix: String = "") extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
+                              metricPrefix: String) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
   private val nioSelector = NSelector.open()
   val serverChannel = openServerSocket(endPoint.host, endPoint.port)
@@ -614,7 +619,6 @@ private[kafka] object Processor {
   val IdlePercentMetricName = "IdlePercent"
   val NetworkProcessorMetricTag = "networkProcessor"
   val ListenerMetricTag = "listener"
-  val SocketServerMetricsGroup = "socket-server-metrics"
 
   val ConnectionQueueSize = 20
 }
@@ -666,7 +670,7 @@ private[kafka] class Processor(val id: Int,
   newGauge(IdlePercentMetricName,
     new Gauge[Double] {
       def value = {
-        Option(metrics.metric(metrics.metricName("io-wait-ratio", SocketServerMetricsGroup, metricTags)))
+        Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags)))
           .fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
       }
     },
