@@ -586,7 +586,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     val partitionsToBeRemovedFromReassignment = scala.collection.mutable.Set.empty[TopicPartition]
     topicPartitions.foreach { tp =>
       if (topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic)) {
-        error(s"Skipping reassignment of $tp since the topic is currently being deleted")
+        info(s"Skipping reassignment of $tp since the topic is currently being deleted")
         partitionsToBeRemovedFromReassignment.add(tp)
       } else {
         val reassignedPartitionContext = controllerContext.partitionsBeingReassigned.get(tp).getOrElse {
@@ -1543,14 +1543,14 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   def electPreferredLeaders(partitions: Set[TopicPartition], callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = { (_,_) => }): Unit =
     eventManager.put(PreferredReplicaLeaderElection(Some(partitions), AdminClientTriggered, callback))
 
-  case class PreferredReplicaLeaderElection(partitionsOpt: Option[Set[TopicPartition]],
+  case class PreferredReplicaLeaderElection(partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
                                             electionType: ElectionType = ZkTriggered,
                                             callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = (_,_) =>{}) extends ControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
     override def process(): Unit = {
       if (!isActive) {
-        callback(Set(), partitionsOpt match {
+        callback(Set(), partitionsFromAdminClientOpt match {
           case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
           case None => Map.empty
         })
@@ -1558,7 +1558,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
         // leader elections and we get the `path exists` check for free
         if (electionType == AdminClientTriggered || zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)) {
-          val partitions = partitionsOpt match {
+          val partitions = partitionsFromAdminClientOpt match {
             case Some(partitions) => partitions
             case None => zkClient.getPreferredReplicaElection
           }
