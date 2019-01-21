@@ -832,6 +832,10 @@ project(':generator') {
     testCompile libs.junit
   }
 
+  integrationTest {
+    enabled = false
+  }
+
   javadoc {
     enabled = false
   }
