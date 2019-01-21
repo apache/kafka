@@ -72,9 +72,6 @@ import scala.util.control.ControlThrowable
  */
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
 
-  val DataPlanePrefix = "data-plane"
-  val ControlPlanePrefix = "control-plane"
-
   private val maxQueuedRequests = config.queuedMaxRequests
 
   private val logContext = new LogContext(s"[SocketServer brokerId=${config.brokerId}] ")
@@ -88,11 +85,11 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   // data-plane
   private val dataPlaneProcessors = new ConcurrentHashMap[Int, Processor]()
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, Acceptor]()
-  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests)
+  val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneMetricPrefix)
   // control-plane
   private var controlPlaneProcessorOpt : Option[Processor] = None
   private[network] var controlPlaneAcceptorOpt : Option[Acceptor] = None
-  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ => new RequestChannel(20, RequestChannel.ControlPlaneMetricPrefix))
+  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ => new RequestChannel(20, ControlPlaneMetricPrefix))
 
   private var nextProcessorId = 0
   private var connectionQuotas: ConnectionQuotas = _
@@ -121,7 +118,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       }
     }
 
-    newGauge("NetworkProcessorAvgIdlePercent",
+    newGauge(s"${DataPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
@@ -134,7 +131,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         }
       }
     )
-    newGauge("ControlPlaneNetworkProcessorAvgIdlePercent",
+    newGauge(s"${ControlPlaneMetricPrefix}NetworkProcessorAvgIdlePercent",
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
@@ -157,7 +154,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         def value = memoryPool.size() - memoryPool.availableMemory()
       }
     )
-    newGauge("ExpiredConnectionsKilledCount",
+    newGauge(s"${DataPlaneMetricPrefix}ExpiredConnectionsKilledCount",
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
@@ -170,7 +167,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
         }
       }
     )
-    newGauge("ControlPlaneExpiredConnectionsKilledCount",
+    newGauge(s"${ControlPlaneMetricPrefix}ExpiredConnectionsKilledCount",
       new Gauge[Double] {
 
         def value = SocketServer.this.synchronized {
@@ -194,7 +191,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
    * was invoked with `startupProcessors=false`.
    */
   def startDataPlaneProcessors(): Unit = synchronized {
-    dataPlaneAcceptors.values.asScala.foreach { _.startProcessors(DataPlanePrefix) }
+    dataPlaneAcceptors.values.asScala.foreach { _.startProcessors(DataPlaneThreadPrefix) }
     info(s"Started data-plane processors for ${dataPlaneAcceptors.size} acceptors")
   }
 
@@ -204,8 +201,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
    * was invoked with `startupProcessors=false`.
    */
   def startControlPlaneProcessor(): Unit = synchronized {
-    if (controlPlaneAcceptorOpt.isDefined) {
-      controlPlaneAcceptorOpt.get.startProcessors(ControlPlanePrefix)
+    controlPlaneAcceptorOpt.foreach { controlPlaneAcceptor =>
+      controlPlaneAcceptor.startProcessors(ControlPlaneThreadPrefix)
       info(s"Started control-plane processor for the control-plane acceptor")
     }
   }
@@ -215,7 +212,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
   private def createDataPlaneAcceptorsAndProcessors(dataProcessorsPerListener: Int,
                                                     endpoints: Seq[EndPoint]): Unit = synchronized {
     endpoints.foreach { endpoint =>
-      val dataPlaneAcceptor = createAcceptor(endpoint, "")
+      val dataPlaneAcceptor = createAcceptor(endpoint, DataPlaneMetricPrefix)
       addDataPlaneProcessors(dataPlaneAcceptor, endpoint, dataProcessorsPerListener)
       KafkaThread.nonDaemon(s"data-plane-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", dataPlaneAcceptor).start()
       dataPlaneAcceptor.awaitStartup()
@@ -226,7 +223,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
   private def createControlPlaneAcceptorAndProcessor(endpointOpt: Option[EndPoint]): Unit = synchronized {
     endpointOpt.foreach { endpoint =>
-      val controlPlaneAcceptor = createAcceptor(endpoint, "ControlPlane")
+      val controlPlaneAcceptor = createAcceptor(endpoint, ControlPlaneMetricPrefix)
       val controlPlaneProcessor = newProcessor(nextProcessorId, controlPlaneRequestChannelOpt.get, connectionQuotas, endpoint.listenerName, endpoint.securityProtocol, memoryPool)
       controlPlaneAcceptorOpt = Some(controlPlaneAcceptor)
       controlPlaneProcessorOpt = Some(controlPlaneProcessor)
@@ -234,8 +231,8 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       listenerProcessors += controlPlaneProcessor
       controlPlaneRequestChannelOpt.foreach(_.addProcessor(controlPlaneProcessor))
       nextProcessorId += 1
-      controlPlaneAcceptor.addProcessors(listenerProcessors, ControlPlanePrefix)
-      KafkaThread.nonDaemon(s"control-plane-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", controlPlaneAcceptor).start()
+      controlPlaneAcceptor.addProcessors(listenerProcessors, ControlPlaneThreadPrefix)
+      KafkaThread.nonDaemon(s"${ControlPlaneThreadPrefix}-kafka-socket-acceptor-${endpoint.listenerName}-${endpoint.securityProtocol}-${endpoint.port}", controlPlaneAcceptor).start()
       controlPlaneAcceptor.awaitStartup()
       info(s"Created control-plane acceptor and processor for endpoint : $endpoint")
     }
@@ -259,7 +256,7 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
       nextProcessorId += 1
     }
     listenerProcessors.foreach(p => dataPlaneProcessors.put(p.id, p))
-    acceptor.addProcessors(listenerProcessors, DataPlanePrefix)
+    acceptor.addProcessors(listenerProcessors, DataPlaneThreadPrefix)
   }
 
   /**
@@ -372,6 +369,10 @@ class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time
 
 object SocketServer {
   val MetricsGroup = "socket-server-metrics"
+  val DataPlaneThreadPrefix = "data-plane"
+  val ControlPlaneThreadPrefix = "control-plane"
+  val DataPlaneMetricPrefix = ""
+  val ControlPlaneMetricPrefix = "ControlPlane"
 }
 
 /**
@@ -467,7 +468,7 @@ private[kafka] class Acceptor(val endPoint: EndPoint,
 
   private def startProcessors(processors: Seq[Processor], processorThreadPrefix: String): Unit = synchronized {
     processors.foreach { processor =>
-      KafkaThread.nonDaemon(processorThreadPrefix + s"-kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
+      KafkaThread.nonDaemon(s"${processorThreadPrefix}-kafka-network-thread-$brokerId-${endPoint.listenerName}-${endPoint.securityProtocol}-${processor.id}",
         processor).start()
     }
   }

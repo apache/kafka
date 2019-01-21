@@ -26,6 +26,7 @@ import java.util.{HashMap, Properties, Random}
 import com.yammer.metrics.core.{Gauge, Meter}
 import com.yammer.metrics.{Metrics => YammerMetrics}
 import javax.net.ssl._
+
 import kafka.security.CredentialProvider
 import kafka.server.{KafkaConfig, ThrottledChannel}
 import kafka.utils.Implicits._
@@ -1077,13 +1078,29 @@ class SocketServerTest extends JUnitSuite {
 
   @Test
   def testConnectionRateLimit(): Unit = {
-    val numConnections = 10
+    shutdownServerAndMetrics(server)
+    val numConnections = 5
     props.put("max.connections.per.ip", numConnections.toString)
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props), connectionQueueSize = 1)
     testableServer.startup()
+    val testableSelector = testableServer.testableSelector
+
+    def acceptorBlocked: Boolean = {
+      Thread.getAllStackTraces.asScala.exists { case (thread, stackTrace) =>
+        thread.getName.contains("kafka-socket-acceptor") &&
+          thread.getState == Thread.State.WAITING &&
+          stackTrace.toList.toString.contains("ArrayBlockingQueue")
+      }
+    }
+
+    def registeredConnectionCount: Int = testableSelector.operationCounts.getOrElse(SelectorOperation.Register, 0)
+
     try {
-      val testableSelector = testableServer.testableSelector
-      testableSelector.pollBlockMs = 100 // To ensure that Processor is blocked
+      // Block selector until Acceptor is blocked while connections are pending
+      testableSelector.pollCallback = () => {
+          TestUtils.waitUntilTrue(() => registeredConnectionCount >= numConnections - 1 || acceptorBlocked,
+            "Acceptor not blocked")
+      }
       testableSelector.operationCounts.clear()
       val sockets = (1 to numConnections).map(_ => connect(testableServer))
       testableSelector.waitForOperations(SelectorOperation.Register, numConnections)
@@ -1142,13 +1159,13 @@ class SocketServerTest extends JUnitSuite {
   private def verifyAcceptorBlockedPercent(listenerName: String, expectBlocked: Boolean): Unit = {
     val blockedPercentMetricMBeanName = "kafka.network:type=Acceptor,name=AcceptorBlockedPercent,listener=PLAINTEXT"
     val blockedPercentMetrics = YammerMetrics.defaultRegistry.allMetrics.asScala
-      .filterKeys(_.getMBeanName.equals(blockedPercentMetricMBeanName)).values
+      .filterKeys(_.getMBeanName == blockedPercentMetricMBeanName).values
     assertEquals(1, blockedPercentMetrics.size)
     val blockedPercentMetric = blockedPercentMetrics.head.asInstanceOf[Meter]
     val blockedPercent = blockedPercentMetric.meanRate
     if (expectBlocked) {
-      assertTrue(s"Acceptor idle percent not recorded: $blockedPercent", blockedPercent > 0.0)
-      assertTrue(s"Unexpected idle percent in acceptor: $blockedPercent", blockedPercent <= 1.0)
+      assertTrue(s"Acceptor blocked percent not recorded: $blockedPercent", blockedPercent > 0.0)
+      assertTrue(s"Unexpected blocked percent in acceptor: $blockedPercent", blockedPercent <= 1.0)
     } else {
       assertEquals(0.0, blockedPercent, 0.001)
     }
@@ -1246,7 +1263,7 @@ class SocketServerTest extends JUnitSuite {
     val allCachedPollData = Seq(cachedCompletedReceives, cachedCompletedSends, cachedDisconnected)
     @volatile var minWakeupCount = 0
     @volatile var pollTimeoutOverride: Option[Long] = None
-    @volatile var pollBlockMs = 0
+    @volatile var pollCallback: () => Unit = () => {}
 
     def addFailure(operation: SelectorOperation, exception: Option[Exception] = None) {
       failures += operation ->
@@ -1288,8 +1305,7 @@ class SocketServerTest extends JUnitSuite {
 
     override def poll(timeout: Long): Unit = {
       try {
-        if (pollBlockMs > 0)
-          Thread.sleep(pollBlockMs)
+        pollCallback.apply()
         allCachedPollData.foreach(_.reset)
         runOp(SelectorOperation.Poll, None) {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
