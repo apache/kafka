@@ -278,10 +278,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     assert(members.size >= maxGroupSize,
       s"Cannot shrink group $groupId to $maxGroupSize as it's current count ${members.size} is smaller.")
 
-    val membersToRemove = members.size - maxGroupSize
+    var membersToRemove = members.size - maxGroupSize
     members.keys.take(membersToRemove + 1).foreach(memberId => {
       if (membersToRemove != 0 && !isLeader(memberId)) {
         remove(memberId)
+        membersToRemove -= 1
       }
     })
   }
