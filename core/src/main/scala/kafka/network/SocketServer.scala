@@ -50,6 +50,10 @@ import JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import scala.util.control.ControlThrowable
 
+object SocketServer {
+  val SocketServerMetricsGroup = "socket-server-metrics"
+}
+
 /**
  * Handles new connections, requests and responses to and from broker.
  * Kafka supports two types of request planes :
@@ -69,6 +73,7 @@ import scala.util.control.ControlThrowable
  *      1 Handler thread that handles requests and produce responses back to the processor thread for writing.
  */
 class SocketServer(val config: KafkaConfig, val metrics: Metrics, val time: Time, val credentialProvider: CredentialProvider) extends Logging with KafkaMetricsGroup {
+  import SocketServer.SocketServerMetricsGroup
 
   val DataPlanePrefix = "data-plane"
   val ControlPlanePrefix = "control-plane"
@@ -594,7 +599,6 @@ private[kafka] object Processor {
   val IdlePercentMetricName = "IdlePercent"
   val NetworkProcessorMetricTag = "networkProcessor"
   val ListenerMetricTag = "listener"
-  val SocketServerMetricsGroup = "socket-server-metrics"
 }
 
 /**
@@ -616,6 +620,7 @@ private[kafka] class Processor(val id: Int,
                                memoryPool: MemoryPool,
                                logContext: LogContext) extends AbstractServerThread(connectionQuotas) with KafkaMetricsGroup {
 
+  import SocketServer.SocketServerMetricsGroup
   import Processor._
   private object ConnectionId {
     def fromString(s: String): Option[ConnectionId] = s.split("-") match {
