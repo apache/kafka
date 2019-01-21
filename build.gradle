@@ -831,6 +831,7 @@ project(':generator') {
     compile libs.jacksonJaxrsJsonProvider
     testCompile libs.junit
   }
+  integrationTest.enabled = false
 
   javadoc {
     enabled = false
