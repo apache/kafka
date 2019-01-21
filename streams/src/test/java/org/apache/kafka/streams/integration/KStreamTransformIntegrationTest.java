@@ -51,6 +51,7 @@ public class KStreamTransformIntegrationTest {
 
     private StreamsBuilder builder;
     private final String topic = "stream";
+    private final String stateStoreName = "myTransformState";
     private final List<KeyValue<Integer, Integer>> results = new ArrayList<>();
     private final ForeachAction<Integer, Integer> action = new ForeachAction<Integer, Integer>() {
         @Override
@@ -64,7 +65,7 @@ public class KStreamTransformIntegrationTest {
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
-                Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+                Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
                                             Serdes.Integer(),
                                             Serdes.Integer());
         builder.addStateStore(keyValueStoreBuilder);
@@ -95,7 +96,7 @@ public class KStreamTransformIntegrationTest {
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {
-                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore(stateStoreName);
                 }
 
                 @Override
@@ -148,7 +149,7 @@ public class KStreamTransformIntegrationTest {
                 @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {
-                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore(stateStoreName);
                 }
 
                 @Override
@@ -176,4 +177,5 @@ public class KStreamTransformIntegrationTest {
             KeyValue.pair(4, 7));
         verifyResult(expected);
     }
+
 }

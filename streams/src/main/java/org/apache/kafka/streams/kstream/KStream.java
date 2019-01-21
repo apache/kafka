@@ -518,9 +518,9 @@ public interface KStream<K, V> {
      * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
      * }</pre>
      * <p>
-     * Within the {@link Transformer}, the state is obtained via the
-     * {@link  ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be registered.
+     * Within the {@link Transformer}, the state is obtained via the {@link  ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
      * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
      * <pre>{@code
@@ -553,6 +553,17 @@ public interface KStream<K, V> {
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * </p>
+     *
+     * <p>
+     * Note that it is possible to emit multiple records for each input record by using
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(K, V)}.
+     * However, a mismatch between the types of the emitted records and the type of the stream would only be detected
+     * at runtime.
+     * To ensure type-safety at compile-time, it is recommended to use
+     * {@link #flatTransform(TransformerSupplier, String...)} if multiple records need to be emitted for each input
+     * record.
+     * </p>
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor

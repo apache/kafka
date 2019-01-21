@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Arrays;
+import java.util.Collections;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
@@ -46,9 +46,9 @@ public class TransformerSupplierAdapter<KIn, VIn, KOut, VOut> implements Transfo
             public Iterable<KeyValue<KOut, VOut>> transform(final KIn key, final VIn value) {
                 final KeyValue<KOut, VOut> pair = transformer.transform(key, value);
                 if (pair != null) {
-                    return Arrays.asList(pair);
+                    return Collections.singletonList(pair);
                 }
-                return Arrays.asList();
+                return Collections.emptyList();
             }
 
             @Override
