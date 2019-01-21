@@ -64,7 +64,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
-    KStream<K, V> filter(Predicate<? super K, ? super V> predicate);
+    KStream<K, V> filter(final Predicate<? super K, ? super V> predicate);
 
     /**
      * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
@@ -76,7 +76,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
-    KStream<K, V> filterNot(Predicate<? super K, ? super V> predicate);
+    KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate);
 
     /**
      * Set a new key (with possibly new type) for each input record.
@@ -109,7 +109,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
      */
-    <KR> KStream<KR, V> selectKey(KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
+    <KR> KStream<KR, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
      * Transform each record of the input stream into a new record in the output stream (both key and value type can be
@@ -148,7 +148,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
-    <KR, VR> KStream<KR, VR> map(KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
+    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -183,7 +183,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
-    <VR> KStream<K, VR> mapValues(ValueMapper<? super V, ? extends VR> mapper);
+    <VR> KStream<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.

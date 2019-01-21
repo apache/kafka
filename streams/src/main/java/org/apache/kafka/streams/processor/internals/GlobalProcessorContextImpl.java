@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import java.time.Duration;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -27,6 +26,7 @@ import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.time.Duration;
 import java.util.List;
 
 public class GlobalProcessorContextImpl extends AbstractProcessorContext {
@@ -59,11 +59,13 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     }
 
     /**
-     * @throws UnsupportedOperationException on every invocation
+     * No-op. This should only be called on GlobalStateStore#flush and there should be no child nodes
      */
     @Override
     public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
+        if (!currentNode().children().isEmpty()) {
+            throw new IllegalStateException("This method should only be called on 'GlobalStateStore.flush' that should not have any children.");
+        }
     }
 
     /**
@@ -106,8 +108,11 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         throw new UnsupportedOperationException("this should not happen: schedule() not supported in global processor context.");
     }
 
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
     @Override
     public long streamTime() {
-        throw new RuntimeException("Stream time is not implemented for the global processor context.");
+        throw new UnsupportedOperationException("Stream-time is not defined for global tasks.");
     }
 }

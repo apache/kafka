@@ -14,22 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.state.internals.ThreadCache;
+package org.apache.kafka.common.protocol;
 
 /**
- * Listen to cache flush events
- * @param <K> key type
- * @param <V> value type
+ * A Message which is part of the top-level Kafka API.
  */
-public interface CacheFlushListener<K, V> {
-
+public interface ApiMessage extends Message {
     /**
-     * Called when records are flushed from the {@link ThreadCache}
-     * @param key         key of the entry
-     * @param newValue    current value
-     * @param oldValue    previous value
+     * Returns the API key of this message, or -1 if there is none.
      */
-    void apply(final K key, final V newValue, final V oldValue);
+    short apiKey();
 }

@@ -1573,7 +1573,7 @@ public class FetcherTest {
         Assert.assertNotNull(topicMetadata);
         Assert.assertNotNull(topicMetadata.get(topicName));
         //noinspection ConstantConditions
-        Assert.assertEquals((int) metadata.fetch().partitionCountForTopic(topicName), topicMetadata.get(topicName).size());
+        Assert.assertEquals(metadata.fetch().partitionCountForTopic(topicName).longValue(), topicMetadata.get(topicName).size());
     }
 
     /*

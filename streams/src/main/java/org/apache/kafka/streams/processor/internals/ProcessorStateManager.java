@@ -24,6 +24,8 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.RecordConverter;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -48,6 +50,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final Map<TopicPartition, Long> standbyRestoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    private final Map<String, RecordConverter> recordConverters; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
@@ -82,6 +85,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<>() : null;
+        recordConverters = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
@@ -96,7 +100,8 @@ public class ProcessorStateManager extends AbstractStateManager {
     }
 
 
-    public static String storeChangelogTopic(final String applicationId, final String storeName) {
+    public static String storeChangelogTopic(final String applicationId,
+                                             final String storeName) {
         return applicationId + "-" + storeName + STATE_CHANGELOG_TOPIC_SUFFIX;
     }
 
@@ -128,17 +133,28 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
+        final StateStore stateStore =
+            store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
+        final RecordConverter recordConverter =
+            stateStore instanceof RecordConverter ? (RecordConverter) stateStore : new DefaultRecordConverter();
+
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
+
             restoreCallbacks.put(topic, stateRestoreCallback);
+            recordConverters.put(topic, recordConverter);
         } else {
             log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
-            final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             new CompositeRestoreListener(stateRestoreCallback),
-                                                             checkpointableOffsets.get(storePartition),
-                                                             offsetLimit(storePartition),
-                                                             store.persistent(),
-                                                             storeName);
+
+            final StateRestorer restorer = new StateRestorer(
+                storePartition,
+                new CompositeRestoreListener(stateRestoreCallback),
+                checkpointableOffsets.get(storePartition),
+                offsetLimit(storePartition),
+                store.persistent(),
+                storeName,
+                recordConverter
+            );
 
             changelogReader.register(restorer);
         }
@@ -179,8 +195,14 @@ public class ProcessorStateManager extends AbstractStateManager {
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreCallbacks.get(storePartition.topic()));
 
         if (!restoreRecords.isEmpty()) {
+            final RecordConverter converter = recordConverters.get(storePartition.topic());
+            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(restoreRecords.size());
+            for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
+                convertedRecords.add(converter.convert(record));
+            }
+
             try {
-                restoreCallback.restoreBatch(restoreRecords);
+                restoreCallback.restoreBatch(convertedRecords);
             } catch (final Exception e) {
                 throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
@@ -190,7 +212,8 @@ public class ProcessorStateManager extends AbstractStateManager {
         standbyRestoredOffsets.put(storePartition, lastOffset + 1);
     }
 
-    void putOffsetLimit(final TopicPartition partition, final long limit) {
+    void putOffsetLimit(final TopicPartition partition,
+                        final long limit) {
         log.trace("Updating store offset limit for partition {} to {}", partition, limit);
         offsetLimits.put(partition, limit);
     }

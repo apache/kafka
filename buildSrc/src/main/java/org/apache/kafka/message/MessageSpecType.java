@@ -14,37 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
 
-import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
-import org.apache.kafka.streams.processor.ProcessorContext;
+package org.apache.kafka.message;
 
-import java.util.HashMap;
-import java.util.Map;
+import com.fasterxml.jackson.annotation.JsonProperty;
 
-public class KTableValueGetterStub<K, V> implements KTableValueGetter<K, V> {
+public enum MessageSpecType {
+    @JsonProperty("request")
+    REQUEST,
 
-    private final Map<K, V> data = new HashMap<>();
+    @JsonProperty("response")
+    RESPONSE,
 
-    @Override
-    public void init(final ProcessorContext context) {
-
-    }
-
-    @Override
-    public V get(final K key) {
-        return data.get(key);
-    }
-
-    public void put(final K key, final V value) {
-        data.put(key, value);
-    }
-
-    public void remove(final K key) {
-        data.remove(key);
-    }
-
-    @Override
-    public void close() {
-    }
+    @JsonProperty("header")
+    HEADER;
 }

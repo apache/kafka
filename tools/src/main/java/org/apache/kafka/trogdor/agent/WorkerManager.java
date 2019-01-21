@@ -280,7 +280,8 @@ public final class WorkerManager {
         void transitionToRunning() {
             state = State.RUNNING;
             timeoutFuture = scheduler.schedule(stateChangeExecutor,
-                new StopWorker(workerId, false), spec.durationMs());
+                new StopWorker(workerId, false),
+                Math.max(0, spec.endMs() - time.milliseconds()));
         }
 
         void transitionToStopping() {
@@ -314,6 +315,12 @@ public final class WorkerManager {
             if (worker == null) {
                 log.info("{}: Ignoring request to create worker {}, because there is already " +
                     "a worker with that id.", nodeName, workerId);
+                return;
+            }
+            if (worker.spec.endMs() <= time.milliseconds()) {
+                log.info("{}: Will not run worker {} as it has expired.", nodeName, worker);
+                stateChangeExecutor.submit(new HandleWorkerHalting(worker,
+                    "worker expired", true));
                 return;
             }
             KafkaFutureImpl<String> haltFuture = new KafkaFutureImpl<>();

@@ -20,7 +20,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -69,7 +68,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     public void init(final ProcessorContext context, final StateStore root) {
         initInternal(context);
         underlying.init(context, root);
-        keySchema.init(context.applicationId());
     }
 
     @SuppressWarnings("unchecked")
@@ -93,7 +91,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
                     final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
                     final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
 
-                    final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes);
+                    final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes.keyDeserializer(), serdes.topic());
                     final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
                     maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
                     underlying.put(key, entry.newValue(), timestamp);
@@ -111,7 +109,11 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
             context.setRecordContext(entry.entry().context());
             try {
                 final V oldValue = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
-                flushListener.apply(windowedKey, serdes.valueFrom(entry.newValue()), oldValue);
+                flushListener.apply(
+                    windowedKey,
+                    serdes.valueFrom(entry.newValue()),
+                    oldValue,
+                    entry.entry().context().timestamp());
             } finally {
                 context.setRecordContext(current);
             }

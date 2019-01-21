@@ -86,8 +86,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                                        joinThisStoreNames);
 
         if (materializedInternal != null) {
-            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder
-                = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
+            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder =
+                new KeyValueStoreMaterializer<>(materializedInternal).materialize();
             topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
         }
     }

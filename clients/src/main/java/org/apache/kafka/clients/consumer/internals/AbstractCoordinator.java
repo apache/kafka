@@ -24,6 +24,7 @@ import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
@@ -415,7 +416,8 @@ public abstract class AbstractCoordinator implements Closeable {
                 final RuntimeException exception = future.exception();
                 if (exception instanceof UnknownMemberIdException ||
                         exception instanceof RebalanceInProgressException ||
-                        exception instanceof IllegalGenerationException)
+                        exception instanceof IllegalGenerationException ||
+                        exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
@@ -548,6 +550,16 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
+            } else if (error == Errors.MEMBER_ID_REQUIRED) {
+                // Broker requires a concrete member id to be allowed to join the group. Update member id
+                // and send another join group request in next cycle.
+                synchronized (AbstractCoordinator.this) {
+                    AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID,
+                        joinResponse.memberId(), null);
+                    AbstractCoordinator.this.rejoinNeeded = true;
+                    AbstractCoordinator.this.state = MemberState.UNJOINED;
+                }
+                future.raise(Errors.MEMBER_ID_REQUIRED);
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));
@@ -730,6 +742,16 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
+     * Check whether given generation id is matching the record within current generation.
+     * Only using in unit tests.
+     * @param generationId generation id
+     * @return true if the two ids are matching.
+     */
+    final synchronized boolean hasMatchingGenerationId(int generationId) {
+        return generation != null && generation.generationId == generationId;
+    }
+
+    /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
     protected synchronized void resetGeneration() {
@@ -777,7 +799,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation != Generation.NO_GENERATION) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.isValid()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Sending LeaveGroup request to coordinator {}", coordinator);
@@ -1078,7 +1100,7 @@ public abstract class AbstractCoordinator implements Closeable {
     protected static class Generation {
         public static final Generation NO_GENERATION = new Generation(
                 OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                JoinGroupResponse.UNKNOWN_MEMBER_ID,
                 null);
 
         public final int generationId;
@@ -1089,6 +1111,10 @@ public abstract class AbstractCoordinator implements Closeable {
             this.generationId = generationId;
             this.memberId = memberId;
             this.protocol = protocol;
+        }
+
+        public boolean isValid() {
+            return generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID;
         }
 
         @Override

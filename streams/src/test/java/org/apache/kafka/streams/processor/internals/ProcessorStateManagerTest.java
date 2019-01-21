@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockKeyValueStore;
 import org.apache.kafka.test.NoOpProcessorContext;
@@ -41,7 +42,7 @@ import org.junit.Test;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -82,7 +83,7 @@ public class ProcessorStateManagerTest {
     private final MockChangelogReader changelogReader = new MockChangelogReader();
     private final MockKeyValueStore mockKeyValueStore = new MockKeyValueStore(storeName, true);
     private final byte[] key = new byte[]{0x0, 0x0, 0x0, 0x1};
-    private final byte[] value = "the-value".getBytes(Charset.forName("UTF-8"));
+    private final byte[] value = "the-value".getBytes(StandardCharsets.UTF_8);
     private final ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(changelogTopic, 0, 0, key, value);
     private final LogContext logContext = new LogContext("process-state-manager-test ");
 
@@ -158,6 +159,28 @@ public class ProcessorStateManagerTest {
     }
 
     @Test
+    public void shouldConvertDataOnRestoreIfStoreImplementsRecordConverter() throws Exception {
+        final TaskId taskId = new TaskId(0, 2);
+        final Integer intKey = 2;
+
+        final MockKeyValueStore persistentStore = getConverterStore();
+        final ProcessorStateManager stateMgr = getStandByStateManager(taskId);
+
+        try {
+            stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.updateStandbyStates(
+                persistentStorePartition,
+                singletonList(consumerRecord),
+                consumerRecord.offset()
+            );
+            assertThat(persistentStore.keys.size(), is(1));
+            assertTrue(persistentStore.keys.contains(intKey));
+        } finally {
+            stateMgr.close(Collections.emptyMap());
+        }
+    }
+
+    @Test
     public void testRegisterPersistentStore() throws IOException {
         final TaskId taskId = new TaskId(0, 2);
 
@@ -187,8 +210,8 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void testRegisterNonPersistentStore() throws IOException {
-        final MockKeyValueStore nonPersistentStore
-            = new MockKeyValueStore(nonPersistentStoreName, false); // non persistent store
+        final MockKeyValueStore nonPersistentStore =
+            new MockKeyValueStore(nonPersistentStoreName, false); // non persistent store
         final ProcessorStateManager stateMgr = new ProcessorStateManager(
             new TaskId(0, 2),
             noPartitions,
@@ -768,6 +791,25 @@ public class ProcessorStateManagerTest {
 
     private MockKeyValueStore getPersistentStore() {
         return new MockKeyValueStore("persistentStore", true);
+    }
+
+    private MockKeyValueStore getConverterStore() {
+        return new ConverterStore("persistentStore", true);
+    }
+
+
+
+    private class ConverterStore extends MockKeyValueStore implements RecordConverter {
+
+        ConverterStore(final String name,
+                       final boolean persistent) {
+            super(name, persistent);
+        }
+
+        @Override
+        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
+            return new ConsumerRecord<>("", 0, 0L, new byte[]{0x0, 0x0, 0x0, 0x2}, "".getBytes());
+        }
     }
 
 }

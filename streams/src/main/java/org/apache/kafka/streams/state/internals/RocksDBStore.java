@@ -103,7 +103,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         this(name, DB_FILE_DIR);
     }
 
-    RocksDBStore(final String name, final String parentDir) {
+    RocksDBStore(final String name,
+                 final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
     }
@@ -157,6 +158,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             try {
                 Files.createDirectories(dbDir.getParentFile().toPath());
+                Files.createDirectories(dbDir.getAbsoluteFile().toPath());
                 db = RocksDB.open(options, dbDir.getAbsolutePath());
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
@@ -222,7 +224,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check
             // for bulk loading
@@ -434,7 +435,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    private class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
+    private class RocksDbIterator
+        extends AbstractIterator<KeyValue<Bytes, byte[]>>
+        implements KeyValueIterator<Bytes, byte[]> {
+
         private final String storeName;
         private final RocksIterator iter;
 

@@ -52,7 +52,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
   this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)

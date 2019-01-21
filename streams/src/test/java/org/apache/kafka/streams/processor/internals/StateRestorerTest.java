@@ -35,8 +35,14 @@ public class StateRestorerTest {
     private final MockRestoreCallback callback = new MockRestoreCallback();
     private final MockStateRestoreListener reportingListener = new MockStateRestoreListener();
     private final CompositeRestoreListener compositeRestoreListener = new CompositeRestoreListener(callback);
-    private final StateRestorer restorer = new StateRestorer(new TopicPartition("topic", 1), compositeRestoreListener,
-                                                             null, OFFSET_LIMIT, true, "storeName");
+    private final StateRestorer restorer = new StateRestorer(
+        new TopicPartition("topic", 1),
+        compositeRestoreListener,
+        null,
+        OFFSET_LIMIT,
+        true,
+        "storeName",
+        new DefaultRecordConverter());
 
     @Before
     public void setUp() {
@@ -66,10 +72,14 @@ public class StateRestorerTest {
 
     @Test
     public void shouldBeCompletedIfOffsetAndOffsetLimitAreZero() {
-        final StateRestorer
-            restorer =
-            new StateRestorer(new TopicPartition("topic", 1), compositeRestoreListener, null, 0, true,
-                              "storeName");
+        final StateRestorer restorer = new StateRestorer(
+            new TopicPartition("topic", 1),
+            compositeRestoreListener,
+            null,
+            0,
+            true,
+            "storeName",
+            new DefaultRecordConverter());
         assertTrue(restorer.hasCompleted(0, 10));
     }
 
