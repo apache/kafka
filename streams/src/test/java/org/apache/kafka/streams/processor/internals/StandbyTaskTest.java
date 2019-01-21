@@ -366,6 +366,7 @@ public class StandbyTaskTest {
             singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
         );
 
+        task.suspend();
         task.closeStateManager(true);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);

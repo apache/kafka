@@ -352,13 +352,15 @@ public class ProcessorStateManagerTest {
         } finally {
             // close the state manager with the ack'ed offsets
             stateMgr.flush();
+            stateMgr.checkpoint(ackedOffsets);
             stateMgr.close(ackedOffsets);
         }
-        // make sure all stores are closed.
+        // make sure all stores are closed, and the checkpoint file is written.
         assertTrue(persistentStore.flushed);
         assertTrue(persistentStore.closed);
         assertTrue(nonPersistentStore.flushed);
         assertTrue(nonPersistentStore.closed);
+        assertTrue(checkpointFile.exists());
 
         // the checkpoint file should contain an offset from the persistent store only.
         final Map<TopicPartition, Long> checkpointedOffsets = checkpoint.read();
