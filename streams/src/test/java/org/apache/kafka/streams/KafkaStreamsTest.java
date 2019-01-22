@@ -209,7 +209,7 @@ public class KafkaStreamsTest {
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 6,
-            "Streams never started.");
+            "Streams never closed.");
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
