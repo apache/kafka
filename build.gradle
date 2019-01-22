@@ -249,10 +249,11 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
-    useJUnit {
-      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    if (it.project.name != 'generator') {
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+      }
     }
-    
   }
 
   jar {
@@ -823,6 +824,23 @@ project(':examples') {
   }
 }
 
+project(':generator') {
+  dependencies {
+    compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
+    compile libs.jacksonJaxrsJsonProvider
+    testCompile libs.junit
+  }
+
+  integrationTest {
+    enabled = false
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
@@ -899,9 +917,12 @@ project(':clients') {
     delete "$buildDir/kafka/"
   }
 
-  task processMessages(type:org.apache.kafka.task.ProcessMessagesTask) {
-    inputDirectory = file("src/main/resources/common/message")
-    outputDirectory = file("src/generated/java/org/apache/kafka/common/message")
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/common/message")
   }
 
   sourceSets {
@@ -912,8 +933,7 @@ project(':clients') {
     }
     test {
       java {
-        srcDirs = ["src/generated/java", "src/test/java",
-            "$rootDir/buildSrc/src/main/java/org/apache/kafka/message/"]
+        srcDirs = ["src/generated/java", "src/test/java"]
       }
     }
   }
