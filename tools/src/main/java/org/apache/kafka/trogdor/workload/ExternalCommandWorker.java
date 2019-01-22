@@ -56,7 +56,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * Start a task {"action":"start", "spec":ExternalCommandSpec}.
  *
- * Stop a task {"action":"stop", "spec":ExternalCommandSpec}.
+ * Stop a task {"action":"stop", "spec":ExternalCommandSpec}. The external process should exit after seeing a stop
+ * command even there is no proceeding start command.
+ *
  *
  *
  * Communication API: {"status":val, "log":val, "error":"msg"}
@@ -225,8 +227,10 @@ public class ExternalCommandWorker implements TaskWorker {
             if (process.isAlive()) {
                 this.stopTask();
                 process.waitFor(1, TimeUnit.MINUTES);
-                process.destroy();
-                process.waitFor();
+                if (process.isAlive()) {
+                    process.destroy();
+                    process.waitFor();
+                }
             }
         }
     }
