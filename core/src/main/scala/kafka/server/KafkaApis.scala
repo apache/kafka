@@ -378,14 +378,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         produceRequest.getErrorResponse(requestThrottleMs, error.exception))
     }
 
-    if (produceRequest.isTransactional) {
-      if (!authorize(request.session, Write, new Resource(TransactionalId, produceRequest.transactionalId))) {
+    if (produceRequest.hasTransactionalRecords) {
+      val isAuthorizedTransactional = produceRequest.transactionalId != null &&
+        authorize(request.session, Write, Resource(TransactionalId, produceRequest.transactionalId))
+      if (!isAuthorizedTransactional) {
         sendErrorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED)
         return
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
-    } else if (produceRequest.isIdempotent && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+    } else if (produceRequest.hasIdempotentRecords && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
       sendErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED)
       return
     }

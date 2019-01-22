@@ -481,7 +481,7 @@ public class SenderTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+                return body instanceof ProduceRequest && ((ProduceRequest) body).hasIdempotentRecords();
             }
         }, produceResponse(tp0, -1, Errors.CLUSTER_AUTHORIZATION_FAILED, 0));
 
@@ -514,7 +514,7 @@ public class SenderTest {
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+                return body instanceof ProduceRequest && ((ProduceRequest) body).hasIdempotentRecords();
             }
         }, produceResponse(tp0, -1, Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, 0));
 
@@ -546,7 +546,7 @@ public class SenderTest {
         client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
-                return body instanceof ProduceRequest && ((ProduceRequest) body).isIdempotent();
+                return body instanceof ProduceRequest && ((ProduceRequest) body).hasIdempotentRecords();
             }
         });
 
