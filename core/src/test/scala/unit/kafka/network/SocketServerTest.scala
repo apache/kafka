@@ -1084,12 +1084,19 @@ class SocketServerTest extends JUnitSuite {
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props), connectionQueueSize = 1)
     testableServer.startup()
     val testableSelector = testableServer.testableSelector
+    val errors = new mutable.HashSet[String]
+
+    def acceptorStackTraces: scala.collection.Map[Thread, String] = {
+      Thread.getAllStackTraces.asScala.filterKeys(_.getName.contains("kafka-socket-acceptor"))
+        .mapValues(_.toList.mkString("\n"))
+    }
 
     def acceptorBlocked: Boolean = {
-      Thread.getAllStackTraces.asScala.exists { case (thread, stackTrace) =>
-        thread.getName.contains("kafka-socket-acceptor") &&
-          thread.getState == Thread.State.WAITING &&
-          stackTrace.toList.toString.contains("ArrayBlockingQueue")
+      val stackTraces = acceptorStackTraces
+      if (stackTraces.isEmpty)
+        errors.add(s"Acceptor thread not found, threads=${Thread.getAllStackTraces.keySet}")
+      stackTraces.exists { case (thread, stackTrace) =>
+          thread.getState == Thread.State.WAITING && stackTrace.contains("ArrayBlockingQueue")
       }
     }
 
@@ -1098,11 +1105,18 @@ class SocketServerTest extends JUnitSuite {
     try {
       // Block selector until Acceptor is blocked while connections are pending
       testableSelector.pollCallback = () => {
-          TestUtils.waitUntilTrue(() => registeredConnectionCount >= numConnections - 1 || acceptorBlocked,
-            "Acceptor not blocked")
+        try {
+          TestUtils.waitUntilTrue(() => errors.nonEmpty || registeredConnectionCount >= numConnections - 1 || acceptorBlocked,
+            "Acceptor not blocked", waitTimeMs = 10000)
+        } catch {
+          case _: Throwable => errors.add(s"Acceptor not blocked: $acceptorStackTraces")
+        }
       }
       testableSelector.operationCounts.clear()
       val sockets = (1 to numConnections).map(_ => connect(testableServer))
+      TestUtils.waitUntilTrue(() => errors.nonEmpty || registeredConnectionCount == numConnections,
+        "Connections not registered", waitTimeMs = 15000)
+      assertEquals(Set.empty, errors)
       testableSelector.waitForOperations(SelectorOperation.Register, numConnections)
       val pollCount = testableSelector.operationCounts(SelectorOperation.Poll)
       assertTrue(s"Connections created too quickly: $pollCount", pollCount >= numConnections)
