@@ -201,12 +201,12 @@ import java.util.regex.Pattern;
  * <p>
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.put(&quot;group.id&quot;, &quot;test&quot;);
- *     props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
- *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
- *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;true&quot;);
+ *     props.setProperty(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     while (true) {
@@ -239,17 +239,17 @@ import java.util.regex.Pattern;
  * <p>
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.put(&quot;group.id&quot;, &quot;test&quot;);
- *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;false&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     final int minBatchSize = 200;
  *     List&lt;ConsumerRecord&lt;String, String&gt;&gt; buffer = new ArrayList&lt;&gt;();
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100);
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             buffer.add(record);
  *         }
@@ -469,6 +469,10 @@ import java.util.regex.Pattern;
  * public class KafkaConsumerRunner implements Runnable {
  *     private final AtomicBoolean closed = new AtomicBoolean(false);
  *     private final KafkaConsumer consumer;
+ *
+ *     public KafkaConsumerRunner(KafkaConsumer consumer) {
+ *       this.consumer = consumer;
+ *     }
  *
  *     public void run() {
  *         try {
@@ -1417,6 +1421,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             maybeThrowInvalidGroupIdException();
+            offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
                         "committing offsets " + offsets);
@@ -1488,6 +1493,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             maybeThrowInvalidGroupIdException();
             log.debug("Committing offsets: {}", offsets);
+            offsets.forEach(this::updateLastSeenEpochIfNewer);
             coordinator.commitOffsetsAsync(new HashMap<>(offsets), callback);
         } finally {
             release();
@@ -1504,12 +1510,34 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        if (offset < 0)
+        seek(partition, new OffsetAndMetadata(offset, null));
+    }
+
+    /**
+     * Overrides the fetch offsets that the consumer will use on the next {@link #poll(Duration) poll(timeout)}. If this API
+     * is invoked for the same partition more than once, the latest offset will be used on the next poll(). Note that
+     * you may lose data if this API is arbitrarily used in the middle of consumption, to reset the fetch offsets. This
+     * method allows for setting the leaderEpoch along with the desired offset.
+     *
+     * @throws IllegalArgumentException if the provided offset is negative
+     * @throws IllegalStateException if the provided TopicPartition is not assigned to this consumer
+     */
+    @Override
+    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        long offset = offsetAndMetadata.offset();
+        if (offset < 0) {
             throw new IllegalArgumentException("seek offset must not be a negative number");
+        }
 
         acquireAndEnsureOpen();
         try {
-            log.debug("Seeking to offset {} for partition {}", offset, partition);
+            if (offsetAndMetadata.leaderEpoch().isPresent()) {
+                log.debug("Seeking to offset {} for partition {} with epoch {}",
+                        offset, partition, offsetAndMetadata.leaderEpoch().get());
+            } else {
+                log.debug("Seeking to offset {} for partition {}", offset, partition);
+            }
+            this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, offset);
         } finally {
             release();
@@ -1704,8 +1732,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
                         "committed offset for partition " + partition + " could be determined");
+            } else {
+                offsets.forEach(this::updateLastSeenEpochIfNewer);
+                return offsets.get(partition);
             }
-            return offsets.get(partition);
         } finally {
             release();
         }
@@ -2233,6 +2263,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (groupId == null)
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
                     "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+    }
+
+    private void updateLastSeenEpochIfNewer(TopicPartition topicPartition, OffsetAndMetadata offsetAndMetadata) {
+        offsetAndMetadata.leaderEpoch().ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(topicPartition, epoch));
     }
 
     // Visible for testing

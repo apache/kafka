@@ -16,13 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public interface CachedStateStore<K, V> {
+/**
+ * Listen to cache flush events
+ * @param <K> key type
+ * @param <V> value type
+ */
+public interface CacheFlushListener<K, V> {
+
     /**
-     * Set the {@link CacheFlushListener} to be notified when entries are flushed from the
-     * cache to the underlying {@link org.apache.kafka.streams.processor.StateStore}
-     * @param listener
-     * @param sendOldValues
+     * Called when records are flushed from the {@link ThreadCache}
+     * @param key         key of the entry
+     * @param newValue    current value
+     * @param oldValue    previous value
+     * @param timestamp   timestamp of new value
      */
-    void setFlushListener(final CacheFlushListener<K, V> listener,
-                          final boolean sendOldValues);
+    void apply(final K key, final V newValue, final V oldValue, final long timestamp);
 }

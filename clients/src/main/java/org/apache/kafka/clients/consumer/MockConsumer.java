@@ -265,6 +265,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        ensureNotClosed();
+        subscriptions.seek(partition, offsetAndMetadata.offset());
+    }
+
+    @Override
     public synchronized OffsetAndMetadata committed(TopicPartition partition) {
         ensureNotClosed();
         if (subscriptions.isAssigned(partition)) {

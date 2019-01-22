@@ -153,24 +153,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
         final ProcessorNode previousNode = currentNode();
         try {
-            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
             final String sendTo = toInternal.child();
-            if (sendTo != null) {
+            if (sendTo == null) {
+                final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+                for (final ProcessorNode child : children) {
+                    forward(child, key, value);
+                }
+            } else {
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
                 }
                 forward(child, key, value);
-            } else {
-                if (children.size() == 1) {
-                    final ProcessorNode child = children.get(0);
-                    forward(child, key, value);
-                } else {
-                    for (final ProcessorNode child : children) {
-                        forward(child, key, value);
-                    }
-                }
             }
         } finally {
             setCurrentNode(previousNode);
