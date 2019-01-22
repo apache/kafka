@@ -887,7 +887,7 @@ class GroupCoordinator(val brokerId: Int,
           }
 
           // a group larger than the max size just finished a rebalance - this is only possible if it has just been loaded by the coordinator
-          // shrink and rebalance the oversized group right after they have been given a chance to commit offsets.
+          // shrink and rebalance the oversized group right after members have been given a chance to commit offsets.
           if (groupIsOverCapacity(group)) {
             info(s"Shrinking group ${group.groupId} to ${groupConfig.groupMaxSize} members.")
             group.shrinkTo(groupConfig.groupMaxSize)

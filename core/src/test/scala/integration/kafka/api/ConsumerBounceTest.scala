@@ -324,19 +324,19 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val receivedExceptions = new ArrayBuffer[Throwable]()
     var kickedOutConsumerIdx: Option[Int] = None
     val lock = new ReentrantLock
+    // restart brokers until the group moves to a Coordinator with the new config
     breakable { for (broker <- servers.indices) {
       killBroker(broker)
       sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
 
       var successfulConsumes = 0
 
-      implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
       // compute consumptions in a non-blocking way in order to account for the rebalance once the group.size takes effect
       val consumeFutures = new ArrayBuffer[SFuture[Any]]
-      // roll clusters until the group moves to a Coordinator with the new config
+      implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
       stableConsumers.indices.foreach(idx => {
         val currentConsumer = stableConsumers(idx)
-        val consumeFuture: SFuture[Any] = SFuture {
+        val consumeFuture = SFuture {
           try {
             receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000)
             CoreUtils.inLock(lock) { successfulConsumes += 1 }
@@ -354,12 +354,12 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       })
       Await.result(SFuture.sequence(consumeFutures), Duration("12sec"))
 
-      if (receivedExceptions.nonEmpty) {
+      if (receivedExceptions.nonEmpty) { // consumer must have been kicked out
         if (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException])) {
           fail(s"Expected to only receive one exception of type ${classOf[GroupMaxSizeReachedException]}" +
             s"during consumption. Received: $receivedExceptions")
         }
-        // validate N-1 consumers consumed
+        // validate the rest N-1 consumers consumed successfully
         assertEquals(maxGroupSize, successfulConsumes)
         break
       }
