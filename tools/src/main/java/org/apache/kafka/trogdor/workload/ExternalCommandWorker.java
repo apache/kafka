@@ -25,7 +25,6 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.common.ThreadUtils;
-import org.apache.kafka.trogdor.common.WorkerUtils;
 import org.apache.kafka.trogdor.task.TaskWorker;
 import org.apache.kafka.trogdor.task.WorkerStatusTracker;
 import org.slf4j.Logger;
@@ -38,6 +37,7 @@ import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.nio.charset.StandardCharsets;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.ExecutorService;
@@ -84,9 +84,7 @@ public class ExternalCommandWorker implements TaskWorker {
 
     private ExecutorService executor;
 
-    private Process process;
-
-    private PrintWriter controlChannel;
+    private ExternalProcess ep;
 
     private String errMsg = "";
 
@@ -97,6 +95,7 @@ public class ExternalCommandWorker implements TaskWorker {
     public ExternalCommandWorker(String id, ExternalCommandSpec spec) {
         this.id = id;
         this.spec = spec;
+
     }
 
     @Override
@@ -116,41 +115,55 @@ public class ExternalCommandWorker implements TaskWorker {
     public class ProcessMonitor implements Runnable {
         @Override
         public void run() {
+            if (spec.command().isEmpty()) {
+                errMsg = "No command specified";
+                doneFuture.complete(errMsg);
+                return;
+            }
+
             try {
-                if (spec.command().isEmpty()) {
-                    errMsg = "No command specified";
-                    doneFuture.complete(errMsg);
-                    return;
-                }
-                ProcessBuilder processBuilder = new ProcessBuilder(spec.command());
-                process = processBuilder.start();
-                Future updater = executor.submit(new StatusUpdater());
-                Future errorUpdater = executor.submit(new ErrorUpdater());
-                controlChannel = new PrintWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8), true);
-                new ControlCommand("start", spec).issue();
-                log.info("{}: Started the process {} to execute command: {}", id, process.toString(), spec.command());
-                process.waitFor();
-                updater.get();
-                errorUpdater.get();
-                int workerExitValue = process.exitValue();
+                ep = new ExternalProcess();
+            } catch (IOException e) {
+                errMsg = "Failed to start the external process.";
+                log.error("{}: Failed to start the external process.");
+                doneFuture.complete(errMsg);
+                return;
+            }
+
+            try {
+                ep.startTask();
+                int workerExitValue = ep.waitForProcess();
                 log.info("{}: The process finished with the exit value: {}.", id, workerExitValue);
                 if (workerExitValue != 0 && errMsg.isEmpty()) {
-                    errMsg = "ExternalWorker exited with error code " + process.exitValue();
+                    errMsg = "ExternalWorker exited with error code " + workerExitValue;
                 }
                 log.info("{}: StatusUpdater and errorUpdater are terminated.", id);
-                doneFuture.complete(errMsg);
-            } catch (IOException e) {
-                log.info("{}: Stdout of the process is closed.", id);
             } catch (InterruptedException e) {
                 log.info("{}: ProcessMonitor is interrupted.", id);
-            } catch (Exception e) {
-                WorkerUtils.abort(log, "ProcessMonitor", e, doneFuture);
+            } catch (ExecutionException e) {
+                log.error("{}: StatusUpdaters throw an exception " + e);
             } finally {
-                if (process != null && process.isAlive()) {
-                    process.destroy();
-                }
+                doneFuture.complete(errMsg);
             }
         }
+    }
+
+    @Override
+    public void stop(Platform platform) throws Exception {
+        if (!running.compareAndSet(true, false)) {
+            throw new IllegalStateException("ExternalCommandWorker is not running.");
+        }
+        log.info("{}: Deactivating ExternalCommandWorker.", id);
+        if (ep != null) {
+            ep.destroyProcess();
+        }
+        executor.shutdownNow();
+        executor.awaitTermination(1, TimeUnit.DAYS);
+        this.executor = null;
+        this.ep = null;
+        this.status = null;
+        this.doneFuture = null;
+        this.ep = null;
     }
 
     public class ControlCommand {
@@ -171,14 +184,58 @@ public class ExternalCommandWorker implements TaskWorker {
             return spec;
         }
 
-        public void issue() {
+        public void issue(PrintWriter controlChannel) {
             String command = JsonUtil.toJsonString(this);
             log.info("{}: Send out command: {} ", id, command);
             controlChannel.println(command);
         }
     }
 
+    public class ExternalProcess {
+        private final Process process;
+        private final PrintWriter controlChannel;
+        Future stdoutMonitor;
+        Future stderrMonitor;
+        ExternalProcess() throws IOException {
+            ProcessBuilder processBuilder = new ProcessBuilder(spec.command());
+            this.process = processBuilder.start();
+            this.controlChannel = new PrintWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8), true);
+            this.stdoutMonitor = executor.submit(new StatusUpdater(this.process));
+            this.stderrMonitor = executor.submit(new ErrorUpdater(this.process));
+        }
+
+        void startTask() {
+            synchronized (this) {
+                new ControlCommand("start", spec).issue(controlChannel);
+            }
+        }
+
+        int waitForProcess() throws InterruptedException, ExecutionException {
+            process.waitFor();
+            stdoutMonitor.get();
+            stderrMonitor.get();
+            return process.exitValue();
+        }
+        void stopTask() {
+            synchronized (this) {
+                new ControlCommand("stop", spec).issue(controlChannel);
+            }
+        }
+        void destroyProcess() throws InterruptedException {
+            if (process.isAlive()) {
+                this.stopTask();
+                process.waitFor(1, TimeUnit.MINUTES);
+                process.destroy();
+                process.waitFor();
+            }
+        }
+    }
+
     public class ErrorUpdater implements Runnable {
+        private Process process;
+        ErrorUpdater(Process process) {
+            this.process = process;
+        }
         @Override
         public void run() {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
@@ -188,17 +245,19 @@ public class ExternalCommandWorker implements TaskWorker {
                 }
             } catch (IOException ioe) {
                 log.info("{}: Stderr of the process is closed.", id);
-            } catch (Exception e) {
-                WorkerUtils.abort(log, "ErrorUpdater", e, doneFuture);
             }
         }
     }
 
     /**
-     * StatusUpdater reads ProcessWorker's stdout line by line. If the line is a JSON object, StatusUpdater updates
+     * StatusUpdater reads the process's stdout line by line. If the line is a JSON object, StatusUpdater updates
      * the status with the JSON object.
      */
     public class StatusUpdater implements Runnable {
+        private Process process;
+        StatusUpdater(Process process) {
+            this.process = process;
+        }
         @Override
         public void run() {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
@@ -226,35 +285,7 @@ public class ExternalCommandWorker implements TaskWorker {
                 }
             } catch (IOException ioe) {
                 log.info("{}: Stdout f the process is closed.", id);
-            } catch (Exception e) {
-                WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
             }
         }
-    }
-
-
-    @Override
-    public void stop(Platform platform) throws Exception {
-        if (!running.compareAndSet(true, false)) {
-            throw new IllegalStateException("ExternalCommandWorker is not running.");
-        }
-        log.info("{}: Deactivating ExternalCommandWorker.", id);
-        if (process != null) {
-            if (process.isAlive()) {
-                new ControlCommand("stop", spec).issue();
-            }
-            process.waitFor(1, TimeUnit.MINUTES);
-            if (process.isAlive()) {
-                log.info("{}: Destroy the external process since it is still alive after 1 minute.");
-                process.destroy();
-            }
-        }
-        doneFuture.complete(errMsg);
-        executor.shutdownNow();
-        executor.awaitTermination(1, TimeUnit.DAYS);
-        this.executor = null;
-        this.process = null;
-        this.status = null;
-        this.doneFuture = null;
     }
 }
