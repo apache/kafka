@@ -607,8 +607,6 @@ public interface KStream<K, V> {
      * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
-     * Method {@link Transformer#transform(Object, Object) transform()} must return an {@link java.util.Iterable} (e.g.,
-     * any {@link java.util.Collection} type) and the return value must not be {@code null}.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
