@@ -97,7 +97,6 @@ public class ExternalCommandWorker implements TaskWorker {
     public ExternalCommandWorker(String id, ExternalCommandSpec spec) {
         this.id = id;
         this.spec = spec;
-
     }
 
     @Override
