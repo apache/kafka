@@ -214,8 +214,8 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
-    private boolean transactional = false;
-    private boolean idempotent = false;
+    private boolean hasTransactionalRecords = false;
+    private boolean hasIdempotentRecords = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(ApiKeys.PRODUCE, version);
@@ -261,8 +261,8 @@ public class ProduceRequest extends AbstractRequest {
     private void setFlags(MemoryRecords records) {
         Iterator<MutableRecordBatch> iterator = records.batches().iterator();
         MutableRecordBatch entry = iterator.next();
-        idempotent = entry.hasProducerId();
-        transactional = entry.isTransactional();
+        hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
+        hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
     }
 
     /**
@@ -366,12 +366,12 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
-    public boolean isTransactional() {
-        return transactional;
+    public boolean hasTransactionalRecords() {
+        return hasTransactionalRecords;
     }
 
-    public boolean isIdempotent() {
-        return idempotent;
+    public boolean hasIdempotentRecords() {
+        return hasIdempotentRecords;
     }
 
     /**
