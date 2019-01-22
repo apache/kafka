@@ -131,10 +131,16 @@ class GroupCoordinator(val brokerId: Int,
           }
 
         case Some(group) =>
-          if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
-            doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
-          } else {
-            doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+          group.inLock {
+            if (groupIsOverCapacity(group)) {
+              responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
+              if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && group.has(memberId))
+                group.remove(memberId)
+            } else if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+              doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+            } else {
+              doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+            }
           }
       }
     }
@@ -158,8 +164,6 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
-      } else if (groupIsFull(group)) {
-        responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
 
@@ -885,14 +889,6 @@ class GroupCoordinator(val brokerId: Int,
             completeAndScheduleNextHeartbeatExpiration(group, member)
             member.isNew = false
           }
-
-          // a group larger than the max size just finished a rebalance - this is only possible if it has just been loaded by the coordinator
-          // shrink and rebalance the oversized group right after members have been given a chance to commit offsets.
-          if (groupIsOverCapacity(group)) {
-            info(s"Shrinking group ${group.groupId} to ${groupConfig.groupMaxSize} members.")
-            group.shrinkTo(groupConfig.groupMaxSize)
-            prepareRebalance(group, s"Freshly-loaded group that is over capacity just finished rebalancing. Shrank it to ${groupConfig.groupMaxSize} members.")
-          }
         }
       }
     }
@@ -933,10 +929,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
-
-  private def groupIsFull(group: GroupMetadata): Boolean = {
-    group.size == groupConfig.groupMaxSize || groupIsOverCapacity(group)
-  }
 
   private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
     group.size > groupConfig.groupMaxSize

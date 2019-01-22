@@ -271,22 +271,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     currentStateTimestamp = Some(time.milliseconds())
   }
 
-  /**
-    * Shrinks the consumer group to the given size by removing members while maintaining the leader
-    */
-  def shrinkTo(maxGroupSize: Int): Unit = {
-    assert(members.size >= maxGroupSize,
-      s"Cannot shrink group $groupId to $maxGroupSize as it's current count ${members.size} is smaller.")
-
-    var membersToRemove = members.size - maxGroupSize
-    members.keys.take(membersToRemove + 1).foreach(memberId => {
-      if (membersToRemove != 0 && !isLeader(memberId)) {
-        remove(memberId)
-        membersToRemove -= 1
-      }
-    })
-  }
-
   def selectProtocol: String = {
     if (members.isEmpty)
       throw new IllegalStateException("Cannot select protocol for empty group")

@@ -323,38 +323,6 @@ class GroupMetadataTest extends JUnitSuite {
   }
 
   @Test
-  def testShrinkToKeepsLeader(): Unit = {
-    var leaderId: Option[String] = None
-    for (i <- 1.to(5)) {
-      val memberId = s"memberId-$i"
-      val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-        protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]), (memberId, Array.empty[Byte])))
-      group.add(member)
-      if (group.isLeader(memberId)) {
-        leaderId = Some(memberId)
-      }
-    }
-    assertTrue(leaderId.isDefined)
-
-    group.shrinkTo(1)
-    assertEquals(1, group.allMemberMetadata.size)
-    assertEquals(leaderId.get, group.allMemberMetadata.head.memberId)
-    assertTrue(group.supportsProtocols(protocolType, Set(leaderId.get)))
-  }
-
-  @Test(expected = classOf[AssertionError])
-  def testShrinkThrowsExceptionOnSizeInconsistency(): Unit = {
-    for (i <- 1.to(2)) {
-      val memberId = s"memberId-$i"
-      val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-        protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]), (memberId, Array.empty[Byte])))
-      group.add(member)
-    }
-
-    group.shrinkTo(3) // cannot shrink to more than what we have
-  }
-
-  @Test
   def testOffsetCommitFailureWithAnotherPending(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val firstOffset = offsetAndMetadata(37)
