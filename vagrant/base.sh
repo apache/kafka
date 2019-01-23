@@ -22,15 +22,17 @@ export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
 
 path_to_jdk_cache() {
   jdk_version=$1
-  echo "/tmp/${jdk_version}.tar.gz"
+  echo "/tmp/jdk-${jdk_version}.tar.gz"
 }
 
 fetch_jdk_tgz() {
   jdk_version=$1
 
-  if [ ! -e $(path_to_jdk_cache $jdk_version) ]; then
-    mkdir -p $(dirname $(path_to_jdk_cache $jdk_version))
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $(path_to_jdk_cache $jdk_version)
+  path=$(path_to_jdk_cache $jdk_version)
+
+  if [ ! -e $path ]; then
+    mkdir -p $(dirname $path)
+    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $path
   fi
 }
 
