@@ -26,6 +26,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -35,6 +36,10 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -650,6 +655,56 @@ public class KafkaProducerTest {
                 new StringSerializer(), metadata, client, null, time)) {
             producer.initTransactions();
             fail("initTransactions() should have raised TimeoutException");
+        }
+    }
+
+    private class TestProducer extends KafkaProducer<String, String> {
+
+        private Sender sender;
+
+        TestProducer(Map<String, Object> configs, Serializer<String> keySerializer, Serializer<String> valueSerializer, Metadata metadata, KafkaClient kafkaClient, ProducerInterceptors interceptors, Time time) {
+            super(configs, keySerializer, valueSerializer, metadata, kafkaClient, interceptors, time);
+        }
+
+        @Override
+        Sender newSender(LogContext logContext, KafkaClient kafkaClient, Metadata metadata) {
+            // give Sender its own Metadata instance so that we can isolate Metadata calls from KafkaProducer
+            sender = super.newSender(logContext, kafkaClient, new Metadata(0, 100_000, true));
+            return sender;
+        }
+
+        void closeSender() {
+            sender.initiateClose();
+        }
+    }
+
+    @Test(timeout = 10000)
+    public void testProducerCloseOnPendingTransaction() {
+        String topic = "topic";
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "bad-transaction");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap(topic, 1));
+        Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
+        metadata.update(initialUpdateResponse, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+        try (TestProducer producer = new TestProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            client.prepareResponse(new FindCoordinatorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NONE, new Node(1, "localhost", 9000)));
+            client.prepareResponse(new InitProducerIdResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.NONE, 1L, (short)0));
+            client.prepareMetadataUpdate(initialUpdateResponse);
+            client.prepareResponse(new AddPartitionsToTxnResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, singletonMap(new TopicPartition(topic, 0), Errors.NONE)));
+            producer.initTransactions();
+            producer.beginTransaction();
+            producer.send(new ProducerRecord<>(topic, "k1", "v1"));
+            producer.send(new ProducerRecord<>(topic, "k2", "v2"));
+            producer.send(new ProducerRecord<>(topic, "k3", "v3"));
+            producer.closeSender();
+            producer.commitTransaction();
         }
     }
 
