@@ -17,9 +17,9 @@
 package org.apache.kafka.common.security.ssl;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.Collections;
+import java.util.ArrayList;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -39,7 +39,32 @@ public class SslPrincipalMapper {
         return new SslPrincipalMapper(parseRules(rules));
     }
 
+    private static List<String> joinSplitRules(List<String> rules) {
+        String rule = "RULE:";
+        String defaultRule = "DEFAULT";
+        List<String> retVal = new ArrayList<>();
+        StringBuilder currentRule = new StringBuilder();
+        for (String r : rules) {
+            if (currentRule.length() > 0) {
+                if (r.startsWith(rule) || r.equals(defaultRule)) {
+                    retVal.add(currentRule.toString());
+                    currentRule.setLength(0);
+                    currentRule.append(r);
+                } else {
+                    currentRule.append(String.format(",%s", r));
+                }
+            } else {
+                currentRule.append(r);
+            }
+        }
+        if (currentRule.length() > 0) {
+            retVal.add(currentRule.toString());
+        }
+        return retVal;
+    }
+
     private static List<Rule> parseRules(List<String> rules) {
+        rules = joinSplitRules(rules);
         List<Rule> result = new ArrayList<>();
         for (String rule : rules) {
             Matcher matcher = RULE_PARSER.matcher(rule);

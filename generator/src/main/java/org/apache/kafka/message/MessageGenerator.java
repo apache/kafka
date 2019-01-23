@@ -24,14 +24,12 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 
 import java.io.BufferedWriter;
-import java.io.File;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * The Kafka message generator.
@@ -94,40 +92,30 @@ public final class MessageGenerator {
         JSON_SERDE.setSerializationInclusion(JsonInclude.Include.NON_EMPTY);
     }
 
-    public static Map<String, File> getOutputFiles(String outputDir, String inputDir) throws Exception {
-        HashMap<String, File> outputFiles = new HashMap<>();
-        for (Path inputPath : Files.newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
-            String jsonName = inputPath.getFileName().toString();
-            String javaName = jsonName.substring(0, jsonName.length() - JSON_SUFFIX.length()) + "Data.java";
-            File outputFile = new File(outputDir, javaName);
-            outputFiles.put(outputFile.toString(), outputFile);
-        }
-        File factoryFile = new File(outputDir, API_MESSAGE_FACTORY_JAVA);
-        outputFiles.put(factoryFile.toString(), factoryFile);
-        return outputFiles;
-    }
-
     public static void processDirectories(String outputDir, String inputDir) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
         ApiMessageFactoryGenerator messageFactoryGenerator = new ApiMessageFactoryGenerator();
         HashSet<String> outputFileNames = new HashSet<>();
-        for (Path inputPath : Files.newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
-            try {
-                MessageSpec spec = JSON_SERDE.
-                    readValue(inputPath.toFile(), MessageSpec.class);
-                String javaName = spec.generatedClassName() + JAVA_SUFFIX;
-                outputFileNames.add(javaName);
-                Path outputPath = Paths.get(outputDir, javaName);
-                try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
-                    MessageDataGenerator generator = new MessageDataGenerator();
-                    generator.generate(spec);
-                    generator.write(writer);
+        try (DirectoryStream<Path> directoryStream = Files
+                .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
+            for (Path inputPath : directoryStream) {
+                try {
+                    MessageSpec spec = JSON_SERDE.
+                        readValue(inputPath.toFile(), MessageSpec.class);
+                    String javaName = spec.generatedClassName() + JAVA_SUFFIX;
+                    outputFileNames.add(javaName);
+                    Path outputPath = Paths.get(outputDir, javaName);
+                    try (BufferedWriter writer = Files.newBufferedWriter(outputPath)) {
+                        MessageDataGenerator generator = new MessageDataGenerator();
+                        generator.generate(spec);
+                        generator.write(writer);
+                    }
+                    numProcessed++;
+                    messageFactoryGenerator.registerMessageType(spec);
+                } catch (Exception e) {
+                    throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
-                numProcessed++;
-                messageFactoryGenerator.registerMessageType(spec);
-            } catch (Exception e) {
-                throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
             }
         }
         Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_FACTORY_JAVA);
@@ -137,9 +125,15 @@ public final class MessageGenerator {
             messageFactoryGenerator.write(writer);
         }
         numProcessed++;
-        for (Path outputPath : Files.newDirectoryStream(Paths.get(outputDir))) {
-            if (!outputFileNames.contains(outputPath.getFileName().toString())) {
-                Files.delete(outputPath);
+        try (DirectoryStream<Path> directoryStream = Files.
+                newDirectoryStream(Paths.get(outputDir))) {
+            for (Path outputPath : directoryStream) {
+                Path fileName = outputPath.getFileName();
+                if (fileName != null) {
+                    if (!outputFileNames.contains(fileName.toString())) {
+                        Files.delete(outputPath);
+                    }
+                }
             }
         }
         System.out.printf("MessageGenerator: processed %d Kafka message JSON files(s).%n", numProcessed);

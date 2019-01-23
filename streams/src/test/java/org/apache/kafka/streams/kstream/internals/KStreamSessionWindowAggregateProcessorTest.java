@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -98,7 +99,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, metrics)
         ) {
             @Override
-            public <K, V> void forward(final K key, final V value) {
+            public <K, V> void forward(final K key, final V value, final To to) {
                 results.add(KeyValue.pair(key, value));
             }
         };

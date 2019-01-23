@@ -597,7 +597,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnBuildWhenAborted() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnBuildWhenAborted() {
         expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
@@ -616,7 +616,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
-    public void shouldResetBufferToInitialPositionOnAbort() throws Exception {
+    public void shouldResetBufferToInitialPositionOnAbort() {
         expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
@@ -631,7 +631,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnCloseWhenAborted() {
         expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
 
         ByteBuffer buffer = ByteBuffer.allocate(128);
@@ -650,7 +650,7 @@ public class MemoryRecordsBuilderTest {
     }
 
     @Test
-    public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() throws Exception {
+    public void shouldThrowIllegalStateExceptionOnAppendWhenAborted() {
         expectExceptionWithZStd(compressionType, RecordBatch.MAGIC_VALUE_V0);
 
         ByteBuffer buffer = ByteBuffer.allocate(128);

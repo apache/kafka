@@ -92,7 +92,6 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Before
     public void before() {
-        schema.init("topic");
 
         if (schema instanceof SessionKeySchema) {
             windows[0] = new SessionWindow(10L, 10L);
