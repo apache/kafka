@@ -22,13 +22,11 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.StateSerdes;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
-import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
@@ -151,13 +149,13 @@ public class InMemoryTimestampedKeyValueStore<K, V> implements TimestampedKeyVal
                                                                         final K to) {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+            new InMemoryKeyValueStore.InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
     public synchronized KeyValueIterator<K, ValueAndTimestamp<V>> all() {
         final TreeMap<K, ValueAndTimestamp<V>> copy = new TreeMap<>(this.map);
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(copy.entrySet().iterator()));
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueStore.InMemoryKeyValueIterator<>(copy.entrySet().iterator()));
     }
 
     @Override
@@ -176,37 +174,4 @@ public class InMemoryTimestampedKeyValueStore<K, V> implements TimestampedKeyVal
         this.open = false;
     }
 
-    static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
-        private final Iterator<Map.Entry<K, V>> iter;
-
-        InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
-            this.iter = iter;
-        }
-
-        @Override
-        public boolean hasNext() {
-            return iter.hasNext();
-        }
-
-        @Override
-        public KeyValue<K, V> next() {
-            final Map.Entry<K, V> entry = iter.next();
-            return new KeyValue<>(entry.getKey(), entry.getValue());
-        }
-
-        @Override
-        public void remove() {
-            iter.remove();
-        }
-
-        @Override
-        public void close() {
-            // do nothing
-        }
-
-        @Override
-        public K peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
-        }
-    }
 }
