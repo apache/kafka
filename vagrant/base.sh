@@ -22,7 +22,7 @@ export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
 
 path_to_jdk_cache() {
   jdk_version=$1
-  echo "/var/cache/oracle-jdk8-installer/jdk-${jdk_version}-linux-64.tar.gz"
+  echo "/tmp/{jdk_version}.tar.gz"
 }
 
 fetch_jdk_tgz() {
@@ -30,29 +30,29 @@ fetch_jdk_tgz() {
 
   if [ ! -e $(path_to_jdk_cache $jdk_version) ]; then
     mkdir -p $(dirname $(path_to_jdk_cache $jdk_version))
-    # Grab a copy of the JDK since it has moved and original downloader won't work
-    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}-linux-x64.tar.gz" -o $(path_to_jdk_cache $jdk_version)
+    curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-${jdk_version}.tar.gz" -o $(path_to_jdk_cache $jdk_version)
   fi
 }
 
+JDK_MAJOR=8
+JDK_FULL='8u202-linux-x64'
+
 if [ -z `which javac` ]; then
     apt-get -y update
-    apt-get install -y software-properties-common python-software-properties binutils gsfonts gsfonts-x11 java-common libfontenc1 libxfont1 x11-common xfonts-encodings xfonts-utils
+    apt-get install -y software-properties-common python-software-properties binutils java-common
 
     echo "===> Installing JDK..." 
 
     mkdir -p /opt/jdk
     cd /opt/jdk
-    rm -rf 8
-    jdk_version='8u202'
-    fetch_jdk_tgz $jdk_version
-    tar zxf $(path_to_jdk_cache $jdk_version)
-    mv jdk1.8.0_202 8
-    for bin in /opt/jdk/8/bin/* ; do 
+    rm -rf $JDK_MAJOR
+    fetch_jdk_tgz $JDK_FULL
+    tar --strip-components=1 zxf $(path_to_jdk_cache $JDK_FULL)
+    for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
       name=$(basename $bin)
-      update-alternatives --install /usr/bin/$name $name $bin 1091 && update-alternatives --set $name $bin
+      update-alternatives --install /usr/bin/$name $name $bin 1081 && update-alternatives --set $name $bin
     done
-    echo "export JAVA_HOME=/opt/jdk/8\nexport PATH=\$PATH:\$JAVA_HOME/bin" > /etc/profile.d/jdk.sh
+    echo -e "export JAVA_HOME=/opt/jdk/$JDK_MAJOR\nexport PATH=\$PATH:\$JAVA_HOME/bin" > /etc/profile.d/jdk.sh
     echo "JDK installed: $(javac -version 2>&1)"
 
 fi
