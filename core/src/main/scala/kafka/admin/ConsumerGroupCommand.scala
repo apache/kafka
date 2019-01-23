@@ -34,6 +34,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
+import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, Set, mutable}
 import scala.reflect.ClassTag
@@ -411,10 +412,10 @@ object ConsumerGroupCommand extends Logging {
     /**
       * Returns states of the specified consumer groups and partition assignment states
       */
-    def collectGroupsOffsets(groupIds: Seq[String]): Map[String, (Option[String], Option[Seq[PartitionAssignmentState]])] = {
+    def collectGroupsOffsets(groupIds: Seq[String]): TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])] = {
       val consumerGroups = describeConsumerGroups(groupIds)
 
-      val groupOffsets = (for ((groupId, consumerGroup) <- consumerGroups) yield {
+      val groupOffsets = TreeMap[String, (Option[String], Option[Seq[PartitionAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state
         val committedOffsets = getCommittedOffsets(groupId).asScala.toMap
         var assignedTopicPartitions = ListBuffer[TopicPartition]()
@@ -451,12 +452,13 @@ object ConsumerGroupCommand extends Logging {
       collectGroupsMembers(Seq(groupId), verbose)(groupId)
     }
 
-    private[admin] def collectGroupsMembers(groupIds: Seq[String], verbose: Boolean): Map[String, (Option[String], Option[Seq[MemberAssignmentState]])] = {
+    private[admin] def collectGroupsMembers(groupIds: Seq[String], verbose: Boolean): TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])] = {
       val consumerGroups = describeConsumerGroups(groupIds)
-      (for ((groupId, consumerGroup) <- consumerGroups) yield {
+      TreeMap[String, (Option[String], Option[Seq[MemberAssignmentState]])]() ++ (for ((groupId, consumerGroup) <- consumerGroups) yield {
         val state = consumerGroup.state.toString
         val memberAssignmentStates = consumerGroup.members().asScala.map(consumer =>
-          MemberAssignmentState(groupId,
+          MemberAssignmentState(
+            groupId,
             consumer.consumerId,
             consumer.host,
             consumer.clientId,
@@ -471,9 +473,9 @@ object ConsumerGroupCommand extends Logging {
       collectGroupsState(Seq(groupId))(groupId)
     }
 
-    private[admin] def collectGroupsState(groupIds: Seq[String]): Map[String, GroupState] = {
+    private[admin] def collectGroupsState(groupIds: Seq[String]): TreeMap[String, GroupState] = {
       val consumerGroups = describeConsumerGroups(groupIds)
-      (for ((groupId, groupDescription) <- consumerGroups) yield {
+      TreeMap[String, GroupState]() ++ (for ((groupId, groupDescription) <- consumerGroups) yield {
         groupId -> GroupState(
           groupId,
           groupDescription.coordinator,
