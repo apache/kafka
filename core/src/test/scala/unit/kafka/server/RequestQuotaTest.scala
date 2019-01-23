@@ -25,6 +25,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData
+import org.apache.kafka.common.message.LeaveGroupRequestData
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
@@ -259,7 +260,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new HeartbeatRequest.Builder("test-group", 1, "")
 
         case ApiKeys.LEAVE_GROUP =>
-          new LeaveGroupRequest.Builder("test-leave-group", "")
+          new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId("test-leave-group").setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
 
         case ApiKeys.SYNC_GROUP =>
           new SyncGroupRequest.Builder("test-sync-group", 1, "", Map[String, ByteBuffer]().asJava)
@@ -433,7 +434,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(response).throttleTimeMs
       case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
       case ApiKeys.HEARTBEAT => new HeartbeatResponse(response).throttleTimeMs
-      case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response).throttleTimeMs
+      case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response, 2).throttleTimeMs
       case ApiKeys.SYNC_GROUP => new SyncGroupResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_GROUPS => new DescribeGroupsResponse(response).throttleTimeMs
       case ApiKeys.LIST_GROUPS => new ListGroupsResponse(response).throttleTimeMs
