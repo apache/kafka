@@ -34,8 +34,8 @@ fetch_jdk_tgz() {
   fi
 }
 
-JDK_MAJOR=8
-JDK_FULL='8u202-linux-x64'
+JDK_MAJOR="${JDK_MAJOR:-8}"
+JDK_FULL="${JDK_FULL:-8u202-linux-x64}"
 
 if [ -z `which javac` ]; then
     apt-get -y update
@@ -47,7 +47,7 @@ if [ -z `which javac` ]; then
     cd /opt/jdk
     rm -rf $JDK_MAJOR
     fetch_jdk_tgz $JDK_FULL
-    tar --strip-components=1 zxf $(path_to_jdk_cache $JDK_FULL)
+    tar x --strip-components=1 zf $(path_to_jdk_cache $JDK_FULL)
     for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
       name=$(basename $bin)
       update-alternatives --install /usr/bin/$name $name $bin 1081 && update-alternatives --set $name $bin
