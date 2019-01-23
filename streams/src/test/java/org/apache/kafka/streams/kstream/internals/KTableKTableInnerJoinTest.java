@@ -257,6 +257,7 @@ public class KTableKTableInnerJoinTest {
             assertOutputKeyValue(driver, 1, "XX1+YY1");
             assertOutputKeyValue(driver, 2, "XX2+YY2");
             assertOutputKeyValue(driver, 3, "XX3+YY3");
+            assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -266,6 +267,7 @@ public class KTableKTableInnerJoinTest {
             assertOutputKeyValue(driver, 1, "X1+YY1");
             assertOutputKeyValue(driver, 2, "X2+YY2");
             assertOutputKeyValue(driver, 3, "X3+YY3");
+            assertNull(driver.readOutput(output));
 
             // push two items with null to the other stream as deletes. this should produce two item.
             for (int i = 0; i < 2; i++) {
@@ -273,6 +275,7 @@ public class KTableKTableInnerJoinTest {
             }
             assertOutputKeyValue(driver, 0, null);
             assertOutputKeyValue(driver, 1, null);
+            assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
@@ -280,6 +283,7 @@ public class KTableKTableInnerJoinTest {
             }
             assertOutputKeyValue(driver, 2, "XX2+YY2");
             assertOutputKeyValue(driver, 3, "XX3+YY3");
+            assertNull(driver.readOutput(output));
 
             driver.pipeInput(recordFactory.create(topic1, null, "XX" + 1));
             assertNull(driver.readOutput(output));

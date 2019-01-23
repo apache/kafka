@@ -112,6 +112,7 @@ public class KTableKTableLeftJoinTest {
             assertOutputKeyValue(driver, 1, "X1+Y1");
             assertOutputKeyValue(driver, 2, "X2+null");
             assertOutputKeyValue(driver, 3, "X3+null");
+            assertNull(driver.readOutput(output));
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -121,6 +122,7 @@ public class KTableKTableLeftJoinTest {
             assertOutputKeyValue(driver, 1, "X1+YY1");
             assertOutputKeyValue(driver, 2, "X2+YY2");
             assertOutputKeyValue(driver, 3, "X3+YY3");
+            assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -130,6 +132,7 @@ public class KTableKTableLeftJoinTest {
             assertOutputKeyValue(driver, 1, "X1+YY1");
             assertOutputKeyValue(driver, 2, "X2+YY2");
             assertOutputKeyValue(driver, 3, "X3+YY3");
+            assertNull(driver.readOutput(output));
 
             // push two items with null to the other stream as deletes. this should produce two item.
             for (int i = 0; i < 2; i++) {
@@ -137,6 +140,7 @@ public class KTableKTableLeftJoinTest {
             }
             assertOutputKeyValue(driver, 0, "X0+null");
             assertOutputKeyValue(driver, 1, "X1+null");
+            assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -146,6 +150,7 @@ public class KTableKTableLeftJoinTest {
             assertOutputKeyValue(driver, 1, "XX1+null");
             assertOutputKeyValue(driver, 2, "XX2+YY2");
             assertOutputKeyValue(driver, 3, "XX3+YY3");
+            assertNull(driver.readOutput(output));
         }
     }
 
