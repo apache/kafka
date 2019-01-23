@@ -118,12 +118,13 @@ class GroupCoordinator(val brokerId: Int,
       sessionTimeoutMs > groupConfig.groupMaxSessionTimeoutMs) {
       responseCallback(joinError(memberId, Errors.INVALID_SESSION_TIMEOUT))
     } else {
+      val isUnknownMember = memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID
       groupManager.getGroup(groupId) match {
         case None =>
           // only try to create the group if the group is UNKNOWN AND
           // the member id is UNKNOWN, if member is specified but group does not
           // exist we should reject the request.
-          if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+          if (isUnknownMember) {
             val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
             doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
           } else {
@@ -132,11 +133,11 @@ class GroupCoordinator(val brokerId: Int,
 
         case Some(group) =>
           group.inLock {
-            if (groupIsOverCapacity(group)) {
-              responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
-              if (memberId != JoinGroupRequest.UNKNOWN_MEMBER_ID && group.has(memberId))
+            if (groupIsOverCapacity(group) || (isUnknownMember && groupIsFull(group))) {
+              if (!isUnknownMember && group.has(memberId)) // oversized group, need to shed members
                 group.remove(memberId)
-            } else if (memberId == JoinGroupRequest.UNKNOWN_MEMBER_ID) {
+              responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
+            } else if (isUnknownMember) {
               doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             } else {
               doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
@@ -929,6 +930,10 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
+
+  private def groupIsFull(group: GroupMetadata): Boolean = {
+    group.size == groupConfig.groupMaxSize || groupIsOverCapacity(group)
+  }
 
   private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
     group.size > groupConfig.groupMaxSize
