@@ -58,13 +58,168 @@ public class KTableKTableInnerJoinTest {
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
+
+    @Test
+    public void testJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
+        final KTable<Integer, String> joined;
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
+        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
+        joined.toStream().to(output);
+
+        doTestJoin(builder, expectedKeys);
+    }
+
+    @Test
+    public void testQueryableJoin() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
+        final KTable<Integer, String> table3;
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
+        table3 = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
+        table3.toStream().to(output);
+
+        doTestJoin(builder, expectedKeys);
+    }
+
+    @Test
+    public void testQueryableNotSendingOldValues() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
+        final KTable<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
+        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+
+        doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
+    }
+
+    @Test
+    public void testNotSendingOldValues() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
+        final KTable<Integer, String> joined;
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
+        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+
+        doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
+            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
+            null
+        ).get();
+
+        final MockProcessorContext context = new MockProcessorContext();
+        context.setRecordMetadata("left", -1, -2, null, -3);
+        join.init(context);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        join.process(null, new Change<>("new", "old"));
+        LogCaptureAppender.unregister(appender);
+
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
+    }
+
+    private void doTestNotSendingOldValues(final StreamsBuilder builder,
+                                        final int[] expectedKeys,
+                                        final KTable<Integer, String> table1,
+                                        final KTable<Integer, String> table2,
+                                        final MockProcessorSupplier<Integer, String> supplier,
+                                        final KTable<Integer, String> joined) {
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+
+            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
+
+            assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+
+            // push two items to the primary stream. the other table is empty
+            for (int i = 0; i < 2; i++) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
+            }
+            proc.checkAndClearProcessResult();
+
+            // push two items to the other stream. this should produce two items.
+            for (int i = 0; i < 2; i++) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
+            }
+            proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)");
+
+            // push all four items to the primary stream. this should produce two items.
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
+            }
+            proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
+
+            // push all items to the other stream. this should produce four items.
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
+            }
+            proc.checkAndClearProcessResult("0:(XX0+YY0<-null)", "1:(XX1+YY1<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
+
+            // push all four items to the primary stream. this should produce four items.
+
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+            }
+            proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
+
+            // push two items with null to the other stream as deletes. this should produce two item.
+            for (int i = 0; i < 2; i++) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
+            }
+            proc.checkAndClearProcessResult("0:(null<-null)", "1:(null<-null)");
+
+            // push all four items to the primary stream. this should produce two items.
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
+            }
+            proc.checkAndClearProcessResult("2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
+        }
+    }
 
     private void doTestJoin(final StreamsBuilder builder, final int[] expectedKeys) {
 
         final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        assertEquals(1, copartitionGroups.size());
+        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
@@ -132,208 +287,7 @@ public class KTableKTableInnerJoinTest {
 
     }
 
-    @Test
-    public void testQueryableNotSendingOldValues() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
-
-        final KTable<Integer, String> table1;
-        final KTable<Integer, String> table2;
-        final KTable<Integer, String> joined;
-
-        table1 = builder.table(topic1, consumed);
-        table2 = builder.table(topic2, consumed);
-        joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        joined.toStream().to(output);
-
-        doTestJoin(builder, expectedKeys);
-    }
-
-    @Test
-    public void testNotSendingOldValues() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
-
-        final KTable<Integer, String> table1;
-        final KTable<Integer, String> table2;
-        final KTable<Integer, String> table3;
-
-        table1 = builder.table(topic1, consumed);
-        table2 = builder.table(topic2, consumed);
-        table3 = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
-        table3.toStream().to(output);
-
-        doTestJoin(builder, expectedKeys);
-    }
-
-    @SuppressWarnings("unchecked")
-    @Test
-    public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
-        final StreamsBuilder builder = new StreamsBuilder();
-
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-
-            final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
-
-            if (!sendOldValues) {
-                assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-                assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-                assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
-            } else {
-                ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
-                assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-                assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-                assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
-            }
-
-            // push two items to the primary stream. the other table is empty
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
-            }
-            proc.checkAndClearProcessResult();
-
-            // push two items to the other stream. this should produce two items.
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
-            }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)");
-
-            // push all four items to the primary stream. this should produce two items.
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
-            }
-            proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
-
-            // push all items to the other stream. this should produce four items.
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
-            }
-            proc.checkAndClearProcessResult("0:(XX0+YY0<-null)", "1:(XX1+YY1<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
-
-            // push all four items to the primary stream. this should produce four items.
-
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
-            }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
-
-            // push two items with null to the other stream as deletes. this should produce two item.
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
-            }
-            proc.checkAndClearProcessResult("0:(null<-null)", "1:(null<-null)");
-
-            // push all four items to the primary stream. this should produce two items.
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
-            }
-            proc.checkAndClearProcessResult("2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    private void doTestJoin(final StreamsBuilder builder,
-                            final int[] expectedKeys,
-                            final MockProcessorSupplier<Integer, String> supplier,
-                            final KTable<Integer, String> joined) {
-        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
-
-        assertEquals(1, copartitionGroups.size());
-        assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
-
-        final KTableValueGetterSupplier<Integer, String> getterSupplier = ((KTableImpl<Integer, String, String>) joined).valueGetterSupplier();
-
-        driver.setUp(builder, stateDir, Serdes.Integer(), Serdes.String());
-        driver.setTime(0L);
-
-        final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
-
-        final KTableValueGetter<Integer, String> getter = getterSupplier.get();
-        getter.init(driver.context());
-
-        // push two items to the primary stream. the other table is empty
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic1, expectedKeys[i], "X" + expectedKeys[i]);
-        }
-        // pass tuple with null key, it will be discarded in join process
-        driver.process(topic1, null, "SomeVal");
-        driver.flushState();
-
-        processor.checkAndClearProcessResult();
-
-        // push two items to the other stream. this should produce two items.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], "Y" + expectedKeys[i]);
-        }
-        // pass tuple with null key, it will be discarded in join process
-        driver.process(topic2, null, "AnotherVal");
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
-        checkJoinedValues(getter, kv(0, "X0+Y0"), kv(1, "X1+Y1"));
-
-        // push all four items to the primary stream. this should produce two items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1");
-        checkJoinedValues(getter, kv(0, "XX0+Y0"), kv(1, "XX1+Y1"));
-
-        // push all items to the other stream. this should produce four items.
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic2, expectedKey, "YY" + expectedKey);
-        }
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("0:XX0+YY0", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
-        checkJoinedValues(getter, kv(0, "XX0+YY0"), kv(1, "XX1+YY1"), kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
-
-        // push all four items to the primary stream. this should produce four items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "X" + expectedKey);
-        }
-        driver.flushState();
-
-        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
-            null
-        ).get();
-
-        // push two items with null to the other stream as deletes. this should produce two item.
-
-        for (int i = 0; i < 2; i++) {
-            driver.process(topic2, expectedKeys[i], null);
-        }
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("0:null", "1:null");
-        checkJoinedValues(getter, kv(0, null), kv(1, null));
-
-        // push all four items to the primary stream. this should produce two items.
-
-        for (final int expectedKey : expectedKeys) {
-            driver.process(topic1, expectedKey, "XX" + expectedKey);
-        }
-        driver.flushState();
-
-        processor.checkAndClearProcessResult("2:XX2+YY2", "3:XX3+YY3");
-        checkJoinedValues(getter, kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
-
-        driver.process(topic1, null, "XX" + 1);
-        checkJoinedValues(getter, kv(2, "XX2+YY2"), kv(3, "XX3+YY3"));
-
-    }
-
-    private void assertOutputKeyValue(TopologyTestDriver driver, Integer expectedKey, String expectedValue) {
+    private void assertOutputKeyValue(final TopologyTestDriver driver, final Integer expectedKey, final String expectedValue) {
         OutputVerifier.compareKeyValue(driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()), expectedKey, expectedValue);
     }
 

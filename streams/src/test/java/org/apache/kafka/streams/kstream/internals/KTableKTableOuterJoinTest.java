@@ -56,7 +56,7 @@ public class KTableKTableOuterJoinTest {
 
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer());
-    private final Properties props = StreamsTestUtils.topologyTestConfig(Serdes.Integer(), Serdes.String());
+    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testJoin() {
@@ -327,7 +327,7 @@ public class KTableKTableOuterJoinTest {
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
-    private void assertOutputKeyValue(TopologyTestDriver driver, Integer expectedKey, String expectedValue) {
+    private void assertOutputKeyValue(final TopologyTestDriver driver, final Integer expectedKey, final String expectedValue) {
         OutputVerifier.compareKeyValue(driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()), expectedKey, expectedValue);
     }
 
