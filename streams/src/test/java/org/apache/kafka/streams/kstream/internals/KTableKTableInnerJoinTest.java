@@ -291,7 +291,9 @@ public class KTableKTableInnerJoinTest {
 
     }
 
-    private void assertOutputKeyValue(final TopologyTestDriver driver, final Integer expectedKey, final String expectedValue) {
+    private void assertOutputKeyValue(final TopologyTestDriver driver,
+                                      final Integer expectedKey,
+                                      final String expectedValue) {
         OutputVerifier.compareKeyValue(driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()), expectedKey, expectedValue);
     }
 

@@ -333,7 +333,9 @@ public class KTableKTableOuterJoinTest {
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
-    private void assertOutputKeyValue(final TopologyTestDriver driver, final Integer expectedKey, final String expectedValue) {
+    private void assertOutputKeyValue(final TopologyTestDriver driver,
+                                      final Integer expectedKey,
+                                      final String expectedValue) {
         OutputVerifier.compareKeyValue(driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()), expectedKey, expectedValue);
     }
 
