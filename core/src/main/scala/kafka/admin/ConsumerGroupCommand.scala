@@ -914,28 +914,32 @@ object ConsumerGroupCommand extends Logging {
 
     options = parser.parse(args : _*)
 
-    val describeOptPresent = options.has(describeOpt)
-
-    val allConsumerGroupLevelOpts: Set[OptionSpec[_]] = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
+    val allGroupSelectionScopeOpts: Set[OptionSpec[_]] = Set(groupOpt, allGroupsOpt)
+    val allConsumerGroupLevelOpts: Set[OptionSpec[_]]  = Set(listOpt, describeOpt, deleteOpt, resetOffsetsOpt)
     val allResetOffsetScenarioOpts: Set[OptionSpec[_]] = Set(resetToOffsetOpt, resetShiftByOpt,
       resetToDatetimeOpt, resetByDurationOpt, resetToEarliestOpt, resetToLatestOpt, resetToCurrentOpt, resetFromFileOpt)
 
     def checkArgs() {
-      // check required args
-      if (options.has(timeoutMsOpt) && !describeOptPresent)
+
+      if (options.has(timeoutMsOpt) && !options.has(describeOpt))
         debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")
 
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
-      if (options.has(deleteOpt) && options.has(topicOpt))
+      if (options.has(describeOpt)) {
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $describeOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+      }
+
+      if (options.has(deleteOpt)) {
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $deleteOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        if (options.has(topicOpt))
           CommandLineUtils.printUsageAndDie(parser, s"The consumer does not support topic-specific offset " +
             "deletion from a consumer group.")
-
-      if (describeOptPresent)
-        CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
-
-      if (options.has(deleteOpt) && !options.has(groupOpt))
-        CommandLineUtils.printUsageAndDie(parser, s"Option $deleteOpt takes $groupOpt")
+      }
 
       if (options.has(resetOffsetsOpt)) {
         if (options.has(dryRunOpt) && options.has(executeOpt))
@@ -948,18 +952,20 @@ object ConsumerGroupCommand extends Logging {
             "if you are scripting this command and want to keep the current default behavior without prompting.")
         }
 
-        CommandLineUtils.checkRequiredArgs(parser, options, groupOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt, allResetOffsetScenarioOpts - resetToOffsetOpt)
+        if (!options.has(groupOpt) && !options.has(allGroupsOpt))
+          CommandLineUtils.printUsageAndDie(parser,
+            s"Option $resetOffsetsOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToOffsetOpt,   allResetOffsetScenarioOpts - resetToOffsetOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToDatetimeOpt, allResetOffsetScenarioOpts - resetToDatetimeOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetByDurationOpt, allResetOffsetScenarioOpts - resetByDurationOpt)
         CommandLineUtils.checkInvalidArgs(parser, options, resetToEarliestOpt, allResetOffsetScenarioOpts - resetToEarliestOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt, allResetOffsetScenarioOpts - resetToLatestOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt, allResetOffsetScenarioOpts - resetToCurrentOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt, allResetOffsetScenarioOpts - resetShiftByOpt)
-        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt, allResetOffsetScenarioOpts - resetFromFileOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToLatestOpt,   allResetOffsetScenarioOpts - resetToLatestOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetToCurrentOpt,  allResetOffsetScenarioOpts - resetToCurrentOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetShiftByOpt,    allResetOffsetScenarioOpts - resetShiftByOpt)
+        CommandLineUtils.checkInvalidArgs(parser, options, resetFromFileOpt,   allResetOffsetScenarioOpts - resetFromFileOpt)
       }
 
-      // check invalid args
+      CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allGroupSelectionScopeOpts - groupOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, groupOpt, allConsumerGroupLevelOpts - describeOpt - deleteOpt - resetOffsetsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicOpt, allConsumerGroupLevelOpts - deleteOpt - resetOffsetsOpt)
     }
