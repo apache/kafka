@@ -22,7 +22,7 @@ export KIBOSH_VERSION=d85ac3ec44be0700efe605c16289fd901cfdaa13
 
 path_to_jdk_cache() {
   jdk_version=$1
-  echo "/tmp/{jdk_version}.tar.gz"
+  echo "/tmp/${jdk_version}.tar.gz"
 }
 
 fetch_jdk_tgz() {
