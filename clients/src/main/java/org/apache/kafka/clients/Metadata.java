@@ -220,7 +220,7 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    public synchronized Optional<PartitionInfo> partitionInfoIfCurrent(TopicPartition topicPartition) {
+    public synchronized Optional<MetadataCache.PartitionInfoAndEpoch> partitionInfoIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
         if (epoch == null) {
             // old cluster format (no epochs)

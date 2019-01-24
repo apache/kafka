@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -870,7 +871,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
-            Node node = metadata.partitionInfoIfCurrent(partition).map(PartitionInfo::leader).orElse(null);
+            Node node = metadata.partitionInfoIfCurrent(partition)
+                    .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
+                    .map(PartitionInfo::leader)
+                    .orElse(null);
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
@@ -993,6 +997,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 log.warn("Not authorized to read from topic {}.", tp.topic());
                 throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            } else if (error == Errors.FENCED_LEADER_EPOCH) {
+                log.warn("Received fenced leader epoch error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
+            } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
+                log.warn("Received unknown leader epoch error in fetch for partition {}", tp);
+                this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
                 log.warn("Unknown error fetching data for topic-partition {}", tp);
             } else {
