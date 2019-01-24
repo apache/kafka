@@ -48,8 +48,10 @@ if [ -z `which javac` ]; then
     mkdir -p /opt/jdk
     cd /opt/jdk
     rm -rf $JDK_MAJOR
+    mkdir -p $JDK_MAJOR
+    cd $JKD_MAJOR
     fetch_jdk_tgz $JDK_FULL
-    tar x --strip-components=1 zf $(path_to_jdk_cache $JDK_FULL)
+    tar x --strip-components=1 -zf $(path_to_jdk_cache $JDK_FULL)
     for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
       name=$(basename $bin)
       update-alternatives --install /usr/bin/$name $name $bin 1081 && update-alternatives --set $name $bin
