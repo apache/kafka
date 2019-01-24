@@ -49,7 +49,7 @@ if [ -z `which javac` ]; then
     cd /opt/jdk
     rm -rf $JDK_MAJOR
     mkdir -p $JDK_MAJOR
-    cd $JKD_MAJOR
+    cd $JDK_MAJOR
     fetch_jdk_tgz $JDK_FULL
     tar x --strip-components=1 -zf $(path_to_jdk_cache $JDK_FULL)
     for bin in /opt/jdk/$JDK_MAJOR/bin/* ; do 
