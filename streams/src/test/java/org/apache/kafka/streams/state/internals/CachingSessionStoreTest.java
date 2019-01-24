@@ -47,9 +47,12 @@ import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
+import static org.hamcrest.Matchers.equalTo;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThat;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class CachingSessionStoreTest {
@@ -176,10 +179,15 @@ public class CachingSessionStoreTest {
         cachingStore.put(b, "2".getBytes());
         cachingStore.flush();
         cachingStore.remove(a);
-        cachingStore.flush();
+        //cachingStore.flush();
+
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
             cachingStore.findSessions(keyA, 0, 0);
         assertFalse(rangeIter.hasNext());
+
+        assertNull(cachingStore.fetchSession(keyA, 0, 0));
+        assertThat(cachingStore.fetchSession(keyB, 0, 0), equalTo("2".getBytes()));
+
     }
 
     @Test
