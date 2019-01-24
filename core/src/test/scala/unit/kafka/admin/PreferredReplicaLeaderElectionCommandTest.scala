@@ -282,11 +282,12 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     val leader = getLeader(testPartition)
     assertNotEquals(testPartitionPreferredLeader, leader)
     // Now kill the controller just before we trigger the election
-    servers(getController().get.config.brokerId).shutdown()
+    val controller = getController().get.config.brokerId
+    servers(controller).shutdown()
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
-        "--bootstrap-server", bootstrapServer(),
+        "--bootstrap-server", bootstrapServer(controller),
         "--path-to-json-file", jsonFile.getAbsolutePath),
         timeout = 2000)
       fail();
