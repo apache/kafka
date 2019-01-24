@@ -546,10 +546,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
-                    || error == Errors.INVALID_GROUP_ID) {
-                // log the error and re-throw the exception
+                    || error == Errors.INVALID_GROUP_ID
+                    || error == Errors.GROUP_MAX_SIZE_REACHED) {
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
-                future.raise(error);
+                if (error == Errors.GROUP_MAX_SIZE_REACHED) {
+                    future.raise(new GroupMaxSizeReachedException(groupId));
+                } else {
+                    future.raise(error);
+                }
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
@@ -562,8 +566,6 @@ public abstract class AbstractCoordinator implements Closeable {
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
                 future.raise(Errors.MEMBER_ID_REQUIRED);
-            } else if (error == Errors.GROUP_MAX_SIZE_REACHED) {
-                future.raise(new GroupMaxSizeReachedException(groupId));
             } else {
                 // unexpected error, throw the exception
                 future.raise(new KafkaException("Unexpected error in join group response: " + error.message()));

@@ -133,9 +133,9 @@ class GroupCoordinator(val brokerId: Int,
 
         case Some(group) =>
           group.inLock {
-            if (groupIsOverCapacity(group) || (isUnknownMember && groupIsFull(group))) {
-              if (!isUnknownMember && group.has(memberId)) // oversized group, need to shed members
-                group.remove(memberId)
+            if (groupIsOverCapacity(group) // oversized group, need to shed members
+                || (isUnknownMember && groupIsFull(group))) {
+              group.remove(memberId)
               responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
               doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
