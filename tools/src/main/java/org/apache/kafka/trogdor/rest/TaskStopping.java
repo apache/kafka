@@ -43,4 +43,9 @@ public class TaskStopping extends TaskState {
     public long startedMs() {
         return startedMs;
     }
+
+    @Override
+    public TaskStateType stateType() {
+        return TaskStateType.STOPPING;
+    }
 }
