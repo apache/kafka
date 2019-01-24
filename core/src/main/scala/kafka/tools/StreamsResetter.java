@@ -257,7 +257,7 @@ public class StreamsResetter {
             CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
-        final scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
+        final scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<OptionSpec<?>>();
         allScenarioOptions.$plus(toOffsetOption);
         allScenarioOptions.$plus(toDatetimeOption);
         allScenarioOptions.$plus(byDurationOption);
@@ -464,8 +464,7 @@ public class StreamsResetter {
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
         final Instant now = Instant.now();
-        duration.negated().addTo(now);
-        final long timestamp = now.toEpochMilli();
+        final long timestamp = now.minus(duration).toEpochMilli();
 
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {

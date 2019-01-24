@@ -555,8 +555,7 @@ object ConsumerGroupCommand extends Logging {
         val duration = opts.options.valueOf(opts.resetByDurationOpt)
         val durationParsed = Duration.parse(duration)
         val now = Instant.now()
-        durationParsed.negated().addTo(now)
-        val timestamp = now.toEpochMilli
+        val timestamp = now.minus(durationParsed).toEpochMilli
         val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
