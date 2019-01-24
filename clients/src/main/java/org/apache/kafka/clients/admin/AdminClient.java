@@ -389,6 +389,47 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
+     * Incrementally updates the configuration for the specified resources with default options.
+     *
+     * This is a convenience method for #{@link AdminClient#alterConfigs(Collection, IncrementalAlterConfigsOptions)} with default options.
+     * See the overload for more details.*
+     *
+     * This operation is supported by brokers with version 2.3.0 or higher.
+     *
+     * @param configs         The resources with their configs
+     * @return                The IncrementalAlterConfigsResult
+     */
+    public IncrementalAlterConfigsResult alterConfigs(Collection<AlterConfigOp> configs) {
+        return alterConfigs(configs, new IncrementalAlterConfigsOptions());
+    }
+
+
+    /**
+     * Incrementally update the configuration for the specified resources.
+     *
+     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
+     * a particular resource are updated atomically.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code IncrementalAlterConfigsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   if the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *   if the authenticated user didn't have alter access to the Topic.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   if the request details are invalid.</li>
+     * </ul>*
+     *
+     * This operation is supported by brokers with version 2.3.0 or higher.
+     *
+     * @param configs         The resources with their configs
+     * @param options         The options to use when altering configs
+     * @return                The IncrementalAlterConfigsResult
+     */
+    public abstract IncrementalAlterConfigsResult alterConfigs(Collection<AlterConfigOp> configs, IncrementalAlterConfigsOptions options);
+
+    /**
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
      * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
      * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given

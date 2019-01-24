@@ -297,6 +297,8 @@ object LogConfig {
         throw new InvalidConfigurationException(s"Unknown topic config name: $name")
   }
 
+  private[kafka] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
+
   /**
    * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
    */

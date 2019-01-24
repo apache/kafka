@@ -380,6 +380,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public IncrementalAlterConfigsResult alterConfigs(Collection<AlterConfigOp> configs, IncrementalAlterConfigsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public AlterReplicaLogDirsResult alterReplicaLogDirs(Map<TopicPartitionReplica, String> replicaAssignment, AlterReplicaLogDirsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
