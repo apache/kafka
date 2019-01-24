@@ -695,31 +695,31 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            Optional<PartitionInfo> currentInfo = metadata.partitionInfoIfCurrent(tp);
+            Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
             if (!currentInfo.isPresent()) {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (currentInfo.get().leader() == null) {
+            } else if (currentInfo.get().partitionInfo().leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (client.isUnavailable(currentInfo.get().leader())) {
-                client.maybeThrowAuthFailure(currentInfo.get().leader());
+            } else if (client.isUnavailable(currentInfo.get().partitionInfo().leader())) {
+                client.maybeThrowAuthFailure(currentInfo.get().partitionInfo().leader());
 
                 // The connection has failed and we need to await the blackout period before we can
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
                 log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                        currentInfo.get().leader(), tp);
+                        currentInfo.get().partitionInfo().leader(), tp);
                 partitionsToRetry.add(tp);
             } else {
-                Node node = currentInfo.get().leader();
+                Node node = currentInfo.get().partitionInfo().leader();
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
                         timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
                 ListOffsetRequest.PartitionData partitionData = new ListOffsetRequest.PartitionData(
-                        entry.getValue(), Optional.empty());
+                        entry.getValue(), Optional.of(currentInfo.get().epoch()));
                 topicData.put(entry.getKey(), partitionData);
             }
         }

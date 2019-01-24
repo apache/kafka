@@ -2037,6 +2037,34 @@ public class FetcherTest {
     }
 
     @Test
+    public void testGetOffsetsFencedLeaderEpoch() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        client.prepareResponse(listOffsetResponse(Errors.FENCED_LEADER_EPOCH, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+        assertFalse(subscriptions.hasValidPosition(tp0));
+    }
+
+    @Test
+    public void testGetOffsetsUnknownLeaderEpoch() {
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        client.prepareResponse(listOffsetResponse(Errors.UNKNOWN_LEADER_EPOCH, 1L, 5L));
+        fetcher.resetOffsetsIfNeeded();
+        consumerClient.pollNoWakeup();
+
+        assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertFalse(subscriptions.isFetchable(tp0));
+        assertFalse(subscriptions.hasValidPosition(tp0));
+    }
+
+    @Test
     public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
