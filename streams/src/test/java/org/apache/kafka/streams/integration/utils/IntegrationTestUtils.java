@@ -228,24 +228,6 @@ public class IntegrationTestUtils {
      * @param topic               Kafka topic to write the data records to
      * @param records             Data records to write to Kafka
      * @param producerConfig      Kafka producer configuration
-     * @param headers             {@link Headers} of the data records
-     * @param timestamp           Timestamp of the record
-     * @param <K>                 Key type of the data records
-     * @param <V>                 Value type of the data records
-     */
-    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
-                                                                         final Collection<KeyValue<K, V>> records,
-                                                                         final Properties producerConfig,
-                                                                         final Headers headers,
-                                                                         final Long timestamp)
-        throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, headers, timestamp, false);
-    }
-
-    /**
-     * @param topic               Kafka topic to write the data records to
-     * @param records             Data records to write to Kafka
-     * @param producerConfig      Kafka producer configuration
      * @param timestamp           Timestamp of the record
      * @param enableTransactions  Send messages in a transaction
      * @param <K>                 Key type of the data records
