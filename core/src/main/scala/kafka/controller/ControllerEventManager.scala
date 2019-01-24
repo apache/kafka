@@ -71,9 +71,8 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
 
   def clearAndPut(event: ControllerEvent): Unit = inLock(putLock) {
     queue.asScala.foreach(evt =>
-      if (evt.isInstanceOf[PreemptableControllerEvent]) {
+      if (evt.isInstanceOf[PreemptableControllerEvent])
         evt.asInstanceOf[PreemptableControllerEvent].preempt()
-      }
     )
     queue.clear()
     put(event)

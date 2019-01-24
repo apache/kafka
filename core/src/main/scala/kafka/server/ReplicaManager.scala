@@ -1527,11 +1527,10 @@ class ReplicaManager(val config: KafkaConfig,
 
     val deadline = time.milliseconds() + requestTimeout
 
-    def electionCallback(waiting: Set[TopicPartition], results: Map[TopicPartition, ApiError]): Unit = {
+    def electionCallback(waiting: Set[TopicPartition],
+                         expectedLeaders: Set[ElectPreferredLeaderMetadata],
+                         results: Map[TopicPartition, ApiError]): Unit = {
       if (waiting.nonEmpty) {
-        val expectedLeaders = waiting.map(
-          tp => ElectPreferredLeaderMetadata(tp, controller.controllerContext.partitionReplicaAssignment(tp).head))
-
         val watchKeys = waiting.map(p => new TopicPartitionOperationKey(p.topic, p.partition)).toSeq
         delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
           new DelayedElectPreferredLeader(deadline - time.milliseconds(), expectedLeaders, results,

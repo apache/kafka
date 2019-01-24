@@ -659,9 +659,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       }
       return results;
     } finally {
-      if (electionType != AdminClientTriggered) {
+      if (electionType != AdminClientTriggered)
         removePartitionsFromPreferredReplicaElection(partitions, electionType == AutoTriggered)
-      }
     }
   }
 
@@ -908,7 +907,6 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       zkClient.deletePreferredReplicaElection(controllerContext.epochZkVersion)
       // Ensure we detect future preferred replica leader elections
       eventManager.put(PreferredReplicaLeaderElection(None))
-
     }
   }
 
@@ -1545,16 +1543,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  def electPreferredLeaders(partitions: Set[TopicPartition], callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = { (_,_) => }): Unit =
+  type ElectPreferredLeadersCallback = (Set[TopicPartition], Set[ElectPreferredLeaderMetadata], Map[TopicPartition, ApiError])=>Unit
+
+  def electPreferredLeaders(partitions: Set[TopicPartition], callback: ElectPreferredLeadersCallback = { (_,_,_) => }): Unit =
     eventManager.put(PreferredReplicaLeaderElection(Some(partitions), AdminClientTriggered, callback))
 
   case class PreferredReplicaLeaderElection(partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
                                             electionType: ElectionType = ZkTriggered,
-                                            callback: (Set[TopicPartition], Map[TopicPartition, ApiError])=>Unit = (_,_) =>{}) extends PreemptableControllerEvent {
+                                            callback: ElectPreferredLeadersCallback = (_,_,_) =>{}) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
     override def handlePreempt(): Unit = {
-      callback(Set(), partitionsFromAdminClientOpt match {
+      callback(Set(), Set(), partitionsFromAdminClientOpt match {
         case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
         case None => Map.empty
       })
@@ -1562,7 +1562,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def handleProcess(): Unit = {
       if (!isActive) {
-        callback(Set(), partitionsFromAdminClientOpt match {
+        callback(Set(), Set(), partitionsFromAdminClientOpt match {
           case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
           case None => Map.empty
         })
@@ -1608,7 +1608,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             invalidPartitions.map ( tp => tp -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
             )
           debug(s"PreferredReplicaLeaderElection waiting: $successfulPartitions, results: $results")
-          callback(successfulPartitions, results)
+          callback(successfulPartitions,
+            successfulPartitions.map(
+              tp => ElectPreferredLeaderMetadata(tp, controllerContext.partitionReplicaAssignment(tp).head)),
+            results)
         }
       }
     }
@@ -1791,22 +1794,20 @@ sealed trait ControllerEvent {
 }
 
 /**
-  * A `ControllerEvent`, such as one with a client callback, which needs specific handing in the event of ZK session expiration.
+  * A `ControllerEvent`, such as one with a client callback, which needs specific handling in the event of ZK session expiration.
   */
 sealed trait PreemptableControllerEvent extends ControllerEvent {
 
   val spent = new AtomicBoolean(false)
 
   final def preempt(): Unit = {
-    if (!spent.getAndSet(true)) {
+    if (!spent.getAndSet(true))
       handlePreempt()
-    }
   }
 
   final def process(): Unit = {
-    if (!spent.getAndSet(true)) {
+    if (!spent.getAndSet(true))
       handleProcess()
-    }
   }
 
   def handlePreempt(): Unit

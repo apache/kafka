@@ -848,5 +848,4 @@ public abstract class AdminClient implements AutoCloseable {
      * Get the metrics kept by the adminClient
      */
     public abstract Map<MetricName, ? extends Metric> metrics();
-
 }

@@ -1348,15 +1348,12 @@ public class RequestResponseTest {
     }
 
     private ElectPreferredLeadersResponse createElectPreferredLeadersResponse() {
-        //Map<TopicPartition, ApiError> errors = new HashMap<>();
-        //errors.put(new TopicPartition("myTopic", 0), ApiError.NONE);
-        //errors.put(new TopicPartition("myTopic", 1), ApiError.fromThrowable(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception("blah")));
         ElectPreferredLeadersResponseData data = new ElectPreferredLeadersResponseData().setThrottleTimeMs(200);
         ReplicaElectionResult resultsByTopic = new ReplicaElectionResult().setTopic("myTopic");
         resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(0)
                 .setErrorCode(Errors.NONE.code())
                 .setErrorMessage(Errors.NONE.message()));
-        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(0)
+        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(1)
                 .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
                 .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         data.replicaElectionResults().add(resultsByTopic);

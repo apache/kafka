@@ -100,9 +100,7 @@ public class ElectPreferredLeadersRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ElectPreferredLeadersResponseData response = new ElectPreferredLeadersResponseData();
-        if (version() >= 2) {
-            response.setThrottleTimeMs(throttleTimeMs);
-        }
+        response.setThrottleTimeMs(throttleTimeMs);
         ApiError apiError = ApiError.fromThrowable(e);
         for (TopicPartitions topic : data.topicPartitions()) {
             ReplicaElectionResult electionResult = new ReplicaElectionResult().setTopic(topic.topic());
@@ -112,8 +110,7 @@ public class ElectPreferredLeadersRequest extends AbstractRequest {
                         .setErrorCode(apiError.error().code())
                         .setErrorMessage(apiError.message()));
             }
-            response.replicaElectionResults().add(
-                    electionResult);
+            response.replicaElectionResults().add(electionResult);
         }
         return new ElectPreferredLeadersResponse(response);
     }
