@@ -59,6 +59,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -72,6 +73,27 @@ import static org.junit.Assert.fail;
 @RunWith(PowerMockRunner.class)
 @PowerMockIgnore("javax.management.*")
 public class KafkaProducerTest {
+    private String topic = "topic";
+    private Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+    private final Cluster emptyCluster = new Cluster(null, nodes,
+            Collections.emptySet(),
+            Collections.emptySet(),
+            Collections.emptySet());
+    private final Cluster onePartitionCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(new Node(0, "host1", 1000)),
+            Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
+    private final Cluster threePartitionCluster = new Cluster(
+            "dummy",
+            Collections.singletonList(new Node(0, "host1", 1000)),
+            Arrays.asList(
+                    new PartitionInfo(topic, 0, null, null, null),
+                    new PartitionInfo(topic, 1, null, null, null),
+                    new PartitionInfo(topic, 2, null, null, null)),
+            Collections.emptySet(),
+            Collections.emptySet());
 
     @Test
     public void testConstructorWithSerializers() {
@@ -269,24 +291,12 @@ public class KafkaProducerTest {
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
 
-        String topic = "topic";
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "value");
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
-                Collections.<PartitionInfo>emptySet(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
-        final Cluster cluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
 
         // Expect exactly one fetch for each attempt to refresh while topic metadata is not available
         final int refreshAttempts = 5;
         EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andReturn(onePartitionCluster).once();
         EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.send(record);
@@ -294,7 +304,7 @@ public class KafkaProducerTest {
 
         // Expect exactly one fetch if topic metadata is available
         PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andReturn(onePartitionCluster).once();
         EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.send(record, null);
@@ -302,88 +312,109 @@ public class KafkaProducerTest {
 
         // Expect exactly one fetch if topic metadata is available
         PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(cluster).once();
+        EasyMock.expect(metadata.fetch()).andReturn(onePartitionCluster).once();
         EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
         producer.partitionsFor(topic);
         PowerMock.verify(metadata);
     }
 
+    @Test
+    public void testMetadataTimeoutWithMissingTopic() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        long refreshBackoffMs = 500L;
+        long metadataExpireMs = 60000L;
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
+                true, new ClusterResourceListeners());
+        final Time time = new MockTime();
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
+
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        yield();
+                    metadata.update(Cluster.empty(), Collections.singleton(topic), time.milliseconds());
+                    time.sleep(60 * 1000L);
+                }
+            }
+        };
+        t.start();
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
+        try {
+            producer.send(record).get();
+            fail("Expect ExecutionException");
+        } catch (ExecutionException e) {
+            // skip
+        }
+        Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
+    }
+
     @PrepareOnlyThisForTest(Metadata.class)
     @Test
-    public void testMetadataFetchOnStaleMetadata() throws Exception {
+    public void testMetadataWithPartitionOutOfRange() throws Exception {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         Metadata metadata = PowerMock.createNiceMock(Metadata.class);
         MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
 
-        String topic = "topic";
-        ProducerRecord<String, String> initialRecord = new ProducerRecord<>(topic, "value");
-        // Create a record with a partition higher than the initial (outdated) partition range
-        ProducerRecord<String, String> extendedRecord = new ProducerRecord<>(topic, 2, null, "value");
-        Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
-        final Cluster emptyCluster = new Cluster(null, nodes,
-                Collections.<PartitionInfo>emptySet(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
-        final Cluster initialCluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(new PartitionInfo(topic, 0, null, null, null)),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
-        final Cluster extendedCluster = new Cluster(
-                "dummy",
-                Collections.singletonList(new Node(0, "host1", 1000)),
-                Arrays.asList(
-                        new PartitionInfo(topic, 0, null, null, null),
-                        new PartitionInfo(topic, 1, null, null, null),
-                        new PartitionInfo(topic, 2, null, null, null)),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet());
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
 
-        // Expect exactly one fetch for each attempt to refresh while topic metadata is not available
+        // Expect exactly one fetch for each attempt to refresh while topic metadata is stale
         final int refreshAttempts = 5;
-        EasyMock.expect(metadata.fetch()).andReturn(emptyCluster).times(refreshAttempts - 1);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
+        EasyMock.expect(metadata.fetch()).andReturn(onePartitionCluster).times(refreshAttempts - 1);
+        EasyMock.expect(metadata.fetch()).andReturn(threePartitionCluster).once();
         EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
         PowerMock.replay(metadata);
-        producer.send(initialRecord);
+        producer.send(record);
         PowerMock.verify(metadata);
+    }
 
-        // Expect exactly one fetch if topic metadata is available and records are still within range
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
-        producer.send(initialRecord, null);
-        PowerMock.verify(metadata);
+    @Test
+    public void testMetadataTimeoutWithPartitionOutOfRange() throws Exception {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "600000");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
 
-        // Expect exactly two fetches if topic metadata is available but metadata response still returns
-        // the same partition size (either because metadata are still stale at the broker too or because
-        // there weren't any partitions added in the first place).
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
+        long refreshBackoffMs = 500L;
+        long metadataExpireMs = 60000L;
+        final Metadata metadata = new Metadata(refreshBackoffMs, metadataExpireMs, true,
+                true, new ClusterResourceListeners());
+        final Time time = new MockTime();
+        MemberModifier.field(KafkaProducer.class, "metadata").set(producer, metadata);
+        MemberModifier.field(KafkaProducer.class, "time").set(producer, time);
+
+        Thread t = new Thread() {
+            @Override
+            public void run() {
+                long startTimeMs = System.currentTimeMillis();
+                for (int i = 0; i < 10; i++) {
+                    while (!metadata.updateRequested() && System.currentTimeMillis() - startTimeMs < 1000)
+                        yield();
+                    metadata.update(onePartitionCluster, Collections.emptySet(), time.milliseconds());
+                    time.sleep(60 * 1000L);
+                }
+            }
+        };
+        t.start();
+        // Create a record with a partition higher than the initial (outdated) partition range
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 2, null, "value");
         try {
-            producer.send(extendedRecord, null);
-            fail("Expected KafkaException to be raised");
-        } catch (KafkaException e) {
-            // expected
+            producer.send(record).get();
+            fail("Expect ExecutionException");
+        } catch (ExecutionException e) {
+            // skip
         }
-        PowerMock.verify(metadata);
-
-        // Expect exactly two fetches if topic metadata is available but outdated for the given record
-        PowerMock.reset(metadata);
-        EasyMock.expect(metadata.fetch()).andReturn(initialCluster).once();
-        EasyMock.expect(metadata.fetch()).andReturn(extendedCluster).once();
-        EasyMock.expect(metadata.fetch()).andThrow(new IllegalStateException("Unexpected call to metadata.fetch()")).anyTimes();
-        PowerMock.replay(metadata);
-        producer.send(extendedRecord, null);
-        PowerMock.verify(metadata);
+        Assert.assertTrue("Topic should still exist in metadata", metadata.containsTopic(topic));
     }
 
     @Test

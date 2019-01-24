@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import java.util.concurrent.{ExecutionException, TimeoutException}
+import java.util.concurrent.ExecutionException
 import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
@@ -25,7 +25,6 @@ import kafka.log.LogConfig
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.{DefaultRecord, DefaultRecordBatch}
@@ -182,8 +181,8 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   }
 
   /**
-    * Send with invalid partition id should throw KafkaException when partition is higher than the upper bound of
-    * partitions.
+    * Send with invalid partition id should return ExecutionException caused by TimeoutException
+    * when partition is higher than the upper bound of partitions.
     */
   @Test
   def testInvalidPartition() {
@@ -192,8 +191,11 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
 
     // create a record with incorrect partition id (higher than the number of partitions), send should fail
     val higherRecord = new ProducerRecord(topic1, 1, "key".getBytes, "value".getBytes)
-    intercept[KafkaException] {
-      producer1.send(higherRecord)
+    intercept[ExecutionException] {
+      producer1.send(higherRecord).get
+    }.getCause match {
+      case _: TimeoutException => // this is ok
+      case ex => throw new Exception("Sending to a partition not present in the metadata should result in a TimeoutException", ex)
     }
   }
 
