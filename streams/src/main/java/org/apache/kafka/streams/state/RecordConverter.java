@@ -14,22 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.state.internals.ThreadCache;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.KeyValue;
 
 /**
- * Listen to cache flush events
- * @param <K> key type
- * @param <V> value type
+ * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
  */
-public interface CacheFlushListener<K, V> {
+public interface RecordConverter {
 
     /**
-     * Called when records are flushed from the {@link ThreadCache}
-     * @param key         key of the entry
-     * @param newValue    current value
-     * @param oldValue    previous value
+     * Convert a given record into a key-value pair.
+     *
+     * @param record the consumer record
+     * @return the record as key-value pair
      */
-    void apply(final K key, final V newValue, final V oldValue);
+    ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
+
 }

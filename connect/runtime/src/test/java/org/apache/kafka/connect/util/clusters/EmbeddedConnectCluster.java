@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import javax.servlet.http.HttpServletResponse;
+import javax.ws.rs.core.Response;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStreamWriter;
@@ -169,6 +170,14 @@ public class EmbeddedConnectCluster {
         }
     }
 
+    /**
+     * Get the status for a connector running in this cluster.
+     *
+     * @param connectorName name of the connector
+     * @return an instance of {@link ConnectorStateInfo} populated with state informaton of the connector and it's tasks.
+     * @throws ConnectRestException if the HTTP request to the REST API failed with a valid status code.
+     * @throws ConnectException for any other error.
+     */
     public ConnectorStateInfo connectorStatus(String connectorName) {
         ObjectMapper mapper = new ObjectMapper();
         String url = endpointForResource(String.format("connectors/%s/status", connectorName));
@@ -215,6 +224,14 @@ public class EmbeddedConnectCluster {
         return httpCon.getResponseCode();
     }
 
+    /**
+     * Execute a GET request on the given URL.
+     *
+     * @param url the HTTP endpoint
+     * @return response body encoded as a String
+     * @throws ConnectRestException if the HTTP request fails with a valid status code
+     * @throws IOException for any other I/O error.
+     */
     public String executeGet(String url) throws IOException {
         log.debug("Executing GET request to URL={}.", url);
         HttpURLConnection httpCon = (HttpURLConnection) new URL(url).openConnection();
@@ -228,6 +245,13 @@ public class EmbeddedConnectCluster {
             }
             log.debug("Get response for URL={} is {}", url, response);
             return response.toString();
+        } catch (IOException e) {
+            Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());
+            if (status != null) {
+                throw new ConnectRestException(status, "Invalid endpoint: " + url, e);
+            }
+            // invalid response code, re-throw the IOException.
+            throw e;
         }
     }
 

@@ -370,6 +370,7 @@
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
         <allow class="javax.servlet.http.HttpServletResponse" />
+        <allow class="javax.ws.rs.core.Response" />
       </subpackage>
     </subpackage>
 

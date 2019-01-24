@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
+import org.rocksdb.BloomFilter;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 import org.rocksdb.FlushOptions;
@@ -109,14 +110,19 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         this.parentDir = parentDir;
     }
 
+
     @SuppressWarnings("unchecked")
     public void openDB(final ProcessorContext context) {
         // initialize the default rocksdb options
+
+        options = new Options();
+
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
+        tableConfig.setFilter(new BloomFilter());
 
-        options = new Options();
+        options.optimizeFiltersForHits();
         options.setTableFormatConfig(tableConfig);
         options.setWriteBufferSize(WRITE_BUFFER_SIZE);
         options.setCompressionType(COMPRESSION_TYPE);
@@ -158,6 +164,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         try {
             try {
                 Files.createDirectories(dbDir.getParentFile().toPath());
+                Files.createDirectories(dbDir.getAbsoluteFile().toPath());
                 db = RocksDB.open(options, dbDir.getAbsolutePath());
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);

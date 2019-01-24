@@ -72,11 +72,11 @@ public class ProcessorNode<K, V> {
         return processor;
     }
 
-    public final List<ProcessorNode<?, ?>> children() {
+    public List<ProcessorNode<?, ?>> children() {
         return children;
     }
 
-    final ProcessorNode getChild(final String childName) {
+    ProcessorNode getChild(final String childName) {
         return childByName.get(childName);
     }
 

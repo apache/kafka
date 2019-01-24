@@ -39,7 +39,6 @@ class Segment extends RocksDBStore implements Comparable<Segment> {
         return Long.compare(id, segment.id);
     }
 
-
     @Override
     public void openDB(final ProcessorContext context) {
         super.openDB(context);

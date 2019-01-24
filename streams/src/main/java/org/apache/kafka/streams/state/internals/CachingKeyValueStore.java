@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -97,9 +96,11 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                 }
                 // we rely on underlying store to handle null new value bytes as deletes
                 underlying.put(entry.key(), entry.newValue());
-                flushListener.apply(serdes.keyFrom(entry.key().get()),
-                                    serdes.valueFrom(entry.newValue()),
-                                    oldValue);
+                flushListener.apply(
+                    serdes.keyFrom(entry.key().get()),
+                    serdes.valueFrom(entry.newValue()),
+                    oldValue,
+                    entry.entry().context().timestamp());
             } else {
                 underlying.put(entry.key(), entry.newValue());
             }
