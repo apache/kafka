@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -39,7 +38,7 @@ public class SessionWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder
     @Override
     public MeteredSessionWithTimestampStore<K, V> build() {
         SessionStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof RecordConverter) && store.persistent()) {
+        if (!(store instanceof StoreWithTimestamps) && store.persistent()) {
             store = new SessionToSessionWithTimestampByteProxyStore(store);
         }
         return new MeteredSessionWithTimestampStore<>(

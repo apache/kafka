@@ -47,8 +47,8 @@ class TupleForwarder<K, V> {
     }
 
     private StateStore maybeRemoveStoreFacade(final StateStore store) {
-        if (store instanceof KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) {
-            return ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+        if (store instanceof KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) {
+            return ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
         }
         if (store instanceof KStreamImpl.WindowStoreFacade) {
             return ((KStreamImpl.WindowStoreFacade) store).inner;

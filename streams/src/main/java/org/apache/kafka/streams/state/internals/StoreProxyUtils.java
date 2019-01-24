@@ -21,6 +21,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.nio.ByteBuffer;
+
 class StoreProxyUtils {
     private static final byte[] UNKNOWN_TIMESTAMP_BYTE_ARRAY = new LongSerializer().serialize(null, -1L);
 
@@ -43,6 +45,10 @@ class StoreProxyUtils {
         System.arraycopy(UNKNOWN_TIMESTAMP_BYTE_ARRAY, 0, rawValueWithUnknownTimestamp, 0, 8);
         System.arraycopy(rawValue, 0, rawValueWithUnknownTimestamp, 8, rawValue.length);
         return rawValueWithUnknownTimestamp;
+    }
+
+    static byte[] getValueWithTimestamp(final byte[] value, final long timestamp) {
+        return ByteBuffer.wrap(new byte[value.length + 8]).putLong(timestamp).put(value).array();
     }
 
     static class KeyValueIteratorProxy<K> implements KeyValueIterator<K, byte[]> {

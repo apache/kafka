@@ -16,48 +16,24 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
 
-import java.util.List;
-
-public class ChangeLoggingKeyValueWithTimestampBytesStore extends ChangeLoggingKeyValueBytesStore {
-    private final LongDeserializer longDeserializer = new LongDeserializer();
-
-    ChangeLoggingKeyValueWithTimestampBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
-        super(inner);
+// We know the inner store's byte format is with timestamps,
+// but we don't want to send them in the value to the changelog,
+// so this class's job is to strip them off before logging.
+class ChangeLoggingKeyValueWithTimestampBytesStore extends ChangeLoggingKeyValueBytesStore implements StoreWithTimestamps {
+    ChangeLoggingKeyValueWithTimestampBytesStore(final KeyValueStore<Bytes, byte[]> innerStoreWithTimestamps) {
+        super(innerStoreWithTimestamps);
     }
 
     @Override
-    public void put(final Bytes key,
-                    final byte[] valueAndTimestamp) {
-        if (valueAndTimestamp != null) {
-            inner.put(key, valueAndTimestamp);
-            log(key, valueAndTimestamp);
-        } else {
-            inner.put(key, null);
-            changeLogger.logChange(key, null);
-        }
-    }
-
-    @Override
-    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-        inner.putAll(entries);
-        for (final KeyValue<Bytes, byte[]> entry : entries) {
-            log(entry.key, entry.value);
-        }
-    }
-
-    private void log(final Bytes key,
-                     final byte[] valueAndTimestamp) {
-        final byte[] rawTimestamp = new byte[8];
+    void logChange(final Bytes key, final byte[] valueAndTimestamp) {
         final byte[] rawValue = new byte[valueAndTimestamp.length - 8];
 
-        System.arraycopy(valueAndTimestamp, 0, rawTimestamp, 0, 8);
         System.arraycopy(valueAndTimestamp, 8, rawValue, 0, valueAndTimestamp.length - 8);
 
-        changeLogger.logChange(key, rawValue, longDeserializer.deserialize(null, rawTimestamp));
+        // note, I removed the timestamp here. IIUC, it should always be the same as the one in the context anyway...
+        changeLogger.logChange(key, rawValue);
     }
 }

@@ -51,7 +51,7 @@ public class KTableReduceTest {
 
         context.register(
             new ProcessorContextImpl.KeyValueStoreReadWriteDecorator<>(
-                new KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade<>(myStore)),
+                new KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<>(myStore)),
             null);
         reduceProcessor.init(context);
         context.setCurrentNode(new ProcessorNode<>("reduce", reduceProcessor, singleton("myStore")));

@@ -70,7 +70,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             if (store instanceof WrappedStateStore) {
                 store = ((WrappedStateStore) store).wrappedStore();
             }
-            this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+            this.store = ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 

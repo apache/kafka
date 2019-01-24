@@ -63,8 +63,8 @@ public class StreamThreadStateStoreProvider implements StateStoreProvider {
                     throw new InvalidStateStoreException("Cannot get state store " + storeName + " for task " + streamTask +
                             " because the store is not open. The state store may have migrated to another instances.");
                 }
-                if (store instanceof KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) {
-                    final KeyValueStore innerStore = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+                if (store instanceof KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) {
+                    final KeyValueStore innerStore = ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
                     if (queryableStoreType instanceof QueryableStoreTypes.KeyValueStoreType) {
                         stores.add((T) new ReadOnlyKeyValueStoreFacade(innerStore));
                     } else {

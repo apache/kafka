@@ -97,7 +97,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
                 if (store instanceof WrappedStateStore) {
                     store = ((WrappedStateStore) store).wrappedStore();
                 }
-                this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+                this.store = ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
                 tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context), sendOldValues);
             }
         }

@@ -50,7 +50,7 @@ public class KTableMaterializedValueGetterSupplier<K, V> implements KTableValueG
             if (store instanceof WrappedStateStore) {
                 store = ((WrappedStateStore) store).wrappedStore();
             }
-            this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+            this.store = ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
         }
 
         @Override

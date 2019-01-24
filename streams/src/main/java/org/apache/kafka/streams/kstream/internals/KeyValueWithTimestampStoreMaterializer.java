@@ -16,23 +16,21 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.DefaultRecordConverter;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
+import org.apache.kafka.streams.state.internals.KeyValueToKeyValueWithUnknownTimestampByteStore;
+import org.apache.kafka.streams.state.internals.StoreWithTimestamps;
 
 import java.util.List;
 import java.util.Map;
@@ -45,19 +43,44 @@ public class KeyValueWithTimestampStoreMaterializer<K, V> {
     }
 
     /**
-     * @return  StoreBuilder
+     * @return StoreBuilder
      */
     public StoreBuilder<KeyValueStore<K, V>> materialize() {
-        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            supplier = Stores.persistentKeyValueWithTimestampStore(materialized.storeName());
+        final KeyValueBytesStoreSupplier innerSupplierWithTimestamps;
+        if (materialized.storeSupplier() == null) {
+            innerSupplierWithTimestamps = Stores.persistentKeyValueWithTimestampStore(materialized.storeName());
+        } else {
+            // wrap the supplier up front, so we can just know later on that we're going to get a store with timestamps
+            innerSupplierWithTimestamps = new KeyValueBytesStoreSupplier() {
+
+                @Override
+                public String name() {
+                    return materialized.storeSupplier().name();
+                }
+
+                @Override
+                public KeyValueStore<Bytes, byte[]> get() {
+                    final KeyValueStore<Bytes, byte[]> store = materialized.storeSupplier().get();
+
+                    // todo why only wrap persistent, non-timestamped stores?
+                    if (!(store instanceof StoreWithTimestamps) && store.persistent()) {
+                        return new KeyValueToKeyValueWithUnknownTimestampByteStore(store);
+                    } else {
+                        return store;
+                    }
+                }
+
+                @Override
+                public String metricsScope() {
+                    return materialized.storeSupplier().metricsScope();
+                }
+            };
         }
 
-        final KeyValueBytesStoreSupplier innerSupplier = supplier;
-        final KeyValueStoreBuilder<K, V> builder = new KeyValueStoreBuilder<K, V>(supplier, null, null, Time.SYSTEM) {
+        final KeyValueStoreBuilder<K, V> builder = new KeyValueStoreBuilder<K, V>(innerSupplierWithTimestamps, null, null, Time.SYSTEM) {
             final StoreBuilder<KeyValueStore<K, ValueAndTimestamp<V>>> inner =
                 Stores.keyValueWithTimestampStoreBuilder(
-                    innerSupplier,
+                    innerSupplierWithTimestamps,
                     materialized.keySerde(),
                     materialized.valueSerde());
 
@@ -102,7 +125,7 @@ public class KeyValueWithTimestampStoreMaterializer<K, V> {
 
             @Override
             public KeyValueStore<K, V> build() {
-                return new KeyValueStoreFacade<>(inner.build());
+                return new TimestampHidingKeyValueStoreFacade<>(inner.build());
             }
         };
 
@@ -118,14 +141,12 @@ public class KeyValueWithTimestampStoreMaterializer<K, V> {
         return builder;
     }
 
-    public static class KeyValueStoreFacade<A, B> implements KeyValueStore<A, B>, RecordConverter {
+    public static class TimestampHidingKeyValueStoreFacade<A, B> implements KeyValueStore<A, B> {
         public final KeyValueStore<A, ValueAndTimestamp<B>> inner;
-        private final RecordConverter innerRecordConvert;
+        private ProcessorContext context;
 
-        public KeyValueStoreFacade(final KeyValueStore<A, ValueAndTimestamp<B>> store) {
+        public TimestampHidingKeyValueStoreFacade(final KeyValueStore<A, ValueAndTimestamp<B>> store) {
             inner = store;
-            final StateStore rootStore = store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
-            innerRecordConvert = rootStore instanceof RecordConverter ? (RecordConverter) rootStore : new DefaultRecordConverter();
         }
 
         @Override
@@ -207,11 +228,6 @@ public class KeyValueWithTimestampStoreMaterializer<K, V> {
         @Override
         public boolean persistent() {
             return inner.persistent();
-        }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return innerRecordConvert.convert(record);
         }
     }
 }

@@ -224,7 +224,7 @@ public class KTableTransformValuesTest {
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(
             new ProcessorContextImpl.KeyValueStoreReadWriteDecorator<>(
-                new KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade<>(stateStore)));
+                new KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<>(stateStore)));
         expect(stateStore.get("Key")).andReturn(ValueAndTimestamp.make("something", 42L));
         replay(context, stateStore);
 

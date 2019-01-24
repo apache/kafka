@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -39,7 +38,7 @@ public class WindowWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<
     @Override
     public WindowStore<K, ValueAndTimestamp<V>> build() {
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof RecordConverter) && store.persistent()) {
+        if (!(store instanceof StoreWithTimestamps) && store.persistent()) {
             store = new WindowToWindowWithTimestampByteProxyStore(store);
         }
         return new MeteredWindowWithTimestampStore<>(

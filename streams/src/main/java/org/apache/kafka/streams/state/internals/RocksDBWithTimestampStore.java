@@ -29,9 +29,9 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.ColumnFamilyDescriptor;
@@ -51,7 +51,6 @@ import org.rocksdb.WriteOptions;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
@@ -66,6 +65,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueWithTimestamp;
 import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueWithUnknownTimestamp;
 
 /**
@@ -75,7 +75,7 @@ import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueW
  * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
  * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  */
-public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, RecordConverter {
+public class RocksDBWithTimestampStore implements StoreWithTimestamps, KeyValueStore<Bytes, byte[]> {
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
 
@@ -316,15 +316,15 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
         return originalValueWithTimestamp;
     }
 
-    private void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
+    private void restoreAllInternal(final Collection<ConsumerRecord<byte[], byte[]>> records) {
         try (final WriteBatch batch = new WriteBatch()) {
-            for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(noTimestampColumnFamily, record.key);
-                    batch.delete(withTimestampColumnFamily, record.key);
+            for (final ConsumerRecord<byte[], byte[]> record : records) {
+                if (record.value() == null) {
+                    batch.delete(noTimestampColumnFamily, record.key());
+                    batch.delete(withTimestampColumnFamily, record.key());
                 } else {
-                    batch.delete(noTimestampColumnFamily, record.key);
-                    batch.put(withTimestampColumnFamily, record.key, record.value);
+                    batch.delete(noTimestampColumnFamily, record.key());
+                    batch.put(withTimestampColumnFamily, record.key(), getValueWithTimestamp(record.value(), record.timestamp()));
                 }
             }
             write(batch);
@@ -502,27 +502,6 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
         }
     }
 
-    @Override
-    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-        final byte[] rawValue = record.value();
-        return new ConsumerRecord<>(
-            record.topic(),
-            record.partition(),
-            record.offset(),
-            record.timestamp(),
-            record.timestampType(),
-            (long) ConsumerRecord.NULL_CHECKSUM,
-            record.serializedKeySize(),
-            8 + record.serializedValueSize(),
-            record.key(),
-            ByteBuffer.allocate(8 + rawValue.length)
-                .putLong(record.timestamp())
-                .put(rawValue).array(),
-            record.headers(),
-            record.leaderEpoch()
-        );
-    }
-
     private class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements KeyValueIterator<Bytes, byte[]> {
         // RocksDB's JNI interface does not expose getters/setters that allow the
         // comparator to be pluggable, and the default is lexicographic, so it's
@@ -668,7 +647,7 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
     }
 
     // not private for testing
-    static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
+    static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback implements RecordBatchingStateRestoreCallback {
 
         private final RocksDBWithTimestampStore rocksDBStore;
 
@@ -677,8 +656,13 @@ public class RocksDBWithTimestampStore implements KeyValueStore<Bytes, byte[]>, 
         }
 
         @Override
-        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+        public void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records) {
             rocksDBStore.restoreAllInternal(records);
+        }
+
+        @Override
+        public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
+            throw new UnsupportedOperationException();
         }
 
         @Override

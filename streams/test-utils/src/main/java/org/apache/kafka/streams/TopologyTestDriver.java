@@ -644,7 +644,7 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
         if (store instanceof MeteredKeyValueWithTimestampStore) {
-            return new KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade<>((KeyValueStore<K, ValueAndTimestamp<V>>) store);
+            return new KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<>((KeyValueStore<K, ValueAndTimestamp<V>>) store);
         }
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
     }
@@ -669,8 +669,8 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getKeyValueWithTimestampStore(final String name) {
         final StateStore store = getStateStore(name);
-        if (store instanceof KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) {
-            return ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade<K, V>) store).inner;
+        if (store instanceof KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) {
+            return ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<K, V>) store).inner;
         }
         return store instanceof KeyValueStore ? (KeyValueStore<K, ValueAndTimestamp<V>>) store : null;
     }

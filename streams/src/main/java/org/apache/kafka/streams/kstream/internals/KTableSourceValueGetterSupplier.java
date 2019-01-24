@@ -49,7 +49,7 @@ public class KTableSourceValueGetterSupplier<K, V> implements KTableValueGetterS
             if (store instanceof WrappedStateStore) {
                 store = ((WrappedStateStore) store).wrappedStore();
             }
-            this.store = store == null ? null : ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+            this.store = store == null ? null : ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
         }
 
         public ValueAndTimestamp<V> get(final K key) {

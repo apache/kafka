@@ -25,52 +25,53 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Arrays;
 import java.util.Map;
-import java.util.Objects;
 
 public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilder<K, ValueAndTimestamp<V>, KeyValueStore<K, ValueAndTimestamp<V>>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
+    private final ValueAndTimestampSerde<V> valueAndTimestampSerde;
 
     public KeyValueWithTimestampStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                              final Serde<K> keySerde,
                                              final Serde<V> valueSerde,
                                              final Time time) {
         super(storeSupplier.name(), keySerde, new ValueAndTimestampSerde<>(valueSerde), time);
-        Objects.requireNonNull(storeSupplier, "bytesStoreSupplier can't be null");
+        valueAndTimestampSerde = (ValueAndTimestampSerde<V>) super.valueSerde;
+        // note null check was pointless (since we already dereferenced storeSupplier)
         this.storeSupplier = storeSupplier;
     }
 
     @Override
     public KeyValueStore<K, ValueAndTimestamp<V>> build() {
-        KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
-        if (!(store instanceof RecordConverter) && store.persistent()) {
-            store = new KeyValueToKeyValueWithTimestampByteProxyStore(store);
+        final KeyValueStore<Bytes, byte[]> storeWithTimestamps = storeSupplier.get();
+        if (!(storeWithTimestamps instanceof StoreWithTimestamps)) {
+            throw new IllegalStateException("the store should have been wrapped already");
         }
+
         return new MeteredKeyValueWithTimestampStore<>(
-            maybeWrapCaching(maybeWrapLogging(store)),
+            maybeWrapCaching(maybeWrapLogging(storeWithTimestamps)),
             storeSupplier.metricsScope(),
             time,
             keySerde,
-            valueSerde);
+            valueAndTimestampSerde);
     }
 
-    private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {
+    private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> innerStoreWithTimestamps) {
         if (!enableCaching) {
-            return inner;
+            return innerStoreWithTimestamps;
         }
-        return new CachingKeyValueWithTimestampStore<>(inner, keySerde, valueSerde);
+        return new CachingKeyValueWithTimestampStore<>(innerStoreWithTimestamps, keySerde, valueAndTimestampSerde);
     }
 
-    private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> inner) {
+    private KeyValueStore<Bytes, byte[]> maybeWrapLogging(final KeyValueStore<Bytes, byte[]> innerStoreWithTimestamps) {
         if (!enableLogging) {
-            return inner;
+            return innerStoreWithTimestamps;
         }
-        return new ChangeLoggingKeyValueWithTimestampBytesStore(inner);
+        return new ChangeLoggingKeyValueWithTimestampBytesStore(innerStoreWithTimestamps);
     }
 
 
@@ -81,11 +82,13 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         private ValueAndTimestampSerializer<V> valueAndTimestampSerializer;
         private ValueAndTimestampDeserializer<V> valueAndTimestampDeserializer;
         private boolean initialized = false;
+        private Serde<V> valueSerde;
 
         public ValueAndTimestampSerde(final Serde<V> valueSerde) {
             if (valueSerde != null) {
                 valueAndTimestampSerializer = new ValueAndTimestampSerializer<>(valueSerde.serializer());
                 valueAndTimestampDeserializer = new ValueAndTimestampDeserializer<>(valueSerde.deserializer());
+                this.valueSerde = valueSerde;
                 initialized = true;
             }
         }
@@ -93,6 +96,7 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         public ValueAndTimestampSerde init(final Serde<V> valueSerde) {
             valueAndTimestampSerializer = new ValueAndTimestampSerializer<>(valueSerde.serializer());
             valueAndTimestampDeserializer = new ValueAndTimestampDeserializer<>(valueSerde.deserializer());
+            this.valueSerde = valueSerde;
             initialized = true;
             return this;
         }
@@ -130,6 +134,11 @@ public class KeyValueWithTimestampStoreBuilder<K, V> extends AbstractStoreBuilde
         public Deserializer<ValueAndTimestamp<V>> deserializer() {
             return valueAndTimestampDeserializer;
         }
+
+        public Serde<V> valueSerde() {
+            return valueSerde;
+        }
+
     }
 
     static class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {

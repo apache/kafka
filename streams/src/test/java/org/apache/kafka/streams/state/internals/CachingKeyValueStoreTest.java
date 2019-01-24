@@ -52,7 +52,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThat;
-import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
@@ -311,11 +310,6 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.putAll(entries);
         assertThat(store.get(bytesKey("a")), equalTo(bytesValue("1")));
         assertThat(store.get(bytesKey("b")), equalTo(bytesValue("2")));
-    }
-
-    @Test
-    public void shouldReturnUnderlying() {
-        assertTrue(store.underlying().equals(underlyingStore));
     }
 
     @Test(expected = InvalidStateStoreException.class)

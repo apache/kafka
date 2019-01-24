@@ -35,23 +35,28 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  */
 public class MeteredKeyValueWithTimestampStore<K, V> extends MeteredKeyValueStore<K, ValueAndTimestamp<V>> {
 
+    private final KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerde<V> valueAndTimestampSerde;
+
     MeteredKeyValueWithTimestampStore(final KeyValueStore<Bytes, byte[]> inner,
                                       final String metricScope,
                                       final Time time,
                                       final Serde<K> keySerde,
-                                      final Serde<ValueAndTimestamp<V>> valueSerde) {
+                                      final KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerde<V> valueSerde) {
         super(inner, metricScope, time, keySerde, valueSerde);
+        valueAndTimestampSerde = valueSerde;
     }
 
     @SuppressWarnings("unchecked")
     @Override
     void initStateSerdes(final ProcessorContext context) {
+        final Serde<K> resolvedKeySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
+        if (!valueAndTimestampSerde.initialized()) {
+            valueAndTimestampSerde.init((Serde<V>) context.valueSerde());
+        }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            ((KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerde) valueSerde).initialized() ?
-                valueSerde :
-                ((KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerde<V>) valueSerde).init((Serde<V>) context.valueSerde()));
+            resolvedKeySerde,
+            valueAndTimestampSerde);
     }
 
 }

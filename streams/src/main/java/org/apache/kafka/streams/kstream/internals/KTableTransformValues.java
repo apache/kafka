@@ -99,7 +99,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
                 if (store instanceof WrappedStateStore) {
                     store = ((WrappedStateStore) store).wrappedStore();
                 }
-                this.store = ((KeyValueWithTimestampStoreMaterializer.KeyValueStoreFacade) store).inner;
+                this.store = ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
                 tupleForwarder = new TupleForwarder<>(store, context, flushListener, sendOldValues);
             }
         }
@@ -150,9 +150,13 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
         @Override
         public ValueAndTimestamp<V1> get(final K key) {
             final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
-            final V value = valueAndTimestamp == null ? null : valueAndTimestamp.value();
-            final V1 result = valueTransformer.transform(key, value);
-            return ValueAndTimestamp.make(result, valueAndTimestamp.timestamp()); // this is a potential NPE -- if `parentValueAndTimestamp == null` we could also directly return `null`, but this would be a semantic change
+            if (valueAndTimestamp == null) {
+                return null;
+            } else {
+                final V value = valueAndTimestamp.value();
+                final V1 result = valueTransformer.transform(key, value);
+                return ValueAndTimestamp.make(result, valueAndTimestamp.timestamp());
+            }
         }
 
         @Override

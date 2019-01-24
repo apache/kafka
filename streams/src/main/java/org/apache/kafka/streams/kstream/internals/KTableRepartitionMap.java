@@ -115,9 +115,13 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         @Override
         public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
             final ValueAndTimestamp<V> parentValueAndTimestamp = parentGetter.get(key);
-            final V parentValue = parentValueAndTimestamp == null ? null : parentValueAndTimestamp.value();
-            final KeyValue<K1, V1> result = mapper.apply(key, parentValue);
-            return ValueAndTimestamp.make(result, parentValueAndTimestamp.timestamp()); // this is a potential NPE -- if `parentValueAndTimestamp == null` we could also directly return `null`, but this would be a semantic change
+            if (parentValueAndTimestamp == null) {
+                return null;
+            } else {
+                final V parentValue = parentValueAndTimestamp.value();
+                final KeyValue<K1, V1> result = mapper.apply(key, parentValue);
+                return ValueAndTimestamp.make(result, parentValueAndTimestamp.timestamp());
+            }
         }
 
         @Override

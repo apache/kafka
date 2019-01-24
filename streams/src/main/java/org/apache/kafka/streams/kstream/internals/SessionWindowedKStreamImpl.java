@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -34,9 +33,7 @@ import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.DefaultRecordConverter;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -44,7 +41,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.time.Duration;
 import java.util.Map;
@@ -284,14 +280,11 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
     }
 
-    public static class SessionStoreFacade<A, B> implements SessionStore<A, B>, RecordConverter {
+    public static class SessionStoreFacade<A, B> implements SessionStore<A, B> {
         public final SessionStore<A, ValueAndTimestamp<B>> inner;
-        private final RecordConverter innerRecordConvert;
 
         public SessionStoreFacade(final SessionStore<A, ValueAndTimestamp<B>> store) {
             this.inner = store;
-            final StateStore rootStore = store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
-            innerRecordConvert = rootStore instanceof RecordConverter ? (RecordConverter) rootStore : new DefaultRecordConverter();
         }
 
         @Override
@@ -366,11 +359,6 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         @Override
         public boolean persistent() {
             return inner.persistent();
-        }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return innerRecordConvert.convert(record);
         }
     }
 }

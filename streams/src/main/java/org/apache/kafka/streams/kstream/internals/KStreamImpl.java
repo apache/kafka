@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
@@ -53,10 +52,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.processor.internals.DefaultRecordConverter;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -65,7 +62,6 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.lang.reflect.Array;
 import java.time.Duration;
@@ -929,14 +925,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         };
     }
 
-    public static class WindowStoreFacade<A, B> implements WindowStore<A, B>, RecordConverter {
+    public static class WindowStoreFacade<A, B> implements WindowStore<A, B> {
         public final WindowStore<A, ValueAndTimestamp<B>> inner;
-        private final RecordConverter innerRecordConvert;
 
         public WindowStoreFacade(final WindowStore<A, ValueAndTimestamp<B>> store) {
             this.inner = store;
-            final StateStore rootStore = store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
-            innerRecordConvert = rootStore instanceof RecordConverter ? (RecordConverter) rootStore : new DefaultRecordConverter();
         }
 
         @Override
@@ -1045,11 +1038,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         @Override
         public boolean persistent() {
             return inner.persistent();
-        }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return innerRecordConvert.convert(record);
         }
 
         private class WindowStoreIteratorFacade implements WindowStoreIterator<B> {

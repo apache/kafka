@@ -28,7 +28,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]> {
+public class ChangeLoggingKeyValueBytesStore
+    extends WrappedStateStore.AbstractStateStore<KeyValueStore<Bytes, byte[]>>
+    implements KeyValueStore<Bytes, byte[]>, WrappedStateStore<KeyValueStore<Bytes, byte[]>> {
+
     final KeyValueStore<Bytes, byte[]> inner;
     StoreChangeLogger<Bytes, byte[]> changeLogger;
 
@@ -48,9 +51,13 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
         if (inner instanceof MemoryLRUCache) {
             ((MemoryLRUCache<Bytes, byte[]>) inner).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
-                changeLogger.logChange(key, null);
+                logChange(key, null);
             });
         }
+    }
+
+    void logChange(final Bytes key, final byte[] value) {
+        changeLogger.logChange(key, value);
     }
 
     @Override
@@ -62,7 +69,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     public void put(final Bytes key,
                     final byte[] value) {
         inner.put(key, value);
-        changeLogger.logChange(key, value);
+        logChange(key, value);
     }
 
     @Override
@@ -79,14 +86,14 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         inner.putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
-            changeLogger.logChange(entry.key, entry.value);
+            logChange(entry.key, entry.value);
         }
     }
 
     @Override
     public byte[] delete(final Bytes key) {
         final byte[] oldValue = inner.delete(key);
-        changeLogger.logChange(key, null);
+        logChange(key, null);
         return oldValue;
     }
 

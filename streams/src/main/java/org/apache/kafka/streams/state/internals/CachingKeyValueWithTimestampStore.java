@@ -18,54 +18,28 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 class CachingKeyValueWithTimestampStore<K, V> extends CachingKeyValueStore<K, V> {
 
-    CachingKeyValueWithTimestampStore(final KeyValueStore<Bytes, byte[]> underlying, final Serde<K> keySerde, final Serde<V> valueSerde) {
-        super(underlying, keySerde, valueSerde);
+    CachingKeyValueWithTimestampStore(final KeyValueStore<Bytes, byte[]> underlying, final Serde<K> keySerde, final KeyValueWithTimestampStoreBuilder.ValueAndTimestampSerde<V> valueSerde) {
+        super(underlying, keySerde, valueSerde.valueSerde());
     }
 
-    @SuppressWarnings("unchecked")
-    void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final ProcessorRecordContext current = context.recordContext();
-        try {
-            context.setRecordContext(entry.entry().context());
-            if (flushListener != null) {
-                V oldValue = null;
-                if (sendOldValues) {
-                    final byte[] oldRawValueAndTimestamp = underlying.get(entry.key());
-                    if (oldRawValueAndTimestamp != null) {
-                        final byte[] oldRawValue = new byte[oldRawValueAndTimestamp.length - 8];
-                        System.arraycopy(oldRawValueAndTimestamp, 8, oldRawValue, 0, oldRawValue.length);
-                        oldValue = ((KeyValueWithTimestampStoreBuilder.ValueAndTimestampDeserializer<V>) serdes.valueDeserializer())
-                            .valueDeserializer.deserialize(serdes.topic(), oldRawValue);
-                    }
-                }
-                // we rely on underlying store to handle null new value bytes as deletes
-                final byte[] rawValueAndTimestamp =  entry.newValue();
-                final byte[] rawValue;
-                if (rawValueAndTimestamp != null) {
-                    rawValue = new byte[rawValueAndTimestamp.length - 8];
-                    System.arraycopy(rawValueAndTimestamp, 8, rawValue, 0, rawValue.length);
-                } else {
-                    rawValue = null;
-                }
-
-                underlying.put(entry.key(), rawValueAndTimestamp);
-                flushListener.apply(
-                    serdes.keyFrom(entry.key().get()),
-                    ((KeyValueWithTimestampStoreBuilder.ValueAndTimestampDeserializer<V>) serdes.valueDeserializer())
-                        .valueDeserializer.deserialize(serdes.topic(), rawValue),
-                    oldValue,
-                    entry.entry().context().timestamp());
-            } else {
-                underlying.put(entry.key(), entry.newValue());
-            }
-        } finally {
-            context.setRecordContext(current);
+    @Override
+    void notifyFlushListener(final ThreadCache.DirtyEntry entry, final byte[] nullableOldRawValue) {
+        final byte[] oldRawValue;
+        if (nullableOldRawValue == null) {
+            oldRawValue = null;
+        } else {
+            oldRawValue = new byte[nullableOldRawValue.length - 8];
+            System.arraycopy(nullableOldRawValue, 8, oldRawValue, 0, oldRawValue.length);
         }
+
+        final byte[] newRawValueAndTimestamp = entry.newValue();
+        final byte[] newRawValue = new byte[newRawValueAndTimestamp.length - 8];
+        System.arraycopy(newRawValueAndTimestamp, 8, newRawValue, 0, newRawValue.length);
+
+        super.notifyFlushListener(new ThreadCache.DirtyEntry(entry.key(), newRawValue, entry.entry()), oldRawValue);
     }
 }

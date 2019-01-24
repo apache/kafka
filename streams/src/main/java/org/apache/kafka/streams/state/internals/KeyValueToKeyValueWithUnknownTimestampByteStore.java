@@ -16,71 +16,67 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.RecordConverter;
 
 import java.util.List;
 
 import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValue;
 import static org.apache.kafka.streams.state.internals.StoreProxyUtils.getValueWithUnknownTimestamp;
 
-public class KeyValueToKeyValueWithTimestampByteProxyStore implements KeyValueStore<Bytes, byte[]>, RecordConverter {
-    final KeyValueStore<Bytes, byte[]> store;
-
-    KeyValueToKeyValueWithTimestampByteProxyStore(final KeyValueStore<Bytes, byte[]> store) {
-        this.store = store;
+public class KeyValueToKeyValueWithUnknownTimestampByteStore extends WrappedStateStore.AbstractStateStore<KeyValueStore<Bytes, byte[]>> implements StoreWithTimestamps, KeyValueStore<Bytes, byte[]> {
+    public KeyValueToKeyValueWithUnknownTimestampByteStore(final KeyValueStore<Bytes, byte[]> store) {
+        super(store);
     }
 
     @Override
     public void put(final Bytes key,
                     final byte[] valueWithTimestamp) {
-        store.put(key, getValue(valueWithTimestamp));
+        wrappedStore().put(key, getValue(valueWithTimestamp));
     }
 
     @Override
     public byte[] putIfAbsent(final Bytes key,
                               final byte[] valueWithTimestamp) {
-        return getValueWithUnknownTimestamp(store.putIfAbsent(key, getValue(valueWithTimestamp)));
+        return getValueWithUnknownTimestamp(wrappedStore().putIfAbsent(key, getValue(valueWithTimestamp)));
     }
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             final byte[] valueWithTimestamp = entry.value;
-            store.put(entry.key, getValue(valueWithTimestamp));
+            wrappedStore().put(entry.key, getValue(valueWithTimestamp));
         }
     }
 
     @Override
     public byte[] delete(final Bytes key) {
-        return getValueWithUnknownTimestamp(store.delete(key));
+        return getValueWithUnknownTimestamp(wrappedStore().delete(key));
     }
 
     @Override
     public String name() {
-        return store.name();
+        return wrappedStore().name();
     }
 
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        store.init(context, root);
+        wrappedStore().init(context, root);
     }
 
     @Override
     public void flush() {
-        store.flush();
+        wrappedStore().flush();
     }
 
     @Override
     public void close() {
-        store.close();
+        wrappedStore().close();
     }
 
     @Override
@@ -90,32 +86,27 @@ public class KeyValueToKeyValueWithTimestampByteProxyStore implements KeyValueSt
 
     @Override
     public boolean isOpen() {
-        return store.isOpen();
+        return wrappedStore().isOpen();
     }
 
     @Override
     public byte[] get(final Bytes key) {
-        return getValueWithUnknownTimestamp(store.get(key));
+        return getValueWithUnknownTimestamp(wrappedStore().get(key));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new StoreProxyUtils.KeyValueIteratorProxy<>(store.range(from, to));
+        return new StoreProxyUtils.KeyValueIteratorProxy<>(wrappedStore().range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new StoreProxyUtils.KeyValueIteratorProxy<>(store.all());
+        return new StoreProxyUtils.KeyValueIteratorProxy<>(wrappedStore().all());
     }
 
     @Override
     public long approximateNumEntries() {
-        return store.approximateNumEntries();
-    }
-
-    @Override
-    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-        return null;
+        return wrappedStore().approximateNumEntries();
     }
 }
