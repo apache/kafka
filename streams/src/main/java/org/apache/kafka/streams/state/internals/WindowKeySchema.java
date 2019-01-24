@@ -205,8 +205,15 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return new Windowed<>(key, window);
     }
 
+    public static <K> Windowed<K> fromStoreKey(final Windowed<Bytes> windowedKey,
+                                               final Deserializer<K> deserializer,
+                                               final String topic) {
+        final K key = deserializer.deserialize(topic, windowedKey.key().get());
+        return new Windowed<>(key, windowedKey.window());
+    }
+
     public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                               final long windowSize) {
+                                                    final long windowSize) {
         final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
         final Window window = extractStoreWindow(binaryKey, windowSize);
         return new Windowed<>(key, window);

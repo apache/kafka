@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
@@ -29,6 +30,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
@@ -97,7 +99,8 @@ public class KTableFilterTest {
 
         final KTable<String, Integer> table1 = builder.table(topic1, consumed);
 
-        final KTable<String, Integer> table2 = table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
+        final KTable<String, Integer> table2 = table1.filter(predicate,
+            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter").withCachingDisabled());
         final KTable<String, Integer> table3 = table1.filterNot(predicate);
 
         assertEquals("anyStoreNameFilter", table2.queryableStoreName());
@@ -258,7 +261,8 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate,
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter").withCachingDisabled());
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
