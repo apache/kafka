@@ -17,32 +17,53 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupRequestData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 public class LeaveGroupRequest extends AbstractRequest {
 
     public static class Builder extends AbstractRequest.Builder<LeaveGroupRequest> {
+        private final String groupId;
+        private final List<MemberIdentity> members;
 
-        private final LeaveGroupRequestData data;
-
-        public Builder(LeaveGroupRequestData data) {
+        public Builder(String groupId, List<MemberIdentity> members) {
             super(ApiKeys.LEAVE_GROUP);
-            this.data = data;
+            this.groupId = groupId;
+            this.members = members;
         }
 
+        /**
+         * Based on the request version to choose fields.
+         */
         @Override
         public LeaveGroupRequest build(short version) {
+            final LeaveGroupRequestData data;
+            // Starting from version 3, all the leave group request will be in batch.
+            if (version >= 3) {
+                data = new LeaveGroupRequestData()
+                           .setGroupId(groupId)
+                           .setMembers(members);
+            } else {
+                data = new LeaveGroupRequestData()
+                           .setGroupId(groupId)
+                           .setMemberId(members.get(0).memberId());
+            }
             return new LeaveGroupRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return data.toString();
+            return "(type=LeaveGroupRequest" +
+                       ", groupId=" + groupId +
+                       ", members=" + MessageUtil.deepToString(members.iterator()) +
+                       ")";
         }
     }
     private final LeaveGroupRequestData data;

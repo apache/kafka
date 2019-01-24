@@ -26,6 +26,7 @@ import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
@@ -153,8 +154,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   }
 
 
-  class JoinGroupOperation extends GroupOperation[JoinGroupResult, JoinGroupCallback] {
-    override def responseCallback(responsePromise: Promise[JoinGroupResult]): JoinGroupCallback = {
+  class JoinGroupOperation extends GroupOperation[JoinGroupCallbackParams, JoinGroupCallback] {
+    override def responseCallback(responsePromise: Promise[JoinGroupCallbackParams]): JoinGroupCallback = {
       val callback: JoinGroupCallback = responsePromise.success(_)
       callback
     }
@@ -267,17 +268,23 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: LeaveGroupCallback): Unit = {
-      groupCoordinator.handleLeaveGroup(member.group.groupId, member.memberId, responseCallback)
+      val memberIdentity = new MemberIdentity()
+          .setMemberId(member.memberId)
+      groupCoordinator.handleLeaveGroup(member.group.groupId, List(memberIdentity), responseCallback)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
-       val error = await(member, DefaultSessionTimeout)
-       assertEquals(Errors.NONE, error)
+      val leaveGroupResults = await(member, DefaultSessionTimeout)
+
+      GroupCoordinatorTest.verifyLeaveGroupResult(List(Errors.NONE), leaveGroupResults)
+      assertEquals(member.memberId, leaveGroupResults.head.memberId)
+      assertEquals(None, leaveGroupResults.head.groupInstanceId)
     }
   }
 }
 
 object GroupCoordinatorConcurrencyTest {
 
+  type JoinGroupCallbackParams = JoinGroupResult
   type JoinGroupCallback = JoinGroupResult => Unit
   type SyncGroupCallbackParams = (Array[Byte], Errors)
   type SyncGroupCallback = SyncGroupResult => Unit
@@ -285,8 +292,8 @@ object GroupCoordinatorConcurrencyTest {
   type HeartbeatCallback = Errors => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
   type CommitOffsetCallback = Map[TopicPartition, Errors] => Unit
-  type LeaveGroupCallbackParams = Errors
-  type LeaveGroupCallback = Errors => Unit
+  type LeaveGroupCallbackParams = List[LeaveGroupResult]
+  type LeaveGroupCallback = List[LeaveGroupResult] => Unit
   type CompleteTxnCallbackParams = Errors
   type CompleteTxnCallback = Errors => Unit
 

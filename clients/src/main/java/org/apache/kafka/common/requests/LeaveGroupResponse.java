@@ -17,18 +17,20 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 public class LeaveGroupResponse extends AbstractResponse {
 
-    private final LeaveGroupResponseData data;
+    public final LeaveGroupResponseData data;
 
     public LeaveGroupResponse(LeaveGroupResponseData data) {
         this.data = data;
@@ -42,20 +44,33 @@ public class LeaveGroupResponse extends AbstractResponse {
         this.data = new LeaveGroupResponseData(struct, version);
     }
 
-    public LeaveGroupResponseData data() {
-        return data;
-    }
-
     @Override
     public int throttleTimeMs() {
         return data.throttleTimeMs();
     }
 
-    public Errors error() {
-        return Errors.forCode(data.errorCode());
+    /**
+     * Get leave group errors.
+     *
+     * Possible error code:
+     *
+     * GROUP_LOAD_IN_PROGRESS (14)
+     * CONSUMER_COORDINATOR_NOT_AVAILABLE (15)
+     * NOT_COORDINATOR_FOR_CONSUMER (16)
+     * UNKNOWN_CONSUMER_ID (25)
+     * GROUP_AUTHORIZATION_FAILED (30)
+     */
+    public List<MemberResponse> errors() {
+        if (data.members().isEmpty()) {
+            return Collections.singletonList(new MemberResponse()
+                                                 .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+                                                 .setErrorCode(data.errorCode())
+            );
+        } else {
+            return data.members();
+        }
     }
 
-    @Override
     public Map<Errors, Integer> errorCounts() {
         return Collections.singletonMap(Errors.forCode(data.errorCode()), 1);
     }

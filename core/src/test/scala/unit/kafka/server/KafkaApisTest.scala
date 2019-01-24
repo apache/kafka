@@ -50,6 +50,7 @@ import org.easymock.{Capture, EasyMock, IAnswer}
 import EasyMock._
 import org.apache.kafka.common.message.{HeartbeatRequestData, JoinGroupRequestData, OffsetCommitRequestData, OffsetCommitResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.replica.ClientMetadata
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
@@ -640,6 +641,60 @@ class KafkaApisTest {
     )
     val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse).asInstanceOf[OffsetCommitResponse]
     assertEquals(expectedTopicErrors, response.data.topics())
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def testMultipleLeaveGroup() {
+    val groupId = "groupId"
+
+    val leaveMemberList = List(
+      new MemberIdentity()
+        .setMemberId("member-1")
+        .setGroupInstanceId("instance-1"),
+      new MemberIdentity()
+        .setMemberId("member-2")
+        .setGroupInstanceId("instance-2")
+    )
+
+    EasyMock.expect(groupCoordinator.handleLeaveGroup(
+      EasyMock.eq(groupId),
+      EasyMock.eq(leaveMemberList),
+      anyObject()
+    ))
+
+    createKafkaApis().handleLeaveGroupRequest(
+      buildRequest(
+        new LeaveGroupRequest.Builder(
+          groupId,
+          leaveMemberList.asJava)
+      )._2)
+
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def testSingleLeaveGroup() {
+    val groupId = "groupId"
+    val memberId = "member"
+
+    val singleLeaveMember = List(
+      new MemberIdentity()
+        .setMemberId(memberId)
+    )
+
+    EasyMock.expect(groupCoordinator.handleLeaveGroup(
+      EasyMock.eq(groupId),
+      EasyMock.eq(singleLeaveMember),
+      anyObject()
+    ))
+
+    createKafkaApis().handleLeaveGroupRequest(
+      buildRequest(
+        new LeaveGroupRequest.Builder(
+          groupId,
+          singleLeaveMember.asJava,
+        ))._2)
     EasyMock.replay(groupCoordinator)
   }
 

@@ -47,6 +47,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{Alter
 import org.apache.kafka.common.message.JoinGroupRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.message.LeaveGroupRequestData
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -184,7 +185,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       Errors.forCode(errorCode)
     }),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
-    ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
+    ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => Errors.forCode(resp.data.members().get(0).errorCode)),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
     ApiKeys.LEADER_AND_ISR -> ((resp: requests.LeaderAndIsrResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
     ApiKeys.STOP_REPLICA -> ((resp: requests.StopReplicaResponse) => resp.responses.asScala.find(_._1 == tp).get._2),
@@ -398,9 +399,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
   private def leaveGroupRequest = new LeaveGroupRequest.Builder(
-    new LeaveGroupRequestData()
-      .setGroupId(group)
-      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
+    group, Collections.singletonList(
+      new MemberIdentity()
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+    )).build()
 
   private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(
     new DeleteGroupsRequestData()
