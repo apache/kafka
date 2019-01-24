@@ -639,7 +639,7 @@ class Partition(val topicPartition: TopicPartition,
             assert(newInSyncReplicas.nonEmpty)
             info("Shrinking ISR from %s to %s".format(inSyncReplicas.map(_.brokerId).mkString(","),
               newInSyncReplicas.map(_.brokerId).mkString(",")))
-            debug(s"Leader (hwm: ${leaderReplica.highWatermark.messageOffset}, endOffset: ${leaderReplica.logEndOffset.messageOffset})")
+            debug(s"Leader (highWatermark: ${leaderReplica.highWatermark.messageOffset}, endOffset: ${leaderReplica.logEndOffset.messageOffset})")
             debug(s"Out of sync replicas: " +
               s"${outOfSyncReplicas.map { replica =>
                 s"(brokerId: ${replica.brokerId}, endOffset: ${replica.logEndOffset.messageOffset})"
