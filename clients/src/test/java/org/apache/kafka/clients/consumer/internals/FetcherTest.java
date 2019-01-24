@@ -917,6 +917,7 @@ public class FetcherTest {
                 });
                 return true;
             } else {
+                fail("Should have seen FetchRequest");
                 return false;
             }
         };
@@ -2076,20 +2077,23 @@ public class FetcherTest {
 
         // Request latest offset
         subscriptions.assignFromUser(singleton(tp0));
-        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+        subscriptions.requestOffsetReset(tp0);
+        fetcher.resetOffsetsIfNeeded();
 
         // Check for epoch in outgoing request
         MockClient.RequestMatcher matcher = body -> {
-            if (body instanceof FetchRequest) {
-                ListOffsetRequest fetchRequest = (ListOffsetRequest) body;
-                Optional<Integer> epoch = fetchRequest.partitionTimestamps().get(tp0).currentLeaderEpoch;
+            if (body instanceof ListOffsetRequest) {
+                ListOffsetRequest offsetRequest = (ListOffsetRequest) body;
+                Optional<Integer> epoch = offsetRequest.partitionTimestamps().get(tp0).currentLeaderEpoch;
                 assertTrue("Expected Fetcher to set leader epoch in request", epoch.isPresent());
                 assertEquals("Expected leader epoch to match epoch from metadata update", epoch.get().longValue(), 99);
                 return true;
             } else {
+                fail("Should have seen ListOffsetRequest");
                 return false;
             }
         };
+
         client.prepareResponse(matcher, listOffsetResponse(Errors.NONE, 1L, 5L));
         consumerClient.pollNoWakeup();
     }
