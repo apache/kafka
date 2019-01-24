@@ -2065,6 +2065,36 @@ public class FetcherTest {
     }
 
     @Test
+    public void testGetOffsetsIncludesLeaderEpoch() {
+        client.updateMetadata(initialUpdateResponse);
+
+        // Metadata update with leader epochs
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap(topicName, 4),
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, Collections.emptyList(), offlineReplicas));
+        client.updateMetadata(metadataResponse);
+
+        // Request latest offset
+        subscriptions.assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        // Check for epoch in outgoing request
+        MockClient.RequestMatcher matcher = body -> {
+            if (body instanceof FetchRequest) {
+                ListOffsetRequest fetchRequest = (ListOffsetRequest) body;
+                Optional<Integer> epoch = fetchRequest.partitionTimestamps().get(tp0).currentLeaderEpoch;
+                assertTrue("Expected Fetcher to set leader epoch in request", epoch.isPresent());
+                assertEquals("Expected leader epoch to match epoch from metadata update", epoch.get().longValue(), 99);
+                return true;
+            } else {
+                return false;
+            }
+        };
+        client.prepareResponse(matcher, listOffsetResponse(Errors.NONE, 1L, 5L));
+        consumerClient.pollNoWakeup();
+    }
+
+    @Test
     public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
