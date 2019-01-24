@@ -2039,6 +2039,10 @@ class KafkaApis(val requestChannel: RequestChannel,
           authorize(request.session, AlterConfigs, Resource.ClusterResource)
         case ConfigResource.Type.TOPIC =>
           authorize(request.session, AlterConfigs, Resource(Topic, resource.name, LITERAL))
+        case ConfigResource.Type.USER =>
+          true
+        case ConfigResource.Type.CLIENT =>
+          true
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt")
       }
     }
@@ -2066,6 +2070,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ConfigResource.Type.BROKER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case ConfigResource.Type.TOPIC =>
           authorize(request.session, DescribeConfigs, Resource(Topic, resource.name, LITERAL))
+        case ConfigResource.Type.USER =>
+          true
+        case ConfigResource.Type.CLIENT =>
+          true
         case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
       }
     }

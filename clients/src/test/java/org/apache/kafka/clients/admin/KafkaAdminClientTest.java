@@ -763,6 +763,20 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeUserConfigs() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(0,
+                    Collections.singletonMap(new ConfigResource(ConfigResource.Type.USER, "user1"),
+                            new DescribeConfigsResponse.Config(ApiError.NONE, Collections.emptySet()))));
+            DescribeConfigsResult result2 = env.adminClient().describeConfigs(Collections.singleton(
+                    new ConfigResource(ConfigResource.Type.USER, "user1")));
+            result2.all().get();
+        }
+    }
+
+
+    @Test
     public void testCreatePartitions() throws Exception {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());

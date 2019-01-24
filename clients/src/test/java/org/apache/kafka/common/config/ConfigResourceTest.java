@@ -34,7 +34,7 @@ public class ConfigResourceTest {
     public void shouldReturnUnknownForUnknownCode() {
         assertEquals(ConfigResource.Type.UNKNOWN, ConfigResource.Type.forId((byte) -1));
         assertEquals(ConfigResource.Type.UNKNOWN, ConfigResource.Type.forId((byte) 0));
-        assertEquals(ConfigResource.Type.UNKNOWN, ConfigResource.Type.forId((byte) 1));
+        assertEquals(ConfigResource.Type.CLIENT, ConfigResource.Type.forId((byte) 1));
     }
 
     @Test

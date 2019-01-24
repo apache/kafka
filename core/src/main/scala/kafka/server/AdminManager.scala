@@ -18,6 +18,7 @@ package kafka.server
 
 import java.util.{Collections, Properties}
 
+import javax.print.DocFlavor.STRING
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
@@ -335,6 +336,22 @@ class AdminManager(val config: KafkaConfig,
               new DescribeConfigsResponse.Config(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, null), Collections.emptyList[DescribeConfigsResponse.ConfigEntry])
             }
 
+          case ConfigResource.Type.USER =>
+            if (resource.name == null || resource.name.isEmpty) {
+              throw new InvalidRequestException(s"missing user id in the config. but received $resource.name")
+            } else {
+              val userProps = adminZkClient.fetchEntityConfig(ConfigType.User, resource.name)
+              createResponseConfig(allConfigs(config), createUserConfigEntry(userProps))
+            }
+
+          case ConfigResource.Type.CLIENT =>
+            if (resource.name == null || resource.name.isEmpty) {
+              throw new InvalidRequestException(s"missing client id in the config. but received $resource.name")
+            } else {
+              val clientIdProps = adminZkClient.fetchEntityConfig(ConfigType.Client, resource.name)
+              createResponseConfig(allConfigs(config), createUserConfigEntry(clientIdProps))
+            }
+
           case ConfigResource.Type.BROKER =>
             if (resource.name == null || resource.name.isEmpty)
               createResponseConfig(config.dynamicConfig.currentDynamicDefaultConfigs,
@@ -388,6 +405,36 @@ class AdminManager(val config: KafkaConfig,
             if (!validateOnly) {
               info(s"Updating topic $topic with new configuration $config")
               adminZkClient.changeTopicConfig(topic, properties)
+            }
+
+            resource -> ApiError.NONE
+
+          case ConfigResource.Type.USER =>
+            val user = resource.name
+
+            val properties = new Properties
+            config.entries().asScala.foreach { configEntry =>
+              properties.setProperty(configEntry.name, configEntry.value)
+            }
+
+            if (!validateOnly) {
+              info(s"Updating user $user with new configuration $config")
+              adminZkClient.changeUserOrUserClientIdConfig(user, properties)
+            }
+
+            resource -> ApiError.NONE
+
+          case ConfigResource.Type.CLIENT =>
+            val client = resource.name
+
+            val properties = new Properties
+            config.entries().asScala.foreach { configEntry =>
+              properties.setProperty(configEntry.name, configEntry.value)
+            }
+
+            if (!validateOnly) {
+              info(s"Updating client $client with new configuration $config")
+              adminZkClient.changeClientIdConfig(client, properties)
             }
 
             resource -> ApiError.NONE
@@ -497,6 +544,18 @@ class AdminManager(val config: KafkaConfig,
     val source = if (allSynonyms.isEmpty) ConfigSource.DEFAULT_CONFIG else allSynonyms.head.source
     val synonyms = if (!includeSynonyms) List.empty else allSynonyms
     new DescribeConfigsResponse.ConfigEntry(name, valueAsString, source, isSensitive, false, synonyms.asJava)
+  }
+
+  private def createUserConfigEntry(userProps: Properties)
+                                    (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
+    val valueAsString = ConfigDef.convertToString(value, ConfigDef.Type.STRING)
+    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, ConfigSource.DYNAMIC_USER_CONFIG, false, false, List.empty.asJava)
+  }
+
+  private def createClientIdConfigEntry(userProps: Properties)
+                                   (name: String, value: Any): DescribeConfigsResponse.ConfigEntry = {
+    val valueAsString = ConfigDef.convertToString(value, ConfigDef.Type.STRING)
+    new DescribeConfigsResponse.ConfigEntry(name, valueAsString, ConfigSource.DYNAMIC_CLIENT_CONFIG, false, false, List.empty.asJava)
   }
 
   private def createBrokerConfigEntry(perBrokerConfig: Boolean, includeSynonyms: Boolean)
