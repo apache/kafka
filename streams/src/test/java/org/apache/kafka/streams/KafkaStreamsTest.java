@@ -84,7 +84,6 @@ import static org.junit.Assert.fail;
 @Category({IntegrationTest.class})
 public class KafkaStreamsTest {
 
-    private static final long TIMEOUT_MS = 30_000L;
     private static final int NUM_BROKERS = 1;
     private static final int NUM_THREADS = 2;
     // We need this to avoid the KafkaConsumer hanging on poll
@@ -158,7 +157,6 @@ public class KafkaStreamsTest {
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 2,
-            TIMEOUT_MS,
             "Streams never started.");
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
@@ -209,7 +207,9 @@ public class KafkaStreamsTest {
 
         globalStreams.close();
 
-        Assert.assertEquals(6, stateListener.numChanges);
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 6,
+            "Streams never closed.");
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
@@ -226,7 +226,6 @@ public class KafkaStreamsTest {
         streams.close();
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
-            TIMEOUT_MS,
             "Streams never stopped.");
 
         // Ensure that any created clients are closed
@@ -254,7 +253,6 @@ public class KafkaStreamsTest {
             streams.start();
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                TIMEOUT_MS,
                 "Streams never started.");
 
             for (int i = 0; i < NUM_THREADS; i++) {
@@ -262,13 +260,11 @@ public class KafkaStreamsTest {
                 tmpThread.shutdown();
                 TestUtils.waitForCondition(
                     () -> tmpThread.state() == StreamThread.State.DEAD,
-                    TIMEOUT_MS,
                     "Thread never stopped.");
                 threads[i].join();
             }
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.ERROR,
-                TIMEOUT_MS,
                 "Streams never stopped.");
         } finally {
             streams.close();
@@ -276,7 +272,6 @@ public class KafkaStreamsTest {
 
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
-            TIMEOUT_MS,
             "Streams never stopped.");
 
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
@@ -295,7 +290,6 @@ public class KafkaStreamsTest {
             streams.start();
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                TIMEOUT_MS,
                 "Streams never started.");
             final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
             globalThreadField.setAccessible(true);
@@ -303,7 +297,6 @@ public class KafkaStreamsTest {
             globalStreamThread.shutdown();
             TestUtils.waitForCondition(
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
-                TIMEOUT_MS,
                 "Thread never stopped.");
             globalStreamThread.join();
             assertEquals(streams.state(), KafkaStreams.State.ERROR);
@@ -555,7 +548,6 @@ public class KafkaStreamsTest {
         globalStreams.start();
         TestUtils.waitForCondition(
             () -> globalStreams.state() == KafkaStreams.State.RUNNING,
-            TIMEOUT_MS,
             "Streams never started.");
 
         try {
@@ -613,7 +605,7 @@ public class KafkaStreamsTest {
         th.start();
 
         try {
-            th.join(TIMEOUT_MS);
+            th.join(30_000L);
             assertFalse(th.isAlive());
         } finally {
             streams.close();
@@ -763,7 +755,6 @@ public class KafkaStreamsTest {
         final File taskDir = new File(appDir, "0_0");
         TestUtils.waitForCondition(
             () -> !oldTaskDir.exists() && taskDir.exists(),
-            TIMEOUT_MS,
             "cleanup has not successfully run");
         assertTrue(taskDir.exists());
     }
