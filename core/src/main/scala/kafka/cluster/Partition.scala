@@ -637,13 +637,16 @@ class Partition(val topicPartition: TopicPartition,
           if (outOfSyncReplicas.nonEmpty) {
             val newInSyncReplicas = inSyncReplicas -- outOfSyncReplicas
             assert(newInSyncReplicas.nonEmpty)
-            info("Shrinking ISR from %s to %s".format(inSyncReplicas.map(_.brokerId).mkString(","),
-              newInSyncReplicas.map(_.brokerId).mkString(",")))
-            debug(s"Leader (highWatermark: ${leaderReplica.highWatermark.messageOffset}, endOffset: ${leaderReplica.logEndOffset.messageOffset})")
-            debug(s"Out of sync replicas: " +
-              s"${outOfSyncReplicas.map { replica =>
-                s"(brokerId: ${replica.brokerId}, endOffset: ${replica.logEndOffset.messageOffset})"
-              }.mkString(" ")}")
+            info("Shrinking ISR from %s to %s. Leader: (highWatermark: %d, endOffset: %d). Out of sync replicas: %s."
+              .format(inSyncReplicas.map(_.brokerId).mkString(","),
+                newInSyncReplicas.map(_.brokerId).mkString(","),
+                leaderReplica.highWatermark.messageOffset,
+                leaderReplica.logEndOffset.messageOffset,
+                outOfSyncReplicas.map { replica =>
+                  s"(brokerId: ${replica.brokerId}, endOffset: ${replica.logEndOffset.messageOffset})"
+                }.mkString(" ")
+              )
+            )
 
             // update ISR in zk and in cache
             updateIsr(newInSyncReplicas)
