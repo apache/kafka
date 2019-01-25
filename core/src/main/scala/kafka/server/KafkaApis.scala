@@ -43,6 +43,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -146,6 +147,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+        case ApiKeys.ELECT_PREFERRED_LEADERS => handleElectPreferredReplicaLeader(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -251,6 +253,11 @@ class KafkaApis(val requestChannel: RequestChannel,
           quotas.fetch.updateQuotaMetricConfigs()
           quotas.produce.updateQuotaMetricConfigs()
           quotas.request.updateQuotaMetricConfigs()
+        }
+      }
+      if (replicaManager.hasDelayedElectionOperations) {
+        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, ps) =>
+          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp.topic(), tp.partition()))
         }
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
@@ -2225,6 +2232,48 @@ class KafkaApis(val requestChannel: RequestChannel,
       false
     else
       true
+  }
+
+  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
+
+    val electionRequest = request.body[ElectPreferredLeadersRequest]
+    val partitions =
+      if (electionRequest.data().topicPartitions() == null) {
+        metadataCache.getAllPartitions()
+      } else {
+        electionRequest.data().topicPartitions().asScala.flatMap{tp =>
+          tp.partitionId().asScala.map(partitionId => new TopicPartition(tp.topic, partitionId))}.toSet
+      }
+    def sendResponseCallback(result: Map[TopicPartition, ApiError]): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs => {
+        val results = result.
+          groupBy{case (tp, error) => tp.topic}.
+          map{case (topic, ps) => new ElectPreferredLeadersResponseData.ReplicaElectionResult()
+            .setTopic(topic)
+            .setPartitionResult(ps.map{
+            case (tp, error) =>
+              new ElectPreferredLeadersResponseData.PartitionResult()
+                .setErrorCode(error.error.code)
+                .setErrorMessage(error.message())
+                .setPartitionId(tp.partition)}.toList.asJava)}
+        val data = new ElectPreferredLeadersResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setReplicaElectionResults(results.toList.asJava)
+        new ElectPreferredLeadersResponse(data)})
+    }
+    if (!authorize(request.session, Alter, Resource.ClusterResource)) {
+      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
+      val partitionErrors =
+      if (electionRequest.data().topicPartitions() == null) {
+        // Don't leak the set of partitions if the client lack authz
+        Map.empty[TopicPartition, ApiError]
+      } else {
+        partitions.map(partition => partition -> error).toMap
+      }
+      sendResponseCallback(partitionErrors)
+    } else {
+      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.data().timeoutMs())
+    }
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

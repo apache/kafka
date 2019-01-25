@@ -146,6 +146,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
+                     val delayedElectPreferredLeaderPurgatory: DelayedOperationPurgatory[DelayedElectPreferredLeader],
                      threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -171,6 +172,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
+      DelayedOperationPurgatory[DelayedElectPreferredLeader](
+        purgatoryName = "ElectPreferredLeader", brokerId = config.brokerId),
       threadNamePrefix)
   }
 
@@ -316,6 +319,13 @@ class ReplicaManager(val config: KafkaConfig,
   def tryCompleteDelayedDeleteRecords(key: DelayedOperationKey) {
     val completed = delayedDeleteRecordsPurgatory.checkAndComplete(key)
     debug("Request key %s unblocked %d DeleteRecordsRequest.".format(key.keyLabel, completed))
+  }
+
+  def hasDelayedElectionOperations = delayedElectPreferredLeaderPurgatory.delayed != 0
+
+  def tryCompleteElection(key: DelayedOperationKey): Unit = {
+    val completed = delayedElectPreferredLeaderPurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d ElectPreferredLeader.".format(key.keyLabel, completed))
   }
 
   def startup() {
@@ -1476,6 +1486,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
+    delayedElectPreferredLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")
@@ -1507,5 +1518,31 @@ class ReplicaManager(val config: KafkaConfig,
       }
       tp -> epochEndOffset
     }
+  }
+
+  def electPreferredLeaders(controller: KafkaController,
+                            partitions: Set[TopicPartition],
+                            responseCallback: Map[TopicPartition, ApiError] => Unit,
+                            requestTimeout: Long): Unit = {
+
+    val deadline = time.milliseconds() + requestTimeout
+
+    def electionCallback(expectedLeaders: Map[TopicPartition, Int],
+                         results: Map[TopicPartition, ApiError]): Unit = {
+      if (expectedLeaders.nonEmpty) {
+        val watchKeys = expectedLeaders.map{
+          case (tp, leader) => new TopicPartitionOperationKey(tp.topic, tp.partition)
+        }.toSeq
+        delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
+          new DelayedElectPreferredLeader(deadline - time.milliseconds(), expectedLeaders, results,
+            this, responseCallback),
+          watchKeys)
+      } else {
+          // There are no partitions actually being elected, so return immediately
+          responseCallback(results)
+      }
+    }
+
+    controller.electPreferredLeaders(partitions, electionCallback)
   }
 }
