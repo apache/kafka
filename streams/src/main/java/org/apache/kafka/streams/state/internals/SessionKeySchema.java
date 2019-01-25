@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 
 
-public class SessionKeySchema<S extends Segment> implements SegmentedBytesStore.KeySchema<S> {
+public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
 
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = 2 * TIMESTAMP_SIZE;
@@ -85,9 +85,9 @@ public class SessionKeySchema<S extends Segment> implements SegmentedBytesStore.
     }
 
     @Override
-    public List<S> segmentsToSearch(final Segments<S> segments,
-                                    final long from,
-                                    final long to) {
+    public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
+                                                        final long from,
+                                                        final long to) {
         return segments.segments(from, Long.MAX_VALUE);
     }
 
@@ -97,21 +97,21 @@ public class SessionKeySchema<S extends Segment> implements SegmentedBytesStore.
         return deserializer.deserialize(topic, extractKeyBytes(binaryKey));
     }
 
-    public static byte[] extractKeyBytes(final byte[] binaryKey) {
+    static byte[] extractKeyBytes(final byte[] binaryKey) {
         final byte[] bytes = new byte[binaryKey.length - 2 * TIMESTAMP_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return bytes;
     }
 
-    public static long extractEndTimestamp(final byte[] binaryKey) {
+    static long extractEndTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);
     }
 
-    public static long extractStartTimestamp(final byte[] binaryKey) {
+    static long extractStartTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE);
     }
 
-    public static Window extractWindow(final byte[] binaryKey) {
+    static Window extractWindow(final byte[] binaryKey) {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE);
         final long end = buffer.getLong(binaryKey.length - 2 * TIMESTAMP_SIZE);

@@ -46,7 +46,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private final String name;
     private final KeyValueSegments segments;
     private final String metricScope;
-    private final KeySchema<KeyValueSegment> keySchema;
+    private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
     private Set<KeyValueSegment> bulkLoadSegments;
@@ -56,7 +56,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
                                final String metricScope,
                                final long retention,
                                final long segmentInterval,
-                               final KeySchema<KeyValueSegment> keySchema) {
+                               final KeySchema keySchema) {
         this.name = name;
         this.metricScope = metricScope;
         this.keySchema = keySchema;

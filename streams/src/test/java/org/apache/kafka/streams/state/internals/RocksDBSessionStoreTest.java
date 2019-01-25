@@ -50,7 +50,7 @@ public class RocksDBSessionStoreTest {
 
     @Before
     public void before() {
-        final SessionKeySchema<KeyValueSegment> schema = new SessionKeySchema<>();
+        final SessionKeySchema schema = new SessionKeySchema();
 
         final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
             "session-store",
@@ -192,7 +192,7 @@ public class RocksDBSessionStoreTest {
             "metrics-scope",
             0x7a00000000000000L,
             0x7a00000000000000L,
-            new SessionKeySchema<>());
+            new SessionKeySchema());
 
         sessionStore = new RocksDBSessionStore<>(
             bytesStore,

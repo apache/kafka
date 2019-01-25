@@ -83,11 +83,11 @@ public class RocksDBSegmentedBytesStoreTest {
     private final Window[] windows = new Window[4];
 
     @Parameter
-    public SegmentedBytesStore.KeySchema<KeyValueSegment> schema;
+    public SegmentedBytesStore.KeySchema schema;
 
     @Parameters(name = "{0}")
     public static Object[] getKeySchemas() {
-        return new Object[] {new SessionKeySchema<KeyValueSegment>(), new WindowKeySchema<KeyValueSegment>()};
+        return new Object[] {new SessionKeySchema(), new WindowKeySchema()};
     }
 
     @Before

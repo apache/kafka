@@ -1375,7 +1375,7 @@ public class RocksDBWindowStoreTest {
                 "metrics-scope",
                 retentionPeriod,
                 segmentInterval,
-                new WindowKeySchema<>()),
+                new WindowKeySchema()),
             Serdes.Integer(),
             new SerdeThatDoesntHandleNull(),
             false,

@@ -96,7 +96,7 @@ public interface SegmentedBytesStore extends StateStore {
      */
     byte[] get(Bytes key);
 
-    interface KeySchema<S extends Segment> {
+    interface KeySchema {
 
         /**
          * Given a range of record keys and a time, construct a Segmented key that represents
@@ -171,6 +171,6 @@ public interface SegmentedBytesStore extends StateStore {
          * @param to
          * @return  List of segments to search
          */
-        List<S> segmentsToSearch(Segments<S> segments, long from, long to);
+        <S extends Segment> List<S> segmentsToSearch(Segments<S> segments, long from, long to);
     }
 }

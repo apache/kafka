@@ -36,7 +36,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private final long windowSize;
-    private final SegmentedBytesStore.KeySchema<KeyValueSegment> keySchema = new WindowKeySchema<>();
+    private final SegmentedBytesStore.KeySchema keySchema = new WindowKeySchema();
 
 
     private String name;
