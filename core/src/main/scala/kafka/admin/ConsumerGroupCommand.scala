@@ -191,9 +191,9 @@ object ConsumerGroupCommand extends Logging {
           case Some("Dead") =>
             printError(s"Consumer group '$group' does not exist.")
           case Some("Empty") =>
-            Console.err.println(s"Consumer group '$group' has no active members.")
+            Console.err.println(s"\nConsumer group '$group' has no active members.")
           case Some("PreparingRebalance") | Some("CompletingRebalance") =>
-            Console.err.println(s"Warning: Consumer group '$group' is rebalancing.")
+            Console.err.println(s"\nWarning: Consumer group '$group' is rebalancing.")
           case Some("Stable") =>
           case other =>
             // the control should never reach here
