@@ -522,9 +522,9 @@ object ConsumerGroupCommand extends Logging {
 
     def close() {
       adminClient.close()
-      consumers.foreach { case (_, consumer) =>
+      consumers.values.foreach(consumer =>
         Option(consumer).foreach(_.close())
-      }
+      )
     }
 
     private def createAdminClient(): admin.AdminClient = {
@@ -757,7 +757,7 @@ object ConsumerGroupCommand extends Logging {
           csvWriter.writeValueAsString(csvRecord)
         }(collection.breakOut): List[String]
       }
-      val csv = rows.foldRight("")(_ + _)
+      val csv = rows.mkString("")
       csv
     }
 
