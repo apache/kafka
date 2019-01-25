@@ -35,7 +35,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -103,7 +102,8 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName4, t4.topic());
 
         store1 = new NoOpReadOnlyStore<>(storeName1, true);
-        store2 = new ConverterStore<>(storeName2, true);
+        // TODO: fix this test?
+        store2 = new NoOpReadOnlyStore<>(storeName2, true);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
 
@@ -285,71 +285,6 @@ public class GlobalStateManagerImplTest {
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
         assertEquals(5, restoredRecord.value.length);
-    }
-
-    @Test
-    public void shouldUseStoreAsRecordConverterIfStoreImplementsRecordConverter() {
-        initializeConsumer(1, 0, t2);
-
-        stateManager.initialize();
-        stateManager.register(store2, stateRestoreCallback);
-
-        final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
-        assertEquals(0, restoredRecord.key.length);
-        assertEquals(0, restoredRecord.value.length);
-
-    }
-
-    @Test
-    public void shouldUseStoreAsRecordConverterIfInnerStoreImplementsRecordConverter() {
-        initializeConsumer(1, 0, t2);
-
-        stateManager.initialize();
-        stateManager.register(new WrappedStateStore() {
-            @Override
-            public StateStore inner() {
-                return store2;
-            }
-
-            @Override
-            public StateStore wrappedStore() {
-                return store2;
-            }
-
-            @Override
-            public String name() {
-                return store2.name();
-            }
-
-            @Override
-            public void init(final ProcessorContext context, final StateStore root) {
-                store2.init(context, root);
-            }
-
-            @Override
-            public void flush() {
-                store2.flush();
-            }
-
-            @Override
-            public void close() {
-                store2.close();
-            }
-
-            @Override
-            public boolean persistent() {
-                return store2.persistent();
-            }
-
-            @Override
-            public boolean isOpen() {
-                return store2.isOpen();
-            }
-        }, stateRestoreCallback);
-
-        final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
-        assertEquals(0, restoredRecord.key.length);
-        assertEquals(0, restoredRecord.value.length);
     }
 
     @Test
@@ -824,21 +759,6 @@ public class GlobalStateManagerImplTest {
         @Override
         public void restore(final byte[] key, final byte[] value) {
             restored.add(KeyValue.pair(key, value));
-        }
-    }
-
-
-
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements RecordConverter {
-
-        ConverterStore(final String name,
-                       final boolean rocksdbStore) {
-            super(name, rocksdbStore);
-        }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return new ConsumerRecord<>("", 0, 0L, "".getBytes(), "".getBytes());
         }
     }
 

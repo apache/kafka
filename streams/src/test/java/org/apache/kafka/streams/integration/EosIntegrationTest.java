@@ -39,6 +39,7 @@ import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -744,12 +745,12 @@ public class EosIntegrationTest {
 
     private void verifyStateStore(final KafkaStreams streams,
                                   final Set<KeyValue<Long, Long>> expectedStoreContent) {
-        ReadOnlyKeyValueStore<Long, Long> store = null;
+        ReadOnlyKeyValueStore<Long, ValueAndTimestamp<Long>> store = null;
 
         final long maxWaitingTime = System.currentTimeMillis() + 300000L;
         while (System.currentTimeMillis() < maxWaitingTime) {
             try {
-                store = streams.store(storeName, QueryableStoreTypes.keyValueStore());
+                store = streams.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
                 break;
             } catch (final InvalidStateStoreException okJustRetry) {
                 try {
@@ -760,7 +761,7 @@ public class EosIntegrationTest {
 
         assertNotNull(store);
 
-        final KeyValueIterator<Long, Long> it = store.all();
+        final KeyValueIterator<Long, ValueAndTimestamp<Long>> it = store.all();
         while (it.hasNext()) {
             assertTrue(expectedStoreContent.remove(it.next()));
         }

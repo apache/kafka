@@ -32,8 +32,6 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.RecordConverter;
-import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -197,17 +195,11 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             }
         }
         try {
-            final StateStore stateStore =
-                store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
-            final RecordConverter recordConverter =
-                stateStore instanceof RecordConverter ? (RecordConverter) stateStore : new DefaultRecordConverter();
-
             restoreState(
                 stateRestoreCallback,
                 topicPartitions,
                 highWatermarks,
-                store.name(),
-                recordConverter);
+                store.name());
             globalStores.put(store.name(), store);
         } finally {
             globalConsumer.unsubscribe();
@@ -261,8 +253,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
                               final Map<TopicPartition, Long> highWatermarks,
-                              final String storeName,
-                              final RecordConverter recordConverter) {
+                              final String storeName) {
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
@@ -286,7 +277,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                         if (record.key() != null) {
-                            restoreRecords.add(recordConverter.convert(record));
+                            restoreRecords.add(record);
                         }
                     }
                     offset = globalConsumer.position(topicPartition);

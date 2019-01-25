@@ -38,6 +38,7 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -385,11 +386,11 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, Long> count = driver.getKeyValueStore("count");
+            final KeyValueStore<String, ValueAndTimestamp<Long>> count = driver.getKeyValueWithTimestampStore("count");
 
-            assertThat(count.get("1"), equalTo(3L));
-            assertThat(count.get("2"), equalTo(1L));
-            assertThat(count.get("3"), equalTo(2L));
+            assertThat(count.get("1").value(), equalTo(3L));
+            assertThat(count.get("2").value(), equalTo(1L));
+            assertThat(count.get("3").value(), equalTo(2L));
         }
     }
 
@@ -421,11 +422,11 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, String> reduced = driver.getKeyValueStore("reduce");
+            final KeyValueStore<String, ValueAndTimestamp<String>> reduced = driver.getKeyValueWithTimestampStore("reduce");
 
-            assertThat(reduced.get("1"), equalTo("A+C+D"));
-            assertThat(reduced.get("2"), equalTo("B"));
-            assertThat(reduced.get("3"), equalTo("E+F"));
+            assertThat(reduced.get("1").value(), equalTo("A+C+D"));
+            assertThat(reduced.get("2").value(), equalTo("B"));
+            assertThat(reduced.get("3").value(), equalTo("E+F"));
         }
     }
 
@@ -464,11 +465,11 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
+            final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getKeyValueWithTimestampStore("aggregate");
 
-            assertThat(aggregate.get("1"), equalTo("0+A+C+D"));
-            assertThat(aggregate.get("2"), equalTo("0+B"));
-            assertThat(aggregate.get("3"), equalTo("0+E+F"));
+            assertThat(aggregate.get("1").value(), equalTo("0+A+C+D"));
+            assertThat(aggregate.get("2").value(), equalTo("0+B"));
+            assertThat(aggregate.get("3").value(), equalTo("0+E+F"));
         }
     }
 

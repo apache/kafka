@@ -104,6 +104,9 @@ public class ProcessorNode<K, V> {
             if (processor != null) {
                 processor.close();
             }
+            if (nodeMetrics == null) {
+                throw new IllegalStateException();
+            }
             nodeMetrics.nodeDestructionSensor.record(time.nanoseconds() - startNs);
             nodeMetrics.removeAllSensors();
         } catch (final Exception e) {

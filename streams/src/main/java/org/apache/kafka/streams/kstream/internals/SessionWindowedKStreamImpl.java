@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
@@ -30,11 +31,19 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
+import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 
+import java.time.Duration;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -191,16 +200,64 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                                                        + " grace=[" + windows.gracePeriodMs() + "],"
                                                        + " retention=[" + retentionPeriod + "]");
             }
-            supplier = Stores.persistentSessionStore(
+            supplier = Stores.persistentSessionWithTimestampStore(
                 materialized.storeName(),
-                retentionPeriod
+                Duration.ofMillis(retentionPeriod)
             );
         }
-        final StoreBuilder<SessionStore<K, VR>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
+
+        final SessionBytesStoreSupplier innerSupplier = supplier;
+        final SessionStoreBuilder<K, VR> builder = new SessionStoreBuilder<K, VR>(supplier, null, null, Time.SYSTEM) {
+            final StoreBuilder<SessionStore<K, ValueAndTimestamp<VR>>> inner = Stores.sessionWithTimestampStoreBuilder(
+                innerSupplier,
+                materialized.keySerde(),
+                materialized.valueSerde()
+            );
+
+            @Override
+            public SessionStoreBuilder<K, VR> withCachingEnabled() {
+                inner.withCachingEnabled();
+                return this;
+            }
+
+            @Override
+            public SessionStoreBuilder<K, VR> withCachingDisabled() {
+                inner.withCachingDisabled();
+                return this;
+            }
+
+            @Override
+            public SessionStoreBuilder<K, VR> withLoggingEnabled(final Map<String, String> config) {
+                inner.withLoggingEnabled(config);
+                return this;
+            }
+
+            @Override
+            public SessionStoreBuilder<K, VR> withLoggingDisabled() {
+                inner.withLoggingDisabled();
+                return this;
+            }
+
+            @Override
+            public Map<String, String> logConfig() {
+                return inner.logConfig();
+            }
+
+            @Override
+            public boolean loggingEnabled() {
+                return inner.loggingEnabled();
+            }
+
+            @Override
+            public String name() {
+                return inner.name();
+            }
+
+            @Override
+            public SessionStore<K, VR> build() {
+                return new SessionStoreFacade<>(inner.build());
+            }
+        };
 
         if (materialized.loggingEnabled()) {
             builder.withLoggingEnabled(materialized.logConfig());
@@ -211,6 +268,7 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
         if (materialized.cachingEnabled()) {
             builder.withCachingEnabled();
         }
+
         return builder;
     }
 
@@ -220,5 +278,87 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {
         return (aggKey, value, aggregate) -> aggregate == null ? value : reducer.apply(aggregate, value);
+    }
+
+    public static class SessionStoreFacade<A, B> implements SessionStore<A, B> {
+        public final SessionStore<A, ValueAndTimestamp<B>> inner;
+
+        public SessionStoreFacade(final SessionStore<A, ValueAndTimestamp<B>> store) {
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
+            inner.init(context, root);
+        }
+
+        @Override
+        public void put(final Windowed<A> sessionKey,
+                        final B aggregate) {
+            inner.put(sessionKey, ValueAndTimestamp.make(aggregate, -1L));
+        }
+
+        @Override
+        public void remove(final Windowed<A> sessionKey) {
+            inner.remove(sessionKey);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> fetch(final A key) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetch(key);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> fetch(final A from,
+                                                      final A to) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetch(from, to);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> findSessions(final A key,
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator
+                = inner.findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> findSessions(final A keyFrom,
+                                                             final A keyTo,
+                                                             final long earliestSessionEndTime,
+                                                             final long latestSessionStartTime) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator
+                = inner.findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
     }
 }

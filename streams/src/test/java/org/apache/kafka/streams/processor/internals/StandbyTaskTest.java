@@ -43,16 +43,18 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WindowKeySchema;
 import org.apache.kafka.test.MockKeyValueStore;
+import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockRestoreConsumer;
 import org.apache.kafka.test.MockStateRestoreListener;
-import org.apache.kafka.test.MockKeyValueStoreBuilder;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -377,18 +379,19 @@ public class StandbyTaskTest {
     }
 
     @SuppressWarnings("unchecked")
-    private List<KeyValue<Windowed<Integer>, Long>> getWindowedStoreContents(final String storeName, final StandbyTask task) {
+    private List<KeyValue<Windowed<Integer>, Long>> getWindowedStoreContents(final String storeName,
+                                                                             final StandbyTask task) {
         final StandbyContextImpl context = (StandbyContextImpl) task.context();
 
         final List<KeyValue<Windowed<Integer>, Long>> result = new ArrayList<>();
 
-        try (final KeyValueIterator<Windowed<byte[]>, Long> iterator =
-                 ((WindowStore) context.getStateMgr().getStore(storeName)).all()) {
+        try (final KeyValueIterator<Windowed<byte[]>, ValueAndTimestamp<Long>> iterator =
+                 ((KStreamImpl.WindowStoreFacade) context.getStateMgr().getStore(storeName)).inner.all()) {
 
             while (iterator.hasNext()) {
-                final KeyValue<Windowed<byte[]>, Long> next = iterator.next();
+                final KeyValue<Windowed<byte[]>, ValueAndTimestamp<Long>> next = iterator.next();
                 final Integer deserializedKey = new IntegerDeserializer().deserialize(null, next.key.key());
-                result.add(new KeyValue<>(new Windowed<>(deserializedKey, next.key.window()), next.value));
+                result.add(new KeyValue<>(new Windowed<>(deserializedKey, next.key.window()), next.value.value()));
             }
         }
 

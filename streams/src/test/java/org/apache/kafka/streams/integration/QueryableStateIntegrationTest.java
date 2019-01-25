@@ -50,7 +50,9 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.StreamsMetadata;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -121,6 +123,7 @@ public class QueryableStateIntegrationTest {
     private KafkaStreams kafkaStreams;
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
+    private Comparator<KeyValue<String, ValueAndTimestamp<Long>>> stringLongTimestampComparator;
     private static int testNo = 0;
 
     private void createTopics() throws Exception {
@@ -193,6 +196,9 @@ public class QueryableStateIntegrationTest {
 
         stringComparator = Comparator.comparing((KeyValue<String, String> o) -> o.key).thenComparing(o -> o.value);
         stringLongComparator = Comparator.comparing((KeyValue<String, Long> o) -> o.key).thenComparingLong(o -> o.value);
+        stringLongTimestampComparator = Comparator.comparing((KeyValue<String, ValueAndTimestamp<Long>> o) -> o.key)
+            .thenComparingLong(o -> o.value.value())
+            .thenComparing(o -> o.value.timestamp());
         inputValues = getInputValues();
         inputValuesKeys = new HashSet<>();
         for (final String sentence : inputValues) {
@@ -301,8 +307,8 @@ public class QueryableStateIntegrationTest {
                         }
                         final int index = metadata.hostInfo().port();
                         final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyKeyValueStore<String, Long> store =
-                            streamsWithKey.store(storeName, QueryableStoreTypes.keyValueStore());
+                        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> store =
+                            streamsWithKey.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
 
                         return store != null && store.get(key) != null;
                     } catch (final IllegalStateException e) {
@@ -336,8 +342,8 @@ public class QueryableStateIntegrationTest {
                         }
                         final int index = metadata.hostInfo().port();
                         final KafkaStreams streamsWithKey = streamRunnables[index].getStream();
-                        final ReadOnlyWindowStore<String, Long> store =
-                            streamsWithKey.store(storeName, QueryableStoreTypes.windowStore());
+                        final ReadOnlyWindowStore<String, ValueAndTimestamp<Long>> store =
+                            streamsWithKey.store(storeName, QueryableStoreTypes.windowWithTimestampStore());
                         return store != null && store.fetch(key, ofEpochMilli(from), ofEpochMilli(to)) != null;
                     } catch (final IllegalStateException e) {
                         // Kafka Streams instance may have closed but rebalance hasn't happened
@@ -455,8 +461,8 @@ public class QueryableStateIntegrationTest {
             waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, numberOfWordsPerIteration);
             waitUntilAtLeastNumRecordProcessed(outputTopicConcurrentWindowed, numberOfWordsPerIteration);
 
-            final ReadOnlyKeyValueStore<String, Long> keyValueStore =
-                kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueStore());
+            final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>
+                keyValueWithTimestampStore = kafkaStreams.store(storeName + "-" + streamConcurrent, QueryableStoreTypes.keyValueWithTimestampStore());
 
             final ReadOnlyWindowStore<String, Long> windowStore =
                 kafkaStreams.store(windowStoreName + "-" + streamConcurrent, QueryableStoreTypes.windowStore());
@@ -465,7 +471,7 @@ public class QueryableStateIntegrationTest {
             final Map<String, Long> expectedCount = new HashMap<>();
             while (producerRunnable.getCurrIteration() < numIterations) {
                 verifyGreaterOrEqual(inputValuesKeys.toArray(new String[0]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, true);
+                    expectedCount, windowStore, keyValueWithTimestampStore, true);
             }
         } finally {
             producerRunnable.shutdown();
@@ -476,12 +482,22 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldBeAbleToQueryStateWithZeroSizedCache() throws Exception {
-        verifyCanQueryState(0);
+        verifyCanQueryState(0, false, false);
     }
 
     @Test
     public void shouldBeAbleToQueryStateWithNonZeroSizedCache() throws Exception {
-        verifyCanQueryState(10 * 1024 * 1024);
+        verifyCanQueryState(10 * 1024 * 1024, false, false);
+    }
+
+    @Test
+    public void shouldBeAbleToQueryTimestampStoreWithoutTimestamps() throws Exception {
+        verifyCanQueryState(0, false, true);
+    }
+
+    @Test
+    public void shouldBeAbleToQueryWithKeyValueStoreSupplier() throws Exception {
+        verifyCanQueryState(0, true, true);
     }
 
     @Test
@@ -521,13 +537,13 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 2);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myFilterStore = kafkaStreams.store("queryFilter", QueryableStoreTypes.keyValueStore());
-        final ReadOnlyKeyValueStore<String, Long>
-            myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>
+            myFilterStore = kafkaStreams.store("queryFilter", QueryableStoreTypes.keyValueWithTimestampStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>
+            myFilterNotStore = kafkaStreams.store("queryFilterNot", QueryableStoreTypes.keyValueWithTimestampStore());
 
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            TestUtils.waitForCondition(() -> expectedEntry.value.equals(myFilterStore.get(expectedEntry.key)),
+            TestUtils.waitForCondition(() -> expectedEntry.value.equals(myFilterStore.get(expectedEntry.key).value()),
                     "Cannot get expected result");
         }
         for (final KeyValue<String, Long> batchEntry : batch1) {
@@ -543,7 +559,7 @@ public class QueryableStateIntegrationTest {
         }
         for (final KeyValue<String, Long> batchEntry : batch1) {
             if (!expectedBatch1.contains(batchEntry)) {
-                TestUtils.waitForCondition(() -> batchEntry.value.equals(myFilterNotStore.get(batchEntry.key)),
+                TestUtils.waitForCondition(() -> batchEntry.value.equals(myFilterNotStore.get(batchEntry.key).value()),
                         "Cannot get expected result");
             }
         }
@@ -587,10 +603,10 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 5);
 
-        final ReadOnlyKeyValueStore<String, Long> myMapStore =
-            kafkaStreams.store("queryMapValues", QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> myMapStore =
+            kafkaStreams.store("queryMapValues", QueryableStoreTypes.keyValueWithTimestampStore());
         for (final KeyValue<String, String> batchEntry : batch1) {
-            assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key));
+            assertEquals(Long.valueOf(batchEntry.value), myMapStore.get(batchEntry.key).value());
         }
     }
 
@@ -635,11 +651,11 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>
             myMapStore = kafkaStreams.store("queryMapValues",
-            QueryableStoreTypes.keyValueStore());
+            QueryableStoreTypes.keyValueWithTimestampStore());
         for (final KeyValue<String, Long> expectedEntry : expectedBatch1) {
-            assertEquals(myMapStore.get(expectedEntry.key), expectedEntry.value);
+            assertEquals(myMapStore.get(expectedEntry.key).value(), expectedEntry.value);
         }
         for (final KeyValue<String, String> batchEntry : batch1) {
             final KeyValue<String, Long> batchEntryMapValue =
@@ -650,7 +666,9 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    private void verifyCanQueryState(final int cacheSizeBytes) throws Exception {
+    private void verifyCanQueryState(final int cacheSizeBytes,
+                                     final boolean usePlainKeyValueStoreSupplier,
+                                     final boolean queryAsNoneTimestampStore) throws Exception {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
         final StreamsBuilder builder = new StreamsBuilder();
         final String[] keys = {"hello", "goodbye", "welcome", "go", "kafka"};
@@ -680,10 +698,17 @@ public class QueryableStateIntegrationTest {
 
         final KStream<String, String> s1 = builder.stream(streamOne);
 
-        // Non Windowed
         final String storeName = "my-count";
+        final Materialized<String, Long, KeyValueStore<Bytes, byte[]>> materialized;
+        if (usePlainKeyValueStoreSupplier) {
+            materialized = Materialized.as(Stores.persistentKeyValueStore(storeName));
+        } else {
+            materialized = Materialized.as(storeName);
+        }
+
+        // Non Windowed
         s1.groupByKey()
-            .count(Materialized.as(storeName))
+            .count(materialized)
             .toStream()
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
@@ -696,18 +721,38 @@ public class QueryableStateIntegrationTest {
 
         waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
-        final ReadOnlyKeyValueStore<String, Long>
-            myCount = kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+        if (!queryAsNoneTimestampStore) {
+            final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>>
+                myCount = kafkaStreams.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
 
-        final ReadOnlyWindowStore<String, Long> windowStore =
-            kafkaStreams.store(windowStoreName, QueryableStoreTypes.windowStore());
-        verifyCanGetByKey(keys,
-            expectedCount,
-            expectedCount,
-            windowStore,
-            myCount);
+            verifyRangeAndAll(expectedCount, myCount);
 
-        verifyRangeAndAll(expectedCount, myCount);
+            final ReadOnlyWindowStore<String, ValueAndTimestamp<Long>> windowStore =
+                kafkaStreams.store(windowStoreName, QueryableStoreTypes.windowWithTimestampStore());
+
+            verifyCanGetByKey(
+                keys,
+                expectedCount,
+                expectedCount,
+                windowStore,
+                myCount);
+        } else {
+            final ReadOnlyKeyValueStore<String, Long>
+                myCount = kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+
+            verifyRangeAndAllWithoutTimestamp(expectedCount, myCount);
+
+            final ReadOnlyWindowStore<String, Long> windowStore =
+                kafkaStreams.store(windowStoreName, QueryableStoreTypes.windowStore());
+
+            verifyCanGetByKeyWithOutTimestamps(
+                keys,
+                expectedCount,
+                expectedCount,
+                windowStore,
+                myCount);
+
+        }
     }
 
     @Test
@@ -738,11 +783,11 @@ public class QueryableStateIntegrationTest {
             maxWaitMs,
             "waiting for store " + storeName);
 
-        final ReadOnlyKeyValueStore<String, Long> store =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> store =
+            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
 
         TestUtils.waitForCondition(
-            () -> new Long(8).equals(store.get("hello")),
+            () -> new Long(8).equals(store.get("hello").value()),
             maxWaitMs,
             "wait for count to be 8");
 
@@ -759,7 +804,7 @@ public class QueryableStateIntegrationTest {
                 try {
                     assertEquals(
                         Long.valueOf(8L),
-                        kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore()).get("hello"));
+                        kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueWithTimestampStore()).get("hello").value());
                     return true;
                 } catch (final InvalidStateStoreException ise) {
                     return false;
@@ -780,7 +825,7 @@ public class QueryableStateIntegrationTest {
         @Override
         public boolean conditionMet() {
             try {
-                kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueStore());
+                kafkaStreams.store(storeName, QueryableStoreTypes.<String, Long>keyValueWithTimestampStore());
                 return true;
             } catch (final InvalidStateStoreException ise) {
                 return false;
@@ -835,13 +880,10 @@ public class QueryableStateIntegrationTest {
             maxWaitMs,
             "waiting for store " + storeName);
 
-        final ReadOnlyKeyValueStore<String, String> store =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store =
+            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
 
-        TestUtils.waitForCondition(
-            () -> "12".equals(store.get("a")) && "34".equals(store.get("b")),
-            maxWaitMs,
-            "wait for agg to be <a,12> and <b,34>");
+        TestUtils.waitForCondition(() -> "12".equals(store.get("a").value()) && "34".equals(store.get("b").value()), maxWaitMs, "wait for agg to be <a,12> and <b,34>");
 
         IntegrationTestUtils.produceKeyValuesSynchronously(
             streamOne,
@@ -862,18 +904,18 @@ public class QueryableStateIntegrationTest {
             maxWaitMs,
             "waiting for store " + storeName);
 
-        final ReadOnlyKeyValueStore<String, String> store2 =
-            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store2 =
+            kafkaStreams.store(storeName, QueryableStoreTypes.keyValueWithTimestampStore());
 
         try {
             TestUtils.waitForCondition(
-                () -> ("125".equals(store2.get("a"))
-                    || "1225".equals(store2.get("a"))
-                    || "12125".equals(store2.get("a")))
+                () -> ("125".equals(store2.get("a").value())
+                    || "1225".equals(store2.get("a").value())
+                    || "12125".equals(store2.get("a").value()))
                     &&
-                    ("34".equals(store2.get("b"))
-                    || "344".equals(store2.get("b"))
-                    || "3434".equals(store2.get("b"))),
+                    ("34".equals(store2.get("b").value())
+                    || "344".equals(store2.get("b").value())
+                    || "3434".equals(store2.get("b").value())),
                 maxWaitMs,
                 "wait for agg to be <a,125>||<a,1225>||<a,12125> and <b,34>||<b,344>||<b,3434>");
         } catch (final Throwable t) {
@@ -882,7 +924,40 @@ public class QueryableStateIntegrationTest {
     }
 
     private void verifyRangeAndAll(final Set<KeyValue<String, Long>> expectedCount,
-                                   final ReadOnlyKeyValueStore<String, Long> myCount) {
+                                   final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> myCount) {
+        final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>>
+            expectedRangeResults =
+            new TreeSet<>(stringLongComparator);
+
+        expectedRangeResults.addAll(Arrays.asList(
+            new KeyValue<>("hello", 1L),
+            new KeyValue<>("go", 1L),
+            new KeyValue<>("goodbye", 1L),
+            new KeyValue<>("kafka", 1L)
+        ));
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<Long>> range = myCount.range("go", "kafka")) {
+            while (range.hasNext()) {
+                final KeyValue<String, ValueAndTimestamp<Long>> keyValue = range.next();
+                countRangeResults.add(KeyValue.pair(keyValue.key, keyValue.value.value()));
+            }
+        }
+
+        try (final KeyValueIterator<String, ValueAndTimestamp<Long>> all = myCount.all()) {
+            while (all.hasNext()) {
+                final KeyValue<String, ValueAndTimestamp<Long>> keyValue = all.next();
+                countAllResults.add(KeyValue.pair(keyValue.key, keyValue.value.value()));
+            }
+        }
+
+        assertThat(countRangeResults, equalTo(expectedRangeResults));
+        assertThat(countAllResults, equalTo(expectedCount));
+    }
+
+    private void verifyRangeAndAllWithoutTimestamp(final Set<KeyValue<String, Long>> expectedCount,
+                                                   final ReadOnlyKeyValueStore<String, Long> myCount) {
         final Set<KeyValue<String, Long>> countRangeResults = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>> countAllResults = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>> expectedRangeResults = new TreeSet<>(stringLongComparator);
@@ -896,13 +971,15 @@ public class QueryableStateIntegrationTest {
 
         try (final KeyValueIterator<String, Long> range = myCount.range("go", "kafka")) {
             while (range.hasNext()) {
-                countRangeResults.add(range.next());
+                final KeyValue<String, Long> keyValue = range.next();
+                countRangeResults.add(KeyValue.pair(keyValue.key, keyValue.value));
             }
         }
 
         try (final KeyValueIterator<String, Long> all = myCount.all()) {
             while (all.hasNext()) {
-                countAllResults.add(all.next());
+                final KeyValue<String, Long> keyValue = all.next();
+                countAllResults.add(KeyValue.pair(keyValue.key, keyValue.value));
             }
         }
 
@@ -913,8 +990,35 @@ public class QueryableStateIntegrationTest {
     private void verifyCanGetByKey(final String[] keys,
                                    final Set<KeyValue<String, Long>> expectedWindowState,
                                    final Set<KeyValue<String, Long>> expectedCount,
-                                   final ReadOnlyWindowStore<String, Long> windowStore,
-                                   final ReadOnlyKeyValueStore<String, Long> myCount) throws Exception {
+                                   final ReadOnlyWindowStore<String, ValueAndTimestamp<Long>> windowStore,
+                                   final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> myCount) throws Exception {
+        final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
+        final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
+
+        final long timeout = System.currentTimeMillis() + 30000;
+        while ((windowState.size() < keys.length ||
+            countState.size() < keys.length) &&
+            System.currentTimeMillis() < timeout) {
+            Thread.sleep(10);
+            for (final String key : keys) {
+                for (final KeyValue<String, ValueAndTimestamp<Long>> keyValue : fetch(windowStore, key)) {
+                    windowState.add(KeyValue.pair(keyValue.key, keyValue.value.value()));
+                }
+                final Long value = myCount.get(key).value();
+                if (value != null) {
+                    countState.add(KeyValue.pair(key, value));
+                }
+            }
+        }
+        assertThat(windowState, equalTo(expectedWindowState));
+        assertThat(countState, equalTo(expectedCount));
+    }
+
+    private <V> void verifyCanGetByKeyWithOutTimestamps(final String[] keys,
+                                                        final Set<KeyValue<String, Long>> expectedWindowState,
+                                                        final Set<KeyValue<String, Long>> expectedCount,
+                                                        final ReadOnlyWindowStore<String, Long> windowStore,
+                                                        final ReadOnlyKeyValueStore<String, Long> myCount) throws Exception {
         final Set<KeyValue<String, Long>> windowState = new TreeSet<>(stringLongComparator);
         final Set<KeyValue<String, Long>> countState = new TreeSet<>(stringLongComparator);
 
@@ -952,7 +1056,7 @@ public class QueryableStateIntegrationTest {
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
-                                      final ReadOnlyKeyValueStore<String, Long> keyValueStore,
+                                      final ReadOnlyKeyValueStore<String, ValueAndTimestamp<Long>> keyValueStore,
                                       final boolean failIfKeyNotFound) {
         final Map<String, Long> windowState = new HashMap<>();
         final Map<String, Long> countState = new HashMap<>();
@@ -963,7 +1067,7 @@ public class QueryableStateIntegrationTest {
                 fail("Key in windowed-store not found " + key);
             }
             windowState.putAll(map);
-            final Long value = keyValueStore.get(key);
+            final Long value = keyValueStore.get(key).value();
             if (value != null) {
                 countState.put(key, value);
             } else if (failIfKeyNotFound) {
@@ -1006,12 +1110,12 @@ public class QueryableStateIntegrationTest {
             120 * 1000);
     }
 
-    private Set<KeyValue<String, Long>> fetch(final ReadOnlyWindowStore<String, Long> store,
-                                              final String key) {
-        final WindowStoreIterator<Long> fetch =
+    private <V> Set<KeyValue<String, V>> fetch(final ReadOnlyWindowStore<String, V> store,
+                                               final String key) {
+        final WindowStoreIterator<V> fetch =
             store.fetch(key, ofEpochMilli(0), ofEpochMilli(System.currentTimeMillis()));
         if (fetch.hasNext()) {
-            final KeyValue<Long, Long> next = fetch.next();
+            final KeyValue<Long, V> next = fetch.next();
             return Collections.singleton(KeyValue.pair(key, next.value));
         }
         return Collections.emptySet();

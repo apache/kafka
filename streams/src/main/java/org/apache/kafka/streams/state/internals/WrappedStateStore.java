@@ -16,40 +16,37 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.RecordConverter;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
  */
-public interface WrappedStateStore extends StateStore {
+public interface WrappedStateStore<S extends StateStore> extends StateStore {
 
     /**
      * Return the inner most storage engine
      *
      * @return wrapped inner storage engine
      */
-    StateStore inner();
+    S inner();
 
     /**
      * Return the state store this store directly wraps
      * @return the state store this store directly wraps
      */
-    StateStore wrappedStore();
+    S wrappedStore();
 
-    abstract class AbstractStateStore implements WrappedStateStore, RecordConverter {
-        final StateStore innerState;
+    abstract class AbstractStateStore<S extends StateStore> implements WrappedStateStore<S> {
+        private final S innerState;
 
-        protected AbstractStateStore(final StateStore inner) {
+        protected AbstractStateStore(final S inner) {
             this.innerState = inner;
         }
 
         @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
+        public void init(final ProcessorContext context, final StateStore root) {
             innerState.init(context, root);
         }
 
@@ -74,12 +71,15 @@ public interface WrappedStateStore extends StateStore {
             }
         }
 
+        // we know that, if the inner store is wrapped, it must specifically be Wrapped<S> because it is also S
+        @SuppressWarnings("unchecked")
         @Override
-        public StateStore inner() {
-            if (innerState instanceof WrappedStateStore) {
-                return ((WrappedStateStore) innerState).inner();
+        public S inner() {
+            S toReturn = innerState;
+            while (toReturn instanceof WrappedStateStore) {
+                toReturn = ((WrappedStateStore<S>) toReturn).inner();
             }
-            return innerState;
+            return toReturn;
         }
 
         @Override
@@ -93,14 +93,8 @@ public interface WrappedStateStore extends StateStore {
         }
 
         @Override
-        public StateStore wrappedStore() {
+        public S wrappedStore() {
             return innerState;
         }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return ((RecordConverter) innerState).convert(record);
-        }
-
     }
 }

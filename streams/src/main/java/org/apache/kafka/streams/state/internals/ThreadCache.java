@@ -331,12 +331,12 @@ public class ThreadCache {
     static class DirtyEntry {
         private final Bytes key;
         private final byte[] newValue;
-        private final LRUCacheEntry recordContext;
+        private final LRUCacheEntry cacheEntry;
 
-        DirtyEntry(final Bytes key, final byte[] newValue, final LRUCacheEntry recordContext) {
+        DirtyEntry(final Bytes key, final byte[] newValue, final LRUCacheEntry cacheEntry) {
             this.key = key;
             this.newValue = newValue;
-            this.recordContext = recordContext;
+            this.cacheEntry = cacheEntry;
         }
 
         public Bytes key() {
@@ -348,7 +348,7 @@ public class ThreadCache {
         }
 
         public LRUCacheEntry entry() {
-            return recordContext;
+            return cacheEntry;
         }
     }
 }

@@ -41,6 +41,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
+import org.apache.kafka.streams.kstream.internals.KStreamImpl;
+import org.apache.kafka.streams.kstream.internals.KeyValueWithTimestampStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.SessionWindowedKStreamImpl;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -62,7 +65,11 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.internals.MeteredKeyValueWithTimestampStore;
+import org.apache.kafka.streams.state.internals.MeteredSessionWithTimestampStore;
+import org.apache.kafka.streams.state.internals.MeteredWindowWithTimestampStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
@@ -564,8 +571,11 @@ public class TopologyTestDriver implements Closeable {
      * @return all stores my name
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
      * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
      */
     @SuppressWarnings("WeakerAccess")
     public Map<String, StateStore> getAllStateStores() {
@@ -587,8 +597,11 @@ public class TopologyTestDriver implements Closeable {
      * @return the state store, or {@code null} if no store has been registered with the given name
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
      * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
      */
     @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) {
@@ -621,13 +634,45 @@ public class TopologyTestDriver implements Closeable {
      * @return the key value store, or {@code null} if no {@link KeyValueStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
      * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
         final StateStore store = getStateStore(name);
+        if (store instanceof MeteredKeyValueWithTimestampStore) {
+            return new KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<>((KeyValueStore<K, ValueAndTimestamp<V>>) store);
+        }
         return store instanceof KeyValueStore ? (KeyValueStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link KeyValueStore KeyValueStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link KeyValueStore KeyValueStore<&lt;K, ValueAndTimestamp&lt;V&gt;&gt;>} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess"})
+    public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getKeyValueWithTimestampStore(final String name) {
+        final StateStore store = getStateStore(name);
+        if (store instanceof KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) {
+            return ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<K, V>) store).inner;
+        }
+        return store instanceof KeyValueStore ? (KeyValueStore<K, ValueAndTimestamp<V>>) store : null;
     }
 
     /**
@@ -642,12 +687,44 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
-     * @see #getSessionStore(String) (String)
+     * @see #getKeyValueWithTimestampStore(String)
+     * @see #getWindowWithTimestampStore(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
         final StateStore store = getStateStore(name);
+        if (store instanceof MeteredWindowWithTimestampStore) {
+            return new KStreamImpl.WindowStoreFacade<>((WindowStore<K, ValueAndTimestamp<V>>) store);
+        }
         return store instanceof WindowStore ? (WindowStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link WindowStore WindowStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link WindowStore WindowStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
+     * @see #getWindowStore(String)
+     * @see #getSessionStore(String)
+     * @see #getSessionWithTimestampStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
+    public <K, V> WindowStore<K, ValueAndTimestamp<V>> getWindowWithTimestampStore(final String name) {
+        final StateStore store = getStateStore(name);
+        if (store instanceof KStreamImpl.WindowStoreFacade) {
+            return ((KStreamImpl.WindowStoreFacade<K, V>) store).inner;
+        }
+        return store instanceof WindowStore ? (WindowStore<K, ValueAndTimestamp<V>>) store : null;
     }
 
     /**
@@ -662,12 +739,44 @@ public class TopologyTestDriver implements Closeable {
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
      * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
+     * @see #getSessionWithTimestampStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
+        if (store instanceof MeteredSessionWithTimestampStore) {
+            return new SessionWindowedKStreamImpl.SessionStoreFacade<>((SessionStore<K, ValueAndTimestamp<V>>) store);
+        }
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
+    }
+
+    /**
+     * Get the {@link SessionStore SessionStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;} with the given name.
+     * The store can be a "regular" or global store.
+     * <p>
+     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
+     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
+     *
+     * @param name the name of the store
+     * @return the key value store, or {@code null} if no {@link SessionStore SessionStore&lt;K, ValueAndTimestamp&lt;V&gt;&gt;} has been registered with the given name
+     * @see #getAllStateStores()
+     * @see #getStateStore(String)
+     * @see #getKeyValueStore(String)
+     * @see #getKeyValueWithTimestampStore(String)
+     * @see #getWindowStore(String)
+     * @see #getWindowWithTimestampStore(String)
+     * @see #getSessionStore(String)
+     */
+    @SuppressWarnings({"unchecked", "WeakerAccess", "unused"})
+    public <K, V> SessionStore<K, ValueAndTimestamp<V>> getSessionWithTimestampStore(final String name) {
+        final StateStore store = getStateStore(name);
+        if (store instanceof SessionWindowedKStreamImpl.SessionStoreFacade) {
+            return ((SessionWindowedKStreamImpl.SessionStoreFacade<K, V>) store).inner;
+        }
+        return store instanceof SessionStore ? (SessionStore<K, ValueAndTimestamp<V>>) store : null;
     }
 
     /**

@@ -98,7 +98,8 @@ public class RocksDBStoreTest {
 
         assertThat(rocksDBStore.getOptions().level0FileNumCompactionTrigger(), equalTo(10));
         assertThat(rocksDBStore.getOptions().level0SlowdownWritesTrigger(), equalTo(20));
-        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));    }
+        assertThat(rocksDBStore.getOptions().level0StopWritesTrigger(), equalTo(36));
+    }
 
     @Test
     public void shouldNotThrowExceptionOnRestoreWhenThereIsPreExistingRocksDbFiles() {

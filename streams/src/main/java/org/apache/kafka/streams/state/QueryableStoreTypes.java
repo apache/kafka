@@ -43,6 +43,17 @@ public final class QueryableStoreTypes {
     }
 
     /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>}.
+     *
+     * @param <K> key type of the store
+     * @param <V> value type of the store
+     * @return {@link QueryableStoreTypes.KeyValueWithTimestampStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> keyValueWithTimestampStore() {
+        return new KeyValueWithTimestampStoreType<>();
+    }
+
+    /**
      * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore}.
      *
      * @param <K> key type of the store
@@ -54,6 +65,17 @@ public final class QueryableStoreTypes {
     }
 
     /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlyWindowStore ReadOnlyWindowStore<K, ValueAndTimestamp<V>>}.
+     *
+     * @param <K> key type of the store
+     * @param <V> value type of the store
+     * @return {@link QueryableStoreTypes.WindowWithTimestampStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> windowWithTimestampStore() {
+        return new WindowWithTimestampStoreType<>();
+    }
+
+    /**
      * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore}.
      *
      * @param <K> key type of the store
@@ -61,6 +83,17 @@ public final class QueryableStoreTypes {
      * @return {@link QueryableStoreTypes.SessionStoreType}
      */
     public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, V>> sessionStore() {
+        return new SessionStoreType<>();
+    }
+
+    /**
+     * A {@link QueryableStoreType} that accepts {@link ReadOnlySessionStore ReadOnlySessionStore<K, ValueAndTimestamp<V>>}.
+     *
+     * @param <K> key type of the store
+     * @param <V> value type of the store
+     * @return {@link QueryableStoreTypes.SessionWithTimestampStoreType}
+     */
+    public static <K, V> QueryableStoreType<ReadOnlySessionStore<K, ValueAndTimestamp<V>>> sessionWithTimestampStore() {
         return new SessionStoreType<>();
     }
 
@@ -79,7 +112,8 @@ public final class QueryableStoreTypes {
         }
     }
 
-    static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+    public static class KeyValueStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, V>> {
+
         KeyValueStoreType() {
             super(ReadOnlyKeyValueStore.class);
         }
@@ -92,7 +126,21 @@ public final class QueryableStoreTypes {
 
     }
 
-    static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
+    private static class KeyValueWithTimestampStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>>> {
+
+        KeyValueWithTimestampStoreType() {
+            super(ReadOnlyKeyValueStore.class);
+        }
+
+        @Override
+        public ReadOnlyKeyValueStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider,
+                                                                     final String storeName) {
+            return new CompositeReadOnlyKeyValueStore<>(storeProvider, this, storeName);
+        }
+    }
+
+    public static class WindowStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, V>> {
+
         WindowStoreType() {
             super(ReadOnlyWindowStore.class);
         }
@@ -104,13 +152,40 @@ public final class QueryableStoreTypes {
         }
     }
 
-    static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+    private static class WindowWithTimestampStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlyWindowStore<K, ValueAndTimestamp<V>>> {
+
+        WindowWithTimestampStoreType() {
+            super(ReadOnlyWindowStore.class);
+        }
+
+        @Override
+        public ReadOnlyWindowStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider,
+                                                final String storeName) {
+            return new CompositeReadOnlyWindowStore<>(storeProvider, this, storeName);
+        }
+    }
+
+    public static class SessionStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, V>> {
+
         SessionStoreType() {
             super(ReadOnlySessionStore.class);
         }
+
         @Override
         public ReadOnlySessionStore<K, V> create(final StateStoreProvider storeProvider,
                                                  final String storeName) {
+            return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
+        }
+    }
+
+    private static class SessionWithTimestampStoreType<K, V> extends QueryableStoreTypeMatcher<ReadOnlySessionStore<K, ValueAndTimestamp<V>>> {
+
+        SessionWithTimestampStoreType() {
+            super(ReadOnlySessionStore.class);
+        }
+
+        @Override
+        public ReadOnlySessionStore<K, ValueAndTimestamp<V>> create(final StateStoreProvider storeProvider, final String storeName) {
             return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
         }
     }

@@ -39,16 +39,17 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
 public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, V> {
     private final SessionStore<Bytes, byte[]> inner;
     private final String metricScope;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
     private final Time time;
-    private StateSerdes<K, V> serdes;
     private StreamsMetricsImpl metrics;
     private Sensor putTime;
     private Sensor fetchTime;
     private Sensor flushTime;
     private Sensor removeTime;
     private String taskName;
+
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
                         final String metricScope,
@@ -63,15 +64,10 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         this.time = time;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        //noinspection unchecked
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        initStateSerdes(context);
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
@@ -96,6 +92,14 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                 time.nanoseconds()
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStateSerdes(final ProcessorContext context) {
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @Override

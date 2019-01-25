@@ -14,16 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.state.RecordConverter;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
+import org.apache.kafka.streams.state.KeyValueStore;
 
-public class DefaultRecordConverter implements RecordConverter {
+public class RocksDbKeyValueWithTimestampBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
-    @Override
-    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-        return record;
+    private final String name;
+
+    public RocksDbKeyValueWithTimestampBytesStoreSupplier(final String name) {
+        this.name = name;
     }
 
+    @Override
+    public String name() {
+        return name;
+    }
+
+    @Override
+    public KeyValueStore<Bytes, byte[]> get() {
+        return new RocksDBWithTimestampStore(name);
+    }
+
+    @Override
+    public String metricsScope() {
+        return "rocksdb-state";
+    }
 }

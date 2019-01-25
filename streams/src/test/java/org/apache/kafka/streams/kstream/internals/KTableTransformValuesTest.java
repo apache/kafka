@@ -34,9 +34,11 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
@@ -59,6 +61,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.isA;
@@ -90,7 +93,7 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private KTableValueGetter<String, String> parentGetter;
     @Mock(MockType.NICE)
-    private KeyValueStore<String, String> stateStore;
+    private KeyValueStore<String, ValueAndTimestamp<String>> stateStore;
     @Mock(MockType.NICE)
     private ValueTransformerWithKeySupplier<String, String, String> mockSupplier;
     @Mock(MockType.NICE)
@@ -203,15 +206,15 @@ public class KTableTransformValuesTest {
 
         expect(parent.valueGetterSupplier()).andReturn(parentGetterSupplier);
         expect(parentGetterSupplier.get()).andReturn(parentGetter);
-        expect(parentGetter.get("Key")).andReturn("Value");
+        expect(parentGetter.get("Key")).andReturn(ValueAndTimestamp.make("Value", 42L));
         replay(parent, parentGetterSupplier, parentGetter);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
 
-        final String result = getter.get("Key");
+        final ValueAndTimestamp<String> result = getter.get("Key");
 
-        assertThat(result, is("Key->Value!"));
+        assertThat(result.value(), is("Key->Value!"));
     }
 
     @Test
@@ -219,16 +222,18 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
-        expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
-        expect(stateStore.get("Key")).andReturn("something");
+        expect(context.getStateStore(QUERYABLE_NAME)).andReturn(
+            new ProcessorContextImpl.KeyValueStoreReadWriteDecorator<>(
+                new KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade<>(stateStore)));
+        expect(stateStore.get("Key")).andReturn(ValueAndTimestamp.make("something", 42L));
         replay(context, stateStore);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();
         getter.init(context);
 
-        final String result = getter.get("Key");
+        final ValueAndTimestamp<String> result = getter.get("Key");
 
-        assertThat(result, is("something"));
+        assertThat(result, equalTo(ValueAndTimestamp.make("something", 42L)));
     }
 
     @Test
@@ -355,10 +360,10 @@ public class KTableTransformValuesTest {
 
         assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:C->null!"));
 
-        final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-        assertThat(keyValueStore.get("A"), is("A->a!"));
-        assertThat(keyValueStore.get("B"), is("B->b!"));
-        assertThat(keyValueStore.get("C"), is("C->null!"));
+        final KeyValueStore<String, ValueAndTimestamp<String>> keyValueStore = driver.getKeyValueWithTimestampStore(QUERYABLE_NAME);
+        assertThat(keyValueStore.get("A").value(), is("A->a!"));
+        assertThat(keyValueStore.get("B").value(), is("B->b!"));
+        assertThat(keyValueStore.get("C").value(), is("C->null!"));
     }
 
     @Test
@@ -384,8 +389,8 @@ public class KTableTransformValuesTest {
 
         assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
 
-        final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
-        assertThat(keyValueStore.get("A"), is(3));
+        final KeyValueStore<String, ValueAndTimestamp<Integer>> keyValueStore = driver.getKeyValueWithTimestampStore(QUERYABLE_NAME);
+        assertThat(keyValueStore.get("A").value(), is(3));
     }
 
     @Test

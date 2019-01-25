@@ -24,7 +24,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 public class WindowStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, WindowStore<K, V>> {
 
-    private final WindowBytesStoreSupplier storeSupplier;
+    final WindowBytesStoreSupplier storeSupplier;
 
     public WindowStoreBuilder(final WindowBytesStoreSupplier storeSupplier,
                               final Serde<K> keySerde,

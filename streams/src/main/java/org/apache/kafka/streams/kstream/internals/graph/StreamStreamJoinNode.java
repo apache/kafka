@@ -34,7 +34,6 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
     private final Joined<K, V1, V2> joined;
 
-
     private StreamStreamJoinNode(final String nodeName,
                                  final ValueJoiner<? super V1, ? super V2, ? extends VR> valueJoiner,
                                  final ProcessorParameters<K, V1> joinThisProcessorParameters,

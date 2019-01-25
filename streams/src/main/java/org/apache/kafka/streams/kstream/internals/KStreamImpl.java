@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
@@ -36,6 +37,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -46,18 +48,28 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StaticTopicNameExtractor;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
+import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
 import java.lang.reflect.Array;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -854,16 +866,208 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                                                  final JoinWindows windows,
                                                                                  final Serde<K> keySerde,
                                                                                  final Serde<V> valueSerde) {
-        return Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                joinName + "-store",
-                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
-                Duration.ofMillis(windows.size()),
-                true
-            ),
-            keySerde,
-            valueSerde
+        final WindowBytesStoreSupplier supplier = Stores.persistentWindowWithTimestampStore(
+            joinName + "-store",
+            Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+            Duration.ofMillis(windows.size()),
+            true
         );
+        return new WindowStoreBuilder<K, V>(supplier, null, null, Time.SYSTEM) {
+            final StoreBuilder<WindowStore<K, ValueAndTimestamp<V>>> inner = Stores.windowWithTimestampStoreBuilder(
+                supplier,
+                keySerde,
+                valueSerde
+            );
+
+            @Override
+            public WindowStoreBuilder<K, V> withCachingEnabled() {
+                inner.withCachingEnabled();
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, V> withCachingDisabled() {
+                inner.withCachingDisabled();
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, V> withLoggingEnabled(final Map<String, String> config) {
+                inner.withLoggingEnabled(config);
+                return this;
+            }
+
+            @Override
+            public WindowStoreBuilder<K, V> withLoggingDisabled() {
+                inner.withLoggingDisabled();
+                return this;
+            }
+
+            @Override
+            public Map<String, String> logConfig() {
+                return inner.logConfig();
+            }
+
+            @Override
+            public boolean loggingEnabled() {
+                return inner.loggingEnabled();
+            }
+
+            @Override
+            public String name() {
+                return inner.name();
+            }
+
+            @Override
+            public WindowStore<K, V> build() {
+                return new WindowStoreFacade<>(inner.build());
+            }
+        };
+    }
+
+    public static class WindowStoreFacade<A, B> implements WindowStore<A, B> {
+        public final WindowStore<A, ValueAndTimestamp<B>> inner;
+
+        public WindowStoreFacade(final WindowStore<A, ValueAndTimestamp<B>> store) {
+            this.inner = store;
+        }
+
+        @Override
+        public void init(final ProcessorContext context,
+                         final StateStore root) {
+            inner.init(context, root);
+        }
+
+        @Override
+        public void put(final A key,
+                        final B value) {
+            inner.put(key, ValueAndTimestamp.make(value, -1L));
+        }
+
+        @Override
+        public void put(final A key,
+                        final B value,
+                        final long windowStartTimestamp) {
+            inner.put(key, ValueAndTimestamp.make(value, -1L), windowStartTimestamp);
+        }
+
+        @Override
+        public B fetch(final A key,
+                       final long time) {
+            final ValueAndTimestamp<B> valueAndTimestamp = inner.fetch(key, time);
+            return valueAndTimestamp == null ? null : valueAndTimestamp.value();
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public WindowStoreIterator<B> fetch(final A key,
+                                            final long timeFrom,
+                                            final long timeTo) {
+            final KeyValueIterator<Long, ValueAndTimestamp<B>> innerIterator = inner.fetch(key, timeFrom, timeTo);
+            return new WindowStoreIteratorFacade(innerIterator);
+        }
+
+        @Override
+        public WindowStoreIterator<B> fetch(final A key,
+                                            final Instant from,
+                                            final Instant to) throws IllegalArgumentException {
+            final KeyValueIterator<Long, ValueAndTimestamp<B>> innerIterator = inner.fetch(key, from, to);
+            return new WindowStoreIteratorFacade(innerIterator);
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public KeyValueIterator<Windowed<A>, B> fetch(final A from,
+                                                      final A to,
+                                                      final long timeFrom,
+                                                      final long timeTo) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetch(from, to, timeFrom, timeTo);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> fetch(final A from,
+                                                      final A to,
+                                                      final Instant fromTime,
+                                                      final Instant toTime) throws IllegalArgumentException {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetch(from, to, fromTime, toTime);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        @SuppressWarnings("deprecation")
+        public KeyValueIterator<Windowed<A>, B> fetchAll(final long timeFrom,
+                                                         final long timeTo) {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetchAll(timeFrom, timeTo);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> fetchAll(final Instant from,
+                                                         final Instant to) throws IllegalArgumentException {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.fetchAll(from, to);
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<A>, B> all() {
+            final KeyValueIterator<Windowed<A>, ValueAndTimestamp<B>> innerIterator = inner.all();
+            return new KeyValueIteratorFacade<>(innerIterator);
+        }
+
+        @Override
+        public void flush() {
+            inner.flush();
+        }
+
+        @Override
+        public void close() {
+            inner.close();
+        }
+
+        @Override
+        public boolean isOpen() {
+            return inner.isOpen();
+        }
+
+        @Override
+        public String name() {
+            return inner.name();
+        }
+
+        @Override
+        public boolean persistent() {
+            return inner.persistent();
+        }
+
+        private class WindowStoreIteratorFacade implements WindowStoreIterator<B> {
+            final KeyValueIterator<Long, ValueAndTimestamp<B>> innerIterator;
+
+            WindowStoreIteratorFacade(final KeyValueIterator<Long, ValueAndTimestamp<B>> iterator) {
+                innerIterator = iterator;
+            }
+
+            @Override
+            public void close() {
+                innerIterator.close();
+            }
+
+            @Override
+            public Long peekNextKey() {
+                return innerIterator.peekNextKey();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return innerIterator.hasNext();
+            }
+
+            @Override
+            public KeyValue<Long, B> next() {
+                final KeyValue<Long, ValueAndTimestamp<B>> innerKeyValue = innerIterator.next();
+                return KeyValue.pair(innerKeyValue.key, innerKeyValue.value.value());
+            }
+        }
     }
 
     private class KStreamImplJoin {

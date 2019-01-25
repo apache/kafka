@@ -52,7 +52,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                 metricsScope(),
                 retentionPeriod,
                 segmentInterval,
-                new WindowKeySchema()
+                new WindowKeySchema<>()
         );
         return new RocksDBWindowStore<>(segmentedBytesStore,
                 Serdes.Bytes(),

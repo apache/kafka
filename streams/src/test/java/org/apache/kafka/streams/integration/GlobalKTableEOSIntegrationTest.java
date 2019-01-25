@@ -40,6 +40,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -138,11 +139,11 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> "J".equals(replicatedStore.get(5L).value()),
             30000,
             "waiting for data in replicated store");
 
@@ -182,11 +183,11 @@ public class GlobalKTableEOSIntegrationTest {
 
         produceGlobalTableValues();
 
-        final ReadOnlyKeyValueStore<Long, String> replicatedStore =
-            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
 
         TestUtils.waitForCondition(
-            () -> "J".equals(replicatedStore.get(5L)),
+            () -> "J".equals(replicatedStore.get(5L).value()),
             30000,
             "waiting for data in replicated store");
 
@@ -218,17 +219,17 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> {
-                final ReadOnlyKeyValueStore<Long, String> store;
+                final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store;
                 try {
-                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
                 } catch (final InvalidStateStoreException ex) {
                     return false;
                 }
                 final Map<Long, String> result = new HashMap<>();
-                final Iterator<KeyValue<Long, String>> it = store.all();
+                final Iterator<KeyValue<Long, ValueAndTimestamp<String>>> it = store.all();
                 while (it.hasNext()) {
-                    final KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
+                    final KeyValue<Long, ValueAndTimestamp<String>> kv = it.next();
+                    result.put(kv.key, kv.value.value());
                 }
                 return result.equals(expected);
             },
@@ -252,17 +253,17 @@ public class GlobalKTableEOSIntegrationTest {
 
         TestUtils.waitForCondition(
             () -> {
-                final ReadOnlyKeyValueStore<Long, String> store;
+                final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> store;
                 try {
-                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
+                    store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueWithTimestampStore());
                 } catch (final InvalidStateStoreException ex) {
                     return false;
                 }
                 final Map<Long, String> result = new HashMap<>();
-                final Iterator<KeyValue<Long, String>> it = store.all();
+                final Iterator<KeyValue<Long, ValueAndTimestamp<String>>> it = store.all();
                 while (it.hasNext()) {
-                    final KeyValue<Long, String> kv = it.next();
-                    result.put(kv.key, kv.value);
+                    final KeyValue<Long, ValueAndTimestamp<String>> kv = it.next();
+                    result.put(kv.key, kv.value.value());
                 }
                 return result.equals(expected);
             },

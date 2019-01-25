@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
@@ -38,11 +39,24 @@ class TupleForwarder<K, V> {
                    final ProcessorContext context,
                    final ForwardingCacheFlushListener flushListener,
                    final boolean sendOldValues) {
-        this.cachedStateStore = cachedStateStore(store);
+        this.cachedStateStore = cachedStateStore(maybeRemoveStoreFacade(store));
         this.context = context;
         if (this.cachedStateStore != null) {
             cachedStateStore.setFlushListener(flushListener, sendOldValues);
         }
+    }
+
+    private StateStore maybeRemoveStoreFacade(final StateStore store) {
+        if (store instanceof KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) {
+            return ((KeyValueWithTimestampStoreMaterializer.TimestampHidingKeyValueStoreFacade) store).inner;
+        }
+        if (store instanceof KStreamImpl.WindowStoreFacade) {
+            return ((KStreamImpl.WindowStoreFacade) store).inner;
+        }
+        if (store instanceof SessionWindowedKStreamImpl.SessionStoreFacade) {
+            return ((SessionWindowedKStreamImpl.SessionStoreFacade) store).inner;
+        }
+        return store;
     }
 
     private CachedStateStore cachedStateStore(final StateStore store) {
@@ -71,4 +85,14 @@ class TupleForwarder<K, V> {
             context.forward(key, new Change<>(newValue, oldValue));
         }
     }
+
+    public void maybeForward(final K key,
+                             final V newValue,
+                             final V oldValue,
+                             final long timestamp) {
+        if (cachedStateStore == null) {
+            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
+        }
+    }
+
 }

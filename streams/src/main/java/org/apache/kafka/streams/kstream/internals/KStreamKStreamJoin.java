@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -53,7 +58,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
     private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
 
-        private WindowStore<K, V2> otherWindow;
+        private WindowStore<K, ValueAndTimestamp<V2>> otherWindow;
         private StreamsMetricsImpl metrics;
 
         @SuppressWarnings("unchecked")
@@ -62,7 +67,11 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
 
-            otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
+            StateStore store = context.getStateStore(otherWindowName);
+            if (store instanceof WrappedStateStore) {
+                store = ((WrappedStateStore) store).wrappedStore();
+            }
+            otherWindow = ((KStreamImpl.WindowStoreFacade<K, V2>) store).inner;
         }
 
 
@@ -88,10 +97,12 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             final long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
             final long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
 
-            try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
+            try (final WindowStoreIterator<ValueAndTimestamp<V2>> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    context().forward(key, joiner.apply(value, iter.next().value));
+                    final KeyValue<Long, ValueAndTimestamp<V2>> other = iter.next();
+                    final long resultTimestamp = Math.max(context().timestamp(), other.value.timestamp());
+                    context().forward(key, joiner.apply(value, other.value.value()), To.all().withTimestamp(resultTimestamp));
                 }
 
                 if (needOuterJoin) {
