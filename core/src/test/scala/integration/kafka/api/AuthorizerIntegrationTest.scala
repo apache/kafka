@@ -229,7 +229,6 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.ALTER_REPLICA_LOG_DIRS -> clusterAlterAcl,
     ApiKeys.DESCRIBE_LOG_DIRS -> clusterDescribeAcl,
     ApiKeys.CREATE_PARTITIONS -> topicAlterAcl,
-    ApiKeys.CREATE_PARTITIONS -> topicAlterAcl,
     ApiKeys.ELECT_PREFERRED_LEADERS -> clusterAlterAcl
   )
 

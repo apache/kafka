@@ -1543,18 +1543,18 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  type ElectPreferredLeadersCallback = (Set[TopicPartition], Set[ElectPreferredLeaderMetadata], Map[TopicPartition, ApiError])=>Unit
+  type ElectPreferredLeadersCallback = (Map[TopicPartition, Int], Map[TopicPartition, ApiError])=>Unit
 
-  def electPreferredLeaders(partitions: Set[TopicPartition], callback: ElectPreferredLeadersCallback = { (_,_,_) => }): Unit =
+  def electPreferredLeaders(partitions: Set[TopicPartition], callback: ElectPreferredLeadersCallback = { (_,_) => }): Unit =
     eventManager.put(PreferredReplicaLeaderElection(Some(partitions), AdminClientTriggered, callback))
 
   case class PreferredReplicaLeaderElection(partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
                                             electionType: ElectionType = ZkTriggered,
-                                            callback: ElectPreferredLeadersCallback = (_,_,_) =>{}) extends PreemptableControllerEvent {
+                                            callback: ElectPreferredLeadersCallback = (_,_) =>{}) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
     override def handlePreempt(): Unit = {
-      callback(Set(), Set(), partitionsFromAdminClientOpt match {
+      callback(Map.empty, partitionsFromAdminClientOpt match {
         case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
         case None => Map.empty
       })
@@ -1562,7 +1562,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def handleProcess(): Unit = {
       if (!isActive) {
-        callback(Set(), Set(), partitionsFromAdminClientOpt match {
+        callback(Map.empty, partitionsFromAdminClientOpt match {
           case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
           case None => Map.empty
         })
@@ -1608,9 +1608,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             invalidPartitions.map ( tp => tp -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
             )
           debug(s"PreferredReplicaLeaderElection waiting: $successfulPartitions, results: $results")
-          callback(successfulPartitions,
-            successfulPartitions.map(
-              tp => ElectPreferredLeaderMetadata(tp, controllerContext.partitionReplicaAssignment(tp).head)),
+          callback(successfulPartitions.map(
+              tp => tp->controllerContext.partitionReplicaAssignment(tp).head).toMap,
             results)
         }
       }

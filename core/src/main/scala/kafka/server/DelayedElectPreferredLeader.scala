@@ -21,21 +21,19 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 
-import scala.collection.{Map, Set, mutable}
-
-case class ElectPreferredLeaderMetadata(partition: TopicPartition, leader: Int)
+import scala.collection.{Map, mutable}
 
 /** A delayed elect preferred leader operation that can be created by the replica manager and watched
   * in the elect preferred leader purgatory
   */
 class DelayedElectPreferredLeader(delayMs: Long,
-                                  expectedLeaders: Set[ElectPreferredLeaderMetadata],
+                                  expectedLeaders: Map[TopicPartition, Int],
                                   results: Map[TopicPartition, ApiError],
                                   replicaManager: ReplicaManager,
                                   responseCallback: Map[TopicPartition, ApiError] => Unit)
     extends DelayedOperation(delayMs) {
 
-  var waitingPartitions = expectedLeaders.to[mutable.Set]
+  var waitingPartitions = expectedLeaders
   val fullResults = results.to[mutable.Set]
 
 
@@ -51,7 +49,9 @@ class DelayedElectPreferredLeader(delayMs: Long,
   override def onComplete(): Unit = {
     // This could be called to force complete, so I need the full list of partitions, so I can time them all out.
     updateWaiting()
-    val timedout = waitingPartitions.map(meta => meta.partition -> new ApiError(Errors.REQUEST_TIMED_OUT, null)).toMap
+    val timedout = waitingPartitions.map{
+      case (tp, leader) => tp -> new ApiError(Errors.REQUEST_TIMED_OUT, null)
+    }.toMap
     responseCallback(timedout ++ fullResults)
   }
 
@@ -73,13 +73,13 @@ class DelayedElectPreferredLeader(delayMs: Long,
   }
 
   private def updateWaiting() = {
-    waitingPartitions.foreach{m =>
-      val ps = replicaManager.metadataCache.getPartitionInfo(m.partition.topic, m.partition.partition)
+    waitingPartitions.foreach{case (tp, leader) =>
+      val ps = replicaManager.metadataCache.getPartitionInfo(tp.topic, tp.partition)
       ps match {
         case Some(ps) =>
-          if (m.leader == ps.basePartitionState.leader) {
-            waitingPartitions -= m
-            fullResults += m.partition -> ApiError.NONE
+          if (leader == ps.basePartitionState.leader) {
+            waitingPartitions -= tp
+            fullResults += tp -> ApiError.NONE
           }
         case None =>
       }

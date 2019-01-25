@@ -27,7 +27,7 @@
         { "name": "PartitionId", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose preferred leader should be elected" }
       ]},
-    { "name": "TimeoutMs", "type": "int32", "versions": "0+",
+    { "name": "TimeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "The time in ms to wait for the election to complete." }
   ]
 }
