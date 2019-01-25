@@ -78,7 +78,7 @@ public class SuppressedInternal<K> implements Suppressed<K> {
         return timeToWaitForMoreEvents == null ? Duration.ZERO : timeToWaitForMoreEvents;
     }
 
-    boolean shouldSuppressTombstones() {
+    boolean safeToDropTombstones() {
         return safeToDropTombstones;
     }
 

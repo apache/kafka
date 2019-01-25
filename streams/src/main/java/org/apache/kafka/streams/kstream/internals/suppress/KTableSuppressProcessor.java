@@ -64,7 +64,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
         bufferTimeDefinition = suppress.timeDefinition();
         bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
-        safeToDropTombstones = suppress.shouldSuppressTombstones();
+        safeToDropTombstones = suppress.safeToDropTombstones();
     }
 
     @SuppressWarnings("unchecked")
