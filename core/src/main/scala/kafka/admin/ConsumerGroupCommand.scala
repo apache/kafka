@@ -260,14 +260,14 @@ object ConsumerGroupCommand extends Logging {
           print(s"\n%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s "
             .format("GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS"))
           if (verbose)
-            print(s"   %s".format("ASSIGNMENT"))
+            print(s"%s".format("ASSIGNMENT"))
           println()
 
           assignments match {
             case None => // do nothing
             case Some(memberAssignments) =>
               memberAssignments.foreach { memberAssignment =>
-                print(s"%${-maxGroupLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s %${-maxConsumerIdLen}s ".format(
+                print(s"%${-maxGroupLen}s %${-maxConsumerIdLen}s %${-maxHostLen}s %${-maxClientIdLen}s %-15s ".format(
                   memberAssignment.group, memberAssignment.consumerId, memberAssignment.host, memberAssignment.clientId, memberAssignment.numPartitions))
                 if (verbose) {
                   val partitions = memberAssignment.assignment match {
@@ -277,7 +277,7 @@ object ConsumerGroupCommand extends Logging {
                         case (topic, partitionList) => topic + partitionList.map(_.partition).sorted.mkString("(", ",", ")")
                       }.toList.sorted.mkString(", ")
                   }
-                  print(s"   %s".format(partitions))
+                  print(s"%s".format(partitions))
                 }
                 println()
               }
