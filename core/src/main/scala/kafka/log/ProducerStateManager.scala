@@ -28,7 +28,7 @@ import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
-import org.apache.kafka.common.record.{ControlRecordType, EndTransactionMarker, RecordBatch}
+import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
 import scala.collection.mutable.ListBuffer
@@ -76,7 +76,7 @@ private[log] object ProducerStateEntry {
 }
 
 private[log] case class BatchMetadata(lastSeq: Int, lastOffset: Long, offsetDelta: Int, timestamp: Long) {
-  def firstSeq = lastSeq - offsetDelta
+  def firstSeq =  DefaultRecordBatch.decrementSequence(lastSeq, offsetDelta)
   def firstOffset = lastOffset - offsetDelta
 
   override def toString: String = {
@@ -265,7 +265,7 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         None
       }
     } else {
-      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.lastOffset,
+      append(batch.producerEpoch, batch.baseSequence, batch.lastSequence, batch.maxTimestamp, batch.baseOffset, batch.lastOffset,
         batch.isTransactional)
       None
     }
@@ -275,10 +275,11 @@ private[log] class ProducerAppendInfo(val producerId: Long,
              firstSeq: Int,
              lastSeq: Int,
              lastTimestamp: Long,
+             firstOffset: Long,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
     maybeValidateAppend(epoch, firstSeq)
-    updatedEntry.addBatch(epoch, lastSeq, lastOffset, lastSeq - firstSeq, lastTimestamp)
+    updatedEntry.addBatch(epoch, lastSeq, lastOffset, (lastOffset - firstOffset).toInt, lastTimestamp)
 
     updatedEntry.currentTxnFirstOffset match {
       case Some(_) if !isTransactional =>
@@ -287,7 +288,6 @@ private[log] class ProducerAppendInfo(val producerId: Long,
 
       case None if isTransactional =>
         // Began a new transaction
-        val firstOffset = lastOffset - (lastSeq - firstSeq)
         updatedEntry.currentTxnFirstOffset = Some(firstOffset)
         transactions += new TxnMetadata(producerId, firstOffset)
 
