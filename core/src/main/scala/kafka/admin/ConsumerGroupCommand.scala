@@ -82,7 +82,7 @@ object ConsumerGroupCommand extends Logging {
   val MISSING_COLUMN_VALUE = "-"
 
   def printError(msg: String, e: Option[Throwable] = None): Unit = {
-    println(s"Error: $msg")
+    println(s"\nError: $msg")
     e.foreach(_.printStackTrace())
   }
 
