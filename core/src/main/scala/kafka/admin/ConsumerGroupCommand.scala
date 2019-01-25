@@ -923,15 +923,15 @@ object ConsumerGroupCommand extends Logging {
 
     def checkArgs() {
 
-      if (options.has(timeoutMsOpt) && !options.has(describeOpt))
-        debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")
-
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
 
       if (options.has(describeOpt)) {
         if (!options.has(groupOpt) && !options.has(allGroupsOpt))
           CommandLineUtils.printUsageAndDie(parser,
             s"Option $describeOpt takes one of these options: ${allGroupSelectionScopeOpts.mkString(", ")}")
+      } else {
+        if (options.has(timeoutMsOpt))
+          debug(s"Option $timeoutMsOpt is applicable only when $describeOpt is used.")
       }
 
       if (options.has(deleteOpt)) {
