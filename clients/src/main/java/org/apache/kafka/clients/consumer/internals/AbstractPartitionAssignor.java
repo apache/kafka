@@ -76,8 +76,13 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
     }
 
     @Override
-    public void onAssignment(Assignment assignment, Optional<Integer> generation) {
+    public void onAssignment(Assignment assignment) {
         // this assignor maintains no internal state, so nothing to do
+    }
+
+    @Override
+    public void onAssignment(Assignment assignment, Optional<Integer> generation) {
+        onAssignment(assignment);
     }
 
     protected static <K, V> void put(Map<K, List<V>> map, K key, V value) {

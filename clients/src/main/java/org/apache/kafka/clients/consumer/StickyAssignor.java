@@ -207,8 +207,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
     static final class ConsumerUserData {
         final List<TopicPartition> partitions;
-        final int generation;
-        ConsumerUserData(List<TopicPartition> partitions, int generation) {
+        final Optional<Integer> generation;
+        ConsumerUserData(List<TopicPartition> partitions, Optional<Integer> generation) {
             this.partitions = partitions;
             this.generation = generation;
         }
@@ -266,7 +266,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 currentPartitionConsumer.put(topicPartition, entry.getKey());
 
         List<TopicPartition> sortedPartitions = sortPartitions(
-                currentAssignment, prevAssignment, isFreshAssignment, partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
+                currentAssignment, prevAssignment.keySet(), isFreshAssignment, partition2AllPotentialConsumers, consumer2AllPotentialPartitions);
 
         // all partitions that need to be assigned (initially set to all partitions but adjusted in the following loop)
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
@@ -328,16 +328,16 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             for (TopicPartition partition: consumerUserData.partitions) {
                 if (sortedPartitionConsumersByGeneration.containsKey(partition)) {
                     Map<Integer, String> consumers = sortedPartitionConsumersByGeneration.get(partition);
-                    if (consumers.containsKey(consumerUserData.generation)) {
+                    if (consumerUserData.generation.isPresent() && consumers.containsKey(consumerUserData.generation.get())) {
                         // same partition is assigned to two consumers during the same rebalance.
                         // log a warning and skip this record
                         log.warn("Partition '{}' is assigned to multiple consumers following sticky assignment generation {}.",
                                 partition, consumerUserData.generation);
                     } else
-                        consumers.put(consumerUserData.generation, consumer);
+                        consumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), consumer);
                 } else {
                     TreeMap<Integer, String> sortedConsumers = new TreeMap<>();
-                    sortedConsumers.put(consumerUserData.generation, consumer);
+                    sortedConsumers.put(consumerUserData.generation.orElse(DEFAULT_GENERATION), consumer);
                     sortedPartitionConsumersByGeneration.put(partition, sortedConsumers);
                 }
             }
@@ -367,7 +367,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
     public void onAssignment(Assignment assignment, Optional<Integer> generation) {
         memberAssignment = assignment.partitions();
         this.generation = generation.orElse(DEFAULT_GENERATION);
-        System.out.println("Got " + memberAssignment + " of gen " + this.generation);
     }
 
     @Override
@@ -375,9 +374,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         if (memberAssignment == null)
             return new Subscription(new ArrayList<>(topics));
 
-        System.out.println("Sending " + memberAssignment + " from gen " + this.generation);
         return new Subscription(new ArrayList<>(topics),
-                serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, generation)));
+                serializeTopicPartitionAssignment(new ConsumerUserData(memberAssignment, Optional.of(generation))));
     }
 
     @Override
@@ -474,14 +472,16 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      * that causes minimal partition movement among consumers (hence honoring maximal stickiness)
      *
      * @param currentAssignment the calculated assignment so far
-     * @param prevAssignment previous consumer of each partition, if any
+     * @param partitionsWithADifferentPreviousAssignment partitions that had a different consumer before (for every
+     *                                                   such partition there should also be a mapping in
+     *                                                   @currentAssignment to a different consumer)
      * @param isFreshAssignment whether this is a new assignment, or a reassignment of an existing one
      * @param partition2AllPotentialConsumers a mapping of partitions to their potential consumers
      * @param consumer2AllPotentialPartitions a mapping of consumers to potential partitions they can consumer from
      * @return sorted list of valid partitions
      */
     private List<TopicPartition> sortPartitions(Map<String, List<TopicPartition>> currentAssignment,
-                                                Map<TopicPartition, ConsumerGenerationPair> prevAssignment,
+                                                Set<TopicPartition> partitionsWithADifferentPreviousAssignment,
                                                 boolean isFreshAssignment,
                                                 Map<TopicPartition, List<String>> partition2AllPotentialConsumers,
                                                 Map<String, List<TopicPartition>> consumer2AllPotentialPartitions) {
@@ -502,19 +502,28 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
             TreeSet<String> sortedConsumers = new TreeSet<>(new SubscriptionComparator(assignments));
             sortedConsumers.addAll(assignments.keySet());
+            // at this point, sortedConsumers contains an ascending-sorted list of consumers based on
+            // how many valid partitions are currently assigned to them
 
-            List<TopicPartition> prevAssignedPartitions = new ArrayList<>(prevAssignment.keySet());
             while (!sortedConsumers.isEmpty()) {
+                // take the consumer with the most partitions
                 String consumer = sortedConsumers.pollLast();
+                // currently assigned partitions to this consumer
                 List<TopicPartition> remainingPartitions = assignments.get(consumer);
-                List<TopicPartition> prevPartitions = new ArrayList<>(prevAssignedPartitions);
+                // partitions that were assigned to a different consumer last time
+                List<TopicPartition> prevPartitions = new ArrayList<>(partitionsWithADifferentPreviousAssignment);
+                // from partitions that had a different consumer before, keep only those that are
+                // assigned to this consumer now
                 prevPartitions.retainAll(remainingPartitions);
                 if (!prevPartitions.isEmpty()) {
+                    // if there is a partition of this consumer that was assigned to another consumer before
+                    // mark it as good options for reassignment
                     TopicPartition partition = prevPartitions.remove(0);
                     remainingPartitions.remove(partition);
                     sortedPartitions.add(partition);
                     sortedConsumers.add(consumer);
                 } else if (!remainingPartitions.isEmpty()) {
+                    // otherwise, mark any other one of the current partitions as a reassignment candidate
                     sortedPartitions.add(remainingPartitions.remove(0));
                     sortedConsumers.add(consumer);
                 }
@@ -778,7 +787,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        struct.set(GENERATION_KEY_NAME, consumerUserData.generation);
+        if (consumerUserData.generation.isPresent())
+            struct.set(GENERATION_KEY_NAME, consumerUserData.generation.get());
         ByteBuffer buffer = ByteBuffer.allocate(STICKY_ASSIGNOR_USER_DATA_V1.sizeOf(struct));
         STICKY_ASSIGNOR_USER_DATA_V1.write(buffer, struct);
         buffer.flip();
@@ -796,7 +806,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 struct = STICKY_ASSIGNOR_USER_DATA_V0.read(copy);
             } catch (Exception e2) {
                 // ignore the consumer's previous assignment if it cannot be parsed
-                return new ConsumerUserData(Collections.emptyList(), -2);
+                return new ConsumerUserData(Collections.emptyList(), Optional.of(DEFAULT_GENERATION));
             }
         }
 
@@ -810,7 +820,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             }
         }
         // make sure this is backward compatible
-        int generation = struct.hasField(GENERATION_KEY_NAME) ? struct.getInt(GENERATION_KEY_NAME) : DEFAULT_GENERATION;
+        Optional<Integer> generation = struct.hasField(GENERATION_KEY_NAME) ? Optional.of(struct.getInt(GENERATION_KEY_NAME)) : Optional.empty();
         return new ConsumerUserData(partitions, generation);
     }
 

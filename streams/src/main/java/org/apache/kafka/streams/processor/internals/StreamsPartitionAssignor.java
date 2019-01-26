@@ -794,11 +794,16 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return taskIdsForConsumerAssignment;
     }
 
+    @Override
+    public void onAssignment(final Assignment assignment, final Optional<Integer> generation) {
+        onAssignment(assignment);
+    }
+
     /**
      * @throws TaskAssignmentException if there is no task id for one of the partitions specified
      */
     @Override
-    public void onAssignment(final Assignment assignment, final Optional<Integer> generation) {
+    public void onAssignment(final Assignment assignment) {
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
         Collections.sort(partitions, PARTITION_COMPARATOR);
 

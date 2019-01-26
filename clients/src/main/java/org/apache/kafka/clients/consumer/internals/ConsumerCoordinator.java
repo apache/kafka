@@ -263,7 +263,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment, Optional.ofNullable(generation));
+        assignor.onAssignment(assignment, Optional.of(generation));
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)
