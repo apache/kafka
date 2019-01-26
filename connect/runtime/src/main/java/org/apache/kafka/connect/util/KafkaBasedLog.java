@@ -146,6 +146,9 @@ public class KafkaBasedLog<K, V> {
             partitions.add(new TopicPartition(partition.topic(), partition.partition()));
         consumer.assign(partitions);
 
+        // Always consume from the beginning of all partitions
+        consumer.seekToBeginning(partitions);
+
         readToLogEnd();
 
         thread = new WorkThread();
