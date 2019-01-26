@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.state;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.state.RecordConverter;
+import java.nio.ByteBuffer;
 
-public class DefaultRecordConverter implements RecordConverter {
+import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
 
-    @Override
-    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-        return record;
+public interface TimestampedBytesStore {
+    static byte[] convertToTimestampedFormat(final byte[] plainValue) {
+        return ByteBuffer
+            .allocate(8 + plainValue.length)
+            .putLong(NO_TIMESTAMP)
+            .put(plainValue)
+            .array();
     }
-
 }

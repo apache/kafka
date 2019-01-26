@@ -14,22 +14,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
+package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
-/**
- * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
- */
 public interface RecordConverter {
-
-    /**
-     * Convert a given record into a key-value pair.
-     *
-     * @param record the consumer record
-     * @return the record as key-value pair
-     */
     ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
 
+    @SuppressWarnings("deprecation")
+    static RecordConverter converter() {
+        return record -> new ConsumerRecord<>(
+            record.topic(),
+            record.partition(),
+            record.offset(),
+            record.timestamp(),
+            record.timestampType(),
+            record.checksum(),
+            record.serializedKeySize(),
+            record.serializedValueSize(),
+            record.key(),
+            TimestampedBytesStore.convertToTimestampedFormat(record.value()),
+            record.headers(),
+            record.leaderEpoch()
+        );
+    }
 }
