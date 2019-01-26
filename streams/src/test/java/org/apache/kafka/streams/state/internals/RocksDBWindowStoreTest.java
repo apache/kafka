@@ -74,7 +74,7 @@ public class RocksDBWindowStoreTest {
     private final long segmentInterval = 60_000L;
     private final long retentionPeriod = segmentInterval * (numSegments - 1);
     private final String windowName = "window";
-    private final Segments segments = new Segments(windowName, retentionPeriod, segmentInterval);
+    private final KeyValueSegments segments = new KeyValueSegments(windowName, retentionPeriod, segmentInterval);
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
     private final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
