@@ -43,6 +43,9 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
 import org.apache.kafka.common.metrics.Metrics
@@ -50,7 +53,6 @@ import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
-import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
@@ -1393,60 +1395,61 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
-    val createTopicsRequest = request.body[CreateTopicsRequest]
-
-    def sendResponseCallback(results: Map[String, ApiError]): Unit = {
+    def sendResponseCallback(results: CreatableTopicResultSet): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new CreateTopicsResponse(requestThrottleMs, results.asJava)
-        trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+        val responseData = new CreateTopicsResponseData().
+          setThrottleTimeMs(requestThrottleMs).
+          setTopics(results)
+        val responseBody = new CreateTopicsResponse(responseData)
+        trace(s"Sending create topics response $responseData for correlation id " +
+          "${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
 
+    val createTopicsRequest = request.body[CreateTopicsRequest]
+    val results = new CreatableTopicResultSet(createTopicsRequest.data().topics().size())
     if (!controller.isActive) {
-      val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        results.add(new CreatableTopicResult().setName(topic.name()).
+          setErrorCode(Errors.NOT_CONTROLLER.code()))
       }
       sendResponseCallback(results)
     } else {
-      val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
-        !createTopicsRequest.duplicateTopics.contains(topic)
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        results.add(new CreatableTopicResult().setName(topic.name()))
       }
-
-      val (authorizedTopics, unauthorizedTopics) =
-        if (authorize(request.session, Create, Resource.ClusterResource)) {
-          (validTopics, Map[String, TopicDetails]())
-        } else {
-          validTopics.partition { case (topic, _) =>
-            authorize(request.session, Create, new Resource(Topic, topic, PatternType.LITERAL))
-          }
+      val hasClusterAuthorization = authorize(request.session, Create, Resource.ClusterResource)
+      results.asScala.foreach(topic => {
+        if (results.findAll(topic.name()).size() > 1) {
+          topic.setErrorCode(Errors.INVALID_REQUEST.code())
+          topic.setErrorMessage("Found multiple entries for this topic.")
+        } else if ((!hasClusterAuthorization) && (!authorize(request.session, Create,
+              new Resource(Topic, topic.name(), PatternType.LITERAL)))) {
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
+          topic.setErrorMessage("Authorization failed.")
         }
-
-      // Special handling to add duplicate topics to the response
-      def sendResponseWithDuplicatesCallback(results: Map[String, ApiError]): Unit = {
-
-        val duplicatedTopicsResults =
-          if (duplicateTopics.nonEmpty) {
-            val errorMessage = s"Create topics request from client `${request.header.clientId}` contains multiple entries " +
-              s"for the following topics: ${duplicateTopics.keySet.mkString(",")}"
-            // We can send the error message in the response for version 1, so we don't have to log it any more
-            if (request.header.apiVersion == 0)
-              warn(errorMessage)
-            duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
-          } else Map.empty
-
-        val unauthorizedTopicsResults = unauthorizedTopics.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null))
-        val completeResults = results ++ duplicatedTopicsResults ++ unauthorizedTopicsResults
-        sendResponseCallback(completeResults)
+      })
+      val toCreate = mutable.Map[String, CreatableTopic]()
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        if (results.find(topic.name()).errorCode() == 0) {
+          toCreate += topic.name() -> topic
+        }
       }
-
-      adminManager.createTopics(
-        createTopicsRequest.timeout,
-        createTopicsRequest.validateOnly,
-        authorizedTopics,
-        sendResponseWithDuplicatesCallback
-      )
+      def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
+        errors.foreach {
+          case (topicName, error) =>
+            results.find(topicName).
+              setErrorCode(error.error().code()).
+              setErrorMessage(error.message())
+        }
+        sendResponseCallback(results)
+      }
+      adminManager.createTopics(createTopicsRequest.data.timeoutMs(),
+          createTopicsRequest.data.validateOnly(),
+          toCreate,
+          handleCreateTopicsResults)
     }
   }
 
