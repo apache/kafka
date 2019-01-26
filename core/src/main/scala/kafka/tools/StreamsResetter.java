@@ -377,7 +377,7 @@ public class StreamsResetter {
                 }
                 client.commitSync();
             }
-        } catch (final Exception e) {
+        } catch (final IOException | ParseException e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
