@@ -24,24 +24,24 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+public class KStreamFlatTransform<KIn, VIn, KOut, VOut> implements ProcessorSupplier<KIn, VIn> {
 
-    private final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier;
+    private final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier;
 
-    KStreamTransform(final TransformerSupplier<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> transformerSupplier) {
+    public KStreamFlatTransform(final TransformerSupplier<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformerSupplier) {
         this.transformerSupplier = transformerSupplier;
     }
 
     @Override
-    public Processor<K, V> get() {
-        return new KStreamTransformProcessor<>(transformerSupplier.get());
+    public Processor<KIn, VIn> get() {
+        return new KStreamFlatTransformProcessor<>(transformerSupplier.get());
     }
 
-    public static class KStreamTransformProcessor<K1, V1, K2, V2> extends AbstractProcessor<K1, V1> {
+    public static class KStreamFlatTransformProcessor<KIn, VIn, KOut, VOut> extends AbstractProcessor<KIn, VIn> {
 
-        private final Transformer<? super K1, ? super V1, ? extends KeyValue<? extends K2, ? extends V2>> transformer;
+        private final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer;
 
-        KStreamTransformProcessor(final Transformer<? super K1, ? super V1, ? extends KeyValue<? extends K2, ? extends V2>> transformer) {
+        public KStreamFlatTransformProcessor(final Transformer<? super KIn, ? super VIn, Iterable<KeyValue<KOut, VOut>>> transformer) {
             this.transformer = transformer;
         }
 
@@ -52,11 +52,12 @@ public class KStreamTransform<K, V, K1, V1> implements ProcessorSupplier<K, V> {
         }
 
         @Override
-        public void process(final K1 key, final V1 value) {
-            final KeyValue<? extends K2, ? extends V2> pair = transformer.transform(key, value);
-
-            if (pair != null) {
-                context().forward(pair.key, pair.value);
+        public void process(final KIn key, final VIn value) {
+            final Iterable<KeyValue<KOut, VOut>> pairs = transformer.transform(key, value);
+            if (pairs != null) {
+                for (final KeyValue<KOut, VOut> pair : pairs) {
+                    context().forward(pair.key, pair.value);
+                }
             }
         }
 
