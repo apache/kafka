@@ -691,22 +691,32 @@ public final class Utils {
      * @return An entry
      */
     public static <K, V> Map.Entry<K, V> mkEntry(final K k, final V v) {
-        return new Map.Entry<K, V>() {
-            @Override
-            public K getKey() {
-                return k;
-            }
+        return new MapEntry<>(k, v);
+    }
 
-            @Override
-            public V getValue() {
-                return v;
-            }
+    public static final class MapEntry<K, V> implements Map.Entry<K, V> {
+        private final K k;
+        private final V v;
 
-            @Override
-            public V setValue(final V value) {
-                throw new UnsupportedOperationException();
-            }
-        };
+        public MapEntry(final K k, final V v) {
+            this.k = k;
+            this.v = v;
+        }
+
+        @Override
+        public K getKey() {
+            return k;
+        }
+
+        @Override
+        public V getValue() {
+            return v;
+        }
+
+        @Override
+        public V setValue(final V value) {
+            throw new UnsupportedOperationException();
+        }
     }
 
     /**

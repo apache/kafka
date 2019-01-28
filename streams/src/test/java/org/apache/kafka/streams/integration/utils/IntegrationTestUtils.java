@@ -59,9 +59,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -772,12 +776,19 @@ public class IntegrationTestUtils {
         return consumedValues;
     }
 
-    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) {
+    public static KafkaStreams getStartedStreams(final Properties streamsConfig, final StreamsBuilder builder, final boolean clean) throws InterruptedException {
         final KafkaStreams driver = new KafkaStreams(builder.build(), streamsConfig);
         if (clean) {
             driver.cleanUp();
         }
+        final CountDownLatch latch = new CountDownLatch(1);
+        driver.setStateListener((newState, oldState) -> {
+            if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                latch.countDown();
+            }
+        });
         driver.start();
+        latch.await(DEFAULT_TIMEOUT, TimeUnit.MILLISECONDS);
         return driver;
     }
 

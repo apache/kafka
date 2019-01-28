@@ -67,7 +67,7 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
         return name;
     }
 
-    BufferConfigInternal bufferConfig() {
+    public BufferConfigInternal bufferConfig() {
         return bufferConfig;
     }
 

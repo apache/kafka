@@ -111,7 +111,7 @@ public class SuppressionDurabilityIntegrationTest {
     }
 
     @Test
-    public void shouldRecoverBufferAfterShutdown() {
+    public void shouldRecoverBufferAfterShutdown() throws InterruptedException {
         final String testId = "-shouldRecoverBufferAfterShutdown";
         final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
         final String input = "input" + testId;

@@ -31,6 +31,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
@@ -42,9 +43,14 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -165,6 +171,53 @@ public class SuppressionIntegrationTest {
                 )
             );
             verifyErrorShutdown(driver);
+        } finally {
+            driver.close();
+            cleanStateAfterTest(CLUSTER, driver);
+        }
+    }
+
+    @Test
+    public void shouldNotShutdownWhenBytesConstraintIsViolatedAndBufferIsPersistent() throws InterruptedException {
+        final String testId = "-shouldShutdownWhenBytesConstraintIsViolated";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
+
+        final List<KeyValue<String, Long>> results = new ArrayList<>();
+
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<String, Long> valueCounts = buildCountsTable(input, builder);
+
+        valueCounts
+            // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
+            .suppress(untilTimeLimit(ofMillis(scaledTime(10L)), maxBytes(200L).spillToDiskWhenFull()))
+            .toStream()
+            .foreach((key, value) -> results.add(new KeyValue<>(key, value)));
+
+        valueCounts
+            .toStream()
+            .to(outputRaw, Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final Properties streamsConfig = getStreamsConfig(appId);
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(100L)),
+                    new KeyValueTimestamp<>("y", "y", scaledTime(101L))
+                )
+            );
+
+            waitForCondition(() -> results.equals(asList(new KeyValue<>("v1", 1L), new KeyValue<>("v2", 1L))), DEFAULT_TIMEOUT, "Timed out waiting for result");
+            assertThat(driver.state(), is(KafkaStreams.State.RUNNING));
         } finally {
             driver.close();
             cleanStateAfterTest(CLUSTER, driver);

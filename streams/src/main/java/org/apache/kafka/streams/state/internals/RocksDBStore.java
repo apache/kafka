@@ -72,7 +72,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
     private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
-    private static final long WRITE_BUFFER_SIZE = 16 * 1024 * 1024L;
     private static final long BLOCK_CACHE_SIZE = 50 * 1024 * 1024L;
     private static final long BLOCK_SIZE = 4096L;
     private static final int MAX_WRITE_BUFFERS = 3;
@@ -81,6 +80,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     final String name;
     private final String parentDir;
     final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
+    private final long writeBufferSize;
 
     File dbDir;
     RocksDB db;
@@ -106,6 +106,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                  final String parentDir) {
         this.name = name;
         this.parentDir = parentDir;
+        writeBufferSize = 16 * 1024 * 1024L;
+    }
+
+    RocksDBStore(final String name,
+                 final String parentDir,
+                 final long writeBufferSize) {
+        this.name = name;
+        this.parentDir = parentDir;
+        this.writeBufferSize = writeBufferSize;
     }
 
 
@@ -124,7 +133,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
-        userSpecifiedOptions.setWriteBufferSize(WRITE_BUFFER_SIZE);
+        userSpecifiedOptions.setWriteBufferSize(writeBufferSize);
         userSpecifiedOptions.setCompressionType(COMPRESSION_TYPE);
         userSpecifiedOptions.setCompactionStyle(COMPACTION_STYLE);
         userSpecifiedOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);

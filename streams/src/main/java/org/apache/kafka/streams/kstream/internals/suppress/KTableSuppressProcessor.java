@@ -108,7 +108,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
             switch (bufferFullStrategy) {
                 case EMIT:
                     buffer.evictWhile(this::overCapacity, this::emit);
-                    return;
+                    break;
                 case SHUT_DOWN:
                     throw new StreamsException(String.format(
                         "%s buffer exceeded its max capacity. Currently [%d/%d] records and [%d/%d] bytes.",
@@ -116,6 +116,9 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
                         buffer.numRecords(), maxRecords,
                         buffer.bufferSize(), maxBytes
                     ));
+                case SPILL_TO_DISK:
+                    // do nothing!
+                    break;
             }
         }
     }

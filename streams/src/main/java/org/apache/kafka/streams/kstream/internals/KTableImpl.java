@@ -37,6 +37,7 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
+import org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
@@ -46,6 +47,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.state.internals.RocksDBTimeOrderedKeyValueBuffer;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -365,11 +367,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 valSerde == null ? null : new FullChangeSerde<>(valSerde)
             );
 
-
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
+            suppressedInternal.bufferConfig().bufferFullStrategy().equals(BufferFullStrategy.SPILL_TO_DISK) ?
+                new RocksDBTimeOrderedKeyValueBuffer.Builder(storeName, suppressedInternal.bufferConfig()) :
+                new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
         );
 
         builder.addGraphNode(streamsGraphNode, node);

@@ -19,8 +19,9 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.streams.kstream.Suppressed;
 
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
+import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SPILL_TO_DISK;
 
-abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> implements Suppressed.BufferConfig<BC> {
+public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> implements Suppressed.BufferConfig<BC> {
     public abstract long maxRecords();
 
     public abstract long maxBytes();
@@ -40,6 +41,11 @@ abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> impl
     @Override
     public Suppressed.StrictBufferConfig shutDownWhenFull() {
         return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SHUT_DOWN);
+    }
+
+    @Override
+    public Suppressed.StrictBufferConfig spillToDiskWhenFull() {
+        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SPILL_TO_DISK);
     }
 
     @Override

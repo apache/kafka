@@ -103,6 +103,11 @@ public interface Suppressed<K> {
         StrictBufferConfig shutDownWhenFull();
 
         /**
+         * TODO docs
+         */
+        StrictBufferConfig spillToDiskWhenFull();
+
+        /**
          * Set the buffer to just emit the oldest records when any of its constraints are violated.
          *
          * This buffer is "not strict" in the sense that it may emit early, so it is suitable for reducing
