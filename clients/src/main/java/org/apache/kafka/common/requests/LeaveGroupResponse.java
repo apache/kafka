@@ -33,6 +33,10 @@ public class LeaveGroupResponse extends AbstractResponse {
         this.data = data;
     }
 
+    public LeaveGroupResponse(Struct struct) {
+        short latestVersion = (short) (LeaveGroupResponseData.SCHEMAS.length - 1);
+        this.data = new LeaveGroupResponseData(struct, latestVersion);
+    }
     public LeaveGroupResponse(Struct struct, short version) {
         this.data = new LeaveGroupResponseData(struct, version);
     }
