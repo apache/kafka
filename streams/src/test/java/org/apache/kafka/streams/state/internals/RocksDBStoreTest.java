@@ -176,20 +176,20 @@ public class RocksDBStoreTest {
         rocksDBStore.flush();
 
         assertEquals(
+            "a",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
-            "a");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
         assertEquals(
+            "b",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
-            "b");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
         assertEquals(
+            "c",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
-            "c");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
     }
 
     @Test
@@ -230,20 +230,20 @@ public class RocksDBStoreTest {
         context.restore(rocksDBStore.name(), entries);
 
         assertEquals(
+            "a",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
-            "a");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
         assertEquals(
+            "b",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
-            "b");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
         assertEquals(
+            "c",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
-            "c");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
     }
 
     @Test
@@ -257,7 +257,7 @@ public class RocksDBStoreTest {
         rocksDBStore.putIfAbsent(keyBytes, valueBytesUpdate);
 
         final String retrievedValue = stringDeserializer.deserialize(null, rocksDBStore.get(keyBytes));
-        assertEquals(retrievedValue, "A");
+        assertEquals("A", retrievedValue);
     }
 
     @Test
@@ -302,20 +302,20 @@ public class RocksDBStoreTest {
         assertThat(keys, equalTo(Utils.mkSet("1", "2", "3")));
 
         assertEquals(
+            "restored",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
-            "restored");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
         assertEquals(
+            "b",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
-            "b");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
         assertEquals(
+            "c",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
-            "c");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
     }
 
     @Test
@@ -327,20 +327,20 @@ public class RocksDBStoreTest {
         context.restore(rocksDBStore.name(), entries);
 
         assertEquals(
+            "a",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))),
-            "a");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "1")))));
         assertEquals(
+            "b",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))),
-            "b");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "2")))));
         assertEquals(
+            "c",
             stringDeserializer.deserialize(
                 null,
-                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))),
-            "c");
+                rocksDBStore.get(new Bytes(stringSerializer.serialize(null, "3")))));
 
         entries.clear();
 

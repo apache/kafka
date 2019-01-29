@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -41,6 +43,11 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
+    final String unknownTimestampString = new String(new LongSerializer().serialize(null, ConsumerRecord.NO_TIMESTAMP));
+
+    String getTimestampPrefix() {
+        return unknownTimestampString;
+    }
 
     RocksDBStore getRocksDBStore() {
         return new RocksDBTimestampedStore(DB_NAME);
@@ -129,19 +136,61 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         assertThat(rocksDBStore.approximateNumEntries(), is(3L));
 
 
+        iteratorsShouldNotMigrateData();
+        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
+
+        rocksDBStore.close();
+
+        verifyOldAndNewColumnFamily();
+    }
+
+    private void iteratorsShouldNotMigrateData() {
         // iterating should not migrate any data, but return all key over both CF (plus surrogate timestamps for old CF)
-        final KeyValueIterator<Bytes, byte[]> it = rocksDBStore.all();
+        final KeyValueIterator<Bytes, byte[]> itAll = rocksDBStore.all();
         {
-            final KeyValue<Bytes, byte[]> keyValue = it.next();
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
             assertArrayEquals("key1".getBytes(), keyValue.key.get());
             // unknown timestamp == -1 plus value == 1
             assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '1'}, keyValue.value);
         }
         {
-            final KeyValue<Bytes, byte[]> keyValue = it.next();
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
             assertArrayEquals("key11".getBytes(), keyValue.key.get());
             assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1', '1'}, keyValue.value);
         }
+        {
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
+            assertArrayEquals("key2".getBytes(), keyValue.key.get());
+            assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '2', '2'}, keyValue.value);
+        }
+        {
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
+            assertArrayEquals("key4".getBytes(), keyValue.key.get());
+            // unknown timestamp == -1 plus value == 4444
+            assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '4', '4', '4', '4'}, keyValue.value);
+        }
+        {
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
+            assertArrayEquals("key5".getBytes(), keyValue.key.get());
+            // unknown timestamp == -1 plus value == 55555
+            assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '5', '5', '5', '5', '5'}, keyValue.value);
+        }
+        {
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
+            assertArrayEquals("key7".getBytes(), keyValue.key.get());
+            // unknown timestamp == -1 plus value == 7777777
+            assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '7', '7', '7', '7', '7', '7', '7'}, keyValue.value);
+        }
+        {
+            final KeyValue<Bytes, byte[]> keyValue = itAll.next();
+            assertArrayEquals("key8".getBytes(), keyValue.key.get());
+            assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '8', '8', '8', '8', '8', '8', '8', '8'}, keyValue.value);
+        }
+        assertFalse(itAll.hasNext());
+        itAll.close();
+
+        final KeyValueIterator<Bytes, byte[]> it =
+            rocksDBStore.range(new Bytes("key2".getBytes()), new Bytes("key5".getBytes()));
         {
             final KeyValue<Bytes, byte[]> keyValue = it.next();
             assertArrayEquals("key2".getBytes(), keyValue.key.get());
@@ -159,24 +208,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
             // unknown timestamp == -1 plus value == 55555
             assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '5', '5', '5', '5', '5'}, keyValue.value);
         }
-        {
-            final KeyValue<Bytes, byte[]> keyValue = it.next();
-            assertArrayEquals("key7".getBytes(), keyValue.key.get());
-            // unknown timestamp == -1 plus value == 7777777
-            assertArrayEquals(new byte[]{-1, -1, -1, -1, -1, -1, -1, -1, '7', '7', '7', '7', '7', '7', '7'}, keyValue.value);
-        }
-        {
-            final KeyValue<Bytes, byte[]> keyValue = it.next();
-            assertArrayEquals("key8".getBytes(), keyValue.key.get());
-            assertArrayEquals(new byte[]{'t', 'i', 'm', 'e', 's', 't', 'a', 'm', 'p', '+', '8', '8', '8', '8', '8', '8', '8', '8'}, keyValue.value);
-        }
         assertFalse(it.hasNext());
         it.close();
-        assertThat(rocksDBStore.approximateNumEntries(), is(3L));
-
-        rocksDBStore.close();
-
-        verifyOldAndNewColumnFamily();
     }
 
     private void verifyOldAndNewColumnFamily() throws Exception {

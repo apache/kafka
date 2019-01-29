@@ -53,11 +53,6 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
     }
 
     @Override
-    public synchronized KeyValue<Bytes, byte[]> next() {
-        return super.next();
-    }
-
-    @Override
     public KeyValue<Bytes, byte[]> makeNext() {
         if (!iter.isValid()) {
             return allDone();

@@ -84,7 +84,7 @@ public class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name);
+        return new RocksDbKeyValueBytesStoreSupplier(name, true);
     }
 
     /**

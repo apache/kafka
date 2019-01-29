@@ -85,7 +85,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     File dbDir;
     RocksDB db;
     RocksDBAccessor dbAccessor;
-    private ColumnFamilyHandle defaultColumnFamily;
 
     // the following option objects will be created in the constructor and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
@@ -181,9 +180,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         try {
             db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-
-            defaultColumnFamily = columnFamilies.get(0);
-            dbAccessor = new DefaultColumnFamilyAccessor();
+            dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
         }
@@ -427,8 +424,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         void flush() throws RocksDBException;
 
-        void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records,
-                                final WriteBatch batch) throws RocksDBException;
+        void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
+                                    final WriteBatch batch) throws RocksDBException;
 
         void close();
 
@@ -463,7 +460,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries, final WriteBatch batch) throws RocksDBException {
+        public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
+                                 final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 if (entry.value == null) {
@@ -485,7 +483,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
             return new RocksDBRangeIterator(
                 name,
                 db.newIterator(columnFamily),
@@ -512,8 +511,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         @Override
-        public void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records,
-                                       final WriteBatch batch) throws RocksDBException {
+        public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
+                                           final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
                 if (record.value == null) {
                     batch.delete(columnFamily, record.key);
@@ -538,12 +537,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    private class DefaultColumnFamilyAccessor extends SingleColumnFamilyAccessor {
-        private DefaultColumnFamilyAccessor() {
-            super(defaultColumnFamily);
-        }
-    }
-
     // not private for testing
     static class RocksDBBatchingRestoreCallback extends AbstractNotifyingBatchingRestoreCallback {
 
@@ -556,7 +549,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
             try (final WriteBatch batch = new WriteBatch()) {
-                rocksDBStore.dbAccessor.restoreAllInternal(records, batch);
+                rocksDBStore.dbAccessor.prepareBatchForRestore(records, batch);
                 rocksDBStore.write(batch);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error restoring batch to store " + rocksDBStore.name, e);
