@@ -66,7 +66,7 @@ object ConsumerGroupCommand extends Logging {
       else if (opts.options.has(opts.resetOffsetsOpt)) {
         val offsetsToReset = consumerGroupService.resetOffsets()
         if (opts.options.has(opts.exportOpt)) {
-          val exported = consumerGroupService.exportOffsetsToReset(offsetsToReset)
+          val exported = consumerGroupService.exportOffsetsToCsv(offsetsToReset)
           println(exported)
         } else
           printOffsetsToReset(offsetsToReset)
@@ -744,12 +744,12 @@ object ConsumerGroupCommand extends Logging {
       }
     }
 
-    def exportOffsetsToReset(assignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): String = {
+    def exportOffsetsToCsv(assignments: Map[String, Map[TopicPartition, OffsetAndMetadata]]): String = {
       val isSingleGroupQuery = opts.options.valuesOf(opts.groupOpt).size() == 1
       val csvWriter =
         if (isSingleGroupQuery) CsvUtils().writerFor[CsvRecordNoGroup]
         else CsvUtils().writerFor[CsvRecordWithGroup]
-      val rows = assignmentsToReset.flatMap { case (groupId, partitionInfo) =>
+      val rows = assignments.flatMap { case (groupId, partitionInfo) =>
         partitionInfo.map { case (k: TopicPartition, v: OffsetAndMetadata) =>
           val csvRecord =
             if (isSingleGroupQuery) CsvRecordNoGroup(k.topic, k.partition, v.offset)
@@ -757,8 +757,7 @@ object ConsumerGroupCommand extends Logging {
           csvWriter.writeValueAsString(csvRecord)
         }(collection.breakOut): List[String]
       }
-      val csv = rows.mkString("")
-      csv
+      rows.mkString("")
     }
 
     def deleteGroups(): Map[String, Throwable] = {
