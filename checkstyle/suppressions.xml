@@ -224,7 +224,7 @@
               files="RequestResponseTest.java"/>
 
     <suppress checks="(NPathComplexity|ClassFanOutComplexity|CyclomaticComplexity|ClassDataAbstractionCoupling)"
-            files="clients/src/generated/.+.java$"/>
+            files="clients[\\/]src[\\/]generated[\\/].+.java$"/>
     <suppress checks="NPathComplexity"
             files="MessageTest.java"/>
 
