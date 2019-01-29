@@ -125,8 +125,8 @@ public class ExternalCommandWorker implements TaskWorker {
             try {
                 ep = new ExternalProcess();
             } catch (IOException e) {
-                errMsg = "Failed to start the external process.";
-                log.error("{}: Failed to start the external process.");
+                errMsg = "Failed to start the external process: " + e.getMessage();
+                log.error("{}: Failed to start the external process.", id, e);
                 doneFuture.complete(errMsg);
                 return;
             }
@@ -138,11 +138,11 @@ public class ExternalCommandWorker implements TaskWorker {
                 if (workerExitValue != 0 && errMsg.isEmpty()) {
                     errMsg = "ExternalWorker exited with error code " + workerExitValue;
                 }
-                log.info("{}: StatusUpdater and errorUpdater are terminated.", id);
+                log.info("{}: StdoutMonitor and StderrMonitor are terminated.", id);
             } catch (InterruptedException e) {
                 log.info("{}: ProcessMonitor is interrupted.", id);
             } catch (ExecutionException e) {
-                log.error("{}: StatusUpdaters throw an exception " + e);
+                log.error("{}: StdoutMonitor and StderrMonitor throw an exception. ", id, e);
             } finally {
                 doneFuture.complete(errMsg);
             }
@@ -201,8 +201,8 @@ public class ExternalCommandWorker implements TaskWorker {
             ProcessBuilder processBuilder = new ProcessBuilder(spec.command());
             this.process = processBuilder.start();
             this.controlChannel = new PrintWriter(new OutputStreamWriter(process.getOutputStream(), StandardCharsets.UTF_8), true);
-            this.stdoutMonitor = executor.submit(new StatusUpdater(this.process));
-            this.stderrMonitor = executor.submit(new ErrorUpdater(this.process));
+            this.stdoutMonitor = executor.submit(new StdoutMonitor(this.process));
+            this.stderrMonitor = executor.submit(new StderrMonitor(this.process));
         }
 
         void startTask() {
@@ -234,9 +234,9 @@ public class ExternalCommandWorker implements TaskWorker {
         }
     }
 
-    public class ErrorUpdater implements Runnable {
+    public class StderrMonitor implements Runnable {
         private Process process;
-        ErrorUpdater(Process process) {
+        StderrMonitor(Process process) {
             this.process = process;
         }
         @Override
@@ -244,7 +244,7 @@ public class ExternalCommandWorker implements TaskWorker {
             try (BufferedReader br = new BufferedReader(new InputStreamReader(process.getErrorStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = br.readLine()) != null) {
-                    log.error("{}: (stderr of the process):{}", id, line);
+                    log.error("{}: (stderr):{}", id, line);
                 }
             } catch (IOException ioe) {
                 log.info("{}: Stderr of the process is closed.", id);
@@ -253,12 +253,12 @@ public class ExternalCommandWorker implements TaskWorker {
     }
 
     /**
-     * StatusUpdater reads the process's stdout line by line. If the line is a JSON object, StatusUpdater updates
+     * StdoutMonitor reads the process's stdout line by line. If the line is a JSON object, StadoutMonitor updates
      * the status with the JSON object.
      */
-    public class StatusUpdater implements Runnable {
+    public class StdoutMonitor implements Runnable {
         private Process process;
-        StatusUpdater(Process process) {
+        StdoutMonitor(Process process) {
             this.process = process;
         }
         @Override
@@ -273,13 +273,13 @@ public class ExternalCommandWorker implements TaskWorker {
                             status.update(resp.get("status"));
                         }
                         if (resp.has("log")) {
-                            log.info("{}: (stdout of the process): {}", id, resp.get("log").toString());
+                            log.info("{}: (stdout):{}", id, resp.get("log").toString());
                         }
                         if (resp.has("error")) {
                             JsonNode errNode = resp.get("error");
                             if (errNode.getNodeType() == JsonNodeType.STRING) {
                                 errMsg = errNode.asText();
-                                log.error("{}: (stdout of the process):{}", id, errMsg);
+                                log.error("{}: (stdout):{}", id, errMsg);
                             }
                         }
                     } catch (IOException e) {
