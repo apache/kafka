@@ -101,13 +101,13 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
 
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
-        private final ColumnFamilyHandle noTimestampColumnFamily;
-        private final ColumnFamilyHandle withTimestampColumnFamily;
+        private final ColumnFamilyHandle oldColumnFamily;
+        private final ColumnFamilyHandle newColumnFamily;
 
-        private DualColumnFamilyAccessor(final ColumnFamilyHandle noTimestampColumnFamily,
-                                         final ColumnFamilyHandle withTimestampColumnFamily) {
-            this.noTimestampColumnFamily = noTimestampColumnFamily;
-            this.withTimestampColumnFamily = withTimestampColumnFamily;
+        private DualColumnFamilyAccessor(final ColumnFamilyHandle oldColumnFamily,
+                                         final ColumnFamilyHandle newColumnFamily) {
+            this.oldColumnFamily = oldColumnFamily;
+            this.newColumnFamily = newColumnFamily;
         }
 
         @Override
@@ -115,26 +115,26 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                         final byte[] valueWithTimestamp) {
             if (valueWithTimestamp == null) {
                 try {
-                    db.delete(noTimestampColumnFamily, wOptions, key);
+                    db.delete(oldColumnFamily, wOptions, key);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while removing key from store " + name, e);
                 }
                 try {
-                    db.delete(withTimestampColumnFamily, wOptions, key);
+                    db.delete(newColumnFamily, wOptions, key);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while removing key from store " + name, e);
                 }
             } else {
                 try {
-                    db.delete(noTimestampColumnFamily, wOptions, key);
+                    db.delete(oldColumnFamily, wOptions, key);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while removing key from store " + name, e);
                 }
                 try {
-                    db.put(withTimestampColumnFamily, wOptions, key, valueWithTimestamp);
+                    db.put(newColumnFamily, wOptions, key, valueWithTimestamp);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
@@ -148,23 +148,23 @@ public class RocksDBTimestampedStore extends RocksDBStore {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 if (entry.value == null) {
-                    batch.delete(noTimestampColumnFamily, entry.key.get());
-                    batch.delete(withTimestampColumnFamily, entry.key.get());
+                    batch.delete(oldColumnFamily, entry.key.get());
+                    batch.delete(newColumnFamily, entry.key.get());
                 } else {
-                    batch.delete(noTimestampColumnFamily, entry.key.get());
-                    batch.put(withTimestampColumnFamily, entry.key.get(), entry.value);
+                    batch.delete(oldColumnFamily, entry.key.get());
+                    batch.put(newColumnFamily, entry.key.get(), entry.value);
                 }
             }
         }
 
         @Override
         public byte[] get(final byte[] key) throws RocksDBException {
-            final byte[] valueWithTimestamp = db.get(withTimestampColumnFamily, key);
+            final byte[] valueWithTimestamp = db.get(newColumnFamily, key);
             if (valueWithTimestamp != null) {
                 return valueWithTimestamp;
             }
 
-            final byte[] plainValue = db.get(noTimestampColumnFamily, key);
+            final byte[] plainValue = db.get(oldColumnFamily, key);
             if (plainValue != null) {
                 final byte[] valueWithUnknownTimestamp = getValueWithUnknownTimestamp(plainValue);
                 // this does only work, because the changelog topic contains correct data already
@@ -179,12 +179,12 @@ public class RocksDBTimestampedStore extends RocksDBStore {
 
         @Override
         public byte[] getOnly(final byte[] key) throws RocksDBException {
-            final byte[] valueWithTimestamp = db.get(withTimestampColumnFamily, key);
+            final byte[] valueWithTimestamp = db.get(newColumnFamily, key);
             if (valueWithTimestamp != null) {
                 return valueWithTimestamp;
             }
 
-            final byte[] plainValue = db.get(noTimestampColumnFamily, key);
+            final byte[] plainValue = db.get(oldColumnFamily, key);
             if (plainValue != null) {
                 return getValueWithUnknownTimestamp(plainValue);
             }
@@ -197,31 +197,31 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                                                      final Bytes to) {
             return new RocksDBDualCFRangeIterator(
                 name,
-                db.newIterator(withTimestampColumnFamily),
-                db.newIterator(noTimestampColumnFamily),
+                db.newIterator(newColumnFamily),
+                db.newIterator(oldColumnFamily),
                 from,
                 to);
         }
 
         @Override
         public KeyValueIterator<Bytes, byte[]> all() {
-            final RocksIterator innerIterWithTimestamp = db.newIterator(withTimestampColumnFamily);
+            final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
             innerIterWithTimestamp.seekToFirst();
-            final RocksIterator innerIterNoTimestamp = db.newIterator(noTimestampColumnFamily);
+            final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);
             innerIterNoTimestamp.seekToFirst();
             return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp);
         }
 
         @Override
         public long approximateNumEntries() throws RocksDBException {
-            return db.getLongProperty(noTimestampColumnFamily, "rocksdb.estimate-num-keys")
-                + db.getLongProperty(withTimestampColumnFamily, "rocksdb.estimate-num-keys");
+            return db.getLongProperty(oldColumnFamily, "rocksdb.estimate-num-keys")
+                + db.getLongProperty(newColumnFamily, "rocksdb.estimate-num-keys");
         }
 
         @Override
         public void flush() throws RocksDBException {
-            db.flush(fOptions, noTimestampColumnFamily);
-            db.flush(fOptions, withTimestampColumnFamily);
+            db.flush(fOptions, oldColumnFamily);
+            db.flush(fOptions, newColumnFamily);
         }
 
         @Override
@@ -229,30 +229,30 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                                            final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
                 if (record.value == null) {
-                    batch.delete(noTimestampColumnFamily, record.key);
-                    batch.delete(withTimestampColumnFamily, record.key);
+                    batch.delete(oldColumnFamily, record.key);
+                    batch.delete(newColumnFamily, record.key);
                 } else {
-                    batch.delete(noTimestampColumnFamily, record.key);
-                    batch.put(withTimestampColumnFamily, record.key, record.value);
+                    batch.delete(oldColumnFamily, record.key);
+                    batch.put(newColumnFamily, record.key, record.value);
                 }
             }
         }
 
         @Override
         public void close() {
-            noTimestampColumnFamily.close();
-            withTimestampColumnFamily.close();
+            oldColumnFamily.close();
+            newColumnFamily.close();
         }
 
         @Override
         public void toggleDbForBulkLoading() {
             try {
-                db.compactRange(noTimestampColumnFamily, true, 1, 0);
+                db.compactRange(oldColumnFamily, true, 1, 0);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
             try {
-                db.compactRange(withTimestampColumnFamily, true, 1, 0);
+                db.compactRange(newColumnFamily, true, 1, 0);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
