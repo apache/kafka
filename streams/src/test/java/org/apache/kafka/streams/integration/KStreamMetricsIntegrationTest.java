@@ -35,10 +35,7 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -169,8 +166,6 @@ public class KStreamMetricsIntegrationTest {
     public void testStreamMetric() throws Exception {
         startApplication();
 
-        Thread.sleep(10000);
-
         // metric level : Thread
         testThreadMetric();
         // metric level : Task
@@ -183,8 +178,6 @@ public class KStreamMetricsIntegrationTest {
         testCacheMetric();
 
         closeApplication();
-
-        Thread.sleep(10000);
 
         // check all metrics de-registered
         final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
@@ -316,7 +309,7 @@ public class KStreamMetricsIntegrationTest {
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
 
-    private void startApplication() {
+    private void startApplication() throws Exception {
         stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
         builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore("myStoreInMemory")).withCachingEnabled())
@@ -330,9 +323,12 @@ public class KStreamMetricsIntegrationTest {
                 .to(STREAM_OUTPUT_4);
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
+
+        Thread.sleep(10000);
     }
 
-    private void closeApplication() throws IOException {
+    private void closeApplication() throws Exception {
+        Thread.sleep(10000);
         kafkaStreams.close();
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
