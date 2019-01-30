@@ -79,6 +79,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private static final String DB_FILE_DIR = "rocksdb";
 
     final String name;
+    private final String parentDir;
     final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     File dbDir;
@@ -98,7 +99,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     protected volatile boolean open = false;
 
     RocksDBStore(final String name) {
+        this(name, DB_FILE_DIR);
+    }
+
+    RocksDBStore(final String name,
+                 final String parentDir) {
         this.name = name;
+        this.parentDir = parentDir;
     }
 
 
@@ -152,7 +159,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
             userSpecifiedOptions.prepareForBulkLoad();
         }
 
-        dbDir = new File(new File(context.stateDir(), DB_FILE_DIR), name);
+        dbDir = new File(new File(context.stateDir(), parentDir), name);
 
         try {
             Files.createDirectories(dbDir.getParentFile().toPath());

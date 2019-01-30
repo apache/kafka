@@ -303,8 +303,8 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                 nextWithTimestamp = iterWithTimestamp.key();
             }
 
-            if (nextNoTimestamp == null) {
-                if (nextWithTimestamp == null) {
+            if (nextNoTimestamp == null && !iterNoTimestamp.isValid()) {
+                if (nextWithTimestamp == null && !iterWithTimestamp.isValid()) {
                     return allDone();
                 } else {
                     next = KeyValue.pair(new Bytes(nextWithTimestamp), iterWithTimestamp.value());
