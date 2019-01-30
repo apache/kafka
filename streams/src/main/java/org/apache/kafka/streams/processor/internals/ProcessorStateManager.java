@@ -23,8 +23,9 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.RecordConverter;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
@@ -136,7 +137,7 @@ public class ProcessorStateManager extends AbstractStateManager {
         final StateStore stateStore =
             store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
         final RecordConverter recordConverter =
-            stateStore instanceof RecordConverter ? (RecordConverter) stateStore : new DefaultRecordConverter();
+            stateStore instanceof TimestampedBytesStore ? RecordConverter.converter() : record -> record;
 
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
