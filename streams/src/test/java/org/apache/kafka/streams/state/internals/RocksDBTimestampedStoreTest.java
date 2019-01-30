@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
@@ -43,11 +41,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
 
 public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
-    final String unknownTimestampString = new String(new LongSerializer().serialize(null, ConsumerRecord.NO_TIMESTAMP));
-
-    String getTimestampPrefix() {
-        return unknownTimestampString;
-    }
 
     RocksDBStore getRocksDBStore() {
         return new RocksDBTimestampedStore(DB_NAME);
@@ -95,7 +88,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // approx: 4 entries on old CF, 1 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(5L));
 
-        // should add new key10 to new CF
+        // should add new key8 to new CF
         rocksDBStore.put(new Bytes("key8".getBytes()), "timestamp+88888888".getBytes());
         // one delete on old CF, one put on new CF
         // approx: 3 entries on old CF, 2 in new CF
