@@ -30,23 +30,36 @@ public class SuppressedInternal<K> implements Suppressed<K> {
     private final BufferConfigInternal bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
-    private final boolean suppressTombstones;
+    private final boolean safeToDropTombstones;
 
+    /**
+     * @param safeToDropTombstones Note: it's *only* safe to drop tombstones for windowed KTables in "final results" mode.
+     *                             In that case, we have a priori knowledge that we have never before emitted any
+     *                             results for a given key, and therefore the tombstone is unnecessary (albeit
+     *                             idempotent and correct). We decided that the unnecessary tombstones would not be
+     *                             desirable in the output stream, though, hence the ability to drop them.
+     *
+     *                             A alternative is to remember whether a result has previously been emitted
+     *                             for a key and drop tombstones in that case, but it would be a little complicated to
+     *                             figure out when to forget the fact that we have emitted some result (currently, the
+     *                             buffer immediately forgets all about a key when we emit, which helps to keep it
+     *                             compact).
+     */
     public SuppressedInternal(final String name,
                               final Duration suppressionTime,
                               final BufferConfig bufferConfig,
                               final TimeDefinition<K> timeDefinition,
-                              final boolean suppressTombstones) {
+                              final boolean safeToDropTombstones) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefintion.instance() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
-        this.suppressTombstones = suppressTombstones;
+        this.safeToDropTombstones = safeToDropTombstones;
     }
 
     @Override
     public Suppressed<K> withName(final String name) {
-        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, suppressTombstones);
+        return new SuppressedInternal<>(name, timeToWaitForMoreEvents, bufferConfig, timeDefinition, safeToDropTombstones);
     }
 
     public String name() {
@@ -65,8 +78,8 @@ public class SuppressedInternal<K> implements Suppressed<K> {
         return timeToWaitForMoreEvents == null ? Duration.ZERO : timeToWaitForMoreEvents;
     }
 
-    boolean shouldSuppressTombstones() {
-        return suppressTombstones;
+    boolean safeToDropTombstones() {
+        return safeToDropTombstones;
     }
 
     @Override
@@ -78,7 +91,7 @@ public class SuppressedInternal<K> implements Suppressed<K> {
             return false;
         }
         final SuppressedInternal<?> that = (SuppressedInternal<?>) o;
-        return suppressTombstones == that.suppressTombstones &&
+        return safeToDropTombstones == that.safeToDropTombstones &&
             Objects.equals(name, that.name) &&
             Objects.equals(bufferConfig, that.bufferConfig) &&
             Objects.equals(timeToWaitForMoreEvents, that.timeToWaitForMoreEvents) &&
@@ -87,7 +100,7 @@ public class SuppressedInternal<K> implements Suppressed<K> {
 
     @Override
     public int hashCode() {
-        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, suppressTombstones);
+        return Objects.hash(name, bufferConfig, timeToWaitForMoreEvents, timeDefinition, safeToDropTombstones);
     }
 
     @Override
@@ -96,7 +109,7 @@ public class SuppressedInternal<K> implements Suppressed<K> {
             ", bufferConfig=" + bufferConfig +
             ", timeToWaitForMoreEvents=" + timeToWaitForMoreEvents +
             ", timeDefinition=" + timeDefinition +
-            ", suppressTombstones=" + suppressTombstones +
+            ", safeToDropTombstones=" + safeToDropTombstones +
             '}';
     }
 }

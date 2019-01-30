@@ -793,6 +793,58 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
+     * Elect the preferred broker of the given {@code partitions} as leader, or
+     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This is a convenience method for {@link #electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
+     * with default options.
+     * See the overload for more details.
+     *
+     * @param partitions      The partitions for which the preferred leader should be elected.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
+        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
+    }
+
+    /**
+     * Elect the preferred broker of the given {@code partitions} as leader, or
+     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * It may take several seconds after this method returns
+     * success for all the brokers in the cluster to become aware that the partitions have new leaders.
+     * During this time, {@link AdminClient#describeTopics(Collection)}
+     * may not return information about the partitions' new leaders.
+     *
+     * This operation is supported by brokers with version 2.2.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code ElectPreferredLeadersResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   if the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   if the topic or partition did not exist within the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *   if the topic was already queued for deletion.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   if the request was sent to a broker that was not the controller for the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   if the request timed out before the election was complete.</li>
+     *   <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
+     *   if the preferred leader was not alive or not in the ISR.</li>
+     * </ul>
+     *
+     * @param partitions      The partitions for which the preferred leader should be elected.
+     * @param options         The options to use when electing the preferred leaders.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public abstract ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
+                                                                      ElectPreferredLeadersOptions options);
+
+    /**
      * Get the metrics kept by the adminClient
      */
     public abstract Map<MetricName, ? extends Metric> metrics();
