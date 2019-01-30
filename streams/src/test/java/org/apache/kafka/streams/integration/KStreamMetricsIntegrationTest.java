@@ -48,8 +48,6 @@ import java.util.stream.Collectors;
 @Category({IntegrationTest.class})
 public class KStreamMetricsIntegrationTest {
 
-    Logger logger = LoggerFactory.getLogger(KStreamMetricsIntegrationTest.class);
-
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
