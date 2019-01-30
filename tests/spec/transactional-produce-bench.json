@@ -13,14 +13,32 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-repositories {
-  mavenCentral()
-}
+//
+// An example task specification for running a transactional producer benchmark
+in Trogdor.  See TROGDOR.md for details.
+//
 
-dependencies {
-  compile "com.fasterxml.jackson.core:jackson-databind:2.9.6"
-  compile "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:2.9.6"
-  compile "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:2.9.6"
+{
+  "class": "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
+  "durationMs": 10000000,
+  "producerNode": "node0",
+  "bootstrapServers": "localhost:9092",
+  "targetMessagesPerSec": 100,
+  "maxMessages": 500,
+  "transactionGenerator" : {
+    "type" : "uniform",
+    "messagesPerTransaction" : 50
+  },
+  "activeTopics": {
+      "foo[1-3]": {
+          "numPartitions": 3,
+          "replicationFactor": 1
+      }
+  },
+  "inactiveTopics": {
+      "foo[4-5]": {
+          "numPartitions": 3,
+          "replicationFactor": 1
+      }
+  }
 }
-
-test.enabled=false

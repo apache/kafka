@@ -134,7 +134,7 @@ public class StandaloneHerder extends AbstractHerder {
     private ConnectorInfo createConnectorInfo(String connector) {
         if (!configState.contains(connector))
             return null;
-        Map<String, String> config = configState.connectorConfig(connector);
+        Map<String, String> config = configState.rawConnectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
             connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -232,7 +232,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         List<TaskInfo> result = new ArrayList<>();
         for (ConnectorTaskId taskId : configState.tasks(connName))
-            result.add(new TaskInfo(taskId, configState.taskConfig(taskId)));
+            result.add(new TaskInfo(taskId, configState.rawTaskConfig(taskId)));
         callback.onCompletion(null, result);
     }
 

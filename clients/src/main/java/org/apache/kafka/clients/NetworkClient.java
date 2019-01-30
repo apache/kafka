@@ -676,7 +676,8 @@ public class NetworkClient implements KafkaClient {
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
-        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct);
+        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct,
+                requestHeader.apiVersion());
     }
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
@@ -811,7 +812,8 @@ public class NetworkClient implements KafkaClient {
                     req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
             // If the received response includes a throttle delay, throttle the connection.
-            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
+            AbstractResponse body = AbstractResponse.
+                    parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
             maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);

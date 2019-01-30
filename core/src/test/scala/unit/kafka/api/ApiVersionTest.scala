@@ -17,12 +17,9 @@
 
 package kafka.api
 
-import org.apache.commons.collections.CollectionUtils
 import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
-
-import scala.collection.JavaConverters
 
 class ApiVersionTest {
 
