@@ -34,8 +34,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
-import org.apache.kafka.streams.state.RecordConverter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -224,7 +224,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUseDefaultRecordConverterIfStoreDoesNotImplementRecordConverter() {
+    public void shouldNotConvertValuesIfStoreDoesNotImplementTimestampedBytesStore() {
         initializeConsumer(1, 0, t1);
 
         stateManager.initialize();
@@ -236,7 +236,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUseDefaultRecordConverterIfInnerStoreDoesNotImplementRecordConverter() {
+    public void shouldNotConvertValuesIfInnerStoreDoesNotImplementTimestampedBytesStore() {
         initializeConsumer(1, 0, t1);
 
         stateManager.initialize();
@@ -288,20 +288,19 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldUseStoreAsRecordConverterIfStoreImplementsRecordConverter() {
+    public void shouldConvertValuesIfStoreImplementsTimestampedBytesStore() {
         initializeConsumer(1, 0, t2);
 
         stateManager.initialize();
         stateManager.register(store2, stateRestoreCallback);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
-        assertEquals(0, restoredRecord.key.length);
-        assertEquals(0, restoredRecord.value.length);
-
+        assertEquals(3, restoredRecord.key.length);
+        assertEquals(13, restoredRecord.value.length);
     }
 
     @Test
-    public void shouldUseStoreAsRecordConverterIfInnerStoreImplementsRecordConverter() {
+    public void shouldConvertValuesIfInnerStoreImplementsTimestampedBytesStore() {
         initializeConsumer(1, 0, t2);
 
         stateManager.initialize();
@@ -348,8 +347,8 @@ public class GlobalStateManagerImplTest {
         }, stateRestoreCallback);
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
-        assertEquals(0, restoredRecord.key.length);
-        assertEquals(0, restoredRecord.value.length);
+        assertEquals(3, restoredRecord.key.length);
+        assertEquals(13, restoredRecord.value.length);
     }
 
     @Test
@@ -827,18 +826,10 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-
-
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements RecordConverter {
-
+    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);
-        }
-
-        @Override
-        public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-            return new ConsumerRecord<>("", 0, 0L, "".getBytes(), "".getBytes());
         }
     }
 

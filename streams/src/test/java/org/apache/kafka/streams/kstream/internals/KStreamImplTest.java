@@ -53,7 +53,9 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.ExpectedException;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -88,6 +90,9 @@ public class KStreamImplTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private Serde<String> mySerde = new Serdes.StringSerde();
+
+    @Rule
+    public final ExpectedException exception = ExpectedException.none();
 
     @Before
     public void before() {
@@ -459,9 +464,8 @@ public class KStreamImplTest {
         final String match = matcher.group();
         assertThat(match, notNullValue());
         assertTrue(match.endsWith("repartition"));
-
     }
-    
+
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -541,9 +545,18 @@ public class KStreamImplTest {
         testStream.to((TopicNameExtractor<String, String>) null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTransformSupplierOnTransform() {
+        exception.expect(NullPointerException.class);
+        exception.expectMessage("transformerSupplier can't be null");
         testStream.transform(null);
+    }
+
+    @Test
+    public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
+        exception.expect(NullPointerException.class);
+        exception.expectMessage("transformerSupplier can't be null");
+        testStream.flatTransform(null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -688,7 +701,7 @@ public class KStreamImplTest {
     public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
         testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
     }
-    
+
     @Test
     public void shouldMergeTwoStreams() {
         final String topic1 = "topic-1";
@@ -709,7 +722,7 @@ public class KStreamImplTest {
 
         assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
-    
+
     @Test
     public void shouldMergeMultipleStreams() {
         final String topic1 = "topic-1";

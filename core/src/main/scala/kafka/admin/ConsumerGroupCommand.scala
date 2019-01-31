@@ -18,10 +18,10 @@
 package kafka.admin
 
 import java.text.{ParseException, SimpleDateFormat}
+import java.time.{Duration, Instant}
 import java.util
-import java.util.{Date, Properties}
+import java.util.Properties
 
-import javax.xml.datatype.DatatypeFactory
 import joptsimple.OptionSpec
 import kafka.utils._
 import org.apache.kafka.clients.admin._
@@ -553,10 +553,9 @@ object ConsumerGroupCommand extends Logging {
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
         val duration = opts.options.valueOf(opts.resetByDurationOpt)
-        val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
-        val now = new Date()
-        durationParsed.negate().addTo(now)
-        val timestamp = now.getTime
+        val durationParsed = Duration.parse(duration)
+        val now = Instant.now()
+        val timestamp = now.minus(durationParsed).toEpochMilli
         val logTimestampOffsets = getLogTimestampOffsets(partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)

@@ -280,7 +280,7 @@ public class RocksDBSessionStoreTest {
         return results;
     }
 
-    static <K, V> List<V> valuesToList(final KeyValueIterator<Windowed<K>, V> iterator) {
+    private static <K, V> List<V> valuesToList(final KeyValueIterator<Windowed<K>, V> iterator) {
         final List<V> results = new ArrayList<>();
         while (iterator.hasNext()) {
             results.add(iterator.next().value);
