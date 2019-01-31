@@ -133,8 +133,9 @@ class GroupCoordinator(val brokerId: Int,
 
         case Some(group) =>
           group.inLock {
-            if (groupIsOverCapacity(group) // oversized group, need to shed members
-                || (isUnknownMember && groupIsFull(group))) {
+            if ((groupIsOverCapacity(group)
+                  && group.has(memberId) && !group.get(memberId).isAwaitingJoin) // oversized group, need to shed members that haven't joined yet
+                || (isUnknownMember && group.size >= groupConfig.groupMaxSize)) {
               group.remove(memberId)
               responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
@@ -930,10 +931,6 @@ class GroupCoordinator(val brokerId: Int,
   }
 
   def partitionFor(group: String): Int = groupManager.partitionFor(group)
-
-  private def groupIsFull(group: GroupMetadata): Boolean = {
-    group.size == groupConfig.groupMaxSize || groupIsOverCapacity(group)
-  }
 
   private def groupIsOverCapacity(group: GroupMetadata): Boolean = {
     group.size > groupConfig.groupMaxSize

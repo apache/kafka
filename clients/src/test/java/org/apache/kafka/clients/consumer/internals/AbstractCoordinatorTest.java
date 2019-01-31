@@ -147,6 +147,24 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
+    public void testGroupMaxSizeExceptionIsFatal() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertEquals(String.format("Consumer group %s already has the configured maximum number of members.", GROUP_ID),
+                future.exception().getMessage());
+        assertFalse(future.isRetriable());
+    }
+
+    @Test
     public void testJoinGroupRequestTimeout() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS);
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
