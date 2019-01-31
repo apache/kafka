@@ -1002,7 +1002,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
                 log.warn("Received unknown leader epoch error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
                 log.warn("Unknown error fetching data for topic-partition {}", tp);
             } else {
