@@ -166,20 +166,46 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         store.setFlushListener(cacheFlushListener, true);
         store.put(bytesKey("1"), bytesValue("a"));
         store.flush();
+        assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
+        assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), bytesValue("b"));
         store.flush();
         assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
         assertEquals("a", cacheFlushListener.forwarded.get("1").oldValue);
+        store.put(bytesKey("1"), null);
+        store.flush();
+        assertNull(cacheFlushListener.forwarded.get("1").newValue);
+        assertEquals("b", cacheFlushListener.forwarded.get("1").oldValue);
+        cacheFlushListener.forwarded.clear();
+        store.put(bytesKey("1"), bytesValue("a"));
+        store.put(bytesKey("1"), bytesValue("b"));
+        store.put(bytesKey("1"), null);
+        store.flush();
+        assertNull(cacheFlushListener.forwarded.get("1"));
+        cacheFlushListener.forwarded.clear();
     }
 
     @Test
     public void shouldNotForwardOldValuesWhenDisabled() {
         store.put(bytesKey("1"), bytesValue("a"));
         store.flush();
+        assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
+        assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), bytesValue("b"));
         store.flush();
         assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
+        store.put(bytesKey("1"), null);
+        store.flush();
+        assertNull(cacheFlushListener.forwarded.get("1").newValue);
+        assertNull(cacheFlushListener.forwarded.get("1").oldValue);
+        cacheFlushListener.forwarded.clear();
+        store.put(bytesKey("1"), bytesValue("a"));
+        store.put(bytesKey("1"), bytesValue("b"));
+        store.put(bytesKey("1"), null);
+        store.flush();
+        assertNull(cacheFlushListener.forwarded.get("1"));
+        cacheFlushListener.forwarded.clear();
     }
 
     @Test

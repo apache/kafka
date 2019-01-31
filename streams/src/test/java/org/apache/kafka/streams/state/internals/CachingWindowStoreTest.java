@@ -346,10 +346,24 @@ public class CachingWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
+        assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertEquals("a", cacheListener.forwarded.get(windowedKey).oldValue);
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey).newValue);
+        assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey));
+        cacheListener.forwarded.clear();
     }
 
     @Test
@@ -358,10 +372,23 @@ public class CachingWindowStoreTest {
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
         cachingStore.flush();
+        assertEquals("a", cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey));
+        cacheListener.forwarded.clear();
     }
 
     @Test
