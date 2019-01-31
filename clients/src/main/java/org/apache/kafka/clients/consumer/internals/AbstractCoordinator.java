@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -803,8 +804,8 @@ public abstract class AbstractCoordinator implements Closeable {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
             log.info("Sending LeaveGroup request to coordinator {}", coordinator);
-            LeaveGroupRequest.Builder request =
-                    new LeaveGroupRequest.Builder(groupId, generation.memberId);
+            LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(new LeaveGroupRequestData()
+                    .setGroupId(groupId).setMemberId(generation.memberId));
             client.send(coordinator, request)
                     .compose(new LeaveGroupResponseHandler());
             client.pollNoWakeup();
