@@ -871,7 +871,7 @@ public class Sender implements Runnable {
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
+                Map<String, String> metricTags = Collections.singletonMap("topic", topic.replace('.', '_'));
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
                 MetricName rateMetricName = this.metrics.topicRecordSendRate(metricTags);
