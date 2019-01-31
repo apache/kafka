@@ -66,14 +66,19 @@ class ChangeLoggingSessionBytesStore extends WrappedStateStore.AbstractStateStor
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         bytesStore.remove(sessionKey);
-        changeLogger.logChange(Bytes.wrap(SessionKeySchema.toBinary(sessionKey)), null);
+        changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), null);
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         bytesStore.put(sessionKey, aggregate);
-        changeLogger.logChange(Bytes.wrap(SessionKeySchema.toBinary(sessionKey)), aggregate);
+        changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), aggregate);
 
+    }
+
+    @Override
+    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+        return bytesStore.fetchSession(key, startTime, endTime);
     }
 
     @Override
