@@ -295,6 +295,18 @@ public class ClusterConnectionStatesTest {
 
         connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
         InetAddress addr2 = connectionStates.currentAddress(nodeId1);
+
+        assertNotSame(addr1, addr2);
+    }
+
+    @Test
+    public void testNodeWithNewHostname() throws UnknownHostException {
+        connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
+        InetAddress addr1 = connectionStates.currentAddress(nodeId1);
+
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps, ClientDnsLookup.DEFAULT);
+        InetAddress addr2 = connectionStates.currentAddress(nodeId1);
+
         assertNotSame(addr1, addr2);
     }
 }
