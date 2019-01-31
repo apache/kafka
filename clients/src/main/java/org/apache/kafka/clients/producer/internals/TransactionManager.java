@@ -728,6 +728,11 @@ public class TransactionManager {
         return !pendingTxnOffsetCommits.isEmpty();
     }
 
+    synchronized boolean hasPendingRequests() {
+        return !pendingRequests.isEmpty();
+    }
+
+    // visible for testing
     synchronized boolean hasOngoingTransaction() {
         // transactions are considered ongoing once started until completion or a fatal error
         return currentState == State.IN_TRANSACTION || isCompleting() || hasAbortableError();
@@ -795,7 +800,7 @@ public class TransactionManager {
 
         if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
-                throw new IllegalArgumentException("Cannot transition to " + target + " with an null exception");
+                throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
         } else {
             lastError = null;
