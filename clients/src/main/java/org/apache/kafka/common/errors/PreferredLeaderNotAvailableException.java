@@ -14,16 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.state.RecordConverter;
+public class PreferredLeaderNotAvailableException extends InvalidMetadataException {
 
-public class DefaultRecordConverter implements RecordConverter {
-
-    @Override
-    public ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record) {
-        return record;
+    public PreferredLeaderNotAvailableException(String message) {
+        super(message);
     }
 
+    public PreferredLeaderNotAvailableException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

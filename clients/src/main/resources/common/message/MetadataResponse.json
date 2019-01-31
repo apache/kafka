@@ -49,7 +49,7 @@
     ]},
     { "name": "ClusterId", "type": "string", "nullableVersions": "2+", "versions": "2+", "ignorable": true,
       "about": "The cluster ID that responding broker belongs to." },
-    { "name": "ControllerId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": "true",
+    { "name": "ControllerId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
       "about": "The ID of the controller broker." },
     { "name": "Topics", "type": "[]MetadataResponseTopic", "versions": "0+",
       "about": "Each topic in the response.", "fields": [

@@ -32,6 +32,11 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
+import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -304,6 +309,10 @@ public class RequestResponseTest {
         checkRequest(createRenewTokenRequest());
         checkErrorResponse(createRenewTokenRequest(), new UnknownServerException());
         checkResponse(createRenewTokenResponse(), 0);
+        checkRequest(createElectPreferredLeadersRequest());
+        checkRequest(createElectPreferredLeadersRequestNullPartitions());
+        checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
+        checkResponse(createElectPreferredLeadersResponse(), 0);
     }
 
     @Test
@@ -460,7 +469,7 @@ public class RequestResponseTest {
         Struct deserializedStruct = ApiKeys.PRODUCE.parseResponse(version, buffer);
 
         ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE,
-                deserializedStruct);
+                deserializedStruct, version);
 
         assertEquals(1, v5FromBytes.responses().size());
         assertTrue(v5FromBytes.responses().containsKey(tp0));
@@ -1322,4 +1331,33 @@ public class RequestResponseTest {
 
         return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
     }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequestNullPartitions() {
+        return new ElectPreferredLeadersRequest.Builder(
+                new ElectPreferredLeadersRequestData()
+                        .setTimeoutMs(100)
+                        .setTopicPartitions(null))
+                .build((short) 0);
+    }
+
+    private ElectPreferredLeadersRequest createElectPreferredLeadersRequest() {
+        ElectPreferredLeadersRequestData data = new ElectPreferredLeadersRequestData()
+                .setTimeoutMs(100);
+        data.topicPartitions().add(new TopicPartitions().setTopic("data").setPartitionId(asList(1, 2)));
+        return new ElectPreferredLeadersRequest.Builder(data).build((short) 0);
+    }
+
+    private ElectPreferredLeadersResponse createElectPreferredLeadersResponse() {
+        ElectPreferredLeadersResponseData data = new ElectPreferredLeadersResponseData().setThrottleTimeMs(200);
+        ReplicaElectionResult resultsByTopic = new ReplicaElectionResult().setTopic("myTopic");
+        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(0)
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(Errors.NONE.message()));
+        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(1)
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
+        data.replicaElectionResults().add(resultsByTopic);
+        return new ElectPreferredLeadersResponse(data);
+    }
+
 }

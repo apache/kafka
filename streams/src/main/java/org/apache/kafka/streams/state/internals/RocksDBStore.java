@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
@@ -33,8 +32,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.ColumnFamilyDescriptor;
+import org.rocksdb.ColumnFamilyHandle;
+import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
+import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.Options;
@@ -49,26 +52,20 @@ import org.slf4j.LoggerFactory;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
  * A persistent key-value store based on RocksDB.
- *
- * Note that the use of array-typed keys is discouraged because they result in incorrect caching behavior.
- * If you intend to work on byte arrays as key, for example, you may want to wrap them with the {@code Bytes} class,
- * i.e. use {@code RocksDBStore<Bytes, ...>} rather than {@code RocksDBStore<byte[], ...>}.
  */
 public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
-
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
@@ -81,17 +78,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private static final int MAX_WRITE_BUFFERS = 3;
     private static final String DB_FILE_DIR = "rocksdb";
 
-    private final String name;
+    final String name;
     private final String parentDir;
-    private final Set<KeyValueIterator> openIterators = Collections.synchronizedSet(new HashSet<>());
+    final Set<KeyValueIterator<Bytes, byte[]>> openIterators = Collections.synchronizedSet(new HashSet<>());
 
     File dbDir;
-    private RocksDB db;
+    RocksDB db;
+    RocksDBAccessor dbAccessor;
 
     // the following option objects will be created in the constructor and closed in the close() method
-    private Options options;
-    private WriteOptions wOptions;
-    private FlushOptions fOptions;
+    private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
+    WriteOptions wOptions;
+    FlushOptions fOptions;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -112,25 +110,27 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
 
     @SuppressWarnings("unchecked")
-    public void openDB(final ProcessorContext context) {
+    void openDB(final ProcessorContext context) {
         // initialize the default rocksdb options
 
-        options = new Options();
+        final DBOptions dbOptions = new DBOptions();
+        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
+        userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
         tableConfig.setFilter(new BloomFilter());
 
-        options.optimizeFiltersForHits();
-        options.setTableFormatConfig(tableConfig);
-        options.setWriteBufferSize(WRITE_BUFFER_SIZE);
-        options.setCompressionType(COMPRESSION_TYPE);
-        options.setCompactionStyle(COMPACTION_STYLE);
-        options.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
-        options.setCreateIfMissing(true);
-        options.setErrorIfExists(false);
-        options.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+        userSpecifiedOptions.optimizeFiltersForHits();
+        userSpecifiedOptions.setTableFormatConfig(tableConfig);
+        userSpecifiedOptions.setWriteBufferSize(WRITE_BUFFER_SIZE);
+        userSpecifiedOptions.setCompressionType(COMPRESSION_TYPE);
+        userSpecifiedOptions.setCompactionStyle(COMPACTION_STYLE);
+        userSpecifiedOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
+        userSpecifiedOptions.setCreateIfMissing(true);
+        userSpecifiedOptions.setErrorIfExists(false);
+        userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
         // this is the recommended way to increase parallelism in RocksDb
         // note that the current implementation of setIncreaseParallelism affects the number
         // of compaction threads but not flush threads (the latter remains one). Also
@@ -138,7 +138,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
         // subtracts one from the value passed to determine the number of compaction threads
         // (this could be a bug in the RocksDB code and their devs have been contacted).
-        options.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
+        userSpecifiedOptions.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
         wOptions = new WriteOptions();
         wOptions.setDisableWAL(true);
@@ -148,32 +148,42 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         final Map<String, Object> configs = context.appConfigs();
         final Class<RocksDBConfigSetter> configSetterClass =
-                (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+            (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
         if (configSetterClass != null) {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
-            configSetter.setConfig(name, options, configs);
+            configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
         if (prepareForBulkload) {
-            options.prepareForBulkLoad();
+            userSpecifiedOptions.prepareForBulkLoad();
         }
 
         dbDir = new File(new File(context.stateDir(), parentDir), name);
 
         try {
-            try {
-                Files.createDirectories(dbDir.getParentFile().toPath());
-                Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-                db = RocksDB.open(options, dbDir.getAbsolutePath());
-            } catch (final RocksDBException e) {
-                throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
-            }
-        } catch (final IOException e) {
-            throw new ProcessorStateException(e);
+            Files.createDirectories(dbDir.getParentFile().toPath());
+            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+        } catch (final IOException fatal) {
+            throw new ProcessorStateException(fatal);
         }
 
+        openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
+    }
+
+    void openRocksDB(final DBOptions dbOptions,
+                     final ColumnFamilyOptions columnFamilyOptions) {
+        final List<ColumnFamilyDescriptor> columnFamilyDescriptors
+            = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
+
+        try {
+            db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
+            dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+        } catch (final RocksDBException e) {
+            throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
+        }
     }
 
     public void init(final ProcessorContext context,
@@ -208,45 +218,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         return open;
     }
 
-    @Override
-    public synchronized byte[] get(final Bytes key) {
-        validateStoreOpen();
-        return getInternal(key.get());
-    }
-
     private void validateStoreOpen() {
         if (!open) {
             throw new InvalidStateStoreException("Store " + name + " is currently closed");
         }
-    }
-
-    private byte[] getInternal(final byte[] rawKey) {
-        try {
-            return db.get(rawKey);
-        } catch (final RocksDBException e) {
-            // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-            throw new ProcessorStateException("Error while getting value for key %s from store " + name, e);
-        }
-    }
-
-    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
-        if (prepareForBulkload) {
-            // if the store is not empty, we need to compact to get around the num.levels check
-            // for bulk loading
-            final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
-
-            if (sstFileNames != null && sstFileNames.length > 0) {
-                try {
-                    db.compactRange(true, 1, 0);
-                } catch (final RocksDBException e) {
-                    throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
-                }
-            }
-        }
-
-        close();
-        this.prepareForBulkload = prepareForBulkload;
-        openDB(internalProcessorContext);
     }
 
     @SuppressWarnings("unchecked")
@@ -255,7 +230,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                                  final byte[] value) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        putInternal(key.get(), value);
+        dbAccessor.put(key.get(), value);
     }
 
     @Override
@@ -269,68 +244,39 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         return originalValue;
     }
 
-    private void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
-        try (final WriteBatch batch = new WriteBatch()) {
-            for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(record.key);
-                } else {
-                    batch.put(record.key, record.value);
-                }
-            }
-            write(batch);
-        } catch (final RocksDBException e) {
-            throw new ProcessorStateException("Error restoring batch to store " + name, e);
-        }
-    }
-
-    private void putInternal(final byte[] rawKey,
-                             final byte[] rawValue) {
-        if (rawValue == null) {
-            try {
-                db.delete(wOptions, rawKey);
-            } catch (final RocksDBException e) {
-                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                throw new ProcessorStateException("Error while removing key %s from store " + name, e);
-            }
-        } else {
-            try {
-                db.put(wOptions, rawKey, rawValue);
-            } catch (final RocksDBException e) {
-                // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
-                throw new ProcessorStateException("Error while putting key %s value %s into store " + name, e);
-            }
-        }
-    }
-
-    void write(final WriteBatch batch) throws RocksDBException {
-        db.write(wOptions, batch);
-    }
-
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         try (final WriteBatch batch = new WriteBatch()) {
-            for (final KeyValue<Bytes, byte[]> entry : entries) {
-                Objects.requireNonNull(entry.key, "key cannot be null");
-                if (entry.value == null) {
-                    batch.delete(entry.key.get());
-                } else {
-                    batch.put(entry.key.get(), entry.value);
-                }
-            }
+            dbAccessor.prepareBatch(entries, batch);
             write(batch);
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while batch writing to store " + name, e);
         }
+    }
 
+    @Override
+    public synchronized byte[] get(final Bytes key) {
+        validateStoreOpen();
+        try {
+            return dbAccessor.get(key.get());
+        } catch (final RocksDBException e) {
+            // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+            throw new ProcessorStateException("Error while getting value for key from store " + name, e);
+        }
     }
 
     @Override
     public synchronized byte[] delete(final Bytes key) {
         Objects.requireNonNull(key, "key cannot be null");
-        final byte[] value = get(key);
+        final byte[] oldValue;
+        try {
+            oldValue = dbAccessor.getOnly(key.get());
+        } catch (final RocksDBException e) {
+            // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+            throw new ProcessorStateException("Error while getting value for key from store " + name, e);
+        }
         put(key, null);
-        return value;
+        return oldValue;
     }
 
     @Override
@@ -340,8 +286,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         Objects.requireNonNull(to, "to cannot be null");
         validateStoreOpen();
 
-        // query rocksdb
-        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(name, db.newIterator(), from, to);
+        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to);
         openIterators.add(rocksDBRangeIterator);
 
         return rocksDBRangeIterator;
@@ -350,10 +295,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
-        // query rocksdb
-        final RocksIterator innerIter = db.newIterator();
-        innerIter.seekToFirst();
-        final RocksDbIterator rocksDbIterator = new RocksDbIterator(name, innerIter);
+        final KeyValueIterator<Bytes, byte[]> rocksDbIterator = dbAccessor.all();
         openIterators.add(rocksDbIterator);
         return rocksDbIterator;
     }
@@ -372,16 +314,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public long approximateNumEntries() {
         validateStoreOpen();
-        final long value;
+        final long numEntries;
         try {
-            value = db.getLongProperty("rocksdb.estimate-num-keys");
+            numEntries = dbAccessor.approximateNumEntries();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error fetching property from store " + name, e);
         }
-        if (isOverflowing(value)) {
+        if (isOverflowing(numEntries)) {
             return Long.MAX_VALUE;
         }
-        return value;
+        return numEntries;
     }
 
     private boolean isOverflowing(final long value) {
@@ -395,18 +337,30 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         if (db == null) {
             return;
         }
-        // flush RocksDB
-        flushInternal();
-    }
-    /**
-     * @throws ProcessorStateException if flushing failed because of any internal store exceptions
-     */
-    private void flushInternal() {
         try {
-            db.flush(fOptions);
+            dbAccessor.flush();
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error while executing flush from store " + name, e);
         }
+    }
+
+    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+        if (prepareForBulkload) {
+            // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
+            final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
+
+            if (sstFileNames != null && sstFileNames.length > 0) {
+                dbAccessor.toggleDbForBulkLoading();
+            }
+        }
+
+        close();
+        this.prepareForBulkload = prepareForBulkload;
+        openDB(internalProcessorContext);
+    }
+
+    void write(final WriteBatch batch) throws RocksDBException {
+        db.write(wOptions, batch);
     }
 
     @Override
@@ -417,127 +371,168 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         open = false;
         closeOpenIterators();
-        options.close();
+        dbAccessor.close();
+        userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
         db.close();
 
-        options = null;
+        userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
         db = null;
     }
 
     private void closeOpenIterators() {
-        final HashSet<KeyValueIterator> iterators;
+        final HashSet<KeyValueIterator<Bytes, byte[]>> iterators;
         synchronized (openIterators) {
             iterators = new HashSet<>(openIterators);
         }
         if (iterators.size() != 0) {
             log.warn("Closing {} open iterators for store {}", iterators.size(), name);
-            for (final KeyValueIterator iterator : iterators) {
+            for (final KeyValueIterator<Bytes, byte[]> iterator : iterators) {
                 iterator.close();
             }
         }
     }
 
-    private class RocksDbIterator
-        extends AbstractIterator<KeyValue<Bytes, byte[]>>
-        implements KeyValueIterator<Bytes, byte[]> {
 
-        private final String storeName;
-        private final RocksIterator iter;
 
-        private volatile boolean open = true;
+    interface RocksDBAccessor {
 
-        private KeyValue<Bytes, byte[]> next;
+        void put(final byte[] key,
+                 final byte[] value);
 
-        RocksDbIterator(final String storeName,
-                        final RocksIterator iter) {
-            this.iter = iter;
-            this.storeName = storeName;
-        }
+        void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
+                          final WriteBatch batch) throws RocksDBException;
 
-        @Override
-        public synchronized boolean hasNext() {
-            if (!open) {
-                throw new InvalidStateStoreException(String.format("RocksDB iterator for store %s has closed", storeName));
-            }
-            return super.hasNext();
-        }
+        byte[] get(final byte[] key) throws RocksDBException;
 
-        @Override
-        public synchronized KeyValue<Bytes, byte[]> next() {
-            return super.next();
-        }
+        /**
+         * In contrast to get(), we don't migrate the key to new CF.
+         * <p>
+         * Use for get() within delete() -- no need to migrate, as it's deleted anyway
+         */
+        byte[] getOnly(final byte[] key) throws RocksDBException;
 
-        @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
-            if (!iter.isValid()) {
-                return allDone();
-            } else {
-                next = getKeyValue();
-                iter.next();
-                return next;
-            }
-        }
+        KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                              final Bytes to);
 
-        private KeyValue<Bytes, byte[]> getKeyValue() {
-            return new KeyValue<>(new Bytes(iter.key()), iter.value());
-        }
+        KeyValueIterator<Bytes, byte[]> all();
 
-        @Override
-        public void remove() {
-            throw new UnsupportedOperationException("RocksDB iterator does not support remove()");
-        }
+        long approximateNumEntries() throws RocksDBException;
 
-        @Override
-        public synchronized void close() {
-            openIterators.remove(this);
-            iter.close();
-            open = false;
-        }
+        void flush() throws RocksDBException;
 
-        @Override
-        public Bytes peekNextKey() {
-            if (!hasNext()) {
-                throw new NoSuchElementException();
-            }
-            return next.key;
-        }
+        void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
+                                    final WriteBatch batch) throws RocksDBException;
+
+        void close();
+
+        void toggleDbForBulkLoading();
     }
 
-    private class RocksDBRangeIterator extends RocksDbIterator {
-        // RocksDB's JNI interface does not expose getters/setters that allow the
-        // comparator to be pluggable, and the default is lexicographic, so it's
-        // safe to just force lexicographic comparator here for now.
-        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        private final byte[] rawToKey;
+    class SingleColumnFamilyAccessor implements RocksDBAccessor {
+        private final ColumnFamilyHandle columnFamily;
 
-        RocksDBRangeIterator(final String storeName,
-                             final RocksIterator iter,
-                             final Bytes from,
-                             final Bytes to) {
-            super(storeName, iter);
-            iter.seek(from.get());
-            rawToKey = to.get();
-            if (rawToKey == null) {
-                throw new NullPointerException("RocksDBRangeIterator: RawToKey is null for key " + to);
+        SingleColumnFamilyAccessor(final ColumnFamilyHandle columnFamily) {
+            this.columnFamily = columnFamily;
+        }
+
+        @Override
+        public void put(final byte[] key,
+                        final byte[] value) {
+            if (value == null) {
+                try {
+                    db.delete(columnFamily, wOptions, key);
+                } catch (final RocksDBException e) {
+                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                    throw new ProcessorStateException("Error while removing key from store " + name, e);
+                }
+            } else {
+                try {
+                    db.put(columnFamily, wOptions, key, value);
+                } catch (final RocksDBException e) {
+                    // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
+                    throw new ProcessorStateException("Error while putting key/value into store " + name, e);
+                }
             }
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
-            final KeyValue<Bytes, byte[]> next = super.makeNext();
-
-            if (next == null) {
-                return allDone();
-            } else {
-                if (comparator.compare(next.key.get(), rawToKey) <= 0) {
-                    return next;
+        public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
+                                 final WriteBatch batch) throws RocksDBException {
+            for (final KeyValue<Bytes, byte[]> entry : entries) {
+                Objects.requireNonNull(entry.key, "key cannot be null");
+                if (entry.value == null) {
+                    batch.delete(columnFamily, entry.key.get());
                 } else {
-                    return allDone();
+                    batch.put(columnFamily, entry.key.get(), entry.value);
                 }
+            }
+        }
+
+        @Override
+        public byte[] get(final byte[] key) throws RocksDBException {
+            return db.get(columnFamily, key);
+        }
+
+        @Override
+        public byte[] getOnly(final byte[] key) throws RocksDBException {
+            return db.get(columnFamily, key);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
+            return new RocksDBRangeIterator(
+                name,
+                db.newIterator(columnFamily),
+                openIterators,
+                from,
+                to);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> all() {
+            final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
+            innerIterWithTimestamp.seekToFirst();
+            return new RocksDbIterator(name, innerIterWithTimestamp, openIterators);
+        }
+
+        @Override
+        public long approximateNumEntries() throws RocksDBException {
+            return db.getLongProperty(columnFamily, "rocksdb.estimate-num-keys");
+        }
+
+        @Override
+        public void flush() throws RocksDBException {
+            db.flush(fOptions, columnFamily);
+        }
+
+        @Override
+        public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
+                                           final WriteBatch batch) throws RocksDBException {
+            for (final KeyValue<byte[], byte[]> record : records) {
+                if (record.value == null) {
+                    batch.delete(columnFamily, record.key);
+                } else {
+                    batch.put(columnFamily, record.key, record.value);
+                }
+            }
+        }
+
+        @Override
+        public void close() {
+            columnFamily.close();
+        }
+
+        @Override
+        public void toggleDbForBulkLoading() {
+            try {
+                db.compactRange(columnFamily, true, 1, 0);
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
         }
     }
@@ -553,7 +548,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public void restoreAll(final Collection<KeyValue<byte[], byte[]>> records) {
-            rocksDBStore.restoreAllInternal(records);
+            try (final WriteBatch batch = new WriteBatch()) {
+                rocksDBStore.dbAccessor.prepareBatchForRestore(records, batch);
+                rocksDBStore.write(batch);
+            } catch (final RocksDBException e) {
+                throw new ProcessorStateException("Error restoring batch to store " + rocksDBStore.name, e);
+            }
         }
 
         @Override
@@ -574,6 +574,6 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
     // for testing
     public Options getOptions() {
-        return options;
+        return userSpecifiedOptions;
     }
 }
