@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.easymock.EasyMock;
@@ -48,6 +49,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -107,7 +109,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
         changelogReader.restore(active);
         assertTrue(functionCalled.get());
     }
@@ -145,7 +147,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -170,7 +172,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         EasyMock.expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         EasyMock.replay(active, task);
@@ -185,7 +187,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
         // retry restore should succeed
         assertEquals(1, changelogReader.restore(active).size());
         assertThat(callback.restored.size(), equalTo(messages));
@@ -210,7 +212,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record);
+            identity());
         changelogReader.register(stateRestorer);
 
         EasyMock.expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
@@ -240,7 +242,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         changelogReader.restore(active);
         assertThat(callback.restored.size(), equalTo(5));
@@ -257,7 +259,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -274,7 +276,7 @@ public class StoreChangelogReaderTest {
             3,
             true,
             "storeName",
-            record -> record);
+            identity());
         changelogReader.register(restorer);
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
@@ -302,7 +304,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName1",
-            record -> record));
+            identity()));
         changelogReader.register(new StateRestorer(
             one,
             restoreListener1,
@@ -310,7 +312,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName2",
-            record -> record));
+            identity()));
         changelogReader.register(new StateRestorer(
             two,
             restoreListener2,
@@ -318,7 +320,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName3",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(one)).andStubReturn(task);
         expect(active.restoringTaskFor(two)).andStubReturn(task);
@@ -350,7 +352,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName1",
-            record -> record));
+            identity()));
         changelogReader.register(new StateRestorer(
             one,
             restoreListener1,
@@ -358,7 +360,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName2",
-            record -> record));
+            identity()));
         changelogReader.register(new StateRestorer(
             two,
             restoreListener2,
@@ -366,7 +368,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName3",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(one)).andReturn(task);
         expect(active.restoringTaskFor(two)).andReturn(task);
@@ -401,7 +403,7 @@ public class StoreChangelogReaderTest {
             5,
             true,
             "storeName1",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -437,7 +439,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record);
+            identity());
         setupConsumer(0, topicPartition);
         changelogReader.register(restorer);
 
@@ -457,7 +459,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record);
+            identity());
 
         changelogReader.register(restorer);
 
@@ -476,7 +478,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -495,7 +497,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             false,
             "storeName",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -518,7 +520,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             false,
             "storeName",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
         changelogReader.restore(active);
@@ -537,7 +539,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "store",
-            record -> record));
+            identity()));
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
         replay(active, task);
 
@@ -559,7 +561,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             false,
             "storeName",
-            record -> record));
+            identity()));
 
         final TopicPartition postInitialization = new TopicPartition("other", 0);
         expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
@@ -581,7 +583,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             false,
             "otherStore",
-            record -> record));
+            identity()));
 
         final Collection<TopicPartition> expected = Utils.mkSet(topicPartition, postInitialization);
         consumer.assign(expected);
@@ -605,7 +607,7 @@ public class StoreChangelogReaderTest {
             9L,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -627,7 +629,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -648,7 +650,7 @@ public class StoreChangelogReaderTest {
             Long.MAX_VALUE,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -668,7 +670,7 @@ public class StoreChangelogReaderTest {
             5,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -689,7 +691,7 @@ public class StoreChangelogReaderTest {
             10,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -717,7 +719,7 @@ public class StoreChangelogReaderTest {
             6,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);
@@ -740,7 +742,7 @@ public class StoreChangelogReaderTest {
             11,
             true,
             "storeName",
-            record -> record));
+            identity()));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         replay(active);

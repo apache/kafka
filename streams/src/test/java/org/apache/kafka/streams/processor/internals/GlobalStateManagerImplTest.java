@@ -31,9 +31,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -240,47 +238,10 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t1);
 
         stateManager.initialize();
-        stateManager.register(new WrappedStateStore() {
-            @Override
-            public StateStore inner() {
-                return store1;
-            }
-
-            @Override
-            public StateStore wrappedStore() {
-                return store1;
-            }
-
-            @Override
-            public String name() {
-                return store1.name();
-            }
-
-            @Override
-            public void init(final ProcessorContext context, final StateStore root) {
-                store1.init(context, root);
-            }
-
-            @Override
-            public void flush() {
-                store1.flush();
-            }
-
-            @Override
-            public void close() {
-                store1.close();
-            }
-
-            @Override
-            public boolean persistent() {
-                return store1.persistent();
-            }
-
-            @Override
-            public boolean isOpen() {
-                return store1.isOpen();
-            }
-        }, stateRestoreCallback);
+        stateManager.register(
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store1) {},
+            stateRestoreCallback
+        );
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);
@@ -304,47 +265,10 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
 
         stateManager.initialize();
-        stateManager.register(new WrappedStateStore() {
-            @Override
-            public StateStore inner() {
-                return store2;
-            }
-
-            @Override
-            public StateStore wrappedStore() {
-                return store2;
-            }
-
-            @Override
-            public String name() {
-                return store2.name();
-            }
-
-            @Override
-            public void init(final ProcessorContext context, final StateStore root) {
-                store2.init(context, root);
-            }
-
-            @Override
-            public void flush() {
-                store2.flush();
-            }
-
-            @Override
-            public void close() {
-                store2.close();
-            }
-
-            @Override
-            public boolean persistent() {
-                return store2.persistent();
-            }
-
-            @Override
-            public boolean isOpen() {
-                return store2.isOpen();
-            }
-        }, stateRestoreCallback);
+        stateManager.register(
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store2) {},
+            stateRestoreCallback
+        );
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
         assertEquals(3, restoredRecord.key.length);

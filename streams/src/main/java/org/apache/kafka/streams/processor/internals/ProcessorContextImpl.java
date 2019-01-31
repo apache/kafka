@@ -35,7 +35,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.streams.state.internals.WrappedStateStore.AbstractStateStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.time.Duration;
 import java.util.List;
@@ -116,14 +116,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return store;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key,
                                final V value) {
         forward(key, value, SEND_TO_ALL);
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings({"unchecked"})
     @Override
     public <K, V> void forward(final K key,
                                final V value,
@@ -134,7 +133,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
     @Override
     public <K, V> void forward(final K key,
                                final V value,
@@ -214,16 +212,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return streamTimeSupplier.get();
     }
 
-    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends AbstractStateStore {
+    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends WrappedStateStore<T> {
         static final String ERROR_MESSAGE = "Global store is read only";
 
         private StateStoreReadOnlyDecorator(final T inner) {
             super(inner);
         }
 
-        @SuppressWarnings("unchecked")
         T getInner() {
-            return (T) wrappedStore();
+            return wrappedStore();
         }
 
         @Override
@@ -403,16 +400,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends AbstractStateStore {
+    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends WrappedStateStore<T> {
         static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
         private StateStoreReadWriteDecorator(final T inner) {
             super(inner);
         }
 
-        @SuppressWarnings("unchecked")
         T wrapped() {
-            return (T) super.wrappedStore();
+            return super.wrappedStore();
         }
 
         @Override

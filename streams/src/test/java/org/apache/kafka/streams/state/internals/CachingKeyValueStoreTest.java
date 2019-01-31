@@ -358,7 +358,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldReturnUnderlying() {
-        assertTrue(store.underlying().equals(underlyingStore));
+        assertEquals(store.wrappedStore(), underlyingStore);
     }
 
     @Test(expected = InvalidStateStoreException.class)

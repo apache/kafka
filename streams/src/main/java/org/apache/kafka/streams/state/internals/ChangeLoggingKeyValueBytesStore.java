@@ -28,25 +28,24 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractStateStore implements KeyValueStore<Bytes, byte[]> {
-    private final KeyValueStore<Bytes, byte[]> inner;
+public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueStore<Bytes, byte[]>> implements KeyValueStore<Bytes, byte[]> {
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
-        this.inner = inner;
     }
 
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        inner.init(context, root);
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), inner.name());
-        this.changeLogger = new StoreChangeLogger<>(inner.name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+        super.init(context, root);
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
+        this.changeLogger = new StoreChangeLogger<>(name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
 
+        // TODO: brittle
         // if the inner store is an LRU cache, add the eviction listener to log removed record
-        if (inner instanceof MemoryLRUCache) {
-            ((MemoryLRUCache<Bytes, byte[]>) inner).setWhenEldestRemoved((key, value) -> {
+        if (wrappedStore() instanceof MemoryLRUCache) {
+            ((MemoryLRUCache<Bytes, byte[]>) wrappedStore()).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
                 changeLogger.logChange(key, null);
             });
@@ -55,13 +54,13 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
 
     @Override
     public long approximateNumEntries() {
-        return inner.approximateNumEntries();
+        return wrappedStore().approximateNumEntries();
     }
 
     @Override
     public void put(final Bytes key,
                     final byte[] value) {
-        inner.put(key, value);
+        wrappedStore().put(key, value);
         changeLogger.logChange(key, value);
     }
 
@@ -77,7 +76,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
 
     @Override
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
-        inner.putAll(entries);
+        wrappedStore().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             changeLogger.logChange(entry.key, entry.value);
         }
@@ -85,24 +84,24 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore.AbstractS
 
     @Override
     public byte[] delete(final Bytes key) {
-        final byte[] oldValue = inner.delete(key);
+        final byte[] oldValue = wrappedStore().delete(key);
         changeLogger.logChange(key, null);
         return oldValue;
     }
 
     @Override
     public byte[] get(final Bytes key) {
-        return inner.get(key);
+        return wrappedStore().get(key);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return inner.range(from, to);
+        return wrappedStore().range(from, to);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return inner.all();
+        return wrappedStore().all();
     }
 }

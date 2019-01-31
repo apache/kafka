@@ -19,81 +19,66 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
  */
-public interface WrappedStateStore extends StateStore {
-
-    /**
-     * Return the inner most storage engine
-     *
-     * @return wrapped inner storage engine
-     */
-    StateStore inner();
-
-    /**
-     * Return the state store this store directly wraps
-     * @return the state store this store directly wraps
-     */
-    StateStore wrappedStore();
-
-    abstract class AbstractStateStore implements WrappedStateStore {
-        final StateStore innerState;
-
-        protected AbstractStateStore(final StateStore inner) {
-            this.innerState = inner;
+public class WrappedStateStore<S extends StateStore> implements StateStore {
+    public static boolean isTimestamped(StateStore stateStore) {
+        if (stateStore instanceof TimestampedBytesStore) {
+            return true;
+        } else if (stateStore instanceof WrappedStateStore) {
+            return isTimestamped(((WrappedStateStore) stateStore).wrappedStore());
+        } else {
+            return false;
         }
+    }
 
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            innerState.init(context, root);
+    private final S innerState;
+
+    public WrappedStateStore(final S innerState) {
+        this.innerState = innerState;
+    }
+
+    @Override
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
+        innerState.init(context, root);
+    }
+
+    @Override
+    public String name() {
+        return innerState.name();
+    }
+
+    @Override
+    public boolean persistent() {
+        return innerState.persistent();
+    }
+
+    @Override
+    public boolean isOpen() {
+        return innerState.isOpen();
+    }
+
+    public void validateStoreOpen() {
+        if (!innerState.isOpen()) {
+            throw new InvalidStateStoreException("Store " + innerState.name() + " is currently closed.");
         }
+    }
 
-        @Override
-        public String name() {
-            return innerState.name();
-        }
+    @Override
+    public void flush() {
+        innerState.flush();
+    }
 
-        @Override
-        public boolean persistent() {
-            return innerState.persistent();
-        }
+    @Override
+    public void close() {
+        innerState.close();
+    }
 
-        @Override
-        public boolean isOpen() {
-            return innerState.isOpen();
-        }
-
-        void validateStoreOpen() {
-            if (!innerState.isOpen()) {
-                throw new InvalidStateStoreException("Store " + innerState.name() + " is currently closed.");
-            }
-        }
-
-        @Override
-        public StateStore inner() {
-            if (innerState instanceof WrappedStateStore) {
-                return ((WrappedStateStore) innerState).inner();
-            }
-            return innerState;
-        }
-
-        @Override
-        public void flush() {
-            innerState.flush();
-        }
-
-        @Override
-        public void close() {
-            innerState.close();
-        }
-
-        @Override
-        public StateStore wrappedStore() {
-            return innerState;
-        }
-
+    public S wrappedStore() {
+        return innerState;
     }
 }

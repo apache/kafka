@@ -28,12 +28,11 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 /**
- * Simple wrapper around a {@link SegmentedBytesStore} to support writing
+ * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore implements WindowStore<Bytes, byte[]> {
+class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes, byte[]>> implements WindowStore<Bytes, byte[]> {
 
-    private final WindowStore<Bytes, byte[]> bytesStore;
     private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
@@ -42,36 +41,32 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                   final boolean retainDuplicates) {
         super(bytesStore);
-        this.bytesStore = bytesStore;
         this.retainDuplicates = retainDuplicates;
     }
 
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
-        return bytesStore.fetch(key, timestamp);
+        return wrappedStore().fetch(key, timestamp);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
-        return bytesStore.fetch(key, from, to);
+        return wrappedStore().fetch(key, from, to);
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
-        return bytesStore.fetch(keyFrom, keyTo, from, to);
+        return wrappedStore().fetch(keyFrom, keyTo, from, to);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return bytesStore.all();
+        return wrappedStore().all();
     }
 
-    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return bytesStore.fetchAll(timeFrom, timeTo);
+        return wrappedStore().fetchAll(timeFrom, timeTo);
     }
 
     @Override
@@ -81,15 +76,15 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
 
     @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
-        bytesStore.put(key, value, windowStartTimestamp);
+        wrappedStore().put(key, value, windowStartTimestamp);
         changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
-        bytesStore.init(context, root);
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name());
+        super.init(context, root);
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
         changeLogger = new StoreChangeLogger<>(
             name(),
             context,

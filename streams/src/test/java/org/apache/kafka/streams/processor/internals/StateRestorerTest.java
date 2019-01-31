@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Before;
@@ -42,7 +43,7 @@ public class StateRestorerTest {
         OFFSET_LIMIT,
         true,
         "storeName",
-        record -> record);
+        RecordConverter.RecordConverters.identity());
 
     @Before
     public void setUp() {
@@ -79,7 +80,7 @@ public class StateRestorerTest {
             0,
             true,
             "storeName",
-            record -> record);
+            RecordConverter.RecordConverters.identity());
         assertTrue(restorer.hasCompleted(0, 10));
     }
 

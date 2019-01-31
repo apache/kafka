@@ -23,9 +23,11 @@ import java.nio.ByteBuffer;
 public interface RecordConverter {
     ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
 
-    @SuppressWarnings("deprecation")
-    static RecordConverter converter() {
-        return record -> {
+    final class RecordConverters {
+        private static final RecordConverter IDENTITY_INSTANCE = record -> record;
+
+        @SuppressWarnings("deprecation")
+        private static final RecordConverter RAW_TO_TIMESTAMED_INSTANCE = record -> {
             final byte[] rawValue = record.value();
             final long timestamp = record.timestamp();
             return new ConsumerRecord<>(
@@ -47,5 +49,16 @@ public interface RecordConverter {
                 record.leaderEpoch()
             );
         };
+
+        // privatize the constructor so the class cannot be instantiated (only used for its static members)
+        private RecordConverters() {}
+
+        public static RecordConverter rawValueToTimestampedValue() {
+            return RAW_TO_TIMESTAMED_INSTANCE;
+        }
+
+        public static RecordConverter identity() {
+            return IDENTITY_INSTANCE;
+        }
     }
 }

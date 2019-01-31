@@ -23,7 +23,6 @@ import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -38,6 +37,9 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
+import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.rawValueToTimestampedValue;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
 
 public class ProcessorStateManager extends AbstractStateManager {
@@ -134,10 +136,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
-        final StateStore stateStore =
-            store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
-        final RecordConverter recordConverter =
-            stateStore instanceof TimestampedBytesStore ? RecordConverter.converter() : record -> record;
+        final RecordConverter recordConverter = isTimestamped(store) ? rawValueToTimestampedValue() : identity();
 
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
