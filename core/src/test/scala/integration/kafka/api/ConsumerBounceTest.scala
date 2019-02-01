@@ -15,6 +15,7 @@ package kafka.api
 
 import java.time
 import java.util.concurrent._
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collection, Collections, Properties}
 
@@ -315,13 +316,13 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
     // assert group is stable and working
     sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
-    stableConsumers.foreach(cons => {
-      receiveAtLeastRecords(cons, recordsProduced / consumerCount, 10000)
-    })
+    stableConsumers.foreach { cons => {
+      receiveAndCommit(cons, recordsProduced / consumerCount, 10000)
+    }}
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
-    val receivedExceptions = new ArrayBuffer[Throwable]()
+    val kickedConsumerOut = new AtomicBoolean(false)
     var kickedOutConsumerIdx: Option[Int] = None
     val lock = new ReentrantLock
     // restart brokers until the group moves to a Coordinator with the new config
@@ -338,15 +339,17 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
         val currentConsumer = stableConsumers(idx)
         val consumeFuture = SFuture {
           try {
-            receiveAtLeastRecords(currentConsumer, recordsProduced / consumerCount, 10000)
+            receiveAndCommit(currentConsumer, recordsProduced / consumerCount, 10000)
             CoreUtils.inLock(lock) { successfulConsumes += 1 }
           } catch {
             case e: Throwable =>
-              if (e.isInstanceOf[GroupMaxSizeReachedException]) {
-                kickedOutConsumerIdx = Some(idx)
+              if (!e.isInstanceOf[GroupMaxSizeReachedException]) {
+                throw e
               }
-
-              CoreUtils.inLock(lock) { receivedExceptions += e }
+              if (!kickedConsumerOut.compareAndSet(false, true)) {
+                fail(s"Received more than one ${classOf[GroupMaxSizeReachedException]}")
+              }
+              kickedOutConsumerIdx = Some(idx)
           }
         }
 
@@ -354,29 +357,26 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       })
       Await.result(SFuture.sequence(consumeFutures), Duration("12sec"))
 
-      if (receivedExceptions.nonEmpty) { // consumer must have been kicked out
-        if (receivedExceptions.size != 1 || receivedExceptions.exists(e => !e.isInstanceOf[GroupMaxSizeReachedException])) {
-          fail(s"Expected to only receive one exception of type ${classOf[GroupMaxSizeReachedException]}" +
-            s"during consumption. Received: $receivedExceptions")
-        }
+      if (kickedConsumerOut.get()) {
         // validate the rest N-1 consumers consumed successfully
         assertEquals(maxGroupSize, successfulConsumes)
         break
       }
+
       val config = newConfigs(broker)
       servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
       restartDeadBrokers()
     }}
-    if (receivedExceptions.isEmpty)
+    if (!kickedConsumerOut.get())
       fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
 
     // assert that the group has gone through a rebalance and shed off one consumer
     stableConsumers.remove(kickedOutConsumerIdx.get)
     sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
     // should be only maxGroupSize consumers left in the group
-    stableConsumers.foreach(cons => {
-      receiveAtLeastRecords(cons, recordsProduced / maxGroupSize, 10000)
-    })
+    stableConsumers.foreach { cons => {
+      receiveAndCommit(cons, recordsProduced / maxGroupSize, 10000)
+    }}
   }
 
   /**
@@ -396,16 +396,18 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val stableConsumers = createConsumersWithGroupId(groupId, maxGroupSize, executor, topic)
     val newConsumer = createConsumerWithGroupId(groupId)
     var failedRebalance = false
-    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = _ => {failedRebalance = true}),
+    var exception: Exception = null
+    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = e => {failedRebalance = true; exception = e}),
       executor = executor, stableConsumers:_*)
     assertTrue("Rebalance did not fail as expected", failedRebalance)
+    assertTrue(exception.isInstanceOf[GroupMaxSizeReachedException])
 
     // assert group continues to live
     val producer = createProducer()
     sendRecords(producer, maxGroupSize * 100, topic, numPartitions = Some(maxGroupSize))
-    stableConsumers.foreach(cons => {
+    stableConsumers.foreach { cons => {
         receiveExactRecords(cons, 100, 10000)
-    })
+    }}
   }
 
   /**
@@ -423,11 +425,11 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   }
 
   def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], executor: ExecutorService, revokeSemaphore: Option[Semaphore] = None,
-                       onException: Exception => Unit = e => { throw e }, topic: String = topic): Future[Any] = {
+                       onException: Exception => Unit = e => { throw e }, topic: String = topic, pollTimeout: Int = 1000): Future[Any] = {
     executor.submit(CoreUtils.runnable {
       try {
         consumer.subscribe(Collections.singletonList(topic))
-        consumer.poll(0)
+        consumer.poll(java.time.Duration.ofMillis(pollTimeout))
       } catch {
         case e: Exception => onException.apply(e)
       }
@@ -549,7 +551,8 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     assertEquals(numRecords, received)
   }
 
-  private def receiveAtLeastRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long): Unit = {
+  @throws(classOf[CommitFailedException])
+  private def receiveAndCommit(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long): Unit = {
     val received = receiveRecords(consumer, numRecords, timeoutMs)
     assertTrue(s"Received $received, expected at least $numRecords", numRecords <= received)
     consumer.commitSync()

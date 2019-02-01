@@ -159,8 +159,7 @@ public class AbstractCoordinatorTest {
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertEquals(String.format("Consumer group %s already has the configured maximum number of members.", GROUP_ID),
-                future.exception().getMessage());
+        assertTrue(future.exception().getClass().isInstance(Errors.GROUP_MAX_SIZE_REACHED.exception()));
         assertFalse(future.isRetriable());
     }
 
