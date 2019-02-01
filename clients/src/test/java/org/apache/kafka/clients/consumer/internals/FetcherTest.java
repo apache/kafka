@@ -118,6 +118,7 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
@@ -876,8 +877,8 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.FENCED_LEADER_EPOCH, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        assertEquals(0, fetcher.fetchedRecords().size());
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals("Should not return any records", 0, fetcher.fetchedRecords().size());
+        assertEquals("Should have requested metadata update", 0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
     @Test
@@ -889,8 +890,8 @@ public class FetcherTest {
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.UNKNOWN_LEADER_EPOCH, 100L, 0));
         consumerClient.poll(time.timer(0));
 
-        assertEquals(0, fetcher.fetchedRecords().size());
-        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
+        assertEquals("Should not return any records", 0, fetcher.fetchedRecords().size());
+        assertNotEquals("Should not have requested metadata update", 0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
     @Test
