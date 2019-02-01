@@ -726,7 +726,6 @@ public class KStreamAggregationIntegrationTest {
                    @Override
                    public void close() {}
                });
-
         startStreams();
         assertTrue(latch.await(30, TimeUnit.SECONDS));
         assertThat(results.get(new Windowed<>("bob", new UnlimitedWindow(startTime))), equalTo(KeyValue.pair(2L, t4)));

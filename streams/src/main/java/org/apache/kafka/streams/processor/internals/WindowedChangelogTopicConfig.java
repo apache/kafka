@@ -42,7 +42,7 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
     }
 
     /**
-     * Get the configured properties for this topic. If rententionMs is set then
+     * Get the configured properties for this topic. If retentionMs is set then
      * we add additionalRetentionMs to work out the desired retention when cleanup.policy=compact,delete
      *
      * @param additionalRetentionMs - added to retention to allow for clock drift etc
@@ -57,7 +57,13 @@ public class WindowedChangelogTopicConfig extends InternalTopicConfig {
         topicConfig.putAll(topicConfigs);
 
         if (retentionMs != null) {
-            topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionMs + additionalRetentionMs));
+            long retentionValue;
+            try {
+                retentionValue = Math.addExact(retentionMs, additionalRetentionMs);
+            } catch (final ArithmeticException swallow) {
+                retentionValue = Long.MAX_VALUE;
+            }
+            topicConfig.put(TopicConfig.RETENTION_MS_CONFIG, String.valueOf(retentionValue));
         }
 
         return topicConfig;

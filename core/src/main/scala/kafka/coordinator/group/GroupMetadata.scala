@@ -184,6 +184,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  private val pendingMembers = new mutable.HashSet[String]
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -212,7 +213,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     assert(groupId == member.groupId)
     assert(this.protocolType.orNull == member.protocolType)
-    assert(supportsProtocols(member.protocols))
+    assert(supportsProtocols(member.protocolType, MemberMetadata.plainProtocolSet(member.supportedProtocols)))
 
     if (leaderId.isEmpty)
       leaderId = Some(member.memberId)
@@ -239,11 +240,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
+  def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
+
+  def addPendingMember(memberId: String) = pendingMembers.add(memberId)
+
+  def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
+
   def currentState = state
 
   def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
 
-  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin
+  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 
@@ -253,7 +260,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     timeout.max(member.rebalanceTimeoutMs)
   }
 
-  // TODO: decide if ids should be predictable or random
   def generateMemberIdSuffix = UUID.randomUUID().toString
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
@@ -287,9 +293,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
   }
 
-  def supportsProtocols(memberProtocols: Set[String]) = {
-    val numMembers = members.size
-    members.isEmpty || memberProtocols.exists(supportedProtocols(_) == numMembers)
+  def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]) = {
+    if (is(Empty))
+      !memberProtocolType.isEmpty && memberProtocols.nonEmpty
+    else
+      protocolType.contains(memberProtocolType) && memberProtocols.exists(supportedProtocols(_) == members.size)
   }
 
   def updateMember(member: MemberMetadata,

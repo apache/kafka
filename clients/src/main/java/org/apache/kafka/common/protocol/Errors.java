@@ -59,6 +59,7 @@ import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -71,6 +72,7 @@ import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -294,7 +296,11 @@ public enum Errors {
             StaleBrokerEpochException::new),
     OFFSET_NOT_AVAILABLE(78, "The leader high watermark has not caught up from a recent leader " +
             "election so the offsets cannot be guaranteed to be monotonically increasing",
-            OffsetNotAvailableException::new);
+            OffsetNotAvailableException::new),
+    MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering a consumer group",
+            MemberIdRequiredException::new),
+    PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
+            PreferredLeaderNotAvailableException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

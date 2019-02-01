@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 
 import java.nio.ByteBuffer;
@@ -34,11 +33,6 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     private static final int TIMESTAMP_SIZE = 8;
     private static final int SUFFIX_SIZE = TIMESTAMP_SIZE + SEQNUM_SIZE;
     private static final byte[] MIN_SUFFIX = new byte[SUFFIX_SIZE];
-
-    @Override
-    public void init(final String topic) {
-        // nothing to do
-    }
 
     @Override
     public Bytes upperRange(final Bytes key, final long to) {
@@ -71,29 +65,31 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
     }
 
     @Override
-    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom, final Bytes binaryKeyTo, final long from, final long to) {
-        return new HasNextCondition() {
-            @Override
-            public boolean hasNext(final KeyValueIterator<Bytes, ?> iterator) {
-                while (iterator.hasNext()) {
-                    final Bytes bytes = iterator.peekNextKey();
-                    final Bytes keyBytes = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(bytes.get()));
-                    final long time = WindowKeySchema.extractStoreTimestamp(bytes.get());
-                    if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
-                        && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
-                        && time >= from
-                        && time <= to) {
-                        return true;
-                    }
-                    iterator.next();
+    public HasNextCondition hasNextCondition(final Bytes binaryKeyFrom,
+                                             final Bytes binaryKeyTo,
+                                             final long from,
+                                             final long to) {
+        return iterator -> {
+            while (iterator.hasNext()) {
+                final Bytes bytes = iterator.peekNextKey();
+                final Bytes keyBytes = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(bytes.get()));
+                final long time = WindowKeySchema.extractStoreTimestamp(bytes.get());
+                if ((binaryKeyFrom == null || keyBytes.compareTo(binaryKeyFrom) >= 0)
+                    && (binaryKeyTo == null || keyBytes.compareTo(binaryKeyTo) <= 0)
+                    && time >= from
+                    && time <= to) {
+                    return true;
                 }
-                return false;
+                iterator.next();
             }
+            return false;
         };
     }
 
     @Override
-    public List<Segment> segmentsToSearch(final Segments segments, final long from, final long to) {
+    public <S extends Segment> List<S> segmentsToSearch(final Segments<S> segments,
+                                                        final long from,
+                                                        final long to) {
         return segments.segments(from, to);
     }
 
@@ -101,8 +97,8 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
      * Safely construct a time window of the given size,
      * taking care of bounding endMs to Long.MAX_VALUE if necessary
      */
-    public static TimeWindow timeWindowForSize(final long startMs,
-                                               final long windowSize) {
+    static TimeWindow timeWindowForSize(final long startMs,
+                                        final long windowSize) {
         final long endMs = startMs + windowSize;
         return new TimeWindow(startMs, endMs < 0 ? Long.MAX_VALUE : endMs);
     }
@@ -180,24 +176,24 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return Bytes.wrap(buf.array());
     }
 
-    public static byte[] extractStoreKeyBytes(final byte[] binaryKey) {
+    static byte[] extractStoreKeyBytes(final byte[] binaryKey) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return bytes;
     }
 
-    public static <K> K extractStoreKey(final byte[] binaryKey,
-                                        final StateSerdes<K, ?> serdes) {
+    static <K> K extractStoreKey(final byte[] binaryKey,
+                                 final StateSerdes<K, ?> serdes) {
         final byte[] bytes = new byte[binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE];
         System.arraycopy(binaryKey, 0, bytes, 0, bytes.length);
         return serdes.keyFrom(bytes);
     }
 
-    public static long extractStoreTimestamp(final byte[] binaryKey) {
+    static long extractStoreTimestamp(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
     }
 
-    public static int extractStoreSequence(final byte[] binaryKey) {
+    static int extractStoreSequence(final byte[] binaryKey) {
         return ByteBuffer.wrap(binaryKey).getInt(binaryKey.length - SEQNUM_SIZE);
     }
 
@@ -210,15 +206,15 @@ public class WindowKeySchema implements RocksDBSegmentedBytesStore.KeySchema {
         return new Windowed<>(key, window);
     }
 
-    public static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
-                                               final long windowSize) {
+    static Windowed<Bytes> fromStoreBytesKey(final byte[] binaryKey,
+                                             final long windowSize) {
         final Bytes key = Bytes.wrap(extractStoreKeyBytes(binaryKey));
         final Window window = extractStoreWindow(binaryKey, windowSize);
         return new Windowed<>(key, window);
     }
 
-    public static Window extractStoreWindow(final byte[] binaryKey,
-                                            final long windowSize) {
+    static Window extractStoreWindow(final byte[] binaryKey,
+                                     final long windowSize) {
         final ByteBuffer buffer = ByteBuffer.wrap(binaryKey);
         final long start = buffer.getLong(binaryKey.length - TIMESTAMP_SIZE - SEQNUM_SIZE);
         return timeWindowForSize(start, windowSize);

@@ -38,6 +38,7 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidTopicException;
@@ -50,6 +51,9 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.requests.CreateAclsResponse;
@@ -67,6 +71,7 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse;
 import org.apache.kafka.common.requests.DescribeAclsResponse;
 import org.apache.kafka.common.requests.DescribeConfigsResponse;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
+import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -631,6 +636,55 @@ public class KafkaAdminClientTest {
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);
+        }
+    }
+
+    @Test
+    public void testElectPreferredLeaders()  throws Exception {
+        TopicPartition topic1 = new TopicPartition("topic", 0);
+        TopicPartition topic2 = new TopicPartition("topic", 2);
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Test a call where one partition has an error.
+            ApiError value = ApiError.fromThrowable(new ClusterAuthorizationException(null));
+            ElectPreferredLeadersResponseData responseData = new ElectPreferredLeadersResponseData();
+            ReplicaElectionResult r = new ReplicaElectionResult().setTopic(topic1.topic());
+            r.partitionResult().add(new PartitionResult()
+                    .setPartitionId(topic1.partition())
+                    .setErrorCode(ApiError.NONE.error().code())
+                    .setErrorMessage(ApiError.NONE.message()));
+            r.partitionResult().add(new PartitionResult()
+                    .setPartitionId(topic2.partition())
+                    .setErrorCode(value.error().code())
+                    .setErrorMessage(value.message()));
+            responseData.replicaElectionResults().add(r);
+            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(responseData));
+            ElectPreferredLeadersResult results = env.adminClient().electPreferredLeaders(asList(topic1, topic2));
+            results.partitionResult(topic1).get();
+            TestUtils.assertFutureError(results.partitionResult(topic2), ClusterAuthorizationException.class);
+            TestUtils.assertFutureError(results.all(), ClusterAuthorizationException.class);
+
+            // Test a call where there are no errors.
+            r.partitionResult().clear();
+            r.partitionResult().add(new PartitionResult()
+                    .setPartitionId(topic1.partition())
+                    .setErrorCode(ApiError.NONE.error().code())
+                    .setErrorMessage(ApiError.NONE.message()));
+            r.partitionResult().add(new PartitionResult()
+                    .setPartitionId(topic2.partition())
+                    .setErrorCode(ApiError.NONE.error().code())
+                    .setErrorMessage(ApiError.NONE.message()));
+            env.kafkaClient().prepareResponse(new ElectPreferredLeadersResponse(responseData));
+
+            results = env.adminClient().electPreferredLeaders(asList(topic1, topic2));
+            results.partitionResult(topic1).get();
+            results.partitionResult(topic2).get();
+
+            // Now try a timeout
+            results = env.adminClient().electPreferredLeaders(asList(topic1, topic2), new ElectPreferredLeadersOptions().timeoutMs(100));
+            TestUtils.assertFutureError(results.partitionResult(topic1), TimeoutException.class);
+            TestUtils.assertFutureError(results.partitionResult(topic2), TimeoutException.class);
         }
     }
 

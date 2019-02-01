@@ -94,5 +94,6 @@ public interface WrappedStateStore extends StateStore {
         public StateStore wrappedStore() {
             return innerState;
         }
+
     }
 }

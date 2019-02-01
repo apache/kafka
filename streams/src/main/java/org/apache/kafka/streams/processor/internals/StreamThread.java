@@ -754,7 +754,8 @@ public class StreamThread extends Thread {
             runLoop();
             cleanRun = true;
         } catch (final KafkaException e) {
-            // just re-throw the exception as it should be logged already
+            log.error("Encountered the following unexpected Kafka exception during processing, " +
+                "this usually indicate Streams internal errors:", e);
             throw e;
         } catch (final Exception e) {
             // we have caught all Kafka related exceptions, and other runtime exceptions

@@ -36,6 +36,40 @@ metadata_2_versions = [str(LATEST_0_10_1), str(LATEST_0_10_2), str(LATEST_0_11_0
 backward_compatible_metadata_2_versions = [str(LATEST_0_10_2), str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1)]
 metadata_3_or_higher_versions = [str(LATEST_2_0), str(LATEST_2_1), str(DEV_VERSION)]
 
+"""
+After each release one should first check that the released version has been uploaded to 
+https://s3-us-west-2.amazonaws.com/kafka-packages/ which is the url used by system test to download jars; 
+anyone can verify that by calling 
+curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
+and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
+
+This test needs to get updated, but this requires several steps
+which are outlined here:
+
+1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
+   release and bumping all relevant already released versions.
+   
+2. Add the new version to the "kafkatest.version" import above and include the version in the 
+   broker_upgrade_versions list above.  You'll also need to add the new version to the 
+   "StreamsUpgradeTestJobRunnerService" on line 484 to make sure the correct arguments are passed
+   during the system test run.
+   
+3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
+   and all point releases for existing releases.  You only need to list the latest version in 
+   this file.
+   
+4. Then update all relevant versions in the tests/docker/Dockerfile
+
+5. Add a new "upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
+   latest system test module from the last release.  Just make sure to update the systout print
+   statement in StreamsUpgradeTest to the version for the release.  After you add the new module
+   you'll need to update settings.gradle file to include the name of the module you just created
+   for gradle to recognize the newly added module
+   
+6. Then you'll need to update any version changes in gradle/dependencies.gradle
+
+"""
+
 class StreamsUpgradeTest(Test):
     """
     Test upgrading Kafka Streams (all version combination)
@@ -139,8 +173,13 @@ class StreamsUpgradeTest(Test):
                                               timeout_sec=60,
                                               err_msg="Never saw output '%s' on" % self.processed_msg + str(processor.node.account))
 
+            # SmokeTestDriver allows up to 6 minutes to consume all
+            # records for the verification step so this timeout is set to
+            # 6 minutes (360 seconds) for consuming of verification records
+            # and a very conservative additional 2 minutes (120 seconds) to process
+            # the records in the verification step
             driver_monitor.wait_until('ALL-RECORDS-DELIVERED\|PROCESSED-MORE-THAN-GENERATED',
-                                      timeout_sec=180,
+                                      timeout_sec=480,
                                       err_msg="Never saw output '%s' on" % 'ALL-RECORDS-DELIVERED|PROCESSED-MORE-THAN-GENERATED' + str(self.driver.node.account))
 
         self.driver.stop()
