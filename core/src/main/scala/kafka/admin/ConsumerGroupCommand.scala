@@ -100,7 +100,8 @@ object ConsumerGroupCommand extends Logging {
   }
 
   def printOffsetsToReset(groupAssignmentsToReset: Map[String, Map[TopicPartition, OffsetAndMetadata]]): Unit = {
-    println("\n%-30s %-30s %-10s %-15s".format("GROUP", "TOPIC", "PARTITION", "NEW-OFFSET"))
+    if (groupAssignmentsToReset.nonEmpty)
+      println("\n%-30s %-30s %-10s %-15s".format("GROUP", "TOPIC", "PARTITION", "NEW-OFFSET"))
     for {
       (groupId, assignment) <- groupAssignmentsToReset
       (consumerAssignment, offsetAndMetadata) <- assignment
