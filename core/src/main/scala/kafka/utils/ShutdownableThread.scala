@@ -29,8 +29,13 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   private val shutdownComplete = new CountDownLatch(1)
 
   def shutdown(): Unit = {
-    initiateShutdown()
-    awaitShutdown()
+    if (this.isAlive) {
+      initiateShutdown()
+      awaitShutdown()
+    } else {
+      shutdownInitiated.countDown()
+      shutdownComplete.countDown()
+    }
   }
 
   def isShutdownComplete: Boolean = {
