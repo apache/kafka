@@ -32,7 +32,8 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.RecordConverter;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 
@@ -200,7 +201,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             final StateStore stateStore =
                 store instanceof WrappedStateStore ? ((WrappedStateStore) store).inner() : store;
             final RecordConverter recordConverter =
-                stateStore instanceof RecordConverter ? (RecordConverter) stateStore : new DefaultRecordConverter();
+                stateStore instanceof TimestampedBytesStore ? RecordConverter.converter() : record -> record;
 
             restoreState(
                 stateRestoreCallback,

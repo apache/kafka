@@ -40,6 +40,11 @@ public class ElectPreferredLeadersResponse extends AbstractResponse {
         this.data = new ElectPreferredLeadersResponseData(struct, version);
     }
 
+    public ElectPreferredLeadersResponse(Struct struct) {
+        short latestVersion = (short) (ElectPreferredLeadersResponseData.SCHEMAS.length - 1);
+        this.data = new ElectPreferredLeadersResponseData(struct, latestVersion);
+    }
+
     public ElectPreferredLeadersResponseData data() {
         return data;
     }

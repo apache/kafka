@@ -16,20 +16,16 @@
  */
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.KeyValue;
+import java.nio.ByteBuffer;
 
-/**
- * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
- */
-public interface RecordConverter {
+import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
 
-    /**
-     * Convert a given record into a key-value pair.
-     *
-     * @param record the consumer record
-     * @return the record as key-value pair
-     */
-    ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
-
+public interface TimestampedBytesStore {
+    static byte[] convertToTimestampedFormat(final byte[] plainValue) {
+        return ByteBuffer
+            .allocate(8 + plainValue.length)
+            .putLong(NO_TIMESTAMP)
+            .put(plainValue)
+            .array();
+    }
 }

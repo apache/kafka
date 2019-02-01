@@ -93,7 +93,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
         store.put(key1, value1);
 
-        assertArrayEquals(value1, (byte[]) sent.get(Bytes.wrap(SessionKeySchema.toBinary(key1))));
+        assertArrayEquals(value1, (byte[]) sent.get(SessionKeySchema.toBinary(key1)));
         EasyMock.verify(inner);
     }
 
@@ -105,7 +105,7 @@ public class ChangeLoggingSessionBytesStoreTest {
         init();
         store.remove(key1);
 
-        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key1));
+        final Bytes binaryKey = SessionKeySchema.toBinary(key1);
         assertTrue(sent.containsKey(binaryKey));
         assertNull(sent.get(binaryKey));
         EasyMock.verify(inner);
