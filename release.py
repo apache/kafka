@@ -532,11 +532,16 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
+print("updating streams quickstart pom")
 regexReplace("streams/quickstart/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart java pom")
 regexReplace("streams/quickstart/java/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart archetype pom")
 regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "")
+print("updating ducktape version.py")
 regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
     "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
+print("updating ducktape __init__.py")
 regexReplace("./tests/kafkatest/__init__.py", ".dev.*", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
