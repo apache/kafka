@@ -2,7 +2,7 @@ Trogdor
 ========================================
 Trogdor is a test framework for Apache Kafka.
 
-Trogdor can run benchmarks and other workloads.  Trogdor can also inject faults in order to stress test the system.
+Trogdor can run benchmarks and other workloads. Trogdor can also inject faults in order to stress test the system.
 
 Quickstart
 =========================================================
@@ -40,12 +40,13 @@ Now, we can submit a test job to Trogdor.
     > ./bin/trogdor.sh client createTask -t localhost:8889 -i produce0 --spec ./tests/spec/simple_produce_bench.json
     Sent CreateTaskRequest for task produce0.
 
-We can run showTask to see what the task's status is:
+We can run `showTask` to see the task's status:
 
     > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0
     Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
 
-To see the results, we use showTask with --show-status:
+To see the results, we can use `showTask` with `--show-status`:
+
     > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0 --show-status
     Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
     Status: {
