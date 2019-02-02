@@ -70,6 +70,8 @@ private[group] class MemberMetadata(val memberId: String,
   var isLeaving: Boolean = false
   var isNew: Boolean = false
 
+  def isAwaitingJoin = awaitingJoinCallback != null
+
   /**
    * Get metadata corresponding to the provided protocol.
    */
@@ -82,7 +84,7 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def shouldKeepAlive(deadlineMs: Long): Boolean = {
-    if (awaitingJoinCallback != null)
+    if (isAwaitingJoin)
       !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
     else awaitingSyncCallback != null ||
       latestHeartbeat + sessionTimeoutMs > deadlineMs
