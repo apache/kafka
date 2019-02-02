@@ -99,7 +99,7 @@ object TopicCommand extends Logging {
                                    leader: Option[Int],
                                    assignedReplicas: Seq[Int],
                                    isr: Seq[Int],
-                                   minIsr: Int,
+                                   minIsrCount: Int,
                                    markedForDeletion: Boolean,
                                    describeConfigs: Boolean)
 
@@ -119,7 +119,7 @@ object TopicCommand extends Logging {
       opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
     }
     private def hasUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
-      partitionDescription.isr.size < partitionDescription.minIsr
+      partitionDescription.isr.size < partitionDescription.minIsrCount
     }
     private def shouldPrintUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
       opts.reportUnderMinIsrPartitions && hasUnderMinIsrPartitions(partitionDescription)
@@ -228,7 +228,7 @@ object TopicCommand extends Logging {
           }
         }
         if (describeOptions.describePartitions) {
-          val computedMinIsr = if (opts.reportUnderMinIsrPartitions)
+          val computedMinIsrCount = if (opts.reportUnderMinIsrPartitions)
             allConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, td.name())).get().get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value().toInt else 0
           for (partition <- sortedPartitions) {
             val partitionDesc = PartitionDescription(
@@ -237,7 +237,7 @@ object TopicCommand extends Logging {
               leader = Option(partition.leader()).map(_.id()),
               assignedReplicas = partition.replicas().asScala.map(_.id()),
               isr = partition.isr().asScala.map(_.id()),
-              minIsr = computedMinIsr,
+              minIsrCount = computedMinIsrCount,
               markedForDeletion = false,
               describeOptions.describeConfigs
             )
@@ -368,7 +368,7 @@ object TopicCommand extends Logging {
                   leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
                   assignedReplicas,
                   isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
-                  minIsr = 0,
+                  minIsrCount = 0,
                   markedForDeletion,
                   describeOptions.describeConfigs
                 )
@@ -548,7 +548,7 @@ object TopicCommand extends Logging {
                                                             "if set when describing topics, only show under replicated partitions")
     private val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
-    private val reportUnderMinIsrPartitionsOpt = parser.accepts("under-minisr-partitions",
+    private val reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
                                                             "if set when describing topics, only show partitions whose isr count is less than the configured minimum. Not supported with the --zookeeper option.")
     private val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
