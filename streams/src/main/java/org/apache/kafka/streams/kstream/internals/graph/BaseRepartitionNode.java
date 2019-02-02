@@ -39,7 +39,7 @@ public abstract class BaseRepartitionNode<K, V> extends StreamsGraphNode {
                         final String sinkName,
                         final String repartitionTopic) {
 
-        super(nodeName, false);
+        super(nodeName);
 
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
