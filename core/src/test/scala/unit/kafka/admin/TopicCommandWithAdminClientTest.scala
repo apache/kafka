@@ -16,7 +16,6 @@
   */
 package kafka.admin
 
-import java.util
 import java.util.{Collections, Properties}
 
 import kafka.admin.TopicCommand.{AdminClientTopicService, TopicCommandOptions}
@@ -547,11 +546,11 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
   @Test
   def testDescribeUnderMinIsrPartitions(): Unit = {
-    val configMap = new util.HashMap[String, String]()
+    val configMap = new java.util.HashMap[String, String]()
     configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6")
 
     adminClient.createTopics(
-      util.Arrays.asList(new NewTopic(testTopicName, 1, 6).configs(configMap))).all().get()
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6).configs(configMap))).all().get()
     waitForTopicCreated(testTopicName)
 
     try {

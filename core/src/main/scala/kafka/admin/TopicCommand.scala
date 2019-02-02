@@ -549,7 +549,7 @@ object TopicCommand extends Logging {
     private val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
     private val reportUnderMinIsrPartitionsOpt = parser.accepts("under-minisr-partitions",
-                                                            "if set when describing topics, only show partitions whose isr count is less than the computed minimum. Not supported with the --zookeeper option.")
+                                                            "if set when describing topics, only show partitions whose isr count is less than the configured minimum. Not supported with the --zookeeper option.")
     private val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     private val ifExistsOpt = parser.accepts("if-exists",
