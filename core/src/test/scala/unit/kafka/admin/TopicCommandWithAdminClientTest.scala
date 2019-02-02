@@ -569,6 +569,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     *   (1) topic with partition under the configured min ISR count
     *   (2) topic with under-replicated partition (but not under min ISR count)
     *   (3) topic with offline partition
+    *   (4) topic with fully replicated partition
     *
     * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
     */
@@ -577,6 +578,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val underMinIsrTopic = "under-min-isr-topic"
     val notUnderMinIsrTopic = "not-under-min-isr-topic"
     val offlineTopic = "offline-topic"
+    val fullyReplicatedTopic = "fully-replicated-topic"
 
     val configMap = new java.util.HashMap[String, String]()
     configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6")
@@ -585,11 +587,13 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       java.util.Arrays.asList(
         new NewTopic(underMinIsrTopic, 1, 6).configs(configMap),
         new NewTopic(notUnderMinIsrTopic, 1, 6),
-        new NewTopic(offlineTopic, Collections.singletonMap(0, Collections.singletonList(0))))).all().get()
+        new NewTopic(offlineTopic, Collections.singletonMap(0, Collections.singletonList(0))),
+        new NewTopic(fullyReplicatedTopic, Collections.singletonMap(0, java.util.Arrays.asList(1, 2, 3))))).all().get()
 
     waitForTopicCreated(underMinIsrTopic)
     waitForTopicCreated(notUnderMinIsrTopic)
     waitForTopicCreated(offlineTopic)
+    waitForTopicCreated(fullyReplicatedTopic)
 
     try {
       killBroker(0)
