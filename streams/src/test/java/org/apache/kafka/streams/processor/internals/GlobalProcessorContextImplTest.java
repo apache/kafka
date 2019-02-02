@@ -129,9 +129,4 @@ public class GlobalProcessorContextImplTest {
     public void shouldNotAllowToSchedulePunctuations() {
         globalContext.schedule(null, null, null);
     }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldNotAllowToGetStreamTime() {
-        globalContext.streamTime();
-    }
 }

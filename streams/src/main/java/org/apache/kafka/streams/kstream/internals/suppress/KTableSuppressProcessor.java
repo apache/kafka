@@ -51,6 +51,8 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
 
+    private long observedStreamTime = 0L;
+
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
                                    final String storeName,
                                    final Serde<K> keySerde,
@@ -80,6 +82,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     @Override
     public void process(final K key, final Change<V> value) {
+        observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
         buffer(key, value);
         enforceConstraints();
     }
@@ -95,7 +98,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     }
 
     private void enforceConstraints() {
-        final long streamTime = internalProcessorContext.streamTime();
+        final long streamTime = observedStreamTime;
         final long expiryTime = streamTime - suppressDurationMillis;
 
         buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);

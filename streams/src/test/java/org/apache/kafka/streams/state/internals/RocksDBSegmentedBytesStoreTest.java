@@ -80,6 +80,7 @@ public class RocksDBSegmentedBytesStoreTest {
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
     private final Window[] windows = new Window[4];
+    private Window nextSegmentWindow;
 
     @Parameter
     public SegmentedBytesStore.KeySchema schema;
@@ -97,12 +98,14 @@ public class RocksDBSegmentedBytesStoreTest {
             windows[1] = new SessionWindow(500L, 1000L);
             windows[2] = new SessionWindow(1_000L, 1_500L);
             windows[3] = new SessionWindow(30_000L, 60_000L);
+            nextSegmentWindow = new SessionWindow(segmentInterval + retention, segmentInterval + retention);
         }
         if (schema instanceof WindowKeySchema) {
             windows[0] = timeWindowForSize(10L, windowSizeForTimeWindow);
             windows[1] = timeWindowForSize(500L, windowSizeForTimeWindow);
             windows[2] = timeWindowForSize(1_000L, windowSizeForTimeWindow);
             windows[3] = timeWindowForSize(60_000L, windowSizeForTimeWindow);
+            nextSegmentWindow = timeWindowForSize(segmentInterval + retention, windowSizeForTimeWindow);
         }
 
 
@@ -414,8 +417,11 @@ public class RocksDBSegmentedBytesStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(RocksDBSegmentedBytesStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        context.setStreamTime(Math.max(retention, segmentInterval) * 2);
-        bytesStore.put(serializeKey(new Windowed<>("a", windows[0])), serializeValue(5));
+        bytesStore.put(serializeKey(new Windowed<>("dummy", nextSegmentWindow)), serializeValue(0));
+
+        final Bytes key = serializeKey(new Windowed<>("a", windows[0]));
+        final byte[] value = serializeValue(5);
+        bytesStore.put(key, value);
 
         LogCaptureAppender.unregister(appender);
 
