@@ -1,0 +1,90 @@
+name: kafka
+base: core18
+version: '2.1.0'
+summary: Apache Kafka is a distributed streaming platform
+description: |
+    Kafka is generally used for two broad classes of applications:
+    - Building real-time streaming data pipelines that reliably get data between systems or applications
+    - Building real-time streaming applications that transform or react to the streams of data 
+
+grade: stable
+confinement: strict
+
+apps:
+  kafka:
+    command: start-kafka-wrapper.bash
+    daemon: simple
+    plugs: [network, network-bind, removable-media]
+  zookeeper:
+    command: start-zookeeper-wrapper.bash
+    daemon: simple
+    plugs: [network, network-bind, removable-media]
+  topics:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: kafka-topics.sh
+  console-consumer:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: kafka-console-consumer.sh
+  console-producer:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: kafka-console-producer.sh
+  consumer-groups:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: kafka-consumer-groups.sh
+  reassign-partitions:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: kafka-reassign-partitions.sh
+  zookeeper-shell:
+    command: script-wrapper.bash
+    plugs: [network, network-bind]
+    environment:
+      _wrapper_script: zookeeper-shell.sh
+
+parts:
+  deps:
+    stage-packages:
+    - default-jre-headless
+    build-packages:
+    - default-jdk-headless
+    - unzip
+    plugin: nil
+    override-build: |-
+      # NOTE: snapcraft gradle plugin currently does not work with kafka build
+      wget -O gradle-5.1.1-bin.zip https://services.gradle.org/distributions/gradle-5.1.1-bin.zip
+      unzip gradle-5.1.1-bin.zip
+  gradle:
+    after:
+    - deps
+    plugin: nil
+    source: https://github.com/apache/kafka.git
+    source-depth: 1
+    source-tag: 2.1.0
+    override-build: |-
+      export PATH=$(pwd)/../../deps/build/gradle-5.1.1/bin:$PATH
+      gradle
+      ./gradlew releaseTarGz
+  wrapper:
+    plugin: dump
+    source: snap/local
+  install:
+    after:
+    - gradle
+    plugin: nil
+    override-build: |-
+      tarball=$(pwd)/../../gradle/build/core/build/distributions/kafka_2.11-2.1.0.tgz
+      mkdir -p $SNAPCRAFT_PART_INSTALL/opt/kafka
+      (cd $SNAPCRAFT_PART_INSTALL/opt/kafka; tar --strip-components=1 -xzvf $tarball)
+    stage:
+    - opt
+    prime:
+    - opt
