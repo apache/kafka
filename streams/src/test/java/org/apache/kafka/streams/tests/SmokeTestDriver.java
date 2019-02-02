@@ -30,23 +30,25 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.test.TestUtils;
 
-import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class SmokeTestDriver extends SmokeTestUtil {
 
@@ -75,71 +77,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
         int next() {
             return (index < values.length) ? values[index++] : -1;
         }
-    }
-
-    // This main() is not used by the system test. It is intended to be used for local debugging.
-    public static void main(final String[] args) throws InterruptedException {
-        final String kafka = "localhost:9092";
-        final File stateDir = TestUtils.tempDirectory();
-
-        final int numKeys = 20;
-        final int maxRecordsPerKey = 1000;
-
-        final Thread driver = new Thread(() -> {
-            try {
-                final Map<String, Set<Integer>> allData = generate(kafka, numKeys, maxRecordsPerKey);
-                verify(kafka, allData, maxRecordsPerKey);
-            } catch (final Exception ex) {
-                ex.printStackTrace();
-            }
-        });
-
-        final Properties props = new Properties();
-        props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "1").getAbsolutePath());
-        final SmokeTestClient streams1 = new SmokeTestClient(props);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "2").getAbsolutePath());
-        final SmokeTestClient streams2 = new SmokeTestClient(props);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "3").getAbsolutePath());
-        final SmokeTestClient streams3 = new SmokeTestClient(props);
-        props.put(StreamsConfig.STATE_DIR_CONFIG, createDir(stateDir, "4").getAbsolutePath());
-        final SmokeTestClient streams4 = new SmokeTestClient(props);
-
-        System.out.println("starting the driver");
-        driver.start();
-
-        System.out.println("starting the first and second client");
-        streams1.start();
-        streams2.start();
-
-        sleep(10000);
-
-        System.out.println("starting the third client");
-        streams3.start();
-
-        System.out.println("closing the first client");
-        streams1.close();
-        System.out.println("closed the first client");
-
-        sleep(10000);
-
-        System.out.println("starting the forth client");
-        streams4.start();
-
-        driver.join();
-
-        System.out.println("driver stopped");
-        streams2.close();
-        streams3.close();
-        streams4.close();
-
-        System.out.println("shutdown");
-    }
-
-    public static Map<String, Set<Integer>> generate(final String kafka,
-                                                     final int numKeys,
-                                                     final int maxRecordsPerKey) {
-        return generate(kafka, numKeys, maxRecordsPerKey, true);
     }
 
     public static Map<String, Set<Integer>> generate(final String kafka,
@@ -252,20 +189,32 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
-    public static void verify(final String kafka, final Map<String, Set<Integer>> allData, final int maxRecordsPerKey) {
+    public static boolean verify(final String kafka, final Map<String, Set<Integer>> allData, final int maxRecordsPerKey) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
-        final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-        final List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
+        final KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(props);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, "data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
         final int recordsGenerated = allData.size() * maxRecordsPerKey;
         int recordsProcessed = 0;
+        final Map<String, AtomicInteger> processed = Stream.of("data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg").collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
+
+        final HashMap<String, LinkedList<Integer>> dataEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Integer>> echoEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Integer>> maxEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Integer>> minEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Integer>> difEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Long>> sumEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Long>> cntEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Double>> avgEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Long>> wcntEvents = new HashMap<>();
+        final HashMap<String, LinkedList<Long>> taggEvents = new HashMap<>();
 
         final HashMap<String, Integer> max = new HashMap<>();
         final HashMap<String, Integer> min = new HashMap<>();
@@ -280,65 +229,96 @@ public class SmokeTestDriver extends SmokeTestUtil {
         final HashMap<String, Set<Integer>> received = new HashMap<>();
         for (final String key : allData.keySet()) {
             keys.add(key);
-            received.put(key, new HashSet<Integer>());
+            received.put(key, new HashSet<>());
         }
         int retry = 0;
         final long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
+            final ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(500));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                if (verifyMin(min, allData, false)
-                    && verifyMax(max, allData, false)
-                    && verifyDif(dif, allData, false)
-                    && verifySum(sum, allData, false)
-                    && verifyCnt(cnt, allData, false)
-                    && verifyAvg(avg, allData, false)
-                    && verifyTAgg(tagg, allData, false)) {
+                if (verifyMin(min, allData, false, dataEvents, minEvents)
+                    && verifyMax(max, allData, false, dataEvents, maxEvents)
+                    && verifyDif(dif, allData, false, dataEvents, difEvents)
+                    && verifySum(sum, allData, false, dataEvents, sumEvents)
+                    && verifyCnt(cnt, allData, false, dataEvents, cntEvents)
+                    && verifyAvg(avg, allData, false, dataEvents, avgEvents)
+                    && verifyTAgg(tagg, allData, false, dataEvents, taggEvents)) {
                     break;
                 }
                 if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
                     break;
                 }
             } else {
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    final String key = stringSerde.deserializer().deserialize("", record.key());
+                for (final ConsumerRecord<String, byte[]> record : records) {
+                    final String key = record.key();
+                    processed.get(record.topic()).incrementAndGet();
                     switch (record.topic()) {
-                        case "echo":
-                            final Integer value = intSerde.deserializer().deserialize("", record.value());
+                        case "data": {
+                            addEvent(key, dataEvents, intSerde.deserializer().deserialize("", record.value()));
+                            break;
+                        }
+                        case "echo": {
                             recordsProcessed++;
                             if (recordsProcessed % 100 == 0) {
                                 System.out.println("Echo records processed = " + recordsProcessed);
                             }
-                            received.get(key).add(value);
+                            final Integer deserialize = intSerde.deserializer().deserialize("", record.value());
+                            received.get(key).add(deserialize);
+                            addEvent(key, echoEvents, deserialize);
                             break;
-                        case "min":
-                            min.put(key, intSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "min": {
+                            final Integer deserialize = intSerde.deserializer().deserialize("", record.value());
+                            min.put(key, deserialize);
+                            addEvent(key, minEvents, deserialize);
                             break;
-                        case "max":
-                            max.put(key, intSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "max": {
+                            final Integer deserialize = intSerde.deserializer().deserialize("", record.value());
+                            max.put(key, deserialize);
+                            addEvent(key, maxEvents, deserialize);
                             break;
-                        case "dif":
-                            dif.put(key, intSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "dif": {
+                            final Integer deserialize = intSerde.deserializer().deserialize("", record.value());
+                            dif.put(key, deserialize);
+                            addEvent(key, difEvents, deserialize);
                             break;
-                        case "sum":
-                            sum.put(key, longSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "sum": {
+                            final Long deserialize = longSerde.deserializer().deserialize("", record.value());
+                            sum.put(key, deserialize);
                             break;
-                        case "cnt":
-                            cnt.put(key, longSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "cnt": {
+                            final Long deserialize = longSerde.deserializer().deserialize("", record.value());
+                            cnt.put(key, deserialize);
+                            addEvent(key, cntEvents, deserialize);
                             break;
-                        case "avg":
-                            avg.put(key, doubleSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "avg": {
+                            final Double deserialize = doubleSerde.deserializer().deserialize("", record.value());
+                            avg.put(key, deserialize);
+                            addEvent(key, avgEvents, deserialize);
                             break;
-                        case "wcnt":
-                            wcnt.put(key, longSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "wcnt": {
+                            final Long deserialize = longSerde.deserializer().deserialize("", record.value());
+                            wcnt.put(key, deserialize);
+                            addEvent(key, wcntEvents, deserialize);
                             break;
-                        case "tagg":
-                            tagg.put(key, longSerde.deserializer().deserialize("", record.value()));
+                        }
+                        case "tagg": {
+                            final Long deserialize = longSerde.deserializer().deserialize("", record.value());
+                            tagg.put(key, deserialize);
+                            addEvent(key, taggEvents, deserialize);
                             break;
+                        }
                         default:
                             System.out.println("unknown topic: " + record.topic());
                     }
                 }
+                System.out.println(processed);
             }
         }
         consumer.close();
@@ -369,18 +349,30 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("missedRecords=" + missedCount);
         }
 
-        success &= verifyMin(min, allData, true);
-        success &= verifyMax(max, allData, true);
-        success &= verifyDif(dif, allData, true);
-        success &= verifySum(sum, allData, true);
-        success &= verifyCnt(cnt, allData, true);
-        success &= verifyAvg(avg, allData, true);
-        success &= verifyTAgg(tagg, allData, true);
+        success &= verifyMin(min, allData, true, dataEvents, minEvents);
+        success &= verifyMax(max, allData, true, dataEvents, maxEvents);
+        success &= verifyDif(dif, allData, true, dataEvents, difEvents);
+        success &= verifySum(sum, allData, true, dataEvents, sumEvents);
+        success &= verifyCnt(cnt, allData, true, dataEvents, cntEvents);
+        success &= verifyAvg(avg, allData, true, dataEvents, avgEvents);
+        success &= verifyTAgg(tagg, allData, true, dataEvents, taggEvents);
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
+        return success;
     }
 
-    private static boolean verifyMin(final Map<String, Integer> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static <V> void addEvent(final String key, final HashMap<String, LinkedList<V>> eventsMap, final V value) {
+        if (!eventsMap.containsKey(key)) {
+            eventsMap.put(key, new LinkedList<>());
+        }
+        eventsMap.get(key).add(value);
+    }
+
+    private static boolean verifyMin(final Map<String, Integer> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Integer>> minEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("min is empty");
@@ -398,10 +390,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 return false;
             }
             for (final Map.Entry<String, Integer> entry : map.entrySet()) {
-                final int expected = getMin(entry.getKey());
+                final String key = entry.getKey();
+                final int expected = getMin(key);
                 if (expected != entry.getValue()) {
                     if (print) {
-                        System.out.println("fail: key=" + entry.getKey() + " min=" + entry.getValue() + " expected=" + expected);
+                        System.out.printf("fail: key=%s min=%d expected=%d%n\tdata=%s%n\tmins=%s%n",
+                                          key,
+                                          entry.getValue(),
+                                          expected,
+                                          dataEvents.get(key),
+                                          minEvents.get(key));
                     }
                     return false;
                 }
@@ -410,7 +408,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return true;
     }
 
-    private static boolean verifyMax(final Map<String, Integer> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifyMax(final Map<String, Integer> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Integer>> maxEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("max is empty");
@@ -428,10 +430,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 return false;
             }
             for (final Map.Entry<String, Integer> entry : map.entrySet()) {
-                final int expected = getMax(entry.getKey());
+                final String key = entry.getKey();
+                final int expected = getMax(key);
                 if (expected != entry.getValue()) {
                     if (print) {
-                        System.out.println("fail: key=" + entry.getKey() + " max=" + entry.getValue() + " expected=" + expected);
+                        System.out.printf("fail: key=%s max=%d expected=%d%n\tdata=%s%n\tmaxs=%s%n",
+                                          key,
+                                          entry.getValue(),
+                                          expected,
+                                          dataEvents.get(key),
+                                          maxEvents.get(key));
                     }
                     return false;
                 }
@@ -440,7 +448,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return true;
     }
 
-    private static boolean verifyDif(final Map<String, Integer> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifyDif(final Map<String, Integer> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Integer>> difEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("dif is empty");
@@ -458,12 +470,18 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 return false;
             }
             for (final Map.Entry<String, Integer> entry : map.entrySet()) {
-                final int min = getMin(entry.getKey());
-                final int max = getMax(entry.getKey());
+                final String key = entry.getKey();
+                final int min = getMin(key);
+                final int max = getMax(key);
                 final int expected = max - min;
                 if (entry.getValue() == null || expected != entry.getValue()) {
                     if (print) {
-                        System.out.println("fail: key=" + entry.getKey() + " dif=" + entry.getValue() + " expected=" + expected);
+                        System.out.printf("fail: key=%s dif=%d expected=%d%n\tdata=%s%n\tdifs=%s%n",
+                                          key,
+                                          entry.getValue(),
+                                          expected,
+                                          dataEvents.get(key),
+                                          difEvents.get(key));
                     }
                     return false;
                 }
@@ -472,7 +490,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return true;
     }
 
-    private static boolean verifyCnt(final Map<String, Long> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifyCnt(final Map<String, Long> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Long>> cntEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("cnt is empty");
@@ -490,12 +512,18 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 return false;
             }
             for (final Map.Entry<String, Long> entry : map.entrySet()) {
-                final int min = getMin(entry.getKey());
-                final int max = getMax(entry.getKey());
+                final String key = entry.getKey();
+                final int min = getMin(key);
+                final int max = getMax(key);
                 final long expected = (max - min) + 1L;
                 if (expected != entry.getValue()) {
                     if (print) {
-                        System.out.println("fail: key=" + entry.getKey() + " cnt=" + entry.getValue() + " expected=" + expected);
+                        System.out.printf("fail: key=%s cnt=%d expected=%d%n\tdata=%s%n\tcnts=%s%n",
+                                          key,
+                                          entry.getValue(),
+                                          expected,
+                                          dataEvents.get(key),
+                                          cntEvents.get(key));
                     }
                     return false;
                 }
@@ -504,7 +532,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return true;
     }
 
-    private static boolean verifySum(final Map<String, Long> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifySum(final Map<String, Long> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Long>> sumEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("sum is empty");
@@ -536,7 +568,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return true;
     }
 
-    private static boolean verifyAvg(final Map<String, Double> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifyAvg(final Map<String, Double> map,
+                                     final Map<String, Set<Integer>> allData,
+                                     final boolean print,
+                                     final HashMap<String, LinkedList<Integer>> dataEvents,
+                                     final HashMap<String, LinkedList<Double>> avgEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("avg is empty");
@@ -570,7 +606,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
 
-    private static boolean verifyTAgg(final Map<String, Long> map, final Map<String, Set<Integer>> allData, final boolean print) {
+    private static boolean verifyTAgg(final Map<String, Long> map,
+                                      final Map<String, Set<Integer>> allData,
+                                      final boolean print,
+                                      final HashMap<String, LinkedList<Integer>> dataEvents,
+                                      final HashMap<String, LinkedList<Long>> taggEvents) {
         if (map.isEmpty()) {
             if (print) {
                 System.out.println("tagg is empty");

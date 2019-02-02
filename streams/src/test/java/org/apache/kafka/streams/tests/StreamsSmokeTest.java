@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamsSmokeTest {
 
@@ -56,9 +58,6 @@ public class StreamsSmokeTest {
         System.out.println("disableAutoTerminate=" + disableAutoTerminate);
 
         switch (command) {
-            case "standalone":
-                SmokeTestDriver.main(args);
-                break;
             case "run":
                 // this starts the driver (data generation and result verification)
                 final int numKeys = 10;
@@ -66,14 +65,14 @@ public class StreamsSmokeTest {
                 if (disableAutoTerminate) {
                     SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, false);
                 } else {
-                    final Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey);
+                    final Map<String, Set<Integer>> allData = SmokeTestDriver.generate(kafka, numKeys, maxRecordsPerKey, true);
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;
             case "process":
                 // this starts a KafkaStreams client
-                final SmokeTestClient client = new SmokeTestClient(streamsProperties);
-                client.start();
+                final SmokeTestClient client = new SmokeTestClient(UUID.randomUUID().toString());
+                client.start(streamsProperties);
                 break;
             case "close-deadlock-test":
                 final ShutdownDeadlockTest test = new ShutdownDeadlockTest(kafka);

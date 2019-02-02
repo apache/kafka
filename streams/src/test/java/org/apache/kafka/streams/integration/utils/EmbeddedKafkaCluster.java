@@ -42,7 +42,7 @@ import java.util.Set;
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
  */
-public class EmbeddedKafkaCluster extends ExternalResource {
+public class EmbeddedKafkaCluster extends ExternalResource implements AutoCloseable {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
@@ -115,7 +115,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     /**
      * Stop the Kafka cluster.
      */
-    private void stop() {
+    public void stop() {
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
@@ -148,6 +148,11 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     @Override
     protected void after() {
+        stop();
+    }
+
+    @Override
+    public void close() {
         stop();
     }
 
@@ -297,6 +302,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
     public void waitForRemainingTopics(final long timeoutMs, final String... topics) throws InterruptedException {
         TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
     }
+
 
     private final class TopicsDeletedCondition implements TestCondition {
         final Set<String> deletedTopics = new HashSet<>();
