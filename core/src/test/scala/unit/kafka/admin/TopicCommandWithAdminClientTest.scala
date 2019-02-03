@@ -536,7 +536,6 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       killBroker(0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
-      println(output)
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
     } finally {
@@ -565,7 +564,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   /**
-    * Test describe --under-min-isr-partitions option with three topics:
+    * Test describe --under-min-isr-partitions option with four topics:
     *   (1) topic with partition under the configured min ISR count
     *   (2) topic with under-replicated partition (but not under min ISR count)
     *   (3) topic with offline partition
