@@ -44,7 +44,7 @@ public class StreamsBrokerDownResilienceTest {
 
     private static final String SINK_TOPIC = "streamsResilienceSink";
 
-    public static void main(String[] args) throws IOException {
+    public static void main(final String[] args) throws IOException {
         if (args.length < 1) {
             System.err.println("StreamsBrokerDownResilienceTest is expecting one parameter: propFile; but currently sees " + args.length + " parameter(s)");
             System.exit(1);
