@@ -23,7 +23,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -340,7 +339,10 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final Map<K, Change<V>> forwarded = new HashMap<>();
 
         @Override
-        public void apply(final K key, final V newValue, final V oldValue) {
+        public void apply(final K key,
+                          final V newValue,
+                          final V oldValue,
+                          final long timestamp) {
             forwarded.put(key, new Change<>(newValue, oldValue));
         }
     }

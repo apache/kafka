@@ -166,4 +166,14 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         responseStruct.set(TOPICS, topics.toArray());
         return responseStruct;
     }
+
+    @Override
+    public String toString() {
+        StringBuilder bld = new StringBuilder();
+        bld.append("(type=OffsetsForLeaderEpochResponse, ")
+            .append(", throttleTimeMs=").append(throttleTimeMs)
+            .append(", epochEndOffsetsByPartition=").append(epochEndOffsetsByPartition)
+            .append(")");
+        return bld.toString();
+    }
 }

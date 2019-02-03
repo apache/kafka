@@ -577,6 +577,18 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testSequenceNumberOverflow() {
+        TransactionManager transactionManager = new TransactionManager();
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        transactionManager.incrementSequenceNumber(tp0, 100);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 99);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 98);
+    }
+
+    @Test
     public void testProducerIdReset() {
         TransactionManager transactionManager = new TransactionManager();
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);

@@ -22,35 +22,57 @@ import java.util.Iterator;
 import java.util.NoSuchElementException;
 
 /**
- * A LinkedHashSet which is more memory-efficient than the standard implementation.
+ * A memory-efficient hash set which tracks the order of insertion of elements.
  *
- * This set preserves the order of insertion.  The order of iteration will always be
- * the order of insertion.
+ * Like java.util.LinkedHashSet, this collection maintains a linked list of elements.
+ * However, rather than using a separate linked list, this collection embeds the next
+ * and previous fields into the elements themselves.  This reduces memory consumption,
+ * because it means that we only have to store one Java object per element, rather
+ * than multiple.
  *
- * This collection requires previous and next indexes to be embedded into each
- * element.  Using array indices rather than pointers saves space on large heaps
- * where pointer compression is not in use.  It also reduces the amount of time
- * the garbage collector has to spend chasing pointers.
+ * The next and previous fields are stored as array indices rather than pointers.
+ * This ensures that the fields only take 32 bits, even when pointers are 64 bits.
+ * It also makes the garbage collector's job easier, because it reduces the number of
+ * pointers that it must chase.
  *
  * This class uses linear probing.  Unlike HashMap (but like HashTable), we don't force
  * the size to be a power of 2.  This saves memory.
  *
- * This class does not have internal synchronization.
+ * This set does not allow null elements.  It does not have internal synchronization.
  */
-@SuppressWarnings("unchecked")
 public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> extends AbstractSet<E> {
     public interface Element {
         int prev();
-        void setPrev(int e);
+        void setPrev(int prev);
         int next();
-        void setNext(int e);
+        void setNext(int next);
     }
 
+    /**
+     * A special index value used to indicate that the next or previous field is
+     * the head.
+     */
     private static final int HEAD_INDEX = -1;
 
+    /**
+     * A special index value used for next and previous indices which have not
+     * been initialized.
+     */
     public static final int INVALID_INDEX = -2;
 
+    /**
+     * The minimum new capacity for a non-empty implicit hash set.
+     */
+    private static final int MIN_NONEMPTY_CAPACITY = 5;
+
+    /**
+     * A static empty array used to avoid object allocations when the capacity is zero.
+     */
+    private static final Element[] EMPTY_ELEMENTS = new Element[0];
+
     private static class HeadElement implements Element {
+        static final HeadElement EMPTY = new HeadElement();
+
         private int prev = HEAD_INDEX;
         private int next = HEAD_INDEX;
 
@@ -122,7 +144,9 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
             }
             cur = next;
             next = indexToElement(head, elements, cur.next());
-            return (E) cur;
+            @SuppressWarnings("unchecked")
+            E returnValue = (E) cur;
+            return returnValue;
         }
 
         @Override
@@ -137,16 +161,23 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
 
     private Element head;
 
-    private Element[] elements;
+    Element[] elements;
 
     private int size;
 
+    /**
+     * Returns an iterator that will yield every element in the set.
+     * The elements will be returned in the order that they were inserted in.
+     *
+     * Do not modify the set while you are iterating over it (except by calling
+     * remove on the iterator itself, of course.)
+     */
     @Override
-    public Iterator<E> iterator() {
+    final public Iterator<E> iterator() {
         return new ImplicitLinkedHashSetIterator();
     }
 
-    private static int slot(Element[] curElements, Element e) {
+    final int slot(Element[] curElements, Object e) {
         return (e.hashCode() & 0x7fffffff) % curElements.length;
     }
 
@@ -158,17 +189,20 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
      * Therefore, we must search forward in the array until we hit a null, before
      * concluding that the element is not present.
      *
-     * @param example   The element to match.
-     * @return          The match index, or INVALID_INDEX if no match was found.
+     * @param key               The element to match.
+     * @return                  The match index, or INVALID_INDEX if no match was found.
      */
-    private int findIndex(E example) {
-        int slot = slot(elements, example);
+    final private int findIndexOfEqualElement(Object key) {
+        if (key == null) {
+            return INVALID_INDEX;
+        }
+        int slot = slot(elements, key);
         for (int seen = 0; seen < elements.length; seen++) {
             Element element = elements[slot];
             if (element == null) {
                 return INVALID_INDEX;
             }
-            if (element.equals(example)) {
+            if (key.equals(element)) {
                 return slot;
             }
             slot = (slot + 1) % elements.length;
@@ -177,43 +211,66 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
     }
 
     /**
-     * Find the element which equals() the given example element.
+     * An element e in the collection such that e.equals(key) and
+     * e.hashCode() == key.hashCode().
      *
-     * @param example   The example element.
-     * @return          Null if no element was found; the element, otherwise.
+     * @param key   The element to match.
+     * @return      The matching element, or null if there were none.
      */
-    public E find(E example) {
-        int index = findIndex(example);
+    final public E find(E key) {
+        int index = findIndexOfEqualElement(key);
         if (index == INVALID_INDEX) {
             return null;
         }
-        return (E) elements[index];
+        @SuppressWarnings("unchecked")
+        E result = (E) elements[index];
+        return result;
     }
 
     /**
      * Returns the number of elements in the set.
      */
     @Override
-    public int size() {
+    final public int size() {
         return size;
     }
 
+    /**
+     * Returns true if there is at least one element e in the collection such
+     * that key.equals(e) and key.hashCode() == e.hashCode().
+     *
+     * @param key       The object to try to match.
+     */
     @Override
-    public boolean contains(Object o) {
-        E example = null;
-        try {
-            example = (E) o;
-        } catch (ClassCastException e) {
-            return false;
-        }
-        return find(example) != null;
+    final public boolean contains(Object key) {
+        return findIndexOfEqualElement(key) != INVALID_INDEX;
     }
 
+    private static int calculateCapacity(int expectedNumElements) {
+        // Avoid using even-sized capacities, to get better key distribution.
+        int newCapacity = (2 * expectedNumElements) + 1;
+        // Don't use a capacity that is too small.
+        if (newCapacity < MIN_NONEMPTY_CAPACITY) {
+            return MIN_NONEMPTY_CAPACITY;
+        }
+        return newCapacity;
+    }
+
+    /**
+     * Add a new element to the collection.
+     *
+     * @param newElement    The new element.
+     *
+     * @return              True if the element was added to the collection;
+     *                      false if it was not, because there was an existing equal element.
+     */
     @Override
-    public boolean add(E newElement) {
+    final public boolean add(E newElement) {
+        if (newElement == null) {
+            return false;
+        }
         if ((size + 1) >= elements.length / 2) {
-            // Avoid using even-sized capacities, to get better key distribution.
-            changeCapacity((2 * elements.length) + 1);
+            changeCapacity(calculateCapacity(elements.length));
         }
         int slot = addInternal(newElement, elements);
         if (slot >= 0) {
@@ -224,7 +281,7 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         return false;
     }
 
-    public void mustAdd(E newElement) {
+    final public void mustAdd(E newElement) {
         if (!add(newElement)) {
             throw new RuntimeException("Unable to add " + newElement);
         }
@@ -236,10 +293,9 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
      * @param newElement    The new element to add.
      * @param addElements   The elements array.
      * @return              The index at which the element was inserted, or INVALID_INDEX
-     *                      if the element could not be inserted because there was already
-     *                      an equivalent element.
+     *                      if the element could not be inserted.
      */
-    private static int addInternal(Element newElement, Element[] addElements) {
+    int addInternal(Element newElement, Element[] addElements) {
         int slot = slot(addElements, newElement);
         for (int seen = 0; seen < addElements.length; seen++) {
             Element element = addElements[slot];
@@ -270,18 +326,35 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         this.size = oldSize;
     }
 
+    /**
+     * Remove the first element e such that key.equals(e)
+     * and key.hashCode == e.hashCode.
+     *
+     * @param key       The object to try to match.
+     * @return          True if an element was removed; false otherwise.
+     */
     @Override
-    public boolean remove(Object o) {
-        E example = null;
-        try {
-            example = (E) o;
-        } catch (ClassCastException e) {
-            return false;
-        }
-        int slot = findIndex(example);
+    final public boolean remove(Object key) {
+        int slot = findElementToRemove(key);
         if (slot == INVALID_INDEX) {
             return false;
         }
+        removeElementAtSlot(slot);
+        return true;
+    }
+
+    int findElementToRemove(Object key) {
+        return findIndexOfEqualElement(key);
+    }
+
+    /**
+     * Remove an element in a particular slot.
+     *
+     * @param slot      The slot of the element to remove.
+     *
+     * @return          True if an element was removed; false otherwise.
+     */
+    private boolean removeElementAtSlot(int slot) {
         size--;
         removeFromList(head, elements, slot);
         slot = (slot + 1) % elements.length;
@@ -328,27 +401,64 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         elements[newSlot] = element;
     }
 
-    @Override
-    public void clear() {
-        reset(elements.length);
-    }
-
+    /**
+     * Create a new ImplicitLinkedHashSet.
+     */
     public ImplicitLinkedHashSet() {
-        this(5);
+        this(0);
     }
 
-    public ImplicitLinkedHashSet(int initialCapacity) {
-        reset(initialCapacity);
+    /**
+     * Create a new ImplicitLinkedHashSet.
+     *
+     * @param expectedNumElements   The number of elements we expect to have in this set.
+     *                              This is used to optimize by setting the capacity ahead
+     *                              of time rather than growing incrementally.
+     */
+    public ImplicitLinkedHashSet(int expectedNumElements) {
+        clear(expectedNumElements);
     }
 
-    private void reset(int capacity) {
-        this.head = new HeadElement();
-        // Avoid using even-sized capacities, to get better key distribution.
-        this.elements = new Element[(2 * capacity) + 1];
-        this.size = 0;
+    /**
+     * Create a new ImplicitLinkedHashSet.
+     *
+     * @param iter                  We will add all the elements accessible through this iterator
+     *                              to the set.
+     */
+    public ImplicitLinkedHashSet(Iterator<E> iter) {
+        clear(0);
+        while (iter.hasNext()) {
+            mustAdd(iter.next());
+        }
     }
 
-    int numSlots() {
+    /**
+     * Removes all of the elements from this set.
+     */
+    @Override
+    final public void clear() {
+        clear(elements.length);
+    }
+
+    /**
+     * Removes all of the elements from this set, and resets the set capacity
+     * based on the provided expected number of elements.
+     */
+    final public void clear(int expectedNumElements) {
+        if (expectedNumElements == 0) {
+            // Optimize away object allocations for empty sets.
+            this.head = HeadElement.EMPTY;
+            this.elements = EMPTY_ELEMENTS;
+            this.size = 0;
+        } else {
+            this.head = new HeadElement();
+            this.elements = new Element[calculateCapacity(expectedNumElements)];
+            this.size = 0;
+        }
+    }
+
+    // Visible for testing
+    final int numSlots() {
         return elements.length;
     }
 }

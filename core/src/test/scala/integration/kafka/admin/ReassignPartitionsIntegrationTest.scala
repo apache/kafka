@@ -12,6 +12,7 @@
   */
 package kafka.admin
 
+import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.junit.Test
@@ -32,7 +33,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
       "--replication-factor", replicationFactor.toString,
       "--disable-rack-aware",
       "--topic", "foo"))
-    kafka.admin.TopicCommand.createTopic(zkClient, createOpts)
+    new ZookeeperTopicService(zkClient).createTopic(createOpts)
 
     val topicJson = """{"topics": [{"topic": "foo"}], "version":1}"""
     val (proposedAssignment, currentAssignment) = ReassignPartitionsCommand.generateAssignment(zkClient,

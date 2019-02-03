@@ -63,35 +63,35 @@ public class StreamsBuilder {
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic name; cannot be {@code null}
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
         return stream(Collections.singleton(topic));
     }
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
      * are defined by the options in {@link Consumed} are used.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic names; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
@@ -113,7 +113,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for the specified topics
      */
     public synchronized <K, V> KStream<K, V> stream(final Collection<String> topics) {
-        return stream(topics, Consumed.<K, V>with(null, null, null, null));
+        return stream(topics, Consumed.with(null, null, null, null));
     }
 
     /**
@@ -155,7 +155,7 @@ public class StreamsBuilder {
      * @return a {@link KStream} for topics matching the regex pattern.
      */
     public synchronized <K, V> KStream<K, V> stream(final Pattern topicPattern) {
-        return stream(topicPattern, Consumed.<K, V>with(null, null));
+        return stream(topicPattern, Consumed.with(null, null));
     }
 
     /**
@@ -199,7 +199,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -250,7 +250,7 @@ public class StreamsBuilder {
      * @return a {@link KTable} for the specified topic
      */
     public synchronized <K, V> KTable<K, V> table(final String topic) {
-        return table(topic, new ConsumedInternal<K, V>());
+        return table(topic, new ConsumedInternal<>());
     }
 
     /**
@@ -356,7 +356,7 @@ public class StreamsBuilder {
      * @return a {@link GlobalKTable} for the specified topic
      */
     public synchronized <K, V> GlobalKTable<K, V> globalTable(final String topic) {
-        return globalTable(topic, Consumed.<K, V>with(null, null));
+        return globalTable(topic, Consumed.with(null, null));
     }
 
     /**
@@ -372,7 +372,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via

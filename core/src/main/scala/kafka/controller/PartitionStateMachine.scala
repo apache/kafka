@@ -125,21 +125,35 @@ class PartitionStateMachine(config: KafkaConfig,
     // It is important to trigger leader election for those partitions.
   }
 
+  /**
+    * Try to change the state of the given partitions to the given targetState, using the given
+    * partitionLeaderElectionStrategyOpt if a leader election is required.
+    * @param partitions The partitions
+    * @param targetState The state
+    * @param partitionLeaderElectionStrategyOpt The leader election strategy if a leader election is required.
+    * @return partitions and corresponding throwable for those partitions which could not transition to the given state
+    */
   def handleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState,
-                         partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Unit = {
+                         partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy] = None): Map[TopicPartition, Throwable] = {
     if (partitions.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
+        val errors = doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
+        errors
       } catch {
         case e: ControllerMovedException =>
           error(s"Controller moved to another broker when moving some partitions to $targetState state", e)
           throw e
-        case e: Throwable => error(s"Error while moving some partitions to $targetState state", e)
+        case e: Throwable =>
+          error(s"Error while moving some partitions to $targetState state", e)
+          partitions.map { _ -> e }.toMap
       }
+    } else {
+      Map.empty[TopicPartition, Throwable]
     }
   }
+
 
   def partitionsInState(state: PartitionState): Set[TopicPartition] = {
     partitionState.filter { case (_, s) => s == state }.keySet.toSet
@@ -183,7 +197,7 @@ class PartitionStateMachine(config: KafkaConfig,
    * @param targetState The end state that the partition should be moved to
    */
   private def doHandleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState,
-                           partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Unit = {
+                           partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     partitions.foreach(partition => partitionState.getOrElseUpdate(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = partitions.partition(partition => isValidTransition(partition, targetState))
@@ -195,6 +209,7 @@ class PartitionStateMachine(config: KafkaConfig,
             s"assigned replicas ${controllerContext.partitionReplicaAssignment(partition).mkString(",")}")
           changeStateTo(partition, partitionState(partition), NewPartition)
         }
+        Map.empty
       case OnlinePartition =>
         val uninitializedPartitions = validPartitions.filter(partition => partitionState(partition) == NewPartition)
         val partitionsToElectLeader = validPartitions.filter(partition => partitionState(partition) == OfflinePartition || partitionState(partition) == OnlinePartition)
@@ -207,23 +222,28 @@ class PartitionStateMachine(config: KafkaConfig,
           }
         }
         if (partitionsToElectLeader.nonEmpty) {
-          val successfulElections = electLeaderForPartitions(partitionsToElectLeader, partitionLeaderElectionStrategyOpt.get)
+          val (successfulElections, failedElections) = electLeaderForPartitions(partitionsToElectLeader, partitionLeaderElectionStrategyOpt.get)
           successfulElections.foreach { partition =>
             stateChangeLog.trace(s"Changed partition $partition from ${partitionState(partition)} to $targetState with state " +
               s"${controllerContext.partitionLeadershipInfo(partition).leaderAndIsr}")
             changeStateTo(partition, partitionState(partition), OnlinePartition)
           }
+          failedElections
+        } else {
+          Map.empty
         }
       case OfflinePartition =>
         validPartitions.foreach { partition =>
           stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
           changeStateTo(partition, partitionState(partition), OfflinePartition)
         }
+        Map.empty
       case NonExistentPartition =>
         validPartitions.foreach { partition =>
           stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
           changeStateTo(partition, partitionState(partition), NonExistentPartition)
         }
+        Map.empty
     }
   }
 
@@ -283,11 +303,14 @@ class PartitionStateMachine(config: KafkaConfig,
    * Repeatedly attempt to elect leaders for multiple partitions until there are no more remaining partitions to retry.
    * @param partitions The partitions that we're trying to elect leaders for.
    * @param partitionLeaderElectionStrategy The election strategy to use.
-   * @return The partitions that successfully had a leader elected.
+   * @return A pair with first element of which is the partitions that successfully had a leader elected
+    *        and the second element a map of failed partition to the corresponding thrown exception.
    */
-  private def electLeaderForPartitions(partitions: Seq[TopicPartition], partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy): Seq[TopicPartition] = {
+  private def electLeaderForPartitions(partitions: Seq[TopicPartition],
+                                       partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy): (Seq[TopicPartition], Map[TopicPartition, Throwable]) = {
     val successfulElections = mutable.Buffer.empty[TopicPartition]
     var remaining = partitions
+    var failures = Map.empty[TopicPartition, Throwable]
     while (remaining.nonEmpty) {
       val (success, updatesToRetry, failedElections) = doElectLeaderForPartitions(partitions, partitionLeaderElectionStrategy)
       remaining = updatesToRetry
@@ -295,8 +318,9 @@ class PartitionStateMachine(config: KafkaConfig,
       failedElections.foreach { case (partition, e) =>
         logFailedStateChange(partition, partitionState(partition), OnlinePartition, e)
       }
+      failures ++= failedElections
     }
-    successfulElections
+    (successfulElections, failures)
   }
 
   /**

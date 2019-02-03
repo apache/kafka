@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.utils.Time
 
 import scala.collection._
+import scala.collection.JavaConverters._
 
 object ControllerEventManager {
   val ControllerEventThreadName = "controller-event-thread"
@@ -69,6 +70,10 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   }
 
   def clearAndPut(event: ControllerEvent): Unit = inLock(putLock) {
+    queue.asScala.foreach(evt =>
+      if (evt.isInstanceOf[PreemptableControllerEvent])
+        evt.asInstanceOf[PreemptableControllerEvent].preempt()
+    )
     queue.clear()
     put(event)
   }

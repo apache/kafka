@@ -451,7 +451,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                         if (!configState.contains(connName)) {
                             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
                         } else {
-                            Map<String, String> config = configState.connectorConfig(connName);
+                            Map<String, String> config = configState.rawConnectorConfig(connName);
                             callback.onCompletion(null, new ConnectorInfo(connName, config,
                                 configState.tasks(connName),
                                 connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG))));
@@ -555,9 +555,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
                         // Note that we use the updated connector config despite the fact that we don't have an updated
                         // snapshot yet. The existing task info should still be accurate.
-                        Map<String, String> map = configState.connectorConfig(connName);
                         ConnectorInfo info = new ConnectorInfo(connName, config, configState.tasks(connName),
-                            map == null ? null : connectorTypeForClass(map.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
+                                // validateConnectorConfig have checked the existence of CONNECTOR_CLASS_CONFIG
+                                connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
                         callback.onCompletion(null, new Created<>(!exists, info));
                         return null;
                     }
@@ -607,7 +607,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             List<TaskInfo> result = new ArrayList<>();
                             for (int i = 0; i < configState.taskCount(connName); i++) {
                                 ConnectorTaskId id = new ConnectorTaskId(connName, i);
-                                result.add(new TaskInfo(id, configState.taskConfig(id)));
+                                result.add(new TaskInfo(id, configState.rawTaskConfig(id)));
                             }
                             callback.onCompletion(null, result);
                         }

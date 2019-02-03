@@ -39,11 +39,11 @@ import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
-import javax.xml.datatype.DatatypeFactory;
-import javax.xml.datatype.Duration;
 import java.io.IOException;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -60,9 +60,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
- * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example, you can reprocess its input from scratch.
+ * {@link StreamsResetter} resets the processing state of a Kafka Streams application so that, for example,
+ * you can reprocess its input from scratch.
  * <p>
- * <strong>This class is not part of public API. For backward compatibility, use the provided script in "bin/" instead of calling this class directly from your code.</strong>
+ * <strong>This class is not part of public API. For backward compatibility,
+ * use the provided script in "bin/" instead of calling this class directly from your code.</strong>
  * <p>
  * Resetting the processing state of an application includes the following actions:
  * <ol>
@@ -71,14 +73,17 @@ import java.util.stream.Collectors;
  * <li>deleting any topics created internally by Kafka Streams for this application</li>
  * </ol>
  * <p>
- * Do only use this tool if <strong>no</strong> application instance is running. Otherwise, the application will get into an invalid state and crash or produce wrong results.
+ * Do only use this tool if <strong>no</strong> application instance is running.
+ * Otherwise, the application will get into an invalid state and crash or produce wrong results.
  * <p>
  * If you run multiple application instances, running this tool once is sufficient.
- * However, you need to call {@code KafkaStreams#cleanUp()} before re-starting any instance (to clean local state store directory).
+ * However, you need to call {@code KafkaStreams#cleanUp()} before re-starting any instance
+ * (to clean local state store directory).
  * Otherwise, your application is in an invalid state.
  * <p>
  * User output topics will not be deleted or modified by this tool.
- * If downstream applications consume intermediate or output topics, it is the user's responsibility to adjust those applications manually if required.
+ * If downstream applications consume intermediate or output topics,
+ * it is the user's responsibility to adjust those applications manually if required.
  */
 @InterfaceStability.Unstable
 public class StreamsResetter {
@@ -164,7 +169,7 @@ public class StreamsResetter {
             e.printStackTrace(System.err);
         } finally {
             if (kafkaAdminClient != null) {
-                kafkaAdminClient.close(60, TimeUnit.SECONDS);
+                kafkaAdminClient.close(Duration.ofSeconds(60));
             }
         }
 
@@ -172,7 +177,9 @@ public class StreamsResetter {
     }
 
     private void validateNoActiveConsumers(final String groupId,
-                                           final AdminClient adminClient) throws ExecutionException, InterruptedException {
+                                           final AdminClient adminClient)
+        throws ExecutionException, InterruptedException {
+
         final DescribeConsumerGroupsResult describeResult = adminClient.describeConsumerGroups(Collections.singleton(groupId),
                 (new DescribeConsumerGroupsOptions()).timeoutMs(10 * 1000));
         final List<MemberDescription> members =
@@ -250,7 +257,7 @@ public class StreamsResetter {
             CommandLineUtils.printUsageAndDie(optionParser, "Only one of --dry-run and --execute can be specified");
         }
 
-        final scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<>();
+        final scala.collection.immutable.HashSet<OptionSpec<?>> allScenarioOptions = new scala.collection.immutable.HashSet<OptionSpec<?>>();
         allScenarioOptions.$plus(toOffsetOption);
         allScenarioOptions.$plus(toDatetimeOption);
         allScenarioOptions.$plus(byDurationOption);
@@ -268,7 +275,10 @@ public class StreamsResetter {
         CommandLineUtils.checkInvalidArgs(optionParser, options, shiftByOption, allScenarioOptions.$minus(shiftByOption));
     }
 
-    private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig, final boolean dryRun) throws Exception {
+    private int maybeResetInputAndSeekToEndIntermediateTopicOffsets(final Map consumerConfig,
+                                                                    final boolean dryRun)
+        throws IOException, ParseException {
+
         final List<String> inputTopics = options.valuesOf(inputTopicsOption);
         final List<String> intermediateTopics = options.valuesOf(intermediateTopicsOption);
         int topicNotFound = EXIT_CODE_SUCCESS;
@@ -334,7 +344,9 @@ public class StreamsResetter {
         config.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         config.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
-        try (final KafkaConsumer<byte[], byte[]> client = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+        try (final KafkaConsumer<byte[], byte[]> client =
+                 new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer())) {
+
             final Collection<TopicPartition> partitions = topicsToSubscribe.stream().map(client::partitionsFor)
                     .flatMap(Collection::stream)
                     .map(info -> new TopicPartition(info.topic(), info.partition()))
@@ -365,7 +377,7 @@ public class StreamsResetter {
                 }
                 client.commitSync();
             }
-        } catch (final Exception e) {
+        } catch (final IOException | ParseException e) {
             System.err.println("ERROR: Resetting offsets failed.");
             throw e;
         }
@@ -392,7 +404,7 @@ public class StreamsResetter {
     private void maybeReset(final String groupId,
                             final Consumer<byte[], byte[]> client,
                             final Set<TopicPartition> inputTopicPartitions)
-        throws Exception {
+        throws IOException, ParseException {
 
         if (inputTopicPartitions.size() > 0) {
             System.out.println("Following input topics offsets will be reset to (for consumer group " + groupId + ")");
@@ -410,11 +422,11 @@ public class StreamsResetter {
                 resetToDatetime(client, inputTopicPartitions, timestamp);
             } else if (options.has(byDurationOption)) {
                 final String duration = options.valueOf(byDurationOption);
-                final Duration durationParsed = DatatypeFactory.newInstance().newDuration(duration);
-                resetByDuration(client, inputTopicPartitions, durationParsed);
+                resetByDuration(client, inputTopicPartitions, Duration.parse(duration));
             } else if (options.has(fromFileOption)) {
                 final String resetPlanPath = options.valueOf(fromFileOption);
-                final Map<TopicPartition, Long> topicPartitionsAndOffset = getTopicPartitionOffsetFromResetPlan(resetPlanPath);
+                final Map<TopicPartition, Long> topicPartitionsAndOffset =
+                    getTopicPartitionOffsetFromResetPlan(resetPlanPath);
                 resetOffsetsFromResetPlan(client, inputTopicPartitions, topicPartitionsAndOffset);
             } else {
                 client.seekToBeginning(inputTopicPartitions);
@@ -441,7 +453,9 @@ public class StreamsResetter {
         }
     }
 
-    private Map<TopicPartition, Long> getTopicPartitionOffsetFromResetPlan(final String resetPlanPath) throws IOException, ParseException {
+    private Map<TopicPartition, Long> getTopicPartitionOffsetFromResetPlan(final String resetPlanPath)
+        throws IOException, ParseException {
+
         final String resetPlanCsv = Utils.readFileAsString(resetPlanPath);
         return parseResetPlan(resetPlanCsv);
     }
@@ -449,9 +463,8 @@ public class StreamsResetter {
     private void resetByDuration(final Consumer<byte[], byte[]> client,
                                  final Set<TopicPartition> inputTopicPartitions,
                                  final Duration duration) {
-        final Date now = new Date();
-        duration.negate().addTo(now);
-        final long timestamp = now.getTime();
+        final Instant now = Instant.now();
+        final long timestamp = now.minus(duration).toEpochMilli();
 
         final Map<TopicPartition, Long> topicPartitionsAndTimes = new HashMap<>(inputTopicPartitions.size());
         for (final TopicPartition topicPartition : inputTopicPartitions) {
@@ -647,7 +660,7 @@ public class StreamsResetter {
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
 
-    private void printHelp(OptionParser parser) throws IOException {
+    private void printHelp(final OptionParser parser) throws IOException {
         System.err.println(usage);
         parser.printHelpOn(System.err);
     }
