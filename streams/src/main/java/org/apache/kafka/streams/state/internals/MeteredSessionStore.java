@@ -179,6 +179,21 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
+    public V fetchSession(final K key, final long startTime, final long endTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+        final V value;
+        final Bytes bytesKey = keyBytes(key);
+        final long startNs = time.nanoseconds();
+        try {
+            value = serdes.valueFrom(inner.fetchSession(bytesKey, startTime, endTime));
+        } finally {
+            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
+        }
+
+        return value;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
         return findSessions(key, 0, Long.MAX_VALUE);

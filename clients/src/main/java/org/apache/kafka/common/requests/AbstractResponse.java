@@ -89,7 +89,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case HEARTBEAT:
                 return new HeartbeatResponse(struct);
             case LEAVE_GROUP:
-                return new LeaveGroupResponse(struct);
+                return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:

@@ -37,6 +37,7 @@ import org.junit.Test;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
@@ -224,31 +225,51 @@ public class CachingSessionStoreTest {
 
     @Test
     public void shouldForwardChangedValuesDuringFlush() {
-        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
-        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
+        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(2, 4));
+        final Windowed<Bytes> b = new Windowed<>(keyA, new SessionWindow(1, 2));
+        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(2, 4));
+        final Windowed<String> bDeserialized = new Windowed<>("a", new SessionWindow(1, 2));
         final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
         cachingStore.setFlushListener(
             (key, newValue, oldValue, timestamp) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
             true
         );
 
+        cachingStore.put(b, "1".getBytes());
+        cachingStore.flush();
+
+        assertEquals(
+            Collections.singletonList(KeyValue.pair(bDeserialized, new Change<>("1", null))),
+            flushed
+        );
+        flushed.clear();
+
         cachingStore.put(a, "1".getBytes());
         cachingStore.flush();
 
+        assertEquals(
+            Collections.singletonList(KeyValue.pair(aDeserialized, new Change<>("1", null))),
+            flushed
+        );
+        flushed.clear();
+
         cachingStore.put(a, "2".getBytes());
         cachingStore.flush();
+
+        assertEquals(
+            Collections.singletonList(KeyValue.pair(aDeserialized, new Change<>("2", "1"))),
+            flushed
+        );
+        flushed.clear();
 
         cachingStore.remove(a);
         cachingStore.flush();
 
         assertEquals(
-            flushed,
-            Arrays.asList(
-                KeyValue.pair(aDeserialized, new Change<>("1", null)),
-                KeyValue.pair(aDeserialized, new Change<>("2", "1")),
-                KeyValue.pair(aDeserialized, new Change<>(null, "2"))
-            )
+            Collections.singletonList(KeyValue.pair(aDeserialized, new Change<>(null, "2"))),
+            flushed
         );
+        flushed.clear();
     }
 
     @Test

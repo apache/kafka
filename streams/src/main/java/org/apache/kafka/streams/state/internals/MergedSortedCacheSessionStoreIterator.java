@@ -63,7 +63,7 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        final Bytes storeKeyBytes = Bytes.wrap(SessionKeySchema.toBinary(storeKey));
+        final Bytes storeKeyBytes = SessionKeySchema.toBinary(storeKey);
         return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }

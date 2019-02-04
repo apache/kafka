@@ -201,6 +201,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def not(groupState: GroupState) = state != groupState
   def has(memberId: String) = members.contains(memberId)
   def get(memberId: String) = members(memberId)
+  def size = members.size
 
   def isLeader(memberId: String): Boolean = leaderId.contains(memberId)
   def leaderOrNull: String = leaderId.orNull
@@ -220,14 +221,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     members.put(member.memberId, member)
     member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.awaitingJoinCallback = callback
-    if (member.awaitingJoinCallback != null)
+    if (member.isAwaitingJoin)
       numMembersAwaitingJoin += 1
   }
 
   def remove(memberId: String) {
     members.remove(memberId).foreach { member =>
       member.supportedProtocols.foreach{ case (protocol, _) => supportedProtocols(protocol) -= 1 }
-      if (member.awaitingJoinCallback != null)
+      if (member.isAwaitingJoin)
         numMembersAwaitingJoin -= 1
     }
 
@@ -248,9 +249,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(_.awaitingJoinCallback == null).toList
+  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
 
-  def hasAllMembersJoined = members.size <= numMembersAwaitingJoin && pendingMembers.isEmpty
+  def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
 
@@ -307,9 +308,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     protocols.foreach{ case (protocol, _) => supportedProtocols(protocol) += 1 }
     member.supportedProtocols = protocols
 
-    if (callback != null && member.awaitingJoinCallback == null) {
+    if (callback != null && !member.isAwaitingJoin) {
       numMembersAwaitingJoin += 1
-    } else if (callback == null && member.awaitingJoinCallback != null) {
+    } else if (callback == null && member.isAwaitingJoin) {
       numMembersAwaitingJoin -= 1
     }
     member.awaitingJoinCallback = callback
@@ -317,7 +318,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def maybeInvokeJoinCallback(member: MemberMetadata,
                               joinGroupResult: JoinGroupResult) : Unit = {
-    if (member.awaitingJoinCallback != null) {
+    if (member.isAwaitingJoin) {
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
       numMembersAwaitingJoin -= 1

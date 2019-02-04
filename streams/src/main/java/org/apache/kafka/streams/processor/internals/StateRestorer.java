@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.state.RecordConverter;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 
 import java.util.ArrayList;
 import java.util.Collection;
