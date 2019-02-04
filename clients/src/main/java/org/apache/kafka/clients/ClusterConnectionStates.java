@@ -115,13 +115,13 @@ final class ClusterConnectionStates {
      */
     public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
         NodeConnectionState connectionState = nodeState.get(id);
-        if (connectionState != null && connectionState.getHost().equals(host)) {
+        if (connectionState != null && connectionState.host().equals(host)) {
             connectionState.lastConnectAttemptMs = now;
             connectionState.state = ConnectionState.CONNECTING;
             connectionState.moveToNextAddress();
             return;
         } else if (connectionState != null) {
-            log.info("Hostname for node {} changed from {} to {}.", id, connectionState.getHost(), host);
+            log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
         }
 
         // Create a new NodeConnectionState if nodeState does not already contain one
@@ -370,7 +370,7 @@ final class ClusterConnectionStates {
             this.clientDnsLookup = clientDnsLookup;
         }
 
-        public String getHost() {
+        public String host() {
             return host;
         }
 
