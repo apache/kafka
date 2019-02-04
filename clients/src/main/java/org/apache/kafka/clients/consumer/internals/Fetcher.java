@@ -819,13 +819,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);
+            } else if (error == Errors.FENCED_LEADER_EPOCH ||
+                       error == Errors.UNKNOWN_LEADER_EPOCH) {
+                log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                        topicPartition, error);
+                partitionsToRetry.add(topicPartition);
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 unauthorizedTopics.add(topicPartition.topic());
             } else {
-                log.warn("Attempt to fetch offsets for partition {} failed due to: {}", topicPartition, error.message());
+                log.warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.", topicPartition, error.message());
                 partitionsToRetry.add(topicPartition);
             }
         }

@@ -2040,6 +2040,8 @@ public class FetcherTest {
 
     @Test
     public void testGetOffsetsFencedLeaderEpoch() {
+        client.updateMetadata(initialUpdateResponse);
+
         subscriptions.assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
@@ -2050,6 +2052,7 @@ public class FetcherTest {
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0));
         assertFalse(subscriptions.hasValidPosition(tp0));
+        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
     @Test
@@ -2064,6 +2067,7 @@ public class FetcherTest {
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
         assertFalse(subscriptions.isFetchable(tp0));
         assertFalse(subscriptions.hasValidPosition(tp0));
+        assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
     @Test
