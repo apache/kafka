@@ -115,7 +115,7 @@ public class EmbeddedKafkaCluster extends ExternalResource implements AutoClosea
     /**
      * Stop the Kafka cluster.
      */
-    public void stop() {
+    private void stop() {
         for (final KafkaEmbedded broker : brokers) {
             broker.stop();
         }
