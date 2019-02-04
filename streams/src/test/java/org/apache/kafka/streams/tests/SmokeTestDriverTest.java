@@ -10,7 +10,6 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
@@ -44,7 +43,7 @@ public class SmokeTestDriverTest {
             return exception;
         }
 
-        public boolean success() {
+        boolean success() {
             return success;
         }
 
@@ -54,8 +53,7 @@ public class SmokeTestDriverTest {
     public void shouldWorkWithRebalance() throws InterruptedException, IOException {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
-        try (final EmbeddedKafkaCluster embeddedKafkaCluster = new EmbeddedKafkaCluster(3);
-        ) {
+        try (final EmbeddedKafkaCluster embeddedKafkaCluster = new EmbeddedKafkaCluster(3)) {
             embeddedKafkaCluster.start();
             embeddedKafkaCluster.createTopics("data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
 

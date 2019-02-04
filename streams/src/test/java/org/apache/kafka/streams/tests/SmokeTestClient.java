@@ -38,7 +38,7 @@ import org.apache.kafka.test.TestUtils;
 import java.time.Duration;
 import java.util.Properties;
 
-public class SmokeTestClient extends SmokeTestUtil implements AutoCloseable {
+public class SmokeTestClient extends SmokeTestUtil {
 
     private final String name;
 
