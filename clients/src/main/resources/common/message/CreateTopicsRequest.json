@@ -22,7 +22,7 @@
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
         "about": "The topic name." },
       { "name": "NumPartitions", "type": "int32", "versions": "0+",
         "about": "The number of partitions to create in the topic, or -1 if we are specifying a manual partition assignment." },
@@ -43,7 +43,7 @@
           "about": "The configuration value." }
       ]}
     ]},
-    { "name": "timeoutMs", "type": "int32", "versions": "0+",
+    { "name": "timeoutMs", "type": "int32", "versions": "0+", "default": "60000",
       "about": "How long to wait in milliseconds before timing out the request." },
     { "name": "validateOnly", "type": "bool", "versions": "1+", "default": "false", "ignorable": false,
       "about": "If true, check that the topics can be created as specified, but don't create anything." }

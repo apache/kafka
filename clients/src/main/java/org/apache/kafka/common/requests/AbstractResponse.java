@@ -109,7 +109,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:
-                return new CreateTopicsResponse(struct);
+                return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct);
             case DELETE_RECORDS:

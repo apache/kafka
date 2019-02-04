@@ -32,6 +32,12 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
@@ -1034,28 +1040,38 @@ public class RequestResponseTest {
     }
 
     private CreateTopicsRequest createCreateTopicRequest(int version, boolean validateOnly) {
-        CreateTopicsRequest.TopicDetails request1 = new CreateTopicsRequest.TopicDetails(3, (short) 5);
+        CreateTopicsRequestData data = new CreateTopicsRequestData().
+            setTimeoutMs(123).
+            setValidateOnly(validateOnly);
+        data.topics().add(new CreatableTopic().
+            setNumPartitions(3).
+            setReplicationFactor((short) 5));
 
-        Map<Integer, List<Integer>> replicaAssignments = new HashMap<>();
-        replicaAssignments.put(1, asList(1, 2, 3));
-        replicaAssignments.put(2, asList(2, 3, 4));
+        CreatableTopic topic2 = new CreatableTopic();
+        data.topics().add(topic2);
+        topic2.assignments().add(new CreatableReplicaAssignment().
+            setPartitionIndex(0).
+            setBrokerIds(Arrays.asList(1, 2, 3)));
+        topic2.assignments().add(new CreatableReplicaAssignment().
+            setPartitionIndex(1).
+            setBrokerIds(Arrays.asList(2, 3, 4)));
+        topic2.configs().add(new CreateableTopicConfig().
+            setName("config1").setValue("value1"));
 
-        Map<String, String> configs = new HashMap<>();
-        configs.put("config1", "value1");
-
-        CreateTopicsRequest.TopicDetails request2 = new CreateTopicsRequest.TopicDetails(replicaAssignments, configs);
-
-        Map<String, CreateTopicsRequest.TopicDetails> request = new HashMap<>();
-        request.put("my_t1", request1);
-        request.put("my_t2", request2);
-        return new CreateTopicsRequest.Builder(request, 0, validateOnly).build((short) version);
+        return new CreateTopicsRequest.Builder(data).build((short) version);
     }
 
     private CreateTopicsResponse createCreateTopicResponse() {
-        Map<String, ApiError> errors = new HashMap<>();
-        errors.put("t1", new ApiError(Errors.INVALID_TOPIC_EXCEPTION, null));
-        errors.put("t2", new ApiError(Errors.LEADER_NOT_AVAILABLE, "Leader with id 5 is not available."));
-        return new CreateTopicsResponse(errors);
+        CreateTopicsResponseData data = new CreateTopicsResponseData();
+        data.topics().add(new CreatableTopicResult().
+            setName("t1").
+            setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code()).
+            setErrorMessage(null));
+        data.topics().add(new CreatableTopicResult().
+            setName("t2").
+            setErrorCode(Errors.LEADER_NOT_AVAILABLE.code()).
+            setErrorMessage("Leader with id 5 is not available."));
+        return new CreateTopicsResponse(data);
     }
 
     private DeleteTopicsRequest createDeleteTopicsRequest() {
