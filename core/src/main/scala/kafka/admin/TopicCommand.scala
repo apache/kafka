@@ -509,7 +509,7 @@ object TopicCommand extends Logging {
     private val configOpt = parser.accepts("config", "A topic configuration override for the topic being created or altered."  +
                                              "The following is a list of valid configurations: " + nl + LogConfig.configNames.map("\t" + _).mkString(nl) + nl +
                                              "See the Kafka documentation for full details on the topic configs." +
-                                             "Not supported with the --bootstrap-server option.")
+                                             "It is supported only in combination with --create if --bootstrap-server option is used.")
                            .withRequiredArg
                            .describedAs("name=value")
                            .ofType(classOf[String])
