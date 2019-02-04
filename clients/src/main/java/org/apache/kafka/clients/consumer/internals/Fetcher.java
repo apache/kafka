@@ -983,7 +983,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
-                       error == Errors.KAFKA_STORAGE_ERROR) {
+                       error == Errors.KAFKA_STORAGE_ERROR ||
+                       error == Errors.FENCED_LEADER_EPOCH) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -1002,11 +1003,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 log.warn("Not authorized to read from topic {}.", tp.topic());
                 throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
-            } else if (error == Errors.FENCED_LEADER_EPOCH) {
-                log.warn("Received fenced leader epoch error in fetch for partition {}", tp);
-                this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
-                log.warn("Received unknown leader epoch error in fetch for partition {}", tp);
+                log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
                 log.warn("Unknown error fetching data for topic-partition {}", tp);
             } else {
