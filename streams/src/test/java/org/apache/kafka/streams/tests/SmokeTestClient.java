@@ -60,7 +60,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         streams = createKafkaStreams(streamsProperties);
         streams.setUncaughtExceptionHandler((t, e) -> {
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
-            System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             uncaughtException = true;
             e.printStackTrace();
         });
@@ -80,14 +79,12 @@ public class SmokeTestClient extends SmokeTestUtil {
         // do not remove these printouts since they are needed for health scripts
         if (!uncaughtException) {
             System.out.println(name + ": SMOKE-TEST-CLIENT-CLOSED");
-            System.out.println("SMOKE-TEST-CLIENT-CLOSED");
         }
         try {
             thread.join();
         } catch (final Exception ex) {
             // do not remove these printouts since they are needed for health scripts
             System.out.println(name + ": SMOKE-TEST-CLIENT-EXCEPTION");
-            System.out.println("SMOKE-TEST-CLIENT-EXCEPTION");
             // ignore
         }
     }
@@ -212,7 +209,6 @@ public class SmokeTestClient extends SmokeTestUtil {
         });
         streamsClient.setUncaughtExceptionHandler((t, e) -> {
             System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-            System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
             streamsClient.close(Duration.ofSeconds(30));
         });
 
