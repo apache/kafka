@@ -71,7 +71,7 @@ public class Schema extends Type {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
-                objects[i] = fields[i].def.type.read(buffer);
+                objects[i] = buffer.position() < buffer.limit() ? fields[i].def.type.read(buffer) : null;
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
