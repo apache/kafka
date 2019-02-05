@@ -47,7 +47,7 @@ public class SmokeTestClient extends SmokeTestUtil {
     private boolean uncaughtException = false;
     private boolean started;
 
-    SmokeTestClient(final String name) {
+    public SmokeTestClient(final String name) {
         super();
         this.name = name;
     }
@@ -70,7 +70,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         thread.start();
     }
 
-    void closeAsync() {
+    public void closeAsync() {
         streams.close(Duration.ZERO);
     }
 

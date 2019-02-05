@@ -80,10 +80,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
-    static Map<String, Set<Integer>> generate(final String kafka,
-                                              final int numKeys,
-                                              final int maxRecordsPerKey,
-                                              final boolean autoTerminate) {
+    public static Map<String, Set<Integer>> generate(final String kafka,
+                                                     final int numKeys,
+                                                     final int maxRecordsPerKey,
+                                                     final boolean autoTerminate) {
         final Properties producerProps = new Properties();
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);

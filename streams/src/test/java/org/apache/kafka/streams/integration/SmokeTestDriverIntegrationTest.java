@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.tests;
+package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.junit.Assert;
 import org.junit.Test;
 
