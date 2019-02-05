@@ -17,10 +17,9 @@
 
 package kafka.cluster
 
-import kafka.server.epoch.LeaderEpochFileCache
 import kafka.log.{Log, LogOffsetSnapshot}
 import kafka.utils.Logging
-import kafka.server.{LogOffsetMetadata, LogReadResult}
+import kafka.server.{LogOffsetMetadata, LogReadResult, OffsetAndEpoch}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Time
@@ -54,8 +53,6 @@ class Replica(val brokerId: Int,
   def isLocal: Boolean = log.isDefined
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
-
-  val epochs: Option[LeaderEpochFileCache] = log.map(_.leaderEpochCache)
 
   info(s"Replica loaded for partition $topicPartition with initial high watermark $initialHighWatermarkValue")
   log.foreach(_.onHighWatermarkIncremented(initialHighWatermarkValue))
@@ -101,9 +98,17 @@ class Replica(val brokerId: Int,
 
   def latestEpoch: Option[Int] = {
     if (isLocal) {
-      epochs.flatMap(_.latestEpochIfExists)
+      log.get.latestEpoch
     } else {
       throw new KafkaException(s"Cannot get latest epoch of non-local replica of $topicPartition")
+    }
+  }
+
+  def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
+    if (isLocal) {
+      log.get.endOffsetForEpoch(leaderEpoch)
+    } else {
+      throw new KafkaException(s"Cannot lookup end offset for epoch of non-local replica of $topicPartition")
     }
   }
 
