@@ -204,12 +204,12 @@ public class SmokeTestClient extends SmokeTestUtil {
                 .to("tagg", Produced.with(stringSerde, longSerde));
 
         final KafkaStreams streamsClient = new KafkaStreams(builder.build(), getStreamsConfig(props));
-        streamsClient.setStateListener(((newState, oldState) -> {
+        streamsClient.setStateListener((newState, oldState) -> {
             System.out.printf("%s: %s -> %s%n", name, oldState, newState);
             if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
                 started = true;
             }
-        }));
+        });
         streamsClient.setUncaughtExceptionHandler((t, e) -> {
             System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
             System.out.println("FATAL: An unexpected exception is encountered on thread " + t + ": " + e);

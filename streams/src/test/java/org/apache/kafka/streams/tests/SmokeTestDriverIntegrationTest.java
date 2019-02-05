@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.tests;
 
 import org.apache.kafka.streams.StreamsConfig;
@@ -14,7 +30,7 @@ import java.util.Set;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
 
-public class SmokeTestDriverTest {
+public class SmokeTestDriverIntegrationTest {
     private static class Driver extends Thread {
         private String bootstrapServers;
         private int numKeys;
@@ -79,7 +95,7 @@ public class SmokeTestDriverTest {
                 Thread.sleep(1000);
 
                 // add a new client
-                final SmokeTestClient smokeTestClient = new SmokeTestClient("streams" + numClientsCreated++);
+                final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
                 clients.add(smokeTestClient);
                 smokeTestClient.start(props);
 
@@ -88,16 +104,27 @@ public class SmokeTestDriverTest {
                     clients.remove(0).closeAsync();
                 }
             }
-            driver.join();
-            Assert.assertNull(driver.exception());
-            Assert.assertTrue(driver.success());
-        } finally {
-            for (final SmokeTestClient client : clients) {
-                client.closeAsync();
+            try {
+                // wait for verification to finish
+                driver.join();
+
+                // check to make sure that it actually succeeded
+                Assert.assertNull(driver.exception());
+                Assert.assertTrue(driver.success());
+
+            } finally {
+                // whether or not the assertions failed, tell all the streams instances to stop
+                for (final SmokeTestClient client : clients) {
+                    client.closeAsync();
+                }
+
+                // then, wait for them to stop
+                for (final SmokeTestClient client : clients) {
+                    client.close();
+                }
             }
-            for (final SmokeTestClient client : clients) {
-                client.close();
-            }
+
+            // When the try-with-resources block exits, Java will close the EmbeddedKafkaCluster
         }
     }
 
