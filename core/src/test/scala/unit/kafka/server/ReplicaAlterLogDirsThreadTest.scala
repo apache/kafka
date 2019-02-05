@@ -71,7 +71,9 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
+    val result = thread.fetchEpochsFromLeader(Map(
+      t1p0 -> EpochData(Some(0), leaderEpoch),
+      t1p1 -> EpochData(Some(0), leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
@@ -114,7 +116,9 @@ class ReplicaAlterLogDirsThreadTest {
       quota = null,
       brokerTopicStats = null)
 
-    val result = thread.fetchEpochsFromLeader(Map(t1p0 -> leaderEpoch, t1p1 -> leaderEpoch))
+    val result = thread.fetchEpochsFromLeader(Map(
+      t1p0 -> EpochData(Some(0), leaderEpoch),
+      t1p1 -> EpochData(Some(0), leaderEpoch)))
 
     val expected = Map(
       t1p0 -> new EpochEndOffset(Errors.NONE, leaderEpoch, leo),
@@ -176,7 +180,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(0L, leaderEpoch = 0), t1p1 -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     //Run it
     thread.doWork()
@@ -241,7 +245,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // First run will result in another offset for leader epoch request
     thread.doWork()
@@ -300,7 +304,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> initialFetchOffset))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(initialFetchOffset, leaderEpoch = 0)))
 
     //Run it
     thread.doWork()
@@ -378,7 +382,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
     (0 to 2).foreach { _ =>
@@ -438,7 +442,7 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(0L, leaderEpoch = 0)))
 
     // loop few times
     (0 to 3).foreach { _ =>
@@ -470,6 +474,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val leaderEpoch = 1
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -477,10 +482,14 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+    thread.addPartitions(Map(
+      t1p0 -> OffsetAndEpoch(0L, leaderEpoch),
+      t1p1 -> OffsetAndEpoch(0L, leaderEpoch)))
 
     val ResultWithPartitions(fetchRequest, partitionsWithError) =
-      thread.buildFetchRequest(Seq((t1p0, new PartitionFetchState(150)), (t1p1, new PartitionFetchState(160))))
+      thread.buildFetchRequest(Seq(
+        (t1p0, new PartitionFetchState(150, leaderEpoch)),
+        (t1p1, new PartitionFetchState(160, leaderEpoch))))
 
     assertFalse(fetchRequest.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
@@ -513,6 +522,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val leaderEpoch = 1
     val thread = new ReplicaAlterLogDirsThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
@@ -520,13 +530,13 @@ class ReplicaAlterLogDirsThreadTest {
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
-    thread.addPartitions(Map(t1p0 -> 0, t1p1 -> 0))
+    thread.addPartitions(Map(t1p0 -> OffsetAndEpoch(0L, leaderEpoch), t1p1 -> OffsetAndEpoch(0L, leaderEpoch)))
 
     // one partition is ready and one is truncating
     val ResultWithPartitions(fetchRequest, partitionsWithError) =
       thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(150)),
-        (t1p1, new PartitionFetchState(160, truncatingLog=true))))
+        (t1p0, new PartitionFetchState(150, leaderEpoch)),
+        (t1p1, new PartitionFetchState(160, leaderEpoch, truncatingLog=true))))
 
     assertFalse(fetchRequest.isEmpty)
     assertFalse(partitionsWithError.nonEmpty)
@@ -538,8 +548,8 @@ class ReplicaAlterLogDirsThreadTest {
     // one partition is ready and one is delayed
     val ResultWithPartitions(fetchRequest2, partitionsWithError2) =
       thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(140)),
-        (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
+        (t1p0, new PartitionFetchState(140, leaderEpoch)),
+        (t1p1, new PartitionFetchState(160, leaderEpoch, delay=new DelayedItem(5000)))))
 
     assertFalse(fetchRequest2.isEmpty)
     assertFalse(partitionsWithError2.nonEmpty)
@@ -551,8 +561,8 @@ class ReplicaAlterLogDirsThreadTest {
     // both partitions are delayed
     val ResultWithPartitions(fetchRequest3, partitionsWithError3) =
       thread.buildFetchRequest(Seq(
-        (t1p0, new PartitionFetchState(140, delay=new DelayedItem(5000))),
-        (t1p1, new PartitionFetchState(160, delay=new DelayedItem(5000)))))
+        (t1p0, new PartitionFetchState(140, leaderEpoch, delay=new DelayedItem(5000))),
+        (t1p1, new PartitionFetchState(160, leaderEpoch, delay=new DelayedItem(5000)))))
     assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }
