@@ -990,7 +990,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                //we log the actual partition and not just the topic to help with ACL propagation issues un large clusters
+                //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
                 log.warn("Not authorized to read from partition {}.", tp);
                 throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
