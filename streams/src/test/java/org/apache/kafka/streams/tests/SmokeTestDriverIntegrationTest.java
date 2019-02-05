@@ -66,11 +66,15 @@ public class SmokeTestDriverIntegrationTest {
     }
 
     @Test
-    public void shouldWorkWithRebalance() throws InterruptedException, IOException {
+    public void shouldWorkWithRebalance() throws InterruptedException {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
         try (final EmbeddedKafkaCluster embeddedKafkaCluster = new EmbeddedKafkaCluster(3)) {
-            embeddedKafkaCluster.start();
+            try {
+                embeddedKafkaCluster.start();
+            } catch (final IOException e) {
+                throw new RuntimeException(e);
+            }
             embeddedKafkaCluster.createTopics("data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
 
             final String bootstrapServers = embeddedKafkaCluster.bootstrapServers();
@@ -84,13 +88,6 @@ public class SmokeTestDriverIntegrationTest {
 
             // cycle out Streams instances as long as the test is running.
             while (driver.isAlive()) {
-                // wait for the last added client to start
-                if (!clients.isEmpty()) {
-                    while (!clients.get(clients.size() - 1).started()) {
-                        Thread.sleep(100);
-                    }
-                }
-
                 // take a nap
                 Thread.sleep(1000);
 
@@ -98,6 +95,10 @@ public class SmokeTestDriverIntegrationTest {
                 final SmokeTestClient smokeTestClient = new SmokeTestClient("streams-" + numClientsCreated++);
                 clients.add(smokeTestClient);
                 smokeTestClient.start(props);
+
+                while (!clients.get(clients.size() - 1).started()) {
+                    Thread.sleep(100);
+                }
 
                 // let the oldest client die of "natural causes"
                 if (clients.size() >= 3) {
