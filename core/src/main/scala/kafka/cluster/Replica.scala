@@ -99,6 +99,14 @@ class Replica(val brokerId: Int,
     }
   }
 
+  def latestEpoch: Option[Int] = {
+    if (isLocal) {
+      epochs.flatMap(_.latestEpochIfExists)
+    } else {
+      throw new KafkaException(s"Cannot get latest epoch of non-local replica of $topicPartition")
+    }
+  }
+
   def logEndOffset: LogOffsetMetadata =
     if (isLocal)
       log.get.logEndOffsetMetadata

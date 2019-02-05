@@ -53,7 +53,7 @@ class ReplicaAlterLogDirsThread(name: String,
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
-    replicaMgr.futureLocalReplicaOrException(topicPartition).epochs.map(_.latestEpoch)
+    replicaMgr.futureLocalReplicaOrException(topicPartition).latestEpoch
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {

@@ -64,6 +64,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def nonEmpty: Boolean = inReadLock(lock) {
+    epochs.nonEmpty
+  }
+
   /**
    * Remove any entries which violate monotonicity following the insertion of an assigned epoch.
    */
@@ -91,6 +95,12 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
   def latestEpoch: Int = {
     inReadLock(lock) {
       if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
+    }
+  }
+
+  def latestEpochIfExists: Option[Int] = {
+    inReadLock(lock) {
+      if (epochs.isEmpty) None else Some(epochs.last.epoch)
     }
   }
 

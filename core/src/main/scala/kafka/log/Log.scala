@@ -287,6 +287,13 @@ class Log(@volatile var dir: File,
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
     _leaderEpochCache.truncateFromStart(logStartOffset)
 
+    // If the message format has been downgraded, we do not want to use the cache for truncation
+    if (_leaderEpochCache.nonEmpty && config.messageFormatVersion.recordVersion.precedes(RecordVersion.V2)) {
+      warn(s"Cleared cached leader epoch entries because of message format downgrade to ${config.messageFormatVersion}. " +
+        "The high watermark will be used for truncation.")
+      _leaderEpochCache.clearAndFlush()
+    }
+
     // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
     // from scratch.
     if (!producerStateManager.isEmpty)

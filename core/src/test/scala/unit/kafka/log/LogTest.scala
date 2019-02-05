@@ -2159,6 +2159,21 @@ class LogTest {
   }
 
   @Test
+  def testLeaderEpochCacheClearedAfterMessageFormatDowngrade(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(Some(5), log.leaderEpochCache.latestEpochIfExists)
+    log.close()
+
+    // reopen the log with an older message format version and check the cache
+    val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val reopened = createLog(logDir, downgradedLogConfig)
+    assertEquals(None, reopened.leaderEpochCache.latestEpochIfExists)
+  }
+
+  @Test
   def testOverCompactedLogRecoveryMultiRecord(): Unit = {
     // append some messages to create some segments
     val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
