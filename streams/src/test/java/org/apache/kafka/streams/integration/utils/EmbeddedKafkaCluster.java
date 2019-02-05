@@ -303,7 +303,6 @@ public class EmbeddedKafkaCluster extends ExternalResource implements AutoClosea
         TestUtils.waitForCondition(new TopicsRemainingCondition(topics), timeoutMs, "Topics are not expected after " + timeoutMs + " milli seconds.");
     }
 
-
     private final class TopicsDeletedCondition implements TestCondition {
         final Set<String> deletedTopics = new HashSet<>();
 
