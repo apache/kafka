@@ -19,7 +19,6 @@ import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
 
 import kafka.log.LogConfig
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -37,6 +36,8 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
 import kafka.server.QuotaType
 import kafka.server.KafkaServer
+
+import scala.collection.mutable
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -861,7 +862,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // for the topic partition assignment
     val (consumerGroup, consumerPollers) = createConsumerGroupAndWaitForAssignment(10, List(topic1, topic2), subscriptions)
     try {
-      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
+      validateGroupAssignment(consumerPollers, subscriptions)
 
       // add one more consumer and validate re-assignment
       addConsumersToGroupAndWaitForGroupAssignment(1, consumerGroup, consumerPollers,
@@ -900,7 +901,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // create a group of consumers, subscribe the consumers to the single topic and start polling
     // for the topic partition assignment
     val (consumerGroup, consumerPollers) = createConsumerGroupAndWaitForAssignment(9, List(topic), partitions)
-    validateGroupAssignment(consumerPollers, partitions, s"Did not get valid initial assignment for partitions ${partitions.asJava}")
+    validateGroupAssignment(consumerPollers, partitions)
     val prePartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
 
     // add one more consumer and validate re-assignment
@@ -945,7 +946,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val consumerPollers = subscribeConsumers(consumersInGroup, List(topic, topic1))
     try {
-      validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
+      validateGroupAssignment(consumerPollers, subscriptions)
 
       // add 2 more consumers and validate re-assignment
       addConsumersToGroupAndWaitForGroupAssignment(2, consumersInGroup, consumerPollers, List(topic, topic1), subscriptions)
@@ -1635,20 +1636,37 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumerPollers += timeoutPoller
 
     // validate the initial assignment
-    validateGroupAssignment(consumerPollers, subscriptions, s"Did not get valid initial assignment for partitions ${subscriptions.asJava}")
+    validateGroupAssignment(consumerPollers, subscriptions)
 
     // stop polling and close one of the consumers, should trigger partition re-assignment among alive consumers
     timeoutPoller.shutdown()
     if (closeConsumer)
       timeoutConsumer.close()
 
-    val maxSessionTimeout = this.serverConfig.getProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp).toLong
     validateGroupAssignment(consumerPollers, subscriptions,
-      s"Did not get valid assignment for partitions ${subscriptions.asJava} after one consumer left", 3 * maxSessionTimeout)
+      Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after one consumer left"), 3 * GroupMaxSessionTimeoutMs)
 
     // done with pollers and consumers
     for (poller <- consumerPollers)
       poller.shutdown()
+  }
+
+  /**
+    * Creates consumer pollers corresponding to a given consumer group, one per consumer; subscribes consumers to
+    * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
+    *
+    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
+    *
+    * @param consumerGroup consumer group
+    * @param topicsToSubscribe topics to which consumers will subscribe to
+    * @return collection of consumer pollers
+    */
+  def subscribeConsumers(consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                         topicsToSubscribe: List[String]): mutable.Buffer[ConsumerAssignmentPoller] = {
+    val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
+    for (consumer <- consumerGroup)
+      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
+    consumerPollers
   }
 
   /**
@@ -1670,51 +1688,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   /**
-   * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
-   * consumer poller and starts polling.
-   * Assumes that the consumer is not subscribed to any topics yet
-   *
-   * @param consumer consumer
-   * @param topicsToSubscribe topics that this consumer will subscribe to
-   * @return consumer poller for the given consumer
-   */
-  def subscribeConsumerAndStartPolling(consumer: Consumer[Array[Byte], Array[Byte]],
-                                       topicsToSubscribe: List[String]): ConsumerAssignmentPoller = {
-    assertEquals(0, consumer.assignment().size)
-    val consumerPoller = new ConsumerAssignmentPoller(consumer, topicsToSubscribe)
-    consumerPoller.start()
-    consumerPoller
-  }
-
-  /**
-   * Creates consumer pollers corresponding to a given consumer group, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
-   *
-   * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
-   *
-   * @param consumerGroup consumer group
-   * @param topicsToSubscribe topics to which consumers will subscribe to
-   * @return collection of consumer pollers
-   */
-  def subscribeConsumers(consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
-                         topicsToSubscribe: List[String]): Buffer[ConsumerAssignmentPoller] = {
-    val consumerPollers = Buffer[ConsumerAssignmentPoller]()
-    for (consumer <- consumerGroup)
-      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
-    consumerPollers
-  }
-
-  /**
-   * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
-   * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
-   *
-   * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
-   *
-   * @param consumerCount number of consumers to create
-   * @param topicsToSubscribe topics to which consumers will subscribe to
-   * @param subscriptions set of all topic partitions
-   * @return collection of created consumers and collection of corresponding consumer pollers
-   */
+    * Creates 'consumerCount' consumers and consumer pollers, one per consumer; subscribes consumers to
+    * 'topicsToSubscribe' topics, waits until consumers get topics assignment.
+    *
+    * When the function returns, consumer pollers will continue to poll until shutdown is called on every poller.
+    *
+    * @param consumerCount number of consumers to create
+    * @param topicsToSubscribe topics to which consumers will subscribe to
+    * @param subscriptions set of all topic partitions
+    * @return collection of created consumers and collection of corresponding consumer pollers
+    */
   def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
                                               topicsToSubscribe: List[String],
                                               subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
@@ -1728,54 +1711,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     (consumerGroup, consumerPollers)
   }
 
-  /**
-   * Create 'numOfConsumersToAdd' consumers add then to the consumer group 'consumerGroup', and create corresponding
-   * pollers for these consumers. Wait for partition re-assignment and validate.
-   *
-   * Currently, assignment validation requires that total number of partitions is greater or equal to
-   * number of consumers, so subscriptions.size must be greater or equal the resulting number of consumers in the group
-   *
-   * @param numOfConsumersToAdd number of consumers to create and add to the consumer group
-   * @param consumerGroup current consumer group
-   * @param consumerPollers current consumer pollers
-   * @param topicsToSubscribe topics to which new consumers will subscribe to
-   * @param subscriptions set of all topic partitions
-   */
-  def addConsumersToGroupAndWaitForGroupAssignment(numOfConsumersToAdd: Int,
-                                                   consumerGroup: Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
-                                                   consumerPollers: Buffer[ConsumerAssignmentPoller],
-                                                   topicsToSubscribe: List[String],
-                                                   subscriptions: Set[TopicPartition]): Unit = {
-    assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
-    for (_ <- 0 until numOfConsumersToAdd) {
-      val consumer = createConsumer()
-      consumerGroup += consumer
-      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
-    }
-
-    // wait until topics get re-assigned and validate assignment
-    validateGroupAssignment(consumerPollers, subscriptions,
-      s"Did not get valid assignment for partitions ${subscriptions.asJava} after we added $numOfConsumersToAdd consumer(s)")
-  }
-
-  /**
-   * Wait for consumers to get partition assignment and validate it.
-   *
-   * @param consumerPollers consumer pollers corresponding to the consumer group we are testing
-   * @param subscriptions set of all topic partitions
-   * @param msg message to print when waiting for/validating assignment fails
-   */
-  def validateGroupAssignment(consumerPollers: Buffer[ConsumerAssignmentPoller],
-                              subscriptions: Set[TopicPartition],
-                              msg: String,
-                              waitTime: Long = 10000L): Unit = {
-    TestUtils.waitUntilTrue(() => {
-      val assignments = Buffer[Set[TopicPartition]]()
-      consumerPollers.foreach(assignments += _.consumerAssignment())
-      isPartitionAssignmentValid(assignments, subscriptions)
-    }, msg, waitTime)
-  }
-
   def changeConsumerGroupSubscriptionAndValidateAssignment(consumerPollers: Buffer[ConsumerAssignmentPoller],
                                                            topicsToSubscribe: List[String],
                                                            subscriptions: Set[TopicPartition]): Unit = {
@@ -1785,11 +1720,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // since subscribe call to poller does not actually call consumer subscribe right away, wait
     // until subscribe is called on all consumers
     TestUtils.waitUntilTrue(() => {
-      consumerPollers forall (poller => poller.isSubscribeRequestProcessed())
-    }, s"Failed to call subscribe on all consumers in the group for subscription ${subscriptions}", 1000L)
+      consumerPollers.forall { poller => poller.isSubscribeRequestProcessed }
+    }, s"Failed to call subscribe on all consumers in the group for subscription $subscriptions", 1000L)
 
     validateGroupAssignment(consumerPollers, subscriptions,
-      s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription")
+      Some(s"Did not get valid assignment for partitions ${subscriptions.asJava} after we changed subscription"))
   }
 
   def changeConsumerSubscriptionAndValidateAssignment[K, V](consumer: Consumer[K, V],
