@@ -43,6 +43,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.Optional;
 
 /**
  * ExternalCommandWorker starts an external process to run a Trogdor command.
@@ -99,7 +100,7 @@ public class ExternalCommandWorker implements TaskWorker {
     /**
      * The queue of objects to write to the process stdin.
      */
-    private final LinkedBlockingQueue<JsonNode> stdinQueue = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<Optional<JsonNode>> stdinQueue = new LinkedBlockingQueue<>();
 
     /**
      * The task ID.
@@ -159,7 +160,7 @@ public class ExternalCommandWorker implements TaskWorker {
         ObjectNode startMessage = new ObjectNode(JsonNodeFactory.instance);
         startMessage.set("id", new TextNode(id));
         startMessage.set("workload", spec.workload());
-        stdinQueue.add(startMessage);
+        stdinQueue.add(Optional.of(startMessage));
     }
 
     private Process startProcess() throws Exception {
@@ -270,12 +271,12 @@ public class ExternalCommandWorker implements TaskWorker {
             try {
                 while (true) {
                     log.info("{}: stdin writer ready.", id);
-                    JsonNode node = stdinQueue.take();
-                    if (node instanceof NullNode) {
+                    Optional<JsonNode> node = stdinQueue.take();
+                    if (!node.isPresent()) {
                         log.trace("{}: StdinWriter terminating.", id);
                         return;
                     }
-                    String inputString = JsonUtil.toJsonString(node);
+                    String inputString = JsonUtil.toJsonString(node.get());
                     log.info("{}: writing to stdin: {}", id, inputString);
                     stdinWriter.write(inputString + "\n");
                     stdinWriter.flush();
@@ -326,7 +327,7 @@ public class ExternalCommandWorker implements TaskWorker {
                     doneFuture.complete("exited with return code " + exitStatus);
                 }
                 // Tell the StdinWriter thread to exit.
-                stdinQueue.add(NullNode.instance);
+                stdinQueue.add(Optional.empty());
                 // Tell the shutdown manager thread to exit.
                 terminatorActionQueue.add(TerminatorAction.CLOSE);
                 terminatorFuture.get();
