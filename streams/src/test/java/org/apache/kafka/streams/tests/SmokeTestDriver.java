@@ -199,9 +199,9 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
-    public static boolean verify(final String kafka,
-                                 final Map<String, Set<Integer>> inputs,
-                                 final int maxRecordsPerKey) {
+    public static VerificationResult verify(final String kafka,
+                                            final Map<String, Set<Integer>> inputs,
+                                            final int maxRecordsPerKey) {
         final Properties props = new Properties();
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
@@ -303,7 +303,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         System.out.println(verificationResult.result());
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
-        return success;
+        return verificationResult;
     }
 
     private static Number deserializeValue(final ConsumerRecord<String, byte[]> record) {
@@ -351,7 +351,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return value;
     }
 
-    private static class VerificationResult {
+    public static class VerificationResult {
         private final boolean passed;
         private final String result;
 
@@ -360,11 +360,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
             this.result = result;
         }
 
-        boolean passed() {
+        public boolean passed() {
             return passed;
         }
 
-        String result() {
+        public String result() {
             return result;
         }
     }

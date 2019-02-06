@@ -42,7 +42,7 @@ import java.util.Set;
 /**
  * Runs an in-memory, "embedded" Kafka cluster with 1 ZooKeeper instance and supplied number of Kafka brokers.
  */
-public class EmbeddedKafkaCluster extends ExternalResource implements AutoCloseable {
+public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
     private static final int DEFAULT_BROKER_PORT = 0; // 0 results in a random port being selected
@@ -148,11 +148,6 @@ public class EmbeddedKafkaCluster extends ExternalResource implements AutoClosea
 
     @Override
     protected void after() {
-        stop();
-    }
-
-    @Override
-    public void close() {
         stop();
     }
 
