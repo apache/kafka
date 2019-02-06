@@ -78,42 +78,42 @@ public class LoggingContextTest {
     @Test
     public void shouldCreateConnectorLoggingContext() {
         assertMdcExtrasUntouched();
-        assertMdc(null, null, null, null);
+        assertMdc(null, null, null);
 
         LoggingContext.forConnector(CONNECTOR_NAME);
-        assertMdc("MockSink", CONNECTOR_NAME, null, Scope.WORKER);
+        assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
         log.info("Starting Connector");
 
         LoggingContext.clear();
         assertMdcExtrasUntouched();
-        assertMdc(null, null, null, null);
+        assertMdc(null, null, null);
     }
 
     @Test
     public void shouldCreateTaskLoggingContext() {
         assertMdcExtrasUntouched();
         LoggingContext.forTask(TASK_ID1);
-        assertMdc("MockSink", TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
+        assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
         log.info("Running task");
 
         LoggingContext.clear();
         assertMdcExtrasUntouched();
-        assertMdc(null, null, null, null);
+        assertMdc(null, null, null);
     }
 
     @Test
     public void shouldCreateOffsetsLoggingContext() {
         assertMdcExtrasUntouched();
         LoggingContext.forOffsets(TASK_ID1);
-        assertMdc("MockSink", TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
+        assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
         log.info("Running task");
 
         LoggingContext.clear();
         assertMdcExtrasUntouched();
-        assertMdc(null, null, null, null);
+        assertMdc(null, null, null);
     }
 
-    protected void assertMdc(String connectorShortClassName, String connectorName, Integer taskId, Scope scope) {
+    protected void assertMdc(String connectorName, Integer taskId, Scope scope) {
         assertEquals(connectorName, MDC.get(Parameters.CONNECTOR_NAME));
         assertEquals(taskId == null ? null : Integer.toString(taskId), MDC.get(Parameters.CONNECTOR_TASK));
         assertEquals(scope == null ? null : scope.value(), MDC.get(Parameters.CONNECTOR_SCOPE));
