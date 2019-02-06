@@ -26,12 +26,9 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 /**
  * This class implements the protocol for Kafka Connect workers in a group. It includes the format of worker state used when
@@ -40,14 +37,40 @@ import java.util.stream.Stream;
 public class IncrementalCooperativeConnectProtocol extends ConnectProtocol {
     public static final String REVOKED_KEY_NAME = "revoked";
     public static final short CONNECT_PROTOCOL_V1 = 1;
+
+    /**
+     * Connect Protocol Header V1:
+     *   Version            => Int16
+     */
     private static final Struct CONNECT_PROTOCOL_HEADER_V1 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V1);
+
+    /**
+     * Config State V1:
+     * Url                => [String]
+     * ConfigOffset       => Int64
+     */
     public static final Schema CONFIG_STATE_V1 = CONFIG_STATE_V0;
 
+    /**
+     * Connector Assignment V0:
+     *   Connector          => [String]
+     *   Tasks              => [Int32]
+     */
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
     // responsibility for running the Connector instance in addition to any tasks it generates).
     public static final Schema CONNECTOR_ASSIGNMENT_V1 = CONNECTOR_ASSIGNMENT_V0;
+
+    /**
+     * Assignment V1:
+     *   Error              => Int16
+     *   Leader             => [String]
+     *   LeaderUrl          => [String]
+     *   ConfigOffset       => Int64
+     *   Assignment         => [Connector Assignment]
+     *   Revoked            => [Connector Assignment]
+     */
     public static final Schema ASSIGNMENT_V1 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
             new Field(LEADER_KEY_NAME, Type.STRING),
@@ -142,6 +165,28 @@ public class IncrementalCooperativeConnectProtocol extends ConnectProtocol {
             }
         }
         return tasksIds;
+    }
+
+    public static class ExtendedWorkerState extends WorkerState {
+        private final ExtendedAssignment assignment;
+
+        public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {
+            super(url, offset);
+            this.assignment = assignment;
+        }
+
+        public ExtendedAssignment assignment() {
+            return assignment;
+        }
+
+        @Override
+        public String toString() {
+            return "WorkerState{" +
+                    "url='" + url() + '\'' +
+                    ", offset=" + offset() +
+                    ", " + assignment +
+                    '}';
+        }
     }
 
     public static class ExtendedAssignment extends Assignment {

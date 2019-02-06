@@ -50,19 +50,43 @@ public class ConnectProtocol {
     public static final short CONNECT_PROTOCOL_V0 = 0;
     public static final Schema CONNECT_PROTOCOL_HEADER_SCHEMA = new Schema(
             new Field(VERSION_KEY_NAME, Type.INT16));
+
+    /**
+     * Connect Protocol Header V0:
+     *   Version            => Int16
+     */
     private static final Struct CONNECT_PROTOCOL_HEADER_V0 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V0);
 
+    /**
+     * Config State V0:
+     *   Url                => [String]
+     *   ConfigOffset       => Int64
+     */
     public static final Schema CONFIG_STATE_V0 = new Schema(
             new Field(URL_KEY_NAME, Type.STRING),
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64));
 
+    /**
+     * Connector Assignment V0:
+     *   Connector          => [String]
+     *   Tasks              => [Int32]
+     */
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
     // responsibility for running the Connector instance in addition to any tasks it generates).
     public static final Schema CONNECTOR_ASSIGNMENT_V0 = new Schema(
             new Field(CONNECTOR_KEY_NAME, Type.STRING),
             new Field(TASKS_KEY_NAME, new ArrayOf(Type.INT32)));
+
+    /**
+     * Assignment V0:
+     *   Error              => Int16
+     *   Leader             => [String]
+     *   LeaderUrl          => [String]
+     *   ConfigOffset       => Int64
+     *   Assignment         => [Connector Assignment]
+     */
     public static final Schema ASSIGNMENT_V0 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
             new Field(LEADER_KEY_NAME, Type.STRING),
