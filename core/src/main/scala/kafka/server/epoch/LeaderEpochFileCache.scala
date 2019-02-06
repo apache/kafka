@@ -64,10 +64,6 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
-  def nonEmpty: Boolean = inReadLock(lock) {
-    epochs.nonEmpty
-  }
-
   /**
    * Remove any entries which violate monotonicity following the insertion of an assigned epoch.
    */

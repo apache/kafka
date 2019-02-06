@@ -341,7 +341,7 @@ class Log(@volatile var dir: File,
   private def initializeLeaderEpochCache(): Option[LeaderEpochFileCache] = {
     val leaderEpochFile = LeaderEpochFile.newFile(dir)
     if (recordVersion.precedes(RecordVersion.V2)) {
-      // Delete the checkpoint file if it exists and the message format is does not support it
+      // Delete the checkpoint file if it exists since the message format does not support it
       Files.deleteIfExists(leaderEpochFile.toPath)
       None
     } else {
