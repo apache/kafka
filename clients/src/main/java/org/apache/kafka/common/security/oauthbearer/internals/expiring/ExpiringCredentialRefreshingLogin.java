@@ -375,13 +375,21 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
              */
             ExpiringCredential optionalCredentialToLogout = expiringCredential;
             LoginContext optionalLoginContextToLogout = loginContext;
-            loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
-            log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
-                    principalName, optionalCredentialToLogout != null);
-            loginContext.login();
-            // Perform a logout() on any original credential if necessary
-            if (optionalCredentialToLogout != null)
-                optionalLoginContextToLogout.logout();
+            boolean cleanLogin = false; // remember to restore the original if necessary
+            try {
+                loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
+                log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
+                        principalName, optionalCredentialToLogout != null);
+                loginContext.login();
+                cleanLogin = true; // no need to restore the original
+                // Perform a logout() on any original credential if necessary
+                if (optionalCredentialToLogout != null)
+                    optionalLoginContextToLogout.logout();
+            } finally {
+                if (!cleanLogin)
+                    // restore the original
+                    loginContext = optionalLoginContextToLogout;
+            }
             /*
              * Get the new credential and make sure it is not any old one that required a
              * logout() after the login()
