@@ -15,6 +15,8 @@
 
 import org.ajoberstar.grgit.Grgit
 
+import java.nio.charset.StandardCharsets
+
 buildscript {
   repositories {
     mavenCentral()
@@ -139,6 +141,10 @@ if (file('.git').exists()) {
   }
 }
 
+def testId(TestDescriptor descriptor) {
+  return "${descriptor.className}.${descriptor.name}"
+}
+
 subprojects {
   apply plugin: 'java'
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
@@ -217,6 +223,28 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
+    // Gradle built-in logging only supports sending test output to stdout, which generates a lot
+    // of noise, especially for passing tests. We really only want output for failed tests. This
+    // hooks into the output and logs it (so we don't have to buffer it all in memory) and only
+    // saves the output for failing tests. Directory and filenames are such that you can, e.g.,
+    // create a Jenkins rule to collect failed test output.
+    def logFiles = new HashMap<TestDescriptor, File>()
+    def logStreams = new HashMap<TestDescriptor, FileOutputStream>()
+    beforeTest { TestDescriptor td ->
+      def logFile = new File("${projectDir}/build/reports/testOutput/${td.className}.${td.name}.test.stdout")
+      logFile.parentFile.mkdirs()
+      logFiles.put(testId(td), logFile)
+      logStreams.put(testId(td), new FileOutputStream(logFile))
+    }
+    onOutput { TestDescriptor td, TestOutputEvent toe ->
+      logStreams.get(testId(td)).write(toe.getMessage().getBytes(StandardCharsets.UTF_8))
+    }
+    afterTest { TestDescriptor td, TestResult tr ->
+      logStreams.get(testId(td)).close()
+      if (tr.resultType != TestResult.ResultType.FAILURE) {
+        logFiles.get(testId(td)).delete()
+      }
+    }
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
