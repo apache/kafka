@@ -181,8 +181,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           val (firstDirtyOffset, firstUncleanableDirtyOffset) =
             LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, now)
 
-          val earliestDirtySegmentTimestamp = LogCleanerManager.getEstimatedEarliestTimestampOfDirtySegments(log, firstDirtyOffset)
-          val compactionDelayMs = LogCleanerManager.getCompactionDelay(log, earliestDirtySegmentTimestamp, now)
+          val compactionDelayMs = LogCleanerManager.getMaxCompactionDelay(log, firstDirtyOffset, now)
           preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
 
           LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
@@ -196,6 +195,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       if(cleanableLogs.isEmpty) {
         None
       } else {
+        preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
         Some(filthiest)
@@ -484,27 +484,25 @@ private[log] object LogCleanerManager extends Logging {
   }
 
   /**
-    * return estimated earliest timestamp of dirty segments
-    */
-  def getEstimatedEarliestTimestampOfDirtySegments(log: Log, firstDirtyOffset: Long) : Long = {
-    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
-
-    val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).filter(_ > 0)
-
-    if (firstBatchTimestamps.nonEmpty)
-      firstBatchTimestamps.min
-    else 0
-  }
-
-  /**
-    * get delay between the time when log is required to be compacted as determined
+    * get max delay between the time when log is required to be compacted as determined
     * by maxCompactionLagMs and the current time.
     */
-  def getCompactionDelay(log: Log, earliestDirtySegmentTimestamp: Long, now: Long) : Long = {
+  def getMaxCompactionDelay(log: Log, firstDirtyOffset: Long, now: Long) : Long = {
+
+    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
+    val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).filter(_ > 0)
+
+    val earliestDirtySegmentTimestamp = {
+      if (firstBatchTimestamps.nonEmpty)
+        firstBatchTimestamps.min
+      else Long.MaxValue
+    }
+
     val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
-    val cleanUtilTime = now - maxCompactionLagMs
-    if (earliestDirtySegmentTimestamp < cleanUtilTime && earliestDirtySegmentTimestamp > 0)
-      cleanUtilTime - earliestDirtySegmentTimestamp
+    val cleanUntilTime = now - maxCompactionLagMs
+
+    if (earliestDirtySegmentTimestamp < cleanUntilTime)
+      cleanUntilTime - earliestDirtySegmentTimestamp
     else
       0L
   }

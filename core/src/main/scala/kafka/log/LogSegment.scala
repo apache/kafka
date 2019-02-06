@@ -526,7 +526,7 @@ class LogSegment private[log] (val log: FileRecords,
     * If not previously loaded,
     * load the timestamp of the first message into memory.
     */
-  private def mayLoadFirstBatchTimestamp(): Unit = {
+  private def loadFirstBatchTimestamp(): Unit = {
     if (rollingBasedTimestamp.isEmpty) {
       val iter = log.batches.iterator()
       if (iter.hasNext)
@@ -545,7 +545,7 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
-    mayLoadFirstBatchTimestamp()
+    loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t
       case _ => now - created
@@ -553,13 +553,13 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
-    * @return the first batch timestamp if the timestamp is available. Otherwise return 0
+    * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
     */
   def getFirstBatchTimestamp() : Long = {
-    mayLoadFirstBatchTimestamp()
+    loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => t
-      case _ => 0L
+      case _ => Long.MaxValue
     }
   }
 

@@ -2019,13 +2019,10 @@ class Log(@volatile var dir: File,
     }
   }
 
-  @threadsafe
   private[log] def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {
-    lock synchronized {
-      segments.map {
-        segment =>
-          segment.getFirstBatchTimestamp()
-      }
+    segments.map {
+      segment =>
+        segment.getFirstBatchTimestamp()
     }
   }
 

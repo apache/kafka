@@ -325,7 +325,7 @@ object LogConfig {
   def validate(props: Properties) {
     validateNames(props)
     val valueMaps = configDef.parse(props)
-    crossValidateCheck(valueMaps)
+    validateValues(valueMaps)
   }
 
   /**

@@ -1532,9 +1532,5 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
         s"${KafkaConfig.FailedAuthenticationDelayMsProp}=$failedAuthenticationDelayMs should always be less than" +
         s" ${KafkaConfig.ConnectionsMaxIdleMsProp}=$connectionsMaxIdleMs to prevent failed" +
         s" authentication responses from timing out")
-
-    require(logCleanerMinCompactionLagMs >= 0 && logCleanerMaxCompactionLagMs > 0 &&
-      logCleanerMinCompactionLagMs <= logCleanerMaxCompactionLagMs,
-      s"${KafkaConfig.LogCleanerMinCompactionLagMsProp} must be less than or equal to ${KafkaConfig.LogCleanerMaxCompactionLagMsProp} and non-negative" )
   }
 }
