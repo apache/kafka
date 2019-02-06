@@ -34,6 +34,9 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -54,6 +57,8 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 
 public class SmokeTestDriver extends SmokeTestUtil {
+
+    private static final int MAX_RECORD_EMPTY_RETRIES = 60;
 
     private static class ValueList {
         public final String key;
@@ -217,12 +222,21 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         final Map<String, Map<String, LinkedList<Number>>> events = new HashMap<>();
 
+        VerificationResult verificationResult = new VerificationResult(false, "no results yet");
+        int retry = 0;
         final long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            final ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofSeconds(30));
+            final ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(500));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
-                break;
+                verificationResult = verifyAll(inputs, events);
+                if (verificationResult.passed()) {
+                    break;
+                }
+                if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
+                    break;
+                }
             } else {
+                retry = 0;
                 for (final ConsumerRecord<String, byte[]> record : records) {
                     final String key = record.key();
 
@@ -280,7 +294,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
             System.out.println("missedRecords=" + missedCount);
         }
 
-        success &= verifyAll(inputs, events);
+        // give it one more try if it's not already passing.
+        if (!verificationResult.passed()) {
+            verificationResult = verifyAll(inputs, events);
+        }
+        success &= verificationResult.passed();
+
+        System.out.println(verificationResult.result());
 
         System.out.println(success ? "SUCCESS" : "FAILURE");
         return success;
@@ -331,34 +351,56 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return value;
     }
 
-    private static boolean verifyAll(final Map<String, Set<Integer>> inputs,
-                                     final Map<String, Map<String, LinkedList<Number>>> events) {
-        final Map<String, LinkedList<Number>> observedInputEvents = events.get("data");
-        boolean pass;
-        pass = verifyTAgg(inputs, events.get("tagg"));
-        pass &= verify("min", inputs, observedInputEvents, events, SmokeTestDriver::getMin);
-        pass &= verify("max", inputs, observedInputEvents, events, SmokeTestDriver::getMax);
-        pass &= verify("dif", inputs, observedInputEvents, events, key -> getMax(key).intValue() - getMin(key).intValue());
-        pass &= verify("sum", inputs, observedInputEvents, events, SmokeTestDriver::getSum);
-        pass &= verify("cnt", inputs, observedInputEvents, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L);
-        pass &= verify("avg", inputs, observedInputEvents, events, SmokeTestDriver::getAvg);
-        return pass;
+    private static class VerificationResult {
+        private final boolean passed;
+        private final String result;
+
+        VerificationResult(final boolean passed, final String result) {
+            this.passed = passed;
+            this.result = result;
+        }
+
+        boolean passed() {
+            return passed;
+        }
+
+        String result() {
+            return result;
+        }
     }
 
-    private static boolean verify(final String topicName,
+    private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
+                                                final Map<String, Map<String, LinkedList<Number>>> events) {
+        final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+        final PrintStream resultStream = new PrintStream(byteArrayOutputStream);
+        boolean pass;
+        pass = verifyTAgg(resultStream, inputs, events.get("tagg"));
+        pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin);
+        pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax);
+        pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue());
+        pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum);
+        pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L);
+        pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg);
+        resultStream.close();
+        return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
+    }
+
+    private static boolean verify(final PrintStream resultStream,
+                                  final String topicName,
                                   final Map<String, Set<Integer>> inputData,
-                                  final Map<String, LinkedList<Number>> consumedInputEvents,
-                                  final Map<String, Map<String, LinkedList<Number>>> allEvents,
+                                  final Map<String, Map<String, LinkedList<Number>>> events,
                                   final Function<String, Number> keyToExpectation) {
-        final Map<String, LinkedList<Number>> outputEvents = allEvents.get(topicName);
+        final Map<String, LinkedList<Number>> consumedInputEvents = events.get("data");
+
+        final Map<String, LinkedList<Number>> outputEvents = events.get(topicName);
         if (outputEvents.isEmpty()) {
-            System.out.println(topicName + " is empty");
+            resultStream.println(topicName + " is empty");
             return false;
         } else {
-            System.out.println("verifying " + topicName);
+            resultStream.println("verifying " + topicName);
 
             if (outputEvents.size() != inputData.size()) {
-                System.out.println("fail: resultCount=" + outputEvents.size() + " expectedCount=" + inputData.size());
+                resultStream.println("fail: resultCount=" + outputEvents.size() + " expectedCount=" + inputData.size());
                 return false;
             }
             for (final Map.Entry<String, LinkedList<Number>> entry : outputEvents.entrySet()) {
@@ -366,13 +408,13 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final Number expected = keyToExpectation.apply(key);
                 final Number actual = entry.getValue().getLast();
                 if (!expected.equals(actual)) {
-                    System.out.printf("fail: key=%s %s=%s expected=%s%n\t inputEvents=%s%n\toutputEvents=%s%n",
-                                      key,
-                                      topicName,
-                                      actual,
-                                      expected,
-                                      consumedInputEvents.get(key),
-                                      entry.getValue());
+                    resultStream.printf("fail: key=%s %s=%s expected=%s%n\t inputEvents=%s%n\toutputEvents=%s%n",
+                                        key,
+                                        topicName,
+                                        actual,
+                                        expected,
+                                        consumedInputEvents.get(key),
+                                        entry.getValue());
                     return false;
                 }
             }
@@ -393,13 +435,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
 
-    private static boolean verifyTAgg(final Map<String, Set<Integer>> allData,
+    private static boolean verifyTAgg(final PrintStream resultStream,
+                                      final Map<String, Set<Integer>> allData,
                                       final Map<String, LinkedList<Number>> taggEvents) {
         if (taggEvents.isEmpty()) {
-            System.out.println("tagg is empty");
+            resultStream.println("tagg is empty");
             return false;
         } else {
-            System.out.println("verifying tagg");
+            resultStream.println("verifying tagg");
 
             // generate expected answer
             final Map<String, Long> expected = new HashMap<>();
@@ -420,8 +463,8 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 }
 
                 if (entry.getValue().getLast().longValue() != expectedCount) {
-                    System.out.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
-                    System.out.println("\t outputEvents: " + entry.getValue());
+                    resultStream.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
+                    resultStream.println("\t outputEvents: " + entry.getValue());
                     return false;
                 }
             }
