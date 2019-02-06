@@ -164,7 +164,6 @@ abstract class AbstractFetcherThread(name: String,
     (partitionsWithEpochs, partitionsWithoutEpochs)
   }
 
-
   private def maybeTruncate(): Unit = {
     val (partitionsWithEpochs, partitionsWithoutEpochs) = fetchTruncatingPartitions()
     if (partitionsWithEpochs.nonEmpty) {
