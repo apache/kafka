@@ -122,6 +122,7 @@ public class OAuthBearerSaslClientCallbackHandler implements AuthenticateCallbac
                             return Long.compare(o1.lifetimeMs(), o2.lifetimeMs());
                         }
                     });
+            sortedByLifetime.addAll(privateCredentials);
             log.warn("Found {} OAuth Bearer tokens in Subject's private credentials; the oldest expires at {}, will use the newest, which expires at {}",
                 sortedByLifetime.size(),
                 new Date(sortedByLifetime.first().lifetimeMs()),
