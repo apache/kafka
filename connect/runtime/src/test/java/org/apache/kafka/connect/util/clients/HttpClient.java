@@ -72,6 +72,10 @@ public class HttpClient {
         return request.get();
     }
 
+    public Response executeGet() {
+        return executeGet(null, null);
+    }
+
     public Response executePut(String path, MediaType mediaTypes, Map<String, String> headers, String body) {
         Builder request = buildRequest(path, mediaTypes, headers);
         return request.put(Entity.entity(body, MediaType.APPLICATION_JSON));
@@ -91,6 +95,11 @@ public class HttpClient {
         Builder request = buildRequest(path, mediaTypes, headers);
         return request.delete();
     }
+
+    public Response executeDelete() {
+        return executeDelete(null, null, null);
+    }
+
     public Response executeOptions(String path, MediaType mediaTypes, Map<String, String> headers) {
         Builder request = buildRequest(path, mediaTypes, headers);
         return request.options();

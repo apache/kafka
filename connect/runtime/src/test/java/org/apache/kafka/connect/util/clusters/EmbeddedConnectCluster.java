@@ -148,8 +148,6 @@ public class EmbeddedConnectCluster {
             log.error("Could not execute PUT request to " + url, e);
             throw e;
         }
-
-
         if (status >= Status.BAD_REQUEST.getStatusCode()) {
             throw new ConnectRestException(status, "Could not execute PUT request");
         }
@@ -221,19 +219,19 @@ public class EmbeddedConnectCluster {
     public String executeGet(String url) {
         log.debug("Executing GET request to URL={}.", url);
         HttpClient httpClient = new HttpClient(url);
-        Response response = httpClient.executeGet(null, null, null);
+        Response response = httpClient.executeGet();
         log.debug("Get response for URL={} is {}", url, response);
         Response.Status status = Response.Status.fromStatusCode(response.getStatus());
         if (response.getStatus() != Status.OK.getStatusCode()) {
             throw new ConnectRestException(status, "Unable to execute GET, invalid status: " + status);
         }
-        return response.toString();
+        return response.readEntity(String.class);
     }
 
     public int executeDelete(String url) {
         log.debug("Executing DELETE request to URL={}", url);
         HttpClient httpClient = new HttpClient(url);
-        Response response = httpClient.executeDelete(null, null, null);
+        Response response = httpClient.executeDelete();
         return response.getStatus();
     }
 
