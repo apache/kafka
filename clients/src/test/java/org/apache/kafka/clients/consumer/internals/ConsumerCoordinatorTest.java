@@ -40,8 +40,11 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -249,10 +252,24 @@ public class ConsumerCoordinatorTest {
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         final AtomicBoolean asyncCallbackInvoked = new AtomicBoolean(false);
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = singletonMap(
-                new TopicPartition("foo", 0), new OffsetCommitRequest.PartitionData(13L,
-                        Optional.empty(), ""));
-        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(groupId, offsets))
+
+        OffsetCommitRequestData offsetCommitRequestData = new OffsetCommitRequestData()
+                .setGroupId(groupId)
+                .setTopics(Collections.singletonList(new
+                        OffsetCommitRequestData.OffsetCommitRequestTopic()
+                                .setName("foo")
+                                .setPartitions(Collections.singletonList(
+                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                                .setPartitionIndex(0)
+                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                                .setCommittedMetadata("")
+                                                .setCommittedOffset(13L)
+                                                .setCommitTimestamp(0)
+                                ))
+                        )
+                );
+
+        consumerClient.send(coordinator.checkAndGetCoordinator(), new OffsetCommitRequest.Builder(offsetCommitRequestData))
                 .compose(new RequestFutureAdapter<ClientResponse, Object>() {
                     @Override
                     public void onSuccess(ClientResponse value, RequestFuture<Object> future) {}
@@ -1495,8 +1512,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-                return commitRequest.memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
-                        commitRequest.generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
+                return commitRequest.data().memberId().equals(OffsetCommitRequest.DEFAULT_MEMBER_ID) &&
+                        commitRequest.data().generationId() == OffsetCommitRequest.DEFAULT_GENERATION_ID;
             }
         }, offsetCommitResponse(singletonMap(t1p, Errors.NONE)));
 
@@ -2127,9 +2144,9 @@ public class ConsumerCoordinatorTest {
             public boolean matches(AbstractRequest body) {
                 commitRequested.set(true);
                 OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
-                return commitRequest.groupId().equals(groupId);
+                return commitRequest.data().groupId().equals(groupId);
             }
-        }, new OffsetCommitResponse(new HashMap<TopicPartition, Errors>()));
+        }, new OffsetCommitResponse(new OffsetCommitResponseData()));
         client.prepareResponse(new MockClient.RequestMatcher() {
             @Override
             public boolean matches(AbstractRequest body) {
@@ -2291,19 +2308,20 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 OffsetCommitRequest req = (OffsetCommitRequest) body;
-                Map<TopicPartition, OffsetCommitRequest.PartitionData> offsets = req.offsetData();
+                Map<TopicPartition, Long> offsets = req.offsets();
                 if (offsets.size() != expectedOffsets.size())
                     return false;
 
                 for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
-                    if (!offsets.containsKey(expectedOffset.getKey()))
+                    if (!offsets.containsKey(expectedOffset.getKey())) {
                         return false;
-
-                    OffsetCommitRequest.PartitionData offsetCommitData = offsets.get(expectedOffset.getKey());
-                    if (offsetCommitData.offset != expectedOffset.getValue())
-                        return false;
+                    } else {
+                        Long actualOffset = offsets.get(expectedOffset.getKey());
+                        if (!actualOffset.equals(expectedOffset.getValue())) {
+                            return false;
+                        }
+                    }
                 }
-
                 return true;
             }
         };
