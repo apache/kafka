@@ -310,6 +310,7 @@
     <allow class="java.net.URI" />
     <allow class="java.net.URL" />
     <allow class="java.net.URLClassLoader" />
+    <allow class="java.net.URISyntaxException" />
     <!-- Use org.apache.kafka.connect.util.clients.HttpClient instead -->
     <disallow pkg="javax.ws.rs.client" />
     <disallow pkg="java.net" />
