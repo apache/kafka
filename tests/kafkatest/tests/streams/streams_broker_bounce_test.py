@@ -91,6 +91,7 @@ class StreamsBrokerBounceTest(Test):
     def __init__(self, test_context):
         super(StreamsBrokerBounceTest, self).__init__(test_context)
         self.replication = 3
+        self.num_kafka_nodes = self.replication
         self.partitions = 3
         self.topics = {
             'echo' : { 'partitions': self.partitions, 'replication-factor': self.replication,
