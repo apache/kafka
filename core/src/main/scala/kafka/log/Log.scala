@@ -32,7 +32,7 @@ import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
 import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
@@ -349,7 +349,7 @@ class Log(@volatile var dir: File,
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    val leaderEpochFile = LeaderEpochFile.newFile(dir)
+    val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
     def newLeaderEpochFileCache(): LeaderEpochFileCache = {
       val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
@@ -1343,11 +1343,8 @@ class Log(@volatile var dir: File,
         }
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch)
-        val epochOptional = latestEpochOpt match {
-          case Some(latestEpoch) => Optional.of[Integer](latestEpoch)
-          case None => Optional.empty[Integer]()
-        }
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
       }
 
