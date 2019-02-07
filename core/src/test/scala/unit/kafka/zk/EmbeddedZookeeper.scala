@@ -50,6 +50,7 @@ class EmbeddedZookeeper() extends Logging {
 
   def shutdown(): Unit = {
     CoreUtils.swallow(zookeeper.shutdown(), this)
+    CoreUtils.swallow(zookeeper.getZKDatabase().close(), this)
     CoreUtils.swallow(factory.shutdown(), this)
 
     def isDown(): Boolean = {
