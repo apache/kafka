@@ -24,6 +24,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.clients.HttpClient;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
@@ -35,19 +36,13 @@ import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import javax.ws.rs.core.MediaType;
+import javax.ws.rs.core.Response;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
 
@@ -62,8 +57,6 @@ public class RestServerTest {
 
     @Before
     public void setUp() {
-        // To be able to set the Origin, we need to toggle this flag
-        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
     }
 
     @After
@@ -180,9 +173,8 @@ public class RestServerTest {
         server = new RestServer(workerConfig);
         server.start(new HerderProvider(herder), herder.plugins());
 
-        Response response = request("/connectors")
-            .accept(MediaType.WILDCARD)
-            .options();
+        HttpClient httpClient = new HttpClient(String.valueOf(server.advertisedUrl()));
+        Response response = httpClient.executeOptions("/connectors", MediaType.WILDCARD_TYPE, Collections.emptyMap());
         Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
         Assert.assertArrayEquals(
             response.getAllowedMethods().toArray(new String[0]),
@@ -217,60 +209,27 @@ public class RestServerTest {
         server = new RestServer(workerConfig);
         server.start(new HerderProvider(herder), herder.plugins());
 
-        Response response = request("/connectors")
-                .header("Referer", origin + "/page")
-                .header("Origin", origin)
-                .get();
+        HttpClient httpClient = new HttpClient(String.valueOf(server.advertisedUrl()));
+        Response response = httpClient.executeGet("/connectors",
+            new HashMap<String, String>() {
+                {
+                    put("Referer", origin + "/page");
+                    put("Origin", origin);
+                }
+            });
         assertEquals(200, response.getStatus());
 
         assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
 
-        response = request("/connector-plugins/FileStreamSource/validate")
-            .header("Referer", origin + "/page")
-            .header("Origin", origin)
-            .header("Access-Control-Request-Method", method)
-            .options();
+        response = httpClient.executeOptions("/connector-plugins/FileStreamSource/validate",
+            new HashMap<String, String>() {{
+                    put("Referer", origin + "/page");
+                    put("Origin", origin);
+                    put("Access-Control-Request-Method", method);
+                }});
         assertEquals(404, response.getStatus());
         assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
         assertEquals(method, response.getHeaderString("Access-Control-Allow-Methods"));
         PowerMock.verifyAll();
-    }
-
-    protected Invocation.Builder request(String path) {
-        return request(path, null, null, null);
-    }
-
-    protected Invocation.Builder request(String path, Map<String, String> queryParams) {
-        return request(path, null, null, queryParams);
-    }
-
-    protected Invocation.Builder request(String path, String templateName, Object templateValue) {
-        return request(path, templateName, templateValue, null);
-    }
-
-    protected Invocation.Builder request(String path, String templateName, Object templateValue,
-                                         Map<String, String> queryParams) {
-        Client client = ClientBuilder.newClient();
-        WebTarget target;
-        URI pathUri = null;
-        try {
-            pathUri = new URI(path);
-        } catch (URISyntaxException e) {
-            // Ignore, use restConnect and assume this is a valid path part
-        }
-        if (pathUri != null && pathUri.isAbsolute()) {
-            target = client.target(path);
-        } else {
-            target = client.target(server.advertisedUrl()).path(path);
-        }
-        if (templateName != null && templateValue != null) {
-            target = target.resolveTemplate(templateName, templateValue);
-        }
-        if (queryParams != null) {
-            for (Map.Entry<String, String> queryParam : queryParams.entrySet()) {
-                target = target.queryParam(queryParam.getKey(), queryParam.getValue());
-            }
-        }
-        return target.request();
     }
 }

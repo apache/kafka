@@ -305,6 +305,11 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow class="java.net.URL" />
+    <allow class="java.net.URI" />
+    <!-- Use org.apache.kafka.connect.util.clients.HttpClient instead -->
+    <disallow pkg="javax.ws.rs.client" />
+    <disallow pkg="java.net" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
@@ -371,8 +376,12 @@
         <allow pkg="kafka.server" />
         <allow pkg="kafka.zk" />
         <allow pkg="kafka.utils" />
-        <allow class="javax.servlet.http.HttpServletResponse" />
         <allow class="javax.ws.rs.core.Response" />
+        <allow class="javax.ws.rs.core.Response.Status" />
+      </subpackage>
+      <subpackage name="clients">
+        <allow pkg="javax.ws.rs.client"/>
+        <allow pkg="javax.ws.rs.core"/>
       </subpackage>
     </subpackage>
 
