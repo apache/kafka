@@ -211,12 +211,10 @@ public class RestServerTest {
 
         HttpClient httpClient = new HttpClient(String.valueOf(server.advertisedUrl()));
         Response response = httpClient.executeGet("/connectors",
-            new HashMap<String, String>() {
-                {
+            new HashMap<String, String>() {{
                     put("Referer", origin + "/page");
                     put("Origin", origin);
-                }
-            });
+                }});
         assertEquals(200, response.getStatus());
 
         assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
