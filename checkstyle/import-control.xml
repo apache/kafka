@@ -305,8 +305,11 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
-    <allow class="java.net.URL" />
+    <allow class="java.net.InetSocketAddress" />
+    <allow class="java.net.MalformedURLException" />
     <allow class="java.net.URI" />
+    <allow class="java.net.URL" />
+    <allow class="java.net.URLClassLoader" />
     <!-- Use org.apache.kafka.connect.util.clients.HttpClient instead -->
     <disallow pkg="javax.ws.rs.client" />
     <disallow pkg="java.net" />
