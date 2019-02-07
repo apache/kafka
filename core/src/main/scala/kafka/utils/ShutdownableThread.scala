@@ -30,7 +30,11 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
 
   def shutdown(): Unit = {
     initiateShutdown()
-    awaitShutdown()
+    if (this.isAlive) {
+      awaitShutdown()
+    } else {
+      shutdownComplete.countDown()
+    }
   }
 
   def isShutdownComplete: Boolean = {
@@ -54,10 +58,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
    * After calling initiateShutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = {
-    if (this.isAlive) {
-      shutdownComplete.await()
-      info("Shutdown completed")
-    }
+    shutdownComplete.await()
+    info("Shutdown completed")
   }
 
   /**
