@@ -84,6 +84,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def nonEmpty: Boolean = inReadLock(lock) {
+    epochs.nonEmpty
+  }
+
   /**
    * Returns the current Leader Epoch if one exists. This is the latest epoch
    * which has messages assigned to it.

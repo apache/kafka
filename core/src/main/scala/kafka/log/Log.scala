@@ -237,7 +237,15 @@ class Log(@volatile var dir: File,
       warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
         s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
         s"This may result in frequent log rolling.")
+    val oldConfig = this.config
     this.config = newConfig
+    if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {
+      val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
+      val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+      if (newRecordVersion.precedes(oldRecordVersion))
+        warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+      initializeLeaderEpochCache()
+    }
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
@@ -271,10 +279,12 @@ class Log(@volatile var dir: File,
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
   // Visible for testing
-  @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = initializeLeaderEpochCache()
+  @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
   locally {
     val startMs = time.milliseconds
+
+    initializeLeaderEpochCache()
 
     val nextOffset = loadSegments()
 
@@ -338,17 +348,33 @@ class Log(@volatile var dir: File,
 
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
-  private def initializeLeaderEpochCache(): Option[LeaderEpochFileCache] = {
+  private def initializeLeaderEpochCache(): Unit = lock synchronized {
     val leaderEpochFile = LeaderEpochFile.newFile(dir)
-    if (recordVersion.precedes(RecordVersion.V2)) {
-      // Delete the checkpoint file if it exists since the message format does not support it
-      Files.deleteIfExists(leaderEpochFile.toPath)
-      None
-    } else {
-      // create the log directory if it doesn't exist
-      Files.createDirectories(dir.toPath)
+
+    def newLeaderEpochFileCache(): LeaderEpochFileCache = {
       val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
-      Some(new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile))
+      new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+    }
+
+    if (recordVersion.precedes(RecordVersion.V2)) {
+      val currentCache = leaderEpochCache.orElse {
+        if (leaderEpochFile.exists())
+          Some(newLeaderEpochFileCache())
+        else
+          None
+      }
+
+      if (currentCache.exists(_.nonEmpty))
+        warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
+
+      Files.deleteIfExists(leaderEpochFile.toPath)
+      leaderEpochCache = None
+    } else {
+      leaderEpochCache = leaderEpochCache.orElse {
+        // create the log directory if it doesn't exist
+        Files.createDirectories(dir.toPath)
+        Some(newLeaderEpochFileCache())
+      }
     }
   }
 
@@ -742,7 +768,7 @@ class Log(@volatile var dir: File,
           producerStateManager.logDir = dir
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
-          leaderEpochCache = initializeLeaderEpochCache()
+          initializeLeaderEpochCache()
         }
       }
     }
