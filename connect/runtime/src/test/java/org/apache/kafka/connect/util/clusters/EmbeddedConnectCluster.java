@@ -205,7 +205,7 @@ public class EmbeddedConnectCluster {
     public int executePut(String url, String body) {
         log.debug("Executing PUT request to URL={}. Payload={}", url, body);
         HttpClient httpClient = new HttpClient(url);
-        Response response = httpClient.executePut( new HashMap<String, String>() {{
+        Response response = httpClient.executePut(new HashMap<String, String>() {{
                 put("Content-Type", "application/json");
             }}, body);
         return response.getStatus();
