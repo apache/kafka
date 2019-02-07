@@ -133,6 +133,15 @@ class StreamsBrokerBounceTest(Test):
         for num in range(0, num_failures - 1):
             signal_node(self, self.kafka.nodes[num], sig)
 
+    def get_topics_count(self):
+        count = 0
+        for node in self.kafka.nodes:
+            topic_list = self.kafka.list_topics("placeholder", node)
+            # need to iterate over topic_list as list_topics returns a python generator so values fetched lazily
+            for topic in topic_list:
+                count += 1
+        return count
+
         
     def setup_system(self, start_processor=True):
         # Setup phase
@@ -141,6 +150,12 @@ class StreamsBrokerBounceTest(Test):
 
         self.kafka = KafkaService(self.test_context, num_nodes=self.replication, zk=self.zk, topics=self.topics)
         self.kafka.start()
+
+        # allow some time for topics to be created
+        wait_until(lambda: self.get_topics_count() >= (len(self.topics) * self.num_kafka_nodes),
+                   timeout_sec=60,
+                   err_msg="Broker did not create all topics in 60 seconds ")
+
         # Start test harness
         self.driver = StreamsSmokeTestDriverService(self.test_context, self.kafka)
         self.processor1 = StreamsSmokeTestJobRunnerService(self.test_context, self.kafka)
