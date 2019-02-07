@@ -273,9 +273,9 @@ trait FetchContext extends Logging {
   def getFetchOffset(part: TopicPartition): Option[Long]
 
   /**
-    * Apply a function to each partition in the fetch request.
+    * Get all of the partitions in the fetch request.
     */
-  def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit
+  def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)]
 
   /**
     * Get the response size to be used for quota computation. Since we are returning an empty response in case of
@@ -302,11 +302,13 @@ trait FetchContext extends Logging {
 /**
   * The fetch context for a fetch request that had a session error.
   */
-class SessionErrorContext(val error: Errors,
-                          val reqMetadata: JFetchMetadata) extends FetchContext {
+final class SessionErrorContext(val error: Errors,
+                                val reqMetadata: JFetchMetadata) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {}
+  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
+    Vector.empty
+  }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
     FetchResponse.sizeOf(versionId, (new FetchSession.RESP_MAP).entrySet.iterator)
@@ -324,12 +326,12 @@ class SessionErrorContext(val error: Errors,
   *
   * @param fetchData          The partition data from the fetch request.
   */
-class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData]) extends FetchContext {
+final class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData]) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
-    fetchData.entrySet.asScala.foreach(entry => fun(entry.getKey, entry.getValue))
+  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
+    fetchData.entrySet.asScala.map(entry => (entry.getKey, entry.getValue))(breakOut)
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -351,16 +353,16 @@ class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, FetchReque
   * @param fetchData          The partition data from the fetch request.
   * @param isFromFollower     True if this fetch request came from a follower.
   */
-class FullFetchContext(private val time: Time,
-                       private val cache: FetchSessionCache,
-                       private val reqMetadata: JFetchMetadata,
-                       private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
-                       private val isFromFollower: Boolean) extends FetchContext {
+final class FullFetchContext(private val time: Time,
+                             private val cache: FetchSessionCache,
+                             private val reqMetadata: JFetchMetadata,
+                             private val fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
+                             private val isFromFollower: Boolean) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
-    fetchData.entrySet.asScala.foreach(entry => fun(entry.getKey, entry.getValue))
+  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
+    fetchData.entrySet.asScala.map(entry => (entry.getKey, entry.getValue))(breakOut)
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -393,18 +395,18 @@ class FullFetchContext(private val time: Time,
   * @param reqMetadata  The request metadata.
   * @param session      The incremental fetch request session.
   */
-class IncrementalFetchContext(private val time: Time,
-                              private val reqMetadata: JFetchMetadata,
-                              private val session: FetchSession) extends FetchContext {
+final class IncrementalFetchContext(private val time: Time,
+                                    private val reqMetadata: JFetchMetadata,
+                                    private val session: FetchSession) extends FetchContext {
 
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
 
-  override def foreachPartition(fun: (TopicPartition, FetchRequest.PartitionData) => Unit): Unit = {
+  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
     // Take the session lock and iterate over all the cached partitions.
     session.synchronized {
-      session.partitionMap.iterator.asScala.foreach(part => {
-        fun(new TopicPartition(part.topic, part.partition), part.reqData)
-      })
+      session.partitionMap.iterator.asScala.toSeq.map(part => {
+        (new TopicPartition(part.topic, part.partition), part.reqData)
+      })(breakOut)
     }
   }
 

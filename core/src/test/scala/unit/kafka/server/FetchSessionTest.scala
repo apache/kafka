@@ -148,11 +148,11 @@ class FetchSessionTest {
     val context2 = fetchManager.newContext(JFetchMetadata.INITIAL, reqData2, EMPTY_PART_LIST, false)
     assertEquals(classOf[FullFetchContext], context2.getClass)
     val reqData2Iter = reqData2.entrySet().iterator()
-    context2.foreachPartition((topicPart, data) => {
+    context2.partitions.foreach { case (topicPart, data) =>
       val entry = reqData2Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
-    })
+    }
     assertEquals(0, context2.getFetchOffset(new TopicPartition("foo", 0)).get)
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
     val respData2 = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[Records]]
@@ -185,11 +185,11 @@ class FetchSessionTest {
       new JFetchMetadata(resp2.sessionId(), 1), reqData5, EMPTY_PART_LIST, false)
     assertEquals(classOf[IncrementalFetchContext], context5.getClass)
     val reqData5Iter = reqData2.entrySet().iterator()
-    context5.foreachPartition((topicPart, data) => {
+    context5.partitions.foreach { case (topicPart, data) =>
       val entry = reqData5Iter.next()
       assertEquals(entry.getKey, topicPart)
       assertEquals(entry.getValue, data)
-    })
+    }
     assertEquals(10, context5.getFetchOffset(new TopicPartition("foo", 1)).get)
     val resp5 = context5.updateAndGenerateResponseData(respData2)
     assertEquals(Errors.NONE, resp5.error())
@@ -271,9 +271,9 @@ class FetchSessionTest {
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
     val parts2 = Set(new TopicPartition("foo", 1), new TopicPartition("bar", 0))
     val reqData2Iter = parts2.iterator
-    context2.foreachPartition((topicPart, data) => {
+    context2.partitions.foreach { case (topicPart, data) =>
       assertEquals(reqData2Iter.next(), topicPart)
-    })
+    }
     assertEquals(None, context2.getFetchOffset(new TopicPartition("foo", 0)))
     assertEquals(10, context2.getFetchOffset(new TopicPartition("foo", 1)).get)
     assertEquals(15, context2.getFetchOffset(new TopicPartition("bar", 0)).get)

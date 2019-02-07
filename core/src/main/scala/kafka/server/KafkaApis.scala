@@ -36,6 +36,8 @@ import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
+import kafka.server.validator.FetchRequestValidation
+import kafka.server.validator.Validator
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -90,6 +92,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
+  val fetchRequestValidator = Validator.fetchRequest(metadataCache, authorizer)
 
   def close() {
     info("Shutdown complete.")
@@ -520,38 +523,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
-    def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
-      new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
-        FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
-    }
-
-    val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
-    val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-    if (fetchRequest.isFromFollower) {
-      // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
-      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        fetchContext.foreachPartition { (topicPartition, data) =>
-          if (!metadataCache.contains(topicPartition))
-            erroneous += topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-          else
-            interesting += (topicPartition -> data)
-        }
-      } else {
-        fetchContext.foreachPartition { (part, _) =>
-          erroneous += part -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-        }
-      }
-    } else {
-      // Regular Kafka consumers need READ permission on each partition they are fetching.
-      fetchContext.foreachPartition { (topicPartition, data) =>
-        if (!authorize(request.session, Read, Resource(Topic, topicPartition.topic, LITERAL)))
-          erroneous += topicPartition -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
-        else if (!metadataCache.contains(topicPartition))
-          erroneous += topicPartition -> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        else
-          interesting += (topicPartition -> data)
-      }
-    }
+    val FetchRequestValidation(erroneous, interesting) = fetchRequestValidator.validate(
+      request,
+      fetchRequest,
+      FetchRequestValidation(Vector.empty, fetchContext.partitions)
+    )
 
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
@@ -559,7 +535,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+        FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
         // Down-conversion of the fetched records is needed when the stored magic version is
         // greater than that supported by the client (as indicated by the fetch request version). If the
@@ -584,7 +560,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // For fetch requests from clients, check if down-conversion is disabled for the particular partition
             if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
               trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-              errorResponse(Errors.UNSUPPORTED_VERSION)
+              FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_VERSION)
             } else {
               try {
                 trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
@@ -598,7 +574,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
-                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+                  FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
@@ -623,12 +599,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       // Record time before any byte-rate throttling.
       request.apiRemoteCompleteTimeNanos = time.nanoseconds
 
-      var unconvertedFetchResponse: FetchResponse[Records] = null
-
-      def createResponse(throttleTimeMs: Int): FetchResponse[BaseRecords] = {
+      def createResponse(unconvertedResponse: FetchResponse[Records], throttleTimeMs: Int): FetchResponse[BaseRecords] = {
         // Down-convert messages for each partition if required
         val convertedData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData[BaseRecords]]
-        unconvertedFetchResponse.responseData().asScala.foreach { case (tp, unconvertedPartitionData) =>
+        unconvertedResponse.responseData().asScala.foreach { case (tp, unconvertedPartitionData) =>
           if (unconvertedPartitionData.error != Errors.NONE)
             debug(s"Fetch request with correlation id ${request.header.correlationId} from client $clientId " +
               s"on partition $tp failed due to ${unconvertedPartitionData.error.exceptionName}")
@@ -636,8 +610,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         // Prepare fetch response from converted data
-        val response = new FetchResponse(unconvertedFetchResponse.error(), convertedData, throttleTimeMs,
-          unconvertedFetchResponse.sessionId())
+        val response = new FetchResponse(unconvertedResponse.error(), convertedData, throttleTimeMs,
+          unconvertedResponse.sessionId())
         response.responseData.asScala.foreach { case (topicPartition, data) =>
           // record the bytes out metrics only when the response is being sent
           brokerTopicStats.updateBytesOut(topicPartition.topic, fetchRequest.isFromFollower, data.records.sizeInBytes)
@@ -657,12 +631,12 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (fetchRequest.isFromFollower) {
         // We've already evaluated against the quota and are good to go. Just need to record it now.
-        unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-        val responseSize = sizeOfThrottledPartitions(versionId, unconvertedFetchResponse, quotas.leader)
+        val unconvertedResponse = fetchContext.updateAndGenerateResponseData(partitions)
+        val responseSize = sizeOfThrottledPartitions(versionId, unconvertedResponse, quotas.leader)
         quotas.leader.record(responseSize)
-        trace(s"Sending Fetch response with partitions.size=${unconvertedFetchResponse.responseData().size()}, " +
-          s"metadata=${unconvertedFetchResponse.sessionId()}")
-        sendResponseExemptThrottle(request, createResponse(0), Some(updateConversionStats))
+        trace(s"Sending Fetch response with partitions.size=${unconvertedResponse.responseData().size()}, " +
+          s"metadata=${unconvertedResponse.sessionId()}")
+        sendResponseExemptThrottle(request, createResponse(unconvertedResponse, 0), Some(updateConversionStats))
       } else {
         // Fetch size used to determine throttle time is calculated before any down conversions.
         // This may be slightly different from the actual response size. But since down conversions
@@ -677,7 +651,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val bandwidthThrottleTimeMs = quotas.fetch.maybeRecordAndGetThrottleTimeMs(request, responseSize, timeMs)
 
         val maxThrottleTimeMs = math.max(bandwidthThrottleTimeMs, requestThrottleTimeMs)
-        if (maxThrottleTimeMs > 0) {
+        val unconvertedResponse = if (maxThrottleTimeMs > 0) {
           // Even if we need to throttle for request quota violation, we should "unrecord" the already recorded value
           // from the fetch quota because we are going to return an empty response.
           quotas.fetch.unrecordQuotaSensor(request, responseSize, timeMs)
@@ -687,15 +661,17 @@ class KafkaApis(val requestChannel: RequestChannel,
             quotas.request.throttle(request, requestThrottleTimeMs, sendResponse)
           }
           // If throttling is required, return an empty response.
-          unconvertedFetchResponse = fetchContext.getThrottledResponse(maxThrottleTimeMs)
+          fetchContext.getThrottledResponse(maxThrottleTimeMs)
         } else {
           // Get the actual response. This will update the fetch context.
-          unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
+          val unconvertedResponse = fetchContext.updateAndGenerateResponseData(partitions)
+          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedResponse.sessionId}")
+
+          unconvertedResponse
         }
 
         // Send the response immediately.
-        sendResponse(request, Some(createResponse(maxThrottleTimeMs)), Some(updateConversionStats))
+        sendResponse(request, Some(createResponse(unconvertedResponse, maxThrottleTimeMs)), Some(updateConversionStats))
       }
     }
 
