@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException
-import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
@@ -261,11 +261,16 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     checkClosedState(manualGroup, numRecords)
   }
 
-  private def findCoordinator(group: String) : Int = {
+  private def findCoordinator(group: String): Int = {
     val request = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
-    val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
-    val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion())
-    response.node().id()
+    var nodeId = -1
+    TestUtils.waitUntilTrue(() => {
+      val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
+      val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion)
+      nodeId = response.node.id
+      response.error == Errors.NONE
+    }, s"Failed to find coordinator for group $group")
+    nodeId
   }
 
   /**
