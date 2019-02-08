@@ -360,12 +360,10 @@ class Log(@volatile var dir: File,
     }
 
     if (recordVersion.precedes(RecordVersion.V2)) {
-      val currentCache = leaderEpochCache.orElse {
-        if (leaderEpochFile.exists())
-          Some(newLeaderEpochFileCache())
-        else
-          None
-      }
+      val currentCache = if (leaderEpochFile.exists())
+        Some(newLeaderEpochFileCache())
+      else
+        None
 
       if (currentCache.exists(_.nonEmpty))
         warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
