@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -26,7 +25,6 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
-import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
@@ -120,10 +118,8 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         );
 
         if (root != null) {
-            context.register(root, (RecordBatchingStateRestoreCallback) records -> {
-                for (final ConsumerRecord<byte[], byte[]> record : records) {
-                    put(extractStoreKey(record.key(), serdes), serdes.valueFrom(record.value()), extractStoreTimestamp(record.key()));
-                }
+            context.register(root, (key, value) -> {
+                put(extractStoreKey(key, serdes), serdes.valueFrom(value), extractStoreTimestamp(key));
             });
         }
         this.open = true;
