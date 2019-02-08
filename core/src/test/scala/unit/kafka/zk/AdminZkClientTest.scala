@@ -66,6 +66,11 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
       adminZkClient.createTopicWithAssignment("test", topicConfig, Map(0->Seq(0,1), 1->Seq(0)))
     }
 
+    // partitions should be 0-based
+    intercept[InvalidReplicaAssignmentException] {
+      adminZkClient.createTopicWithAssignment("test", topicConfig, Map(1->Seq(1,2), 2->Seq(1,2)))
+    }
+
     // good assignment
     val assignment = Map(0 -> List(0, 1, 2),
                          1 -> List(1, 2, 3))

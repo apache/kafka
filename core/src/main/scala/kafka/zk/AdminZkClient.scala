@@ -125,6 +125,10 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
         throw new InvalidReplicaAssignmentException("Duplicate replica assignment found: " + partitionReplicaAssignment)
     )
 
+    val partitionSize = partitionReplicaAssignment.size
+    if (partitionReplicaAssignment.keys.reduce(_+_) != partitionSize * (partitionSize - 1) / 2)
+        throw new InvalidReplicaAssignmentException("partitions should be a consecutive 0-based integer series")
+
     LogConfig.validate(config)
   }
 
