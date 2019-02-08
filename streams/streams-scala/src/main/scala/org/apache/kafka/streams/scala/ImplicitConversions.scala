@@ -60,24 +60,47 @@ object ImplicitConversions {
 
   implicit def tuple2ToKeyValue[K, V](tuple: (K, V)): KeyValue[K, V] = new KeyValue(tuple._1, tuple._2)
 
-  // we would also like to allow users implicit serdes
-  // and these implicits will convert them to `Grouped`, `Produced` or `Consumed`
+  // we would also like to allow users implicit serdes and optional repartition topic / state stores names
+  // and these implicits will convert them to `Grouped`, `Produced`, `Consumed`, `Materialized` and `Joined`
 
-  implicit def groupedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] =
+  implicit def groupedFromNameAndSerde[K, V](repartitionTopicName: String)
+                                         (implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] = {
+    Grouped.`with`[K, V](repartitionTopicName)
+  }
+
+  implicit def groupedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] = {
     Grouped.`with`[K, V]
+  }
 
-  implicit def consumedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Consumed[K, V] =
+  implicit def consumedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Consumed[K, V] = {
     Consumed.`with`[K, V]
+  }
 
-  implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] =
+  implicit def producedFromSerde[K, V](implicit keySerde: Serde[K], valueSerde: Serde[V]): Produced[K, V] = {
     Produced.`with`[K, V]
+  }
+
+  implicit def materializedFromNameAndSerde[K, V, S <: StateStore](stateStoreName: String)
+                                                               (implicit keySerde: Serde[K],
+                                                                valueSerde: Serde[V]): Materialized[K, V, S] = {
+    Materialized.as[K, V, S](stateStoreName)
+  }
 
   implicit def materializedFromSerde[K, V, S <: StateStore](implicit keySerde: Serde[K],
-                                                            valueSerde: Serde[V]): Materialized[K, V, S] =
+                                                            valueSerde: Serde[V]): Materialized[K, V, S] = {
     Materialized.`with`[K, V, S]
+  }
+
+  implicit def joinedFromNameAndKeyValueOtherSerde[K, V, VO](name: String)
+                                                         (implicit keySerde: Serde[K],
+                                                          valueSerde: Serde[V],
+                                                          otherValueSerde: Serde[VO]): Joined[K, V, VO] = {
+    Joined.`with`[K, V, VO](name)
+  }
 
   implicit def joinedFromKeyValueOtherSerde[K, V, VO](implicit keySerde: Serde[K],
                                                       valueSerde: Serde[V],
-                                                      otherValueSerde: Serde[VO]): Joined[K, V, VO] =
+                                                      otherValueSerde: Serde[VO]): Joined[K, V, VO] = {
     Joined.`with`[K, V, VO]
+  }
 }
