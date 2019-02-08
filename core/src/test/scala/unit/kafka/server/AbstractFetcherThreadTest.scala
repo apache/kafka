@@ -284,10 +284,8 @@ class AbstractFetcherThreadTest {
   def testTruncateToHighWatermarkIfLeaderEpochRequestNotSupported(): Unit = {
     val highWatermark = 2L
     val partition = new TopicPartition("topic", 0)
-    var truncations = 0
     val fetcher = new MockFetcherThread {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-        truncations += 1
         assertEquals(highWatermark, truncationState.offset)
         assertTrue(truncationState.truncationCompleted)
         super.truncate(topicPartition, truncationState)
@@ -310,7 +308,6 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    assertEquals(1, truncations)
     assertEquals(highWatermark, replicaState.logEndOffset)
     assertEquals(highWatermark, fetcher.fetchState(partition).get.fetchOffset)
     assertTrue(fetcher.fetchState(partition).get.isReadyForFetch)
@@ -320,10 +317,8 @@ class AbstractFetcherThreadTest {
   def testTruncateToHighWatermarkIfLeaderEpochInfoNotAvailable(): Unit = {
     val highWatermark = 2L
     val partition = new TopicPartition("topic", 0)
-    var truncations = 0
     val fetcher = new MockFetcherThread {
       override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-        truncations += 1
         assertEquals(highWatermark, truncationState.offset)
         assertTrue(truncationState.truncationCompleted)
         super.truncate(topicPartition, truncationState)
@@ -346,7 +341,6 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    assertEquals(1, truncations)
     assertEquals(highWatermark, replicaState.logEndOffset)
     assertEquals(highWatermark, fetcher.fetchState(partition).get.fetchOffset)
     assertTrue(fetcher.fetchState(partition).get.isReadyForFetch)
