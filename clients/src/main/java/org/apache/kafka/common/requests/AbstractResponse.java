@@ -89,7 +89,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case HEARTBEAT:
                 return new HeartbeatResponse(struct);
             case LEAVE_GROUP:
-                return new LeaveGroupResponse(struct);
+                return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
@@ -109,7 +109,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:
-                return new CreateTopicsResponse(struct);
+                return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct);
             case DELETE_RECORDS:

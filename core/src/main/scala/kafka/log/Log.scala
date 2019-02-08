@@ -32,15 +32,15 @@ import kafka.api.KAFKA_0_10_0_IV0
 import kafka.common.{LogSegmentOffsetOverflowException, LongRef, OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, NoCompressionCodec}
 import kafka.metrics.KafkaMetricsGroup
-import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.LeaderEpochFileCache
-import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogOffsetMetadata, OffsetAndEpoch}
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.requests.ListOffsetRequest
+import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
@@ -237,7 +237,15 @@ class Log(@volatile var dir: File,
       warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
         s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
         s"This may result in frequent log rolling.")
+    val oldConfig = this.config
     this.config = newConfig
+    if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {
+      val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
+      val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+      if (newRecordVersion.precedes(oldRecordVersion))
+        warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+      initializeLeaderEpochCache()
+    }
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
@@ -270,22 +278,28 @@ class Log(@volatile var dir: File,
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
 
-  @volatile private var _leaderEpochCache: LeaderEpochFileCache = initializeLeaderEpochCache()
+  // Visible for testing
+  @volatile var leaderEpochCache: Option[LeaderEpochFileCache] = None
 
   locally {
     val startMs = time.milliseconds
+
+    // create the log directory if it doesn't exist
+    Files.createDirectories(dir.toPath)
+
+    initializeLeaderEpochCache()
 
     val nextOffset = loadSegments()
 
     /* Calculate the offset of the next message */
     nextOffsetMetadata = new LogOffsetMetadata(nextOffset, activeSegment.baseOffset, activeSegment.size)
 
-    _leaderEpochCache.truncateFromEnd(nextOffsetMetadata.messageOffset)
+    leaderEpochCache.foreach(_.truncateFromEnd(nextOffsetMetadata.messageOffset))
 
     logStartOffset = math.max(logStartOffset, segments.firstEntry.getValue.baseOffset)
 
     // The earliest leader epoch may not be flushed during a hard failure. Recover it here.
-    _leaderEpochCache.truncateFromStart(logStartOffset)
+    leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
 
     // Any segment loading or recovery code must not use producerStateManager, so that we can build the full state here
     // from scratch.
@@ -335,13 +349,30 @@ class Log(@volatile var dir: File,
   /** The name of this log */
   def name  = dir.getName()
 
-  def leaderEpochCache: LeaderEpochFileCache = _leaderEpochCache
+  def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
-  private def initializeLeaderEpochCache(): LeaderEpochFileCache = {
-    // create the log directory if it doesn't exist
-    Files.createDirectories(dir.toPath)
-    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
-    new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+  private def initializeLeaderEpochCache(): Unit = lock synchronized {
+    val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
+
+    def newLeaderEpochFileCache(): LeaderEpochFileCache = {
+      val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
+      new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+    }
+
+    if (recordVersion.precedes(RecordVersion.V2)) {
+      val currentCache = if (leaderEpochFile.exists())
+        Some(newLeaderEpochFileCache())
+      else
+        None
+
+      if (currentCache.exists(_.nonEmpty))
+        warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
+
+      Files.deleteIfExists(leaderEpochFile.toPath)
+      leaderEpochCache = None
+    } else {
+      leaderEpochCache = Some(newLeaderEpochFileCache())
+    }
   }
 
   /**
@@ -580,7 +611,7 @@ class Log(@volatile var dir: File,
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
-            recoverSegment(segment, Some(_leaderEpochCache))
+            recoverSegment(segment, leaderEpochCache)
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset
@@ -734,7 +765,7 @@ class Log(@volatile var dir: File,
           producerStateManager.logDir = dir
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
           // the checkpoint file in renamed log directory
-          _leaderEpochCache = initializeLeaderEpochCache()
+          initializeLeaderEpochCache()
         }
       }
     }
@@ -875,7 +906,7 @@ class Log(@volatile var dir: File,
         // update the epoch cache with the epoch stamped onto the message by the leader
         validRecords.batches.asScala.foreach { batch =>
           if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
-            _leaderEpochCache.assign(batch.partitionLeaderEpoch, batch.baseOffset)
+            maybeAssignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -944,6 +975,24 @@ class Log(@volatile var dir: File,
     }
   }
 
+  def maybeAssignEpochStartOffset(leaderEpoch: Int, startOffset: Long): Unit = {
+    leaderEpochCache.foreach { cache =>
+      cache.assign(leaderEpoch, startOffset)
+    }
+  }
+
+  def latestEpoch: Option[Int] = leaderEpochCache.flatMap(_.latestEpoch)
+
+  def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
+    leaderEpochCache.flatMap { cache =>
+      val (foundEpoch, foundOffset) = cache.endOffsetFor(leaderEpoch)
+      if (foundOffset == EpochEndOffset.UNDEFINED_EPOCH_OFFSET)
+        None
+      else
+        Some(OffsetAndEpoch(foundOffset, foundEpoch))
+    }
+  }
+
   def onHighWatermarkIncremented(highWatermark: Long): Unit = {
     lock synchronized {
       replicaHighWatermark = Some(highWatermark)
@@ -982,7 +1031,7 @@ class Log(@volatile var dir: File,
         if (newLogStartOffset > logStartOffset) {
           info(s"Incrementing log start offset to $newLogStartOffset")
           logStartOffset = newLogStartOffset
-          _leaderEpochCache.truncateFromStart(logStartOffset)
+          leaderEpochCache.foreach(_.truncateFromStart(logStartOffset))
           producerStateManager.truncateHead(logStartOffset)
           updateFirstUnstableOffset()
         }
@@ -1284,19 +1333,16 @@ class Log(@volatile var dir: File,
         // The first cached epoch usually corresponds to the log start offset, but we have to verify this since
         // it may not be true following a message format version bump as the epoch will not be available for
         // log entries written in the older format.
-        val earliestEpochEntry = leaderEpochCache.earliestEntry
+        val earliestEpochEntry = leaderEpochCache.flatMap(_.earliestEntry)
         val epochOpt = earliestEpochEntry match {
           case Some(entry) if entry.startOffset <= logStartOffset => Optional.of[Integer](entry.epoch)
           case _ => Optional.empty[Integer]()
         }
         return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logStartOffset, epochOpt))
       } else if (targetTimestamp == ListOffsetRequest.LATEST_TIMESTAMP) {
-        val latestEpoch = leaderEpochCache.latestEpoch
-        val epochOpt = if (latestEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH)
-          Optional.empty[Integer]()
-        else
-          Optional.of[Integer](latestEpoch)
-        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOpt))
+        val latestEpochOpt = leaderEpochCache.flatMap(_.latestEpoch).map(_.asInstanceOf[Integer])
+        val epochOptional = Optional.ofNullable(latestEpochOpt.orNull)
+        return Some(new TimestampAndOffset(RecordBatch.NO_TIMESTAMP, logEndOffset, epochOptional))
       }
 
       val targetSeg = {
@@ -1711,7 +1757,7 @@ class Log(@volatile var dir: File,
         removeLogMetrics()
         logSegments.foreach(_.deleteIfExists())
         segments.clear()
-        _leaderEpochCache.clear()
+        leaderEpochCache.foreach(_.clear())
         Utils.delete(dir)
         // File handlers will be closed if this log is deleted
         isMemoryMappedBufferClosed = true
@@ -1766,7 +1812,7 @@ class Log(@volatile var dir: File,
             updateLogEndOffset(targetOffset)
             this.recoveryPoint = math.min(targetOffset, this.recoveryPoint)
             this.logStartOffset = math.min(targetOffset, this.logStartOffset)
-            _leaderEpochCache.truncateFromEnd(targetOffset)
+            leaderEpochCache.foreach(_.truncateFromEnd(targetOffset))
             loadProducerState(targetOffset, reloadFromCleanShutdown = false)
           }
           true
@@ -1795,7 +1841,7 @@ class Log(@volatile var dir: File,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
         updateLogEndOffset(newOffset)
-        _leaderEpochCache.clearAndFlush()
+        leaderEpochCache.foreach(_.clearAndFlush())
 
         producerStateManager.truncate()
         producerStateManager.updateMapEndOffset(newOffset)

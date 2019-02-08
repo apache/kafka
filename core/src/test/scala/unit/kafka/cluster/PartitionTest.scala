@@ -35,7 +35,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{IsolationLevel, LeaderAndIsrRequest, ListOffsetRequest}
+import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, ListOffsetRequest}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
@@ -60,10 +60,7 @@ class PartitionTest {
 
   @Before
   def setup(): Unit = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
 
     tmpDir = TestUtils.tempDir()
@@ -86,6 +83,15 @@ class PartitionTest {
     EasyMock.expect(kafkaZkClient.conditionalUpdatePath(EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject()))
       .andReturn((true, 0)).anyTimes()
     EasyMock.replay(kafkaZkClient)
+  }
+
+  private def createLogProperties(overrides: Map[String, String]): Properties = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    overrides.foreach { case (k, v) => logProps.put(k, v) }
+    logProps
   }
 
   @After
@@ -121,6 +127,35 @@ class PartitionTest {
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
     assertEquals(4, epochEndOffset.endOffset)
     assertEquals(leaderEpoch, epochEndOffset.leaderEpoch)
+  }
+
+  @Test
+  def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
+    val leaderEpoch = 8
+
+    val logConfig = LogConfig(createLogProperties(Map(
+      LogConfig.MessageFormatVersionProp -> kafka.api.KAFKA_0_10_2_IV0.shortVersion)))
+    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)),
+      magicValue = RecordVersion.V1.value
+    ), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("k3".getBytes, "v3".getBytes),
+      new SimpleRecord("k4".getBytes, "v4".getBytes)),
+      magicValue = RecordVersion.V1.value
+    ), leaderEpoch = 5)
+    assertEquals(4, log.logEndOffset)
+
+    val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
+    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+    assertEquals(None, log.latestEpoch)
+
+    val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
+      leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
+    assertEquals(EpochEndOffset.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
+    assertEquals(EpochEndOffset.UNDEFINED_EPOCH, epochEndOffset.leaderEpoch)
   }
 
   @Test
