@@ -95,7 +95,7 @@ class ReplicaFetcherThread(name: String,
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
-    replicaMgr.localReplicaOrException(topicPartition).epochs.map(_.latestEpoch)
+    replicaMgr.localReplicaOrException(topicPartition).latestEpoch
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
@@ -103,14 +103,7 @@ class ReplicaFetcherThread(name: String,
   }
 
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
-    val replica = replicaMgr.localReplicaOrException(topicPartition)
-    replica.epochs.flatMap { epochCache =>
-      val (foundEpoch, foundOffset) = epochCache.endOffsetFor(epoch)
-      if (foundOffset == UNDEFINED_EPOCH_OFFSET)
-        None
-      else
-        Some(OffsetAndEpoch(foundOffset, foundEpoch))
-    }
+    replicaMgr.localReplicaOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
   override def initiateShutdown(): Boolean = {
@@ -299,47 +292,35 @@ class ReplicaFetcherThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
 
-  override def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-    def undefinedResponseMap(error: Errors,
-                             requestMap: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-      requestMap.map { case (tp, _) =>
-        tp -> new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-      }
+  override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+
+    if (partitions.isEmpty) {
+      debug("Skipping leaderEpoch request since all partitions do not have an epoch")
+      return Map.empty
     }
 
-    if (brokerSupportsLeaderEpochRequest) {
-      // skip request for partitions without epoch, as their topic log message format doesn't support epochs
-      val (partitionsWithEpoch, partitionsWithoutEpoch) = partitions.partition { case (_, epochData) =>
-        epochData.leaderEpoch != UNDEFINED_EPOCH
-      }
-      val resultWithoutEpoch = undefinedResponseMap(Errors.NONE, partitionsWithoutEpoch)
-      if (partitionsWithEpoch.isEmpty) {
-        debug("Skipping leaderEpoch request since all partitions do not have an epoch")
-        return resultWithoutEpoch
-      }
+    val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion, partitions.asJava)
+    debug(s"Sending offset for leader epoch request $epochRequest")
 
-      val epochRequest = new OffsetsForLeaderEpochRequest.Builder(offsetForLeaderEpochRequestVersion,
-        partitionsWithEpoch.asJava)
-      val resultWithEpoch = try {
-        val response = leaderEndpoint.sendRequest(epochRequest)
-        val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
-        debug(s"Receive leaderEpoch response $response; " +
-          s"Skipped request for partitions ${partitionsWithoutEpoch.keys}")
-        responseBody.responses.asScala
-      } catch {
-        case t: Throwable =>
-          warn(s"Error when sending leader epoch request for $partitions", t)
+    try {
+      val response = leaderEndpoint.sendRequest(epochRequest)
+      val responseBody = response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse]
+      debug(s"Received leaderEpoch response $response")
+      responseBody.responses.asScala
+    } catch {
+      case t: Throwable =>
+        warn(s"Error when sending leader epoch request for $partitions", t)
 
-          // if we get any unexpected exception, mark all partitions with an error
-          undefinedResponseMap(Errors.forException(t), partitionsWithEpoch)
-      }
-      resultWithEpoch ++ resultWithoutEpoch
-    } else {
-      // just generate a response with no error but UNDEFINED_OFFSET so that we can fall back to truncating using
-      // high watermark in maybeTruncate()
-      undefinedResponseMap(Errors.NONE, partitions)
+        // if we get any unexpected exception, mark all partitions with an error
+        val error = Errors.forException(t)
+        partitions.map { case (tp, _) =>
+          tp -> new EpochEndOffset(error, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
+        }
     }
   }
+
+  override def isOffsetForLeaderEpochSupported: Boolean = brokerSupportsLeaderEpochRequest
+
 
   /**
    *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,
