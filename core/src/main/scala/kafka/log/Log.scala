@@ -284,6 +284,9 @@ class Log(@volatile var dir: File,
   locally {
     val startMs = time.milliseconds
 
+    // create the log directory if it doesn't exist
+    Files.createDirectories(dir.toPath)
+
     initializeLeaderEpochCache()
 
     val nextOffset = loadSegments()
@@ -370,11 +373,7 @@ class Log(@volatile var dir: File,
       Files.deleteIfExists(leaderEpochFile.toPath)
       leaderEpochCache = None
     } else {
-      leaderEpochCache = leaderEpochCache.orElse {
-        // create the log directory if it doesn't exist
-        Files.createDirectories(dir.toPath)
-        Some(newLeaderEpochFileCache())
-      }
+      leaderEpochCache = Some(newLeaderEpochFileCache())
     }
   }
 
