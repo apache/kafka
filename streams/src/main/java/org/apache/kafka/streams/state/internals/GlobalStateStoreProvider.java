@@ -27,7 +27,7 @@ import java.util.Map;
 public class GlobalStateStoreProvider implements StateStoreProvider {
     private final Map<String, StateStore> globalStateStores;
 
-    public GlobalStateStoreProvider(Map<String, StateStore> globalStateStores) {
+    public GlobalStateStoreProvider(final Map<String, StateStore> globalStateStores) {
         this.globalStateStores = globalStateStores;
     }
 

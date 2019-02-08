@@ -269,6 +269,16 @@ public class ConnectSchemaTest {
     }
 
     @Test
+    public void testArrayDefaultValueEquality() {
+        ConnectSchema s1 = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        ConnectSchema s2 = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"a", "b"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+        ConnectSchema differentValueSchema = new ConnectSchema(Schema.Type.ARRAY, false, new String[] {"b", "c"}, null, null, null, null, null, null, SchemaBuilder.int8().build());
+
+        assertEquals(s1, s2);
+        assertNotEquals(s1, differentValueSchema);
+    }
+
+    @Test
     public void testMapEquality() {
         // Same as testArrayEquality, but for both key and value schemas
         ConnectSchema s1 = new ConnectSchema(Schema.Type.MAP, false, null, null, null, null, null, null, SchemaBuilder.int8().build(), SchemaBuilder.int16().build());

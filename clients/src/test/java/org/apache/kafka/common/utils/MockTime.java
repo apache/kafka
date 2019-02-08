@@ -71,11 +71,6 @@ public class MockTime implements Time {
         return highResTimeNs.get();
     }
 
-    @Override
-    public long hiResClockMs() {
-        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
-    }
-
     private void maybeSleep(long ms) {
         if (ms != 0)
             sleep(ms);

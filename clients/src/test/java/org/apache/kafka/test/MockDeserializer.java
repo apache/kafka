@@ -31,6 +31,9 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
     public static ClusterResource noClusterId = new ClusterResource("no_cluster_id");
     public static AtomicReference<ClusterResource> clusterIdBeforeDeserialize = new AtomicReference<>(noClusterId);
 
+    public boolean isKey;
+    public Map<String, ?> configs;
+
     public static void resetStaticVariables() {
         initCount = new AtomicInteger(0);
         closeCount = new AtomicInteger(0);
@@ -44,6 +47,8 @@ public class MockDeserializer implements ClusterResourceListener, Deserializer<b
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
+        this.configs = configs;
+        this.isKey = isKey;
     }
 
     @Override

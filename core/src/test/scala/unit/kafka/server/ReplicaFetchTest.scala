@@ -51,12 +51,11 @@ class ReplicaFetchTest extends ZooKeeperTestHarness  {
 
     // create a topic and partition and await leadership
     for (topic <- List(topic1,topic2)) {
-      createTopic(zkUtils, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
+      createTopic(zkClient, topic, numPartitions = 1, replicationFactor = 2, servers = brokers)
     }
 
     // send test messages to leader
-    val producer = TestUtils.createNewProducer(TestUtils.getBrokerListStrFromServers(brokers),
-                                               retries = 5,
+    val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(brokers),
                                                keySerializer = new StringSerializer,
                                                valueSerializer = new StringSerializer)
     val records = testMessageList1.map(m => new ProducerRecord(topic1, m, m)) ++

@@ -43,7 +43,7 @@ public class MockStateRestoreListener extends AbstractNotifyingRestoreCallback {
     public static final String RESTORE_END = "restore_end";
 
     @Override
-    public void restore(byte[] key, byte[] value) {
+    public void restore(final byte[] key, final byte[] value) {
         restored.add(KeyValue.pair(key, value));
     }
 

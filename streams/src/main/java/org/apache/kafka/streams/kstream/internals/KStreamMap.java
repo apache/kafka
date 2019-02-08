@@ -26,7 +26,7 @@ class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
     private final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper;
 
-    public KStreamMap(KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper) {
+    public KStreamMap(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper) {
         this.mapper = mapper;
     }
 
@@ -37,8 +37,8 @@ class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
 
     private class KStreamMapProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(K key, V value) {
-            KeyValue<? extends K1, ? extends V1> newPair = mapper.apply(key, value);
+        public void process(final K key, final V value) {
+            final KeyValue<? extends K1, ? extends V1> newPair = mapper.apply(key, value);
             context().forward(newPair.key, newPair.value);
         }
     }

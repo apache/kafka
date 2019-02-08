@@ -89,4 +89,8 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     public void requestUpdate() {
         // Do nothing
     }
+
+    @Override
+    public void close() {
+    }
 }

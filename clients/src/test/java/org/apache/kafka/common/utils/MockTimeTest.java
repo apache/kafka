@@ -30,7 +30,7 @@ public class MockTimeTest {
     final public Timeout globalTimeout = Timeout.millis(120000);
 
     @Test
-    public void testAdvanceClock() throws Exception {
+    public void testAdvanceClock() {
         MockTime time = new MockTime(0, 100, 200);
         Assert.assertEquals(100, time.milliseconds());
         Assert.assertEquals(200, time.nanoseconds());
@@ -40,7 +40,7 @@ public class MockTimeTest {
     }
 
     @Test
-    public void testAutoTickMs() throws Exception {
+    public void testAutoTickMs() {
         MockTime time = new MockTime(1, 100, 200);
         Assert.assertEquals(101, time.milliseconds());
         Assert.assertEquals(2000200, time.nanoseconds());

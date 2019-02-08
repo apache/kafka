@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.file;
 
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.easymock.EasyMockSupport;
@@ -47,6 +48,16 @@ public class FileStreamSinkConnectorTest extends EasyMockSupport {
         sinkProperties = new HashMap<>();
         sinkProperties.put(SinkConnector.TOPICS_CONFIG, MULTIPLE_TOPICS);
         sinkProperties.put(FileStreamSinkConnector.FILE_CONFIG, FILENAME);
+    }
+
+    @Test
+    public void testConnectorConfigValidation() {
+        replayAll();
+        List<ConfigValue> configValues = connector.config().validate(sinkProperties);
+        for (ConfigValue val : configValues) {
+            assertEquals("Config property errors: " + val.errorMessages(), 0, val.errorMessages().size());
+        }
+        verifyAll();
     }
 
     @Test

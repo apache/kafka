@@ -22,7 +22,8 @@ import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
-import java.util.{Properties, UUID}
+import java.util.{Base64, Properties, UUID}
+
 import javax.management._
 
 import scala.collection._
@@ -30,7 +31,7 @@ import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.utils.{Base64, KafkaThread, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Utils}
 import org.slf4j.event.Level
 
 /**
@@ -101,6 +102,30 @@ object CoreUtils extends Logging {
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
 
   /**
+   * Invokes every function in `all` even if one or more functions throws an exception.
+   *
+   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+   * added as suppressed exceptions.
+   */
+  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
+  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
+  def tryAll(all: Seq[() => Unit]): Unit = {
+    var exception: Throwable = null
+    all.foreach { element =>
+      try element.apply()
+      catch {
+        case e: Throwable =>
+          if (exception != null)
+            exception.addSuppressed(e)
+          else
+            exception = e
+      }
+    }
+    if (exception != null)
+      throw exception
+  }
+
+  /**
    * Register the given mbean with the platform mbean server,
    * unregistering any mbean that was there before. Note,
    * this method will not throw an exception if the registration
@@ -122,7 +147,7 @@ object CoreUtils extends Logging {
       }
     } catch {
       case e: Exception => {
-        error("Failed to register Mbean " + name, e)
+        error(s"Failed to register Mbean $name", e)
         false
       }
     }
@@ -292,7 +317,7 @@ object CoreUtils extends Logging {
 
   def generateUuidAsBase64(): String = {
     val uuid = UUID.randomUUID()
-    Base64.urlEncoderNoPadding.encodeToString(getBytesFromUuid(uuid))
+    Base64.getUrlEncoder.withoutPadding.encodeToString(getBytesFromUuid(uuid))
   }
 
   def getBytesFromUuid(uuid: UUID): Array[Byte] = {

@@ -251,7 +251,7 @@ abstract public class Shell {
      * @param cmd shell command to execute.
      * @return the output of the executed command.
      */
-    public static String execCommand(String ... cmd) throws IOException {
+    public static String execCommand(String... cmd) throws IOException {
         return execCommand(cmd, -1);
     }
 

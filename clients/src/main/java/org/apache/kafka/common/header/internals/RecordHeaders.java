@@ -28,7 +28,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.utils.AbstractIterator;
 
 public class RecordHeaders implements Headers {
-    
+
     private final List<Header> headers;
     private volatile boolean isReadOnly;
 
@@ -43,7 +43,7 @@ public class RecordHeaders implements Headers {
             this.headers = new ArrayList<>(Arrays.asList(headers));
         }
     }
-    
+
     public RecordHeaders(Iterable<Header> headers) {
         //Use efficient copy constructor if possible, fallback to iteration otherwise
         if (headers == null) {
@@ -99,12 +99,7 @@ public class RecordHeaders implements Headers {
     @Override
     public Iterable<Header> headers(final String key) {
         checkKey(key);
-        return new Iterable<Header>() {
-            @Override
-            public Iterator<Header> iterator() {
-                return new FilterByKeyIterator(headers.iterator(), key);
-            }
-        };
+        return () -> new FilterByKeyIterator(headers.iterator(), key);
     }
 
     @Override
@@ -119,17 +114,15 @@ public class RecordHeaders implements Headers {
     public Header[] toArray() {
         return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[headers.size()]);
     }
-    
+
     private void checkKey(String key) {
-        if (key == null) {
+        if (key == null)
             throw new IllegalArgumentException("key cannot be null.");
-        }
     }
-    
+
     private void canWrite() {
-        if (isReadOnly) {
+        if (isReadOnly)
             throw new IllegalStateException("RecordHeaders has been closed.");
-        }
     }
 
     private Iterator<Header> closeAware(final Iterator<Header> original) {
@@ -177,7 +170,7 @@ public class RecordHeaders implements Headers {
                ", isReadOnly = " + isReadOnly +
                ')';
     }
-    
+
     private static final class FilterByKeyIterator extends AbstractIterator<Header> {
 
         private final Iterator<Header> original;
@@ -187,14 +180,13 @@ public class RecordHeaders implements Headers {
             this.original = original;
             this.key = key;
         }
-        
+
         protected Header makeNext() {
             while (true) {
                 if (original.hasNext()) {
                     Header header = original.next();
-                    if (!header.key().equals(key)) {
+                    if (!header.key().equals(key))
                         continue;
-                    }
 
                     return header;
                 }

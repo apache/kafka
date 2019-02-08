@@ -29,16 +29,17 @@ import org.scalatest.junit.JUnitSuite
 import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
-import kafka.common.InvalidOffsetException
+import org.apache.kafka.common.errors.InvalidOffsetException
 
 class OffsetIndexTest extends JUnitSuite {
   
   var idx: OffsetIndex = null
   val maxEntries = 30
+  val baseOffset = 45L
   
   @Before
   def setup() {
-    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset = 45L, maxIndexSize = 30 * 8)
+    this.idx = new OffsetIndex(nonExistentTempFile(), baseOffset, maxIndexSize = 30 * 8)
   }
   
   @After
@@ -102,10 +103,10 @@ class OffsetIndexTest extends JUnitSuite {
 
   @Test
   def testFetchUpperBoundOffset() {
-    val first = OffsetPosition(0, 0)
-    val second = OffsetPosition(1, 10)
-    val third = OffsetPosition(2, 23)
-    val fourth = OffsetPosition(3, 37)
+    val first = OffsetPosition(baseOffset + 0, 0)
+    val second = OffsetPosition(baseOffset + 1, 10)
+    val third = OffsetPosition(baseOffset + 2, 23)
+    val fourth = OffsetPosition(baseOffset + 3, 37)
 
     assertEquals(None, idx.fetchUpperBoundOffset(first, 5))
 
@@ -176,6 +177,15 @@ class OffsetIndexTest extends JUnitSuite {
     idx.forceUnmap()
     // mmap should be null after unmap causing lookup to throw a NPE
     intercept[NullPointerException](idx.lookup(1))
+  }
+
+  @Test
+  def testSanityLastOffsetEqualToBaseOffset(): Unit = {
+    // Test index sanity for the case where the last offset appended to the index is equal to the base offset
+    val baseOffset = 20L
+    val idx = new OffsetIndex(nonExistentTempFile(), baseOffset = baseOffset, maxIndexSize = 10 * 8)
+    idx.append(baseOffset, 0)
+    idx.sanityCheck()
   }
   
   def assertWriteFails[T](message: String, idx: OffsetIndex, offset: Int, klass: Class[T]) {

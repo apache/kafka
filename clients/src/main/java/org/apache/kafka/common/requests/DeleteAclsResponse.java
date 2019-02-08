@@ -18,13 +18,15 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AclBinding;
+import org.apache.kafka.common.resource.ResourcePattern;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.resource.Resource;
+import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -43,6 +45,7 @@ import static org.apache.kafka.common.protocol.CommonFields.OPERATION;
 import static org.apache.kafka.common.protocol.CommonFields.PERMISSION_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.PRINCIPAL;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_NAME;
+import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_PATTERN_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.RESOURCE_TYPE;
 import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
 
@@ -51,11 +54,27 @@ public class DeleteAclsResponse extends AbstractResponse {
     private final static String FILTER_RESPONSES_KEY_NAME = "filter_responses";
     private final static String MATCHING_ACLS_KEY_NAME = "matching_acls";
 
-    private static final Schema MATCHING_ACL = new Schema(
+    private static final Schema MATCHING_ACL_V0 = new Schema(
             ERROR_CODE,
             ERROR_MESSAGE,
             RESOURCE_TYPE,
             RESOURCE_NAME,
+            PRINCIPAL,
+            HOST,
+            OPERATION,
+            PERMISSION_TYPE);
+
+    /**
+     * V1 sees a new `RESOURCE_PATTERN_TYPE` that defines the type of the resource pattern.
+     *
+     * For more info, see {@link PatternType}.
+     */
+    private static final Schema MATCHING_ACL_V1 = new Schema(
+            ERROR_CODE,
+            ERROR_MESSAGE,
+            RESOURCE_TYPE,
+            RESOURCE_NAME,
+            RESOURCE_PATTERN_TYPE,
             PRINCIPAL,
             HOST,
             OPERATION,
@@ -67,10 +86,24 @@ public class DeleteAclsResponse extends AbstractResponse {
                     new ArrayOf(new Schema(
                             ERROR_CODE,
                             ERROR_MESSAGE,
-                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL), "The matching ACLs")))));
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V0), "The matching ACLs")))));
+
+    /**
+     * V1 sees a new `RESOURCE_PATTERN_TYPE` field added to MATCHING_ACL_V1, that describes how the resource pattern is interpreted
+     * and version was bumped to indicate that, on quota violation, brokers send out responses before throttling.
+     *
+     * For more info, see {@link PatternType}.
+     */
+    private static final Schema DELETE_ACLS_RESPONSE_V1 = new Schema(
+            THROTTLE_TIME_MS,
+            new Field(FILTER_RESPONSES_KEY_NAME,
+                    new ArrayOf(new Schema(
+                            ERROR_CODE,
+                            ERROR_MESSAGE,
+                            new Field(MATCHING_ACLS_KEY_NAME, new ArrayOf(MATCHING_ACL_V1), "The matching ACLs")))));
 
     public static Schema[] schemaVersions() {
-        return new Schema[]{DELETE_ACLS_RESPONSE_V0};
+        return new Schema[]{DELETE_ACLS_RESPONSE_V0, DELETE_ACLS_RESPONSE_V1};
     }
 
     public static class AclDeletionResult {
@@ -147,7 +180,7 @@ public class DeleteAclsResponse extends AbstractResponse {
                 Struct matchingAclStruct = (Struct) matchingAclStructObj;
                 ApiError matchError = new ApiError(matchingAclStruct);
                 AccessControlEntry entry = RequestUtils.aceFromStructFields(matchingAclStruct);
-                Resource resource = RequestUtils.resourceFromStructFields(matchingAclStruct);
+                ResourcePattern resource = RequestUtils.resourcePatternromStructFields(matchingAclStruct);
                 deletions.add(new AclDeletionResult(matchError, new AclBinding(resource, entry)));
             }
             this.responses.add(new AclFilterResponse(error, deletions));
@@ -156,6 +189,8 @@ public class DeleteAclsResponse extends AbstractResponse {
 
     @Override
     protected Struct toStruct(short version) {
+        validate(version);
+
         Struct struct = new Struct(ApiKeys.DELETE_ACLS.responseSchema(version));
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
         List<Struct> responseStructs = new ArrayList<>();
@@ -166,7 +201,7 @@ public class DeleteAclsResponse extends AbstractResponse {
             for (AclDeletionResult deletion : response.deletions()) {
                 Struct deletionStruct = responseStruct.instance(MATCHING_ACLS_KEY_NAME);
                 deletion.error.write(deletionStruct);
-                RequestUtils.resourceSetStructFields(deletion.acl().resource(), deletionStruct);
+                RequestUtils.resourcePatternSetStructFields(deletion.acl().pattern(), deletionStruct);
                 RequestUtils.aceSetStructFields(deletion.acl().entry(), deletionStruct);
                 deletionStructs.add(deletionStruct);
             }
@@ -177,6 +212,7 @@ public class DeleteAclsResponse extends AbstractResponse {
         return struct;
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -201,4 +237,30 @@ public class DeleteAclsResponse extends AbstractResponse {
         return "(responses=" + Utils.join(responses, ",") + ")";
     }
 
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
+    }
+
+    private void validate(short version) {
+        if (version == 0) {
+            final boolean unsupported = responses.stream()
+                .flatMap(r -> r.deletions.stream())
+                .map(AclDeletionResult::acl)
+                .map(AclBinding::pattern)
+                .map(ResourcePattern::patternType)
+                .anyMatch(patternType -> patternType != PatternType.LITERAL);
+            if (unsupported) {
+                throw new UnsupportedVersionException("Version 0 only supports literal resource pattern types");
+            }
+        }
+
+        final boolean unknown = responses.stream()
+            .flatMap(r -> r.deletions.stream())
+            .map(AclDeletionResult::acl)
+            .anyMatch(AclBinding::isUnknown);
+        if (unknown) {
+            throw new IllegalArgumentException("Response contains UNKNOWN elements");
+        }
+    }
 }

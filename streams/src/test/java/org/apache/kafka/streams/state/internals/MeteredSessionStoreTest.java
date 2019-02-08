@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -42,9 +43,10 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThat;
@@ -54,7 +56,11 @@ import static org.junit.Assert.assertTrue;
 public class MeteredSessionStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<String, String> tags = new HashMap<>();
+    private final Map<String, String> tags = mkMap(
+        mkEntry("client-id", "test"),
+        mkEntry("task-id", taskId.toString()),
+        mkEntry("scope-id", "metered")
+    );
     private final Metrics metrics = new Metrics();
     private MeteredSessionStore<String, String> metered;
     @Mock(type = MockType.NICE)
@@ -74,8 +80,6 @@ public class MeteredSessionStoreTest {
                                             Serdes.String(),
                                             Serdes.String(),
                                             new MockTime());
-        tags.put("task-id", taskId.toString());
-        tags.put("scope-id", "metered");
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         EasyMock.expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
         EasyMock.expect(context.taskId()).andReturn(taskId);
@@ -88,6 +92,17 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
+    public void testMetrics() {
+        init();
+        final JmxReporter reporter = new JmxReporter("kafka.streams");
+        metrics.addReporter(reporter);
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+                "scope", "test", taskId.toString(), "scope", "metered")));
+        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
+                "scope", "test", taskId.toString(), "scope", "all")));
+    }
+
+    @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
         inner.put(EasyMock.eq(windowedKeyBytes), EasyMock.aryEq(keyBytes));
         EasyMock.expectLastCall();
@@ -96,7 +111,7 @@ public class MeteredSessionStoreTest {
         metered.put(new Windowed<>(key, new SessionWindow(0, 0)), key);
 
         final KafkaMetric metric = metric("put-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue(((Double) metric.metricValue()) > 0);
         EasyMock.verify(inner);
     }
 
@@ -113,7 +128,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -130,7 +145,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -144,7 +159,7 @@ public class MeteredSessionStoreTest {
         metered.remove(new Windowed<>(key, new SessionWindow(0, 0)));
 
         final KafkaMetric metric = metric("remove-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -161,7 +176,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -178,7 +193,7 @@ public class MeteredSessionStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("fetch-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
         EasyMock.verify(inner);
     }
 
@@ -186,7 +201,7 @@ public class MeteredSessionStoreTest {
     public void shouldRecordRestoreTimeOnInit() {
         init();
         final KafkaMetric metric = metric("restore-rate");
-        assertTrue(metric.value() > 0);
+        assertTrue((Double) metric.metricValue() > 0);
     }
 
     @Test(expected = NullPointerException.class)

@@ -57,16 +57,6 @@ public final class RecordMetadata {
     }
 
     /**
-     * @deprecated As of 0.11.0. Use @{@link RecordMetadata#RecordMetadata(TopicPartition, long, long, long, Long, int, int)}.
-     */
-    @Deprecated
-    public RecordMetadata(TopicPartition topicPartition, long baseOffset, long relativeOffset, long timestamp,
-                          long checksum, int serializedKeySize, int serializedValueSize) {
-        this(topicPartition, baseOffset, relativeOffset, timestamp, Long.valueOf(checksum), serializedKeySize,
-                serializedValueSize);
-    }
-
-    /**
      * Indicates whether the record metadata includes the offset.
      * @return true if the offset is included in the metadata, false otherwise.
      */

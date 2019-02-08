@@ -676,7 +676,7 @@ public class StickyAssignorTest {
      * - there is no topic partition that can be moved from one consumer to another with 2+ fewer topic partitions
      *
      * @param subscriptions: topic subscriptions of each consumer
-     * @param assignment: given assignment for balance check
+     * @param assignments: given assignment for balance check
      */
     private static void verifyValidityAndBalance(Map<String, Subscription> subscriptions, Map<String, List<TopicPartition>> assignments) {
         int size = subscriptions.size();
@@ -711,8 +711,8 @@ public class StickyAssignorTest {
                 if (Math.abs(len - otherLen) <= 1)
                     continue;
 
-                Map<String, List<Integer>> map = CollectionUtils.groupDataByTopic(partitions);
-                Map<String, List<Integer>> otherMap = CollectionUtils.groupDataByTopic(otherPartitions);
+                Map<String, List<Integer>> map = CollectionUtils.groupPartitionsByTopic(partitions);
+                Map<String, List<Integer>> otherMap = CollectionUtils.groupPartitionsByTopic(otherPartitions);
 
                 if (len > otherLen) {
                     for (String topic: map.keySet())

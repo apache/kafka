@@ -72,7 +72,7 @@ class KiboshTest(Test):
 
         def check(self, node):
             fault_json = self.kibosh.get_fault_json(node)
-            expected_json = json.dumps({"faults": [spec.kibosh_message()]})
+            expected_json = json.dumps({"faults": [spec.kibosh_message]})
             self.logger.info("Read back: [%s].  Expected: [%s]." % (fault_json, expected_json))
             return fault_json == expected_json
 

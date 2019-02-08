@@ -22,6 +22,8 @@ import org.apache.kafka.streams.kstream.internals.WindowedSerializer;
 import org.apache.kafka.streams.kstream.internals.WindowedStreamPartitioner;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 
+import java.util.Objects;
+
 /**
  * This class is used to provide the optional parameters when producing to new topics
  * using {@link KStream#through(String, Produced)} or {@link KStream#to(String, Produced)}.
@@ -69,7 +71,8 @@ public class Produced<K, V> {
      * @param valueSerde    Serde to use for serializing the value
      * @param partitioner   the function used to determine how records are distributed among partitions of the topic,
      *                      if not specified and {@code keySerde} provides a {@link WindowedSerializer} for the key
-     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner} wil be used
+     *                      {@link WindowedStreamPartitioner} will be used&mdash;otherwise {@link DefaultPartitioner}
+     *                      will be used
      * @param <K>           key type
      * @param <V>           value type
      * @return  A new {@link Produced} instance configured with keySerde, valueSerde, and partitioner
@@ -153,5 +156,24 @@ public class Produced<K, V> {
     public Produced<K, V> withKeySerde(final Serde<K> keySerde) {
         this.keySerde = keySerde;
         return this;
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final Produced<?, ?> produced = (Produced<?, ?>) o;
+        return Objects.equals(keySerde, produced.keySerde) &&
+               Objects.equals(valueSerde, produced.valueSerde) &&
+               Objects.equals(partitioner, produced.partitioner);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(keySerde, valueSerde, partitioner);
     }
 }

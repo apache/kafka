@@ -30,6 +30,26 @@ public class TopicDescription {
     private final boolean internal;
     private final List<TopicPartitionInfo> partitions;
 
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+
+        TopicDescription that = (TopicDescription) o;
+
+        if (internal != that.internal) return false;
+        if (name != null ? !name.equals(that.name) : that.name != null) return false;
+        return partitions != null ? partitions.equals(that.partitions) : that.partitions == null;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = name != null ? name.hashCode() : 0;
+        result = 31 * result + (internal ? 1 : 0);
+        result = 31 * result + (partitions != null ? partitions.hashCode() : 0);
+        return result;
+    }
+
     /**
      * Create an instance with the specified parameters.
      *

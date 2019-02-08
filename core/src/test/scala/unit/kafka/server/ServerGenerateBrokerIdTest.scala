@@ -24,6 +24,8 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import java.io.File
 
+import org.apache.zookeeper.KeeperException.NodeExistsException
+
 class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var props1: Properties = null
   var config1: KafkaConfig = null
@@ -149,7 +151,7 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
     val propsB = TestUtils.createBrokerConfig(1, zkConnect)
     val configB = KafkaConfig.fromProps(propsB)
     val serverB = new KafkaServer(configB)
-    intercept[RuntimeException] {
+    intercept[NodeExistsException] {
       serverB.startup()
     }
     servers = Seq(serverA)
@@ -186,13 +188,5 @@ class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
       }
     }
     true
-  }
-
-  @Test
-  def testGetSequenceIdMethod() {
-    val path = "/test/seqid"
-    (1 to 10).foreach { seqid =>
-      assertEquals(seqid, zkUtils.getSequenceId(path))
-    }
   }
 }

@@ -21,12 +21,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+
 import java.util.Objects;
 
 public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyValueStore<K, V>> {
 
     private final KeyValueBytesStoreSupplier storeSupplier;
-
 
     public KeyValueStoreBuilder(final KeyValueBytesStoreSupplier storeSupplier,
                                 final Serde<K> keySerde,
@@ -39,11 +39,12 @@ public class KeyValueStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, KeyVa
 
     @Override
     public KeyValueStore<K, V> build() {
-        return new MeteredKeyValueBytesStore<>(maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
-                                               storeSupplier.metricsScope(),
-                                               time,
-                                               keySerde,
-                                               valueSerde);
+        return new MeteredKeyValueStore<>(
+            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
+            storeSupplier.metricsScope(),
+            time,
+            keySerde,
+            valueSerde);
     }
 
     private KeyValueStore<Bytes, byte[]> maybeWrapCaching(final KeyValueStore<Bytes, byte[]> inner) {

@@ -21,8 +21,8 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.cluster.{Partition, Replica}
-import kafka.log.Log
-import kafka.server.epoch.LeaderEpochCache
+import kafka.log.{Log, LogManager}
+import kafka.server.epoch.LeaderEpochFileCache
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
@@ -40,6 +40,7 @@ class IsrExpirationTest {
   var topicPartitionIsr: Map[(String, Int), Seq[Int]] = new HashMap[(String, Int), Seq[Int]]()
   val replicaLagTimeMaxMs = 100L
   val replicaFetchWaitMaxMs = 100
+  val leaderLogEndOffset = 20
 
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
@@ -54,7 +55,7 @@ class IsrExpirationTest {
 
   @Before
   def setUp() {
-    val logManager = EasyMock.createMock(classOf[kafka.log.LogManager])
+    val logManager: LogManager = EasyMock.createMock(classOf[LogManager])
     EasyMock.expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     EasyMock.replay(logManager)
 
@@ -81,12 +82,12 @@ class IsrExpirationTest {
     assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
     val leaderReplica = partition0.getReplica(configs.head.brokerId).get
 
-    // let the follower catch up to the Leader logEndOffset (15)
+    // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.assignedReplicas - leaderReplica)
-      replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
-                                                    highWatermark = 15L,
+      replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(leaderLogEndOffset - 1), MemoryRecords.EMPTY),
+                                                    highWatermark = leaderLogEndOffset - 1,
                                                     leaderLogStartOffset = 0L,
-                                                    leaderLogEndOffset = 15L,
+                                                    leaderLogEndOffset = leaderLogEndOffset,
                                                     followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1,
@@ -138,10 +139,10 @@ class IsrExpirationTest {
 
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.assignedReplicas - leaderReplica)
-      replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(10L), MemoryRecords.EMPTY),
-                                                    highWatermark = 10L,
+      replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(leaderLogEndOffset - 2), MemoryRecords.EMPTY),
+                                                    highWatermark = leaderLogEndOffset - 2,
                                                     leaderLogStartOffset = 0L,
-                                                    leaderLogEndOffset = 15L,
+                                                    leaderLogEndOffset = leaderLogEndOffset,
                                                     followerLogStartOffset = 0L,
                                                     fetchTimeMs = time.milliseconds,
                                                     readSize = -1,
@@ -155,10 +156,10 @@ class IsrExpirationTest {
     time.sleep(75)
 
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
-      r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(11L), MemoryRecords.EMPTY),
-                            highWatermark = 11L,
+      r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(leaderLogEndOffset - 1), MemoryRecords.EMPTY),
+                            highWatermark = leaderLogEndOffset - 1,
                             leaderLogStartOffset = 0L,
-                            leaderLogEndOffset = 15L,
+                            leaderLogEndOffset = leaderLogEndOffset,
                             followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1,
@@ -175,10 +176,10 @@ class IsrExpirationTest {
 
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
-      r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(15L), MemoryRecords.EMPTY),
-                            highWatermark = 15L,
+      r.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(leaderLogEndOffset), MemoryRecords.EMPTY),
+                            highWatermark = leaderLogEndOffset,
                             leaderLogStartOffset = 0L,
-                            leaderLogEndOffset = 15L,
+                            leaderLogEndOffset = leaderLogEndOffset,
                             followerLogStartOffset = 0L,
                             fetchTimeMs = time.milliseconds,
                             readSize = -1,
@@ -187,6 +188,40 @@ class IsrExpirationTest {
     partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
     assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
 
+    EasyMock.verify(log)
+  }
+
+  /*
+   * Test the case where a follower has already caught up with same log end offset with the leader. This follower should not be considered as out-of-sync
+   */
+  @Test
+  def testIsrExpirationForCaughtUpFollowers() {
+    val log = logMock
+
+    // create one partition and all replicas
+    val partition0 = getPartitionWithAllReplicasInIsr(topic, 0, time, configs.head, log)
+    assertEquals("All replicas should be in ISR", configs.map(_.brokerId).toSet, partition0.inSyncReplicas.map(_.brokerId))
+    val leaderReplica = partition0.getReplica(configs.head.brokerId).get
+
+    // let the follower catch up to the Leader logEndOffset
+    for (replica <- partition0.assignedReplicas - leaderReplica)
+      replica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(new LogOffsetMetadata(leaderLogEndOffset), MemoryRecords.EMPTY),
+        highWatermark = leaderLogEndOffset,
+        leaderLogStartOffset = 0L,
+        leaderLogEndOffset = leaderLogEndOffset,
+        followerLogStartOffset = 0L,
+        fetchTimeMs = time.milliseconds,
+        readSize = -1,
+        lastStableOffset = None))
+    var partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
+
+    // let some time pass
+    time.sleep(150)
+
+    // even though follower hasn't pulled any data for > replicaMaxLagTimeMs ms, the follower has already caught up. So it is not out-of-sync.
+    partition0OSR = partition0.getOutOfSyncReplicas(leaderReplica, configs.head.replicaLagTimeMaxMs)
+    assertEquals("No replica should be out of sync", Set.empty[Int], partition0OSR.map(_.brokerId))
     EasyMock.verify(log)
   }
 
@@ -217,11 +252,12 @@ class IsrExpirationTest {
   }
 
   private def logMock: Log = {
-    val log = EasyMock.createMock(classOf[kafka.log.Log])
-    val cache = EasyMock.createNiceMock(classOf[LeaderEpochCache])
+    val log: Log = EasyMock.createMock(classOf[Log])
+    val cache: LeaderEpochFileCache = EasyMock.createNiceMock(classOf[LeaderEpochFileCache])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
     EasyMock.expect(log.leaderEpochCache).andReturn(cache).anyTimes()
     EasyMock.expect(log.onHighWatermarkIncremented(0L))
+    EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLogEndOffset)).anyTimes()
     EasyMock.replay(log)
     log
   }

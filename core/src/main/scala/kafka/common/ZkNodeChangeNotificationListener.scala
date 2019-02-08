@@ -16,6 +16,7 @@
  */
 package kafka.common
 
+import java.nio.charset.StandardCharsets.UTF_8
 import java.util.concurrent.LinkedBlockingQueue
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -24,11 +25,13 @@ import kafka.zk.{KafkaZkClient, StateChangeHandlers}
 import kafka.zookeeper.{StateChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.common.utils.Time
 
+import scala.util.{Failure, Try}
+
 /**
  * Handle the notificationMessage.
  */
 trait NotificationHandler {
-  def processNotification(notificationMessage: String)
+  def processNotification(notificationMessage: Array[Byte])
 }
 
 /**
@@ -83,12 +86,7 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
         for (notification <- notifications) {
           val changeId = changeNumber(notification)
           if (changeId > lastExecutedChange) {
-            val changeZnode = seqNodeRoot + "/" + notification
-            val (data, _) = zkClient.getDataAndStat(changeZnode)
-            data match {
-              case Some(d) => notificationHandler.processNotification(d)
-              case None => warn(s"read null data from $changeZnode when processing notification $notification")
-            }
+            processNotification(notification)
             lastExecutedChange = changeId
           }
         }
@@ -97,6 +95,18 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
     } catch {
       case e: InterruptedException => if (!isClosed.get) error(s"Error while processing notification change for path = $seqNodeRoot", e)
       case e: Exception => error(s"Error while processing notification change for path = $seqNodeRoot", e)
+    }
+  }
+
+  private def processNotification(notification: String): Unit = {
+    val changeZnode = seqNodeRoot + "/" + notification
+    val (data, _) = zkClient.getDataAndStat(changeZnode)
+    data match {
+      case Some(d) => Try(notificationHandler.processNotification(d)) match {
+        case Failure(e) => error(s"error processing change notification ${new String(d, UTF_8)} from $changeZnode", e)
+        case _ =>
+      }
+      case None => warn(s"read null data from $changeZnode")
     }
   }
 
@@ -143,7 +153,6 @@ class ZkNodeChangeNotificationListener(private val zkClient: KafkaZkClient,
   object ZkStateChangeHandler extends  StateChangeHandler {
     override val name: String = StateChangeHandlers.zkNodeChangeListenerHandler(seqNodeRoot)
     override def afterInitializingSession(): Unit = addChangeNotification
-    override def onReconnectionTimeout(): Unit = error("Reconnection timeout.")
   }
 }
 

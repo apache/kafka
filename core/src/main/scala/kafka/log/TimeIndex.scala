@@ -20,9 +20,9 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 
-import kafka.common.InvalidOffsetException
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
+import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
 
 /**
@@ -128,7 +128,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       if (timestamp > lastEntry.timestamp) {
         debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
-        mmap.putInt((offset - baseOffset).toInt)
+        mmap.putInt(relativeOffset(offset))
         _entries += 1
         _lastEntry = TimestampOffset(timestamp, offset)
         require(_entries * entrySize == mmap.position(), _entries + " entries but file position in index is " + mmap.position() + ".")
@@ -208,14 +208,15 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   override def sanityCheck() {
     val lastTimestamp = lastEntry.timestamp
     val lastOffset = lastEntry.offset
-    require(_entries == 0 || (lastTimestamp >= timestamp(mmap, 0)),
-      s"Corrupt time index found, time index file (${file.getAbsolutePath}) has non-zero size but the last timestamp " +
-          s"is $lastTimestamp which is no larger than the first timestamp ${timestamp(mmap, 0)}")
-    require(_entries == 0 || lastOffset >= baseOffset,
-      s"Corrupt time index found, time index file (${file.getAbsolutePath}) has non-zero size but the last offset " +
-          s"is $lastOffset which is smaller than the first offset $baseOffset")
-    require(length % entrySize == 0,
-      "Time index file " + file.getAbsolutePath + " is corrupt, found " + length +
-          " bytes which is not positive or not a multiple of 12.")
+    if (_entries != 0 && lastTimestamp < timestamp(mmap, 0))
+      throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
+        s"non-zero size but the last timestamp is $lastTimestamp which is less than the first timestamp " +
+        s"${timestamp(mmap, 0)}")
+    if (_entries != 0 && lastOffset < baseOffset)
+      throw new CorruptIndexException(s"Corrupt time index found, time index file (${file.getAbsolutePath}) has " +
+        s"non-zero size but the last offset is $lastOffset which is less than the first offset $baseOffset")
+    if (length % entrySize != 0)
+      throw new CorruptIndexException(s"Time index file ${file.getAbsolutePath} is corrupt, found $length bytes " +
+        s"which is neither positive nor a multiple of $entrySize.")
   }
 }

@@ -19,7 +19,12 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.common.utils.Bytes;
 
 /**
- * A store supplier that can be used to create one or more {@link WindowStore WindowStore<Bytes, byte[]>>} instances of type &lt;Byte, byte[]&gt;.
+ * A store supplier that can be used to create one or more {@link WindowStore WindowStore&lt;Byte, byte[]&gt;} instances of type &lt;Byte, byte[]&gt;.
+ *
+ * For any stores implementing the {@link WindowStore WindowStore&lt;Byte, byte[]&gt;} interface, null value bytes are considered as "not exist". This means:
+ *
+ * 1. Null value bytes in put operations should be treated as delete.
+ * 2. Null value bytes should never be returned in range query results.
  */
 public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Bytes, byte[]>> {
     /**
@@ -28,11 +33,22 @@ public interface WindowBytesStoreSupplier extends StoreSupplier<WindowStore<Byte
      * It is also used to reduce the amount of data that is scanned when caching is enabled.
      *
      * @return number of segments
+     * @deprecated since 2.1. Use {@link WindowBytesStoreSupplier#segmentIntervalMs()} instead.
      */
+    @Deprecated
     int segments();
 
     /**
-     * The size of the windows any store created from this supplier is creating.
+     * The size of the segments (in milliseconds) the store has.
+     * If your store is segmented then this should be the size of segments in the underlying store.
+     * It is also used to reduce the amount of data that is scanned when caching is enabled.
+     *
+     * @return size of the segments (in milliseconds)
+     */
+    long segmentIntervalMs();
+
+    /**
+     * The size of the windows (in milliseconds) any store created from this supplier is creating.
      *
      * @return window size
      */

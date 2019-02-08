@@ -16,14 +16,19 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
+import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.After;
+import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
@@ -34,13 +39,14 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-
 import javax.ws.rs.client.Client;
 import javax.ws.rs.client.ClientBuilder;
 import javax.ws.rs.client.Invocation;
 import javax.ws.rs.client.WebTarget;
+import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 
 import static org.junit.Assert.assertEquals;
@@ -50,22 +56,34 @@ public class RestServerTest {
 
     @MockStrict
     private Herder herder;
+    @MockStrict
+    private Plugins plugins;
     private RestServer server;
+
+    @Before
+    public void setUp() {
+        // To be able to set the Origin, we need to toggle this flag
+        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+    }
 
     @After
     public void tearDown() {
         server.stop();
     }
 
+    @SuppressWarnings("deprecation")
     private Map<String, String> baseWorkerProps() {
         Map<String, String> workerProps = new HashMap<>();
-        workerProps.put("key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.value.converter", "org.apache.kafka.connect.json.JsonConverter");
-        workerProps.put("internal.key.converter.schemas.enable", "false");
-        workerProps.put("internal.value.converter.schemas.enable", "false");
-        workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
+        workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
+        workerProps.put(DistributedConfig.CONFIG_TOPIC_CONFIG, "config-topic");
+        workerProps.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
+        workerProps.put(DistributedConfig.GROUP_ID_CONFIG, "connect-test-group");
+        workerProps.put(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.INTERNAL_KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(WorkerConfig.INTERNAL_VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
+        workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, "connect-offsets");
+
         return workerProps;
     }
 
@@ -79,28 +97,125 @@ public class RestServerTest {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testParseListeners() {
+        // Use listeners field
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertArrayEquals(new String[] {"http://localhost:8080", "https://localhost:8443"}, server.parseListeners().toArray());
+
+        // Build listener from hostname and port
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
+        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void testAdvertisedUri() {
+        // Advertised URI from listeenrs without protocol
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
+        DistributedConfig config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("http://localhost:8080/", server.advertisedUrl().toString());
+
+        // Advertised URI from listeners with protocol
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "http://localhost:8080,https://localhost:8443");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "https");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+
+        // Advertised URI from listeners with only SSL available
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("https://localhost:8443/", server.advertisedUrl().toString());
+
+        // Listener is overriden by advertised values
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.LISTENERS_CONFIG, "https://localhost:8443");
+        configMap.put(WorkerConfig.REST_ADVERTISED_LISTENER_CONFIG, "http");
+        configMap.put(WorkerConfig.REST_ADVERTISED_HOST_NAME_CONFIG, "somehost");
+        configMap.put(WorkerConfig.REST_ADVERTISED_PORT_CONFIG, "10000");
+        config = new DistributedConfig(configMap);
+
+        server = new RestServer(config);
+        Assert.assertEquals("http://somehost:10000/", server.advertisedUrl().toString());
+
+        // listener from hostname and port
+        configMap = new HashMap<>(baseWorkerProps());
+        configMap.put(WorkerConfig.REST_HOST_NAME_CONFIG, "my-hostname");
+        configMap.put(WorkerConfig.REST_PORT_CONFIG, "8080");
+        config = new DistributedConfig(configMap);
+        server = new RestServer(config);
+        Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
+    }
+
+    @Test
+    public void testOptionsDoesNotIncludeWadlOutput() {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
+
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class))
+            .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        server.start(new HerderProvider(herder), herder.plugins());
+
+        Response response = request("/connectors")
+            .accept(MediaType.WILDCARD)
+            .options();
+        Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
+        Assert.assertArrayEquals(
+            response.getAllowedMethods().toArray(new String[0]),
+            response.readEntity(String.class).split(", ")
+        );
+
+        PowerMock.verifyAll();
+    }
+
     public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
-        // To be able to set the Origin, we need to toggle this flag
-        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
+        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
+        WorkerConfig workerConfig = new DistributedConfig(workerProps);
+
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+                                           workerConfig,
+                                           ConnectRestExtension.class))
+            .andStubReturn(Collections.emptyList());
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(connectorsCallback));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
+            return null;
         });
 
         PowerMock.replayAll();
 
-        Map<String, String> workerProps = baseWorkerProps();
-        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
-        workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
-        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+
         server = new RestServer(workerConfig);
-        server.start(herder);
+        server.start(new HerderProvider(herder), herder.plugins());
 
         Response response = request("/connectors")
                 .header("Referer", origin + "/page")

@@ -21,39 +21,40 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A configuration object containing the configuration entries for a resource.
- *
+ * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public class Config {
 
-    private final Collection<ConfigEntry> entries;
+    private final Map<String, ConfigEntry> entries = new HashMap<>();
 
     /**
      * Create a configuration instance with the provided entries.
      */
     public Config(Collection<ConfigEntry> entries) {
-        this.entries = Collections.unmodifiableCollection(entries);
+        for (ConfigEntry entry : entries) {
+            this.entries.put(entry.name(), entry);
+        }
     }
 
     /**
      * Configuration entries for a resource.
      */
     public Collection<ConfigEntry> entries() {
-        return entries;
+        return Collections.unmodifiableCollection(entries.values());
     }
 
     /**
      * Get the configuration entry with the provided name or null if there isn't one.
      */
     public ConfigEntry get(String name) {
-        for (ConfigEntry entry : entries)
-            if (entry.name().equals(name))
-                return entry;
-        return null;
+        return entries.get(name);
     }
 
     @Override
@@ -75,6 +76,6 @@ public class Config {
 
     @Override
     public String toString() {
-        return "Config(entries=" + entries + ")";
+        return "Config(entries=" + entries.values() + ")";
     }
 }

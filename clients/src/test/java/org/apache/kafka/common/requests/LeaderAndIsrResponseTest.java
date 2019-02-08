@@ -27,6 +27,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 public class LeaderAndIsrResponseTest {
 
@@ -38,7 +39,7 @@ public class LeaderAndIsrResponseTest {
         partitionStates.put(new TopicPartition("foo", 1), new LeaderAndIsrRequest.PartitionState(15, 1, 10,
                 Collections.singletonList(10), 20, Collections.singletonList(10), false));
         LeaderAndIsrRequest request = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion(),
-                15, 20, partitionStates, Collections.<Node>emptySet()).build();
+                15, 20, 0, partitionStates, Collections.<Node>emptySet()).build();
         LeaderAndIsrResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2), response.errorCounts());
     }
@@ -62,6 +63,18 @@ public class LeaderAndIsrResponseTest {
         assertEquals(2, errorCounts.size());
         assertEquals(1, errorCounts.get(Errors.NONE).intValue());
         assertEquals(1, errorCounts.get(Errors.CLUSTER_AUTHORIZATION_FAILED).intValue());
+    }
+
+    @Test
+    public void testToString() {
+        Map<TopicPartition, Errors> errors = new HashMap<>();
+        errors.put(new TopicPartition("foo", 0), Errors.NONE);
+        errors.put(new TopicPartition("foo", 1), Errors.CLUSTER_AUTHORIZATION_FAILED);
+        LeaderAndIsrResponse response = new LeaderAndIsrResponse(Errors.NONE, errors);
+        String responseStr = response.toString();
+        assertTrue(responseStr.contains(LeaderAndIsrResponse.class.getSimpleName()));
+        assertTrue(responseStr.contains(errors.toString()));
+        assertTrue(responseStr.contains(Errors.NONE.name()));
     }
 
 }

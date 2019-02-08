@@ -17,12 +17,15 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 
 /**
  * A new topic to be created via {@link AdminClient#createTopics(Collection)}.
@@ -98,20 +101,35 @@ public class NewTopic {
         return this;
     }
 
-    TopicDetails convertToTopicDetails() {
+    /**
+     * The configuration for the new topic or null if no configs ever specified.
+     */
+    public Map<String, String> configs() {
+        return configs;
+    }
+
+    CreatableTopic convertToCreatableTopic() {
+        CreatableTopic creatableTopic = new CreatableTopic().
+            setName(name).
+            setNumPartitions(numPartitions).
+            setReplicationFactor(replicationFactor);
         if (replicasAssignments != null) {
-            if (configs != null) {
-                return new TopicDetails(replicasAssignments, configs);
-            } else {
-                return new TopicDetails(replicasAssignments);
-            }
-        } else {
-            if (configs != null) {
-                return new TopicDetails(numPartitions, replicationFactor, configs);
-            } else {
-                return new TopicDetails(numPartitions, replicationFactor);
+            for (Entry<Integer, List<Integer>> entry : replicasAssignments.entrySet()) {
+                creatableTopic.assignments().add(
+                    new CreatableReplicaAssignment().
+                        setPartitionIndex(entry.getKey()).
+                        setBrokerIds(entry.getValue()));
             }
         }
+        if (configs != null) {
+            for (Entry<String, String> entry : configs.entrySet()) {
+                creatableTopic.configs().add(
+                    new CreateableTopicConfig().
+                        setName(entry.getKey()).
+                        setValue(entry.getValue()));
+            }
+        }
+        return creatableTopic;
     }
 
     @Override

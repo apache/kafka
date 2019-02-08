@@ -26,9 +26,8 @@ import org.junit.Test
 import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
-
-  override def numBrokers: Int = 1
-  override def logDirCount: Int = 2
+  override val logDirCount = 2
+  override val numBrokers: Int = 1
 
   val topic = "topic"
   val partitionNum = 2
@@ -40,8 +39,8 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     val onlineDir = new File(servers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
     servers.head.replicaManager.handleLogDirFailure(offlineDir)
-    TestUtils.createTopic(zkUtils, topic, partitionNum, 1, servers)
-    TestUtils.produceMessages(servers, topic, 10)
+    createTopic(topic, partitionNum, 1)
+    TestUtils.generateAndProduceMessages(servers, topic, 10)
 
     val request = new DescribeLogDirsRequest.Builder(null).build()
     val response = connectAndSend(request, ApiKeys.DESCRIBE_LOG_DIRS, controllerSocketServer)

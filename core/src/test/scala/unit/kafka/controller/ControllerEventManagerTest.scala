@@ -53,8 +53,8 @@ class ControllerEventManagerTest {
   private def check(metricName: String, controllerState: ControllerState, process: () => Unit): Unit = {
     val controllerStats = new ControllerStats
     val eventProcessedListenerCount = new AtomicInteger
-    controllerEventManager = new ControllerEventManager(controllerStats.rateAndTimeMetrics,
-      _ => eventProcessedListenerCount.incrementAndGet)
+    controllerEventManager = new ControllerEventManager(0, controllerStats.rateAndTimeMetrics,
+      _ => eventProcessedListenerCount.incrementAndGet, () => ())
     controllerEventManager.start()
 
     val initialTimerCount = timer(metricName).count

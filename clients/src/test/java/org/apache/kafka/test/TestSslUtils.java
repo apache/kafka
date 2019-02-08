@@ -20,15 +20,17 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.network.Mode;
 
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.EOFException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.math.BigInteger;
 import java.net.InetAddress;
 
 import javax.net.ssl.TrustManagerFactory;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.security.GeneralSecurityException;
 import java.security.Key;
 import java.security.KeyPair;
@@ -87,7 +89,7 @@ public class TestSslUtils {
 
     public static KeyPair generateKeyPair(String algorithm) throws NoSuchAlgorithmException {
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance(algorithm);
-        keyGen.initialize(1024);
+        keyGen.initialize(2048);
         return keyGen.genKeyPair();
     }
 
@@ -99,7 +101,7 @@ public class TestSslUtils {
 
     private static void saveKeyStore(KeyStore ks, String filename,
                                      Password password) throws GeneralSecurityException, IOException {
-        try (FileOutputStream out = new FileOutputStream(filename)) {
+        try (OutputStream out = Files.newOutputStream(Paths.get(filename))) {
             ks.store(out, password.value().toCharArray());
         }
     }
@@ -137,7 +139,7 @@ public class TestSslUtils {
     public static <T extends Certificate> void createTrustStore(
             String filename, Password password, Map<String, T> certs) throws GeneralSecurityException, IOException {
         KeyStore ks = KeyStore.getInstance("JKS");
-        try (FileInputStream in = new FileInputStream(filename)) {
+        try (InputStream in = Files.newInputStream(Paths.get(filename))) {
             ks.load(in, password.value().toCharArray());
         } catch (EOFException e) {
             ks = createEmptyKeyStore();
@@ -179,9 +181,9 @@ public class TestSslUtils {
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,
-            Mode mode, File trustStoreFile, String certAlias, String hostName)
+            Mode mode, File trustStoreFile, String certAlias, String cn)
         throws IOException, GeneralSecurityException {
-        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, hostName, new CertificateBuilder());
+        return createSslConfig(useClientCert, trustStore, mode, trustStoreFile, certAlias, cn, new CertificateBuilder());
     }
 
     public static  Map<String, Object> createSslConfig(boolean useClientCert, boolean trustStore,

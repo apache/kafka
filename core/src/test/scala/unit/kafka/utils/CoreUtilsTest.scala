@@ -17,7 +17,7 @@
 
 package kafka.utils
 
-import java.util.{Arrays, UUID}
+import java.util.{Arrays, Base64, UUID}
 import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
@@ -26,13 +26,14 @@ import java.util.regex.Pattern
 
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
-import kafka.common.KafkaException
 import kafka.utils.CoreUtils.inLock
+import org.apache.kafka.common.KafkaException
 import org.junit.Test
-import org.apache.kafka.common.utils.{Base64, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
@@ -43,6 +44,56 @@ class CoreUtilsTest extends JUnitSuite with Logging {
   @Test
   def testSwallow() {
     CoreUtils.swallow(throw new KafkaException("test"), this, Level.INFO)
+  }
+
+  @Test
+  def testTryAll(): Unit = {
+    case class TestException(key: String) extends Exception
+
+    val recorded = mutable.Map.empty[String, Either[TestException, String]]
+    def recordingFunction(v: Either[TestException, String]): Unit = {
+      val key = v match {
+        case Right(key) => key
+        case Left(e) => e.key
+      }
+      recorded(key) = v
+    }
+
+    CoreUtils.tryAll(Seq(
+      () => recordingFunction(Right("valid-0")),
+      () => recordingFunction(Left(new TestException("exception-1"))),
+      () => recordingFunction(Right("valid-2")),
+      () => recordingFunction(Left(new TestException("exception-3")))
+    ))
+    var expected = Map(
+      "valid-0" -> Right("valid-0"),
+      "exception-1" -> Left(TestException("exception-1")),
+      "valid-2" -> Right("valid-2"),
+      "exception-3" -> Left(TestException("exception-3"))
+    )
+    assertEquals(expected, recorded)
+
+    recorded.clear()
+    CoreUtils.tryAll(Seq(
+      () => recordingFunction(Right("valid-0")),
+      () => recordingFunction(Right("valid-1"))
+    ))
+    expected = Map(
+      "valid-0" -> Right("valid-0"),
+      "valid-1" -> Right("valid-1")
+    )
+    assertEquals(expected, recorded)
+
+    recorded.clear()
+    CoreUtils.tryAll(Seq(
+      () => recordingFunction(Left(new TestException("exception-0"))),
+      () => recordingFunction(Left(new TestException("exception-1")))
+    ))
+    expected = Map(
+      "exception-0" -> Left(TestException("exception-0")),
+      "exception-1" -> Left(TestException("exception-1"))
+    )
+    assertEquals(expected, recorded)
   }
 
   @Test
@@ -162,14 +213,14 @@ class CoreUtilsTest extends JUnitSuite with Logging {
   def testUrlSafeBase64EncodeUUID() {
 
     // Test a UUID that has no + or / characters in base64 encoding [a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46 ->(base64)-> oUm0owbhS0moy4qcSln6Rg==]
-    val clusterId1 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+    val clusterId1 = Base64.getUrlEncoder.withoutPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
       "a149b4a3-06e1-4b49-a8cb-8a9c4a59fa46")))
     assertEquals(clusterId1, "oUm0owbhS0moy4qcSln6Rg")
     assertEquals(clusterId1.length, 22)
     assertTrue(clusterIdPattern.matcher(clusterId1).matches())
 
     // Test a UUID that has + or / characters in base64 encoding [d418ec02-277e-4853-81e6-afe30259daec ->(base64)-> 1BjsAid+SFOB5q/jAlna7A==]
-    val clusterId2 = Base64.urlEncoderNoPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
+    val clusterId2 = Base64.getUrlEncoder.withoutPadding.encodeToString(CoreUtils.getBytesFromUuid(UUID.fromString(
       "d418ec02-277e-4853-81e6-afe30259daec")))
     assertEquals(clusterId2, "1BjsAid-SFOB5q_jAlna7A")
     assertEquals(clusterId2.length, 22)

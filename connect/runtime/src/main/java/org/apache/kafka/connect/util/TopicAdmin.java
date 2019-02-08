@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -229,13 +230,20 @@ public class TopicAdmin implements AutoCloseable {
                 newlyCreatedTopicNames.add(topic);
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
-                if (e.getCause() instanceof TopicExistsException) {
+                if (cause instanceof TopicExistsException) {
                     log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
                     continue;
                 }
                 if (cause instanceof UnsupportedVersionException) {
-                    log.debug("Unable to use Kafka admin client to create topic descriptions for '{}' using the brokers at {}," +
-                                      "falling back to assume topic(s) exist or will be auto-created by the broker", topicNameList, bootstrapServers);
+                    log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API.",
+                            " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                            topicNameList, bootstrapServers);
+                    return Collections.emptySet();
+                }
+                if (cause instanceof ClusterAuthorizationException) {
+                    log.debug("Not authorized to create topic(s) '{}'." +
+                            " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                            topicNameList, bootstrapServers);
                     return Collections.emptySet();
                 }
                 if (cause instanceof TimeoutException) {

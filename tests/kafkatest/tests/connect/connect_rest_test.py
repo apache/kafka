@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.connect import ConnectDistributedService, ConnectRestError
+from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
 from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 from ducktape.cluster.remoteaccount import RemoteCommandError
@@ -31,14 +31,22 @@ class ConnectRestApiTest(KafkaTest):
     FILE_SOURCE_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSourceConnector'
     FILE_SINK_CONNECTOR = 'org.apache.kafka.connect.file.FileStreamSinkConnector'
 
-    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topic', 'file', 'transforms'}
-    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'topics', 'file', 'transforms', 'topics.regex'}
+    FILE_SOURCE_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'batch.size',
+                           'topic', 'file', 'transforms', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
+                           'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages'}
+    FILE_SINK_CONFIGS = {'name', 'connector.class', 'tasks.max', 'key.converter', 'value.converter', 'header.converter', 'topics',
+                         'file', 'transforms', 'topics.regex', 'config.action.reload', 'errors.retry.timeout', 'errors.retry.delay.max.ms',
+                         'errors.tolerance', 'errors.log.enable', 'errors.log.include.messages', 'errors.deadletterqueue.topic.name',
+                         'errors.deadletterqueue.topic.replication.factor', 'errors.deadletterqueue.context.headers.enable'}
 
     INPUT_FILE = "/mnt/connect.input"
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
-    TOPIC = "test"
+    TOPIC = "${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
+    TOPIC_TEST = "test"
+
+    DEFAULT_BATCH_SIZE = "2000"
     OFFSETS_TOPIC = "connect-offsets"
     OFFSETS_REPLICATION_FACTOR = "1"
     OFFSETS_PARTITIONS = "1"
@@ -72,6 +80,7 @@ class ConnectRestApiTest(KafkaTest):
         self.schemas = True
 
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.set_external_configs(lambda node: self.render("connect-file-external.properties", node=node))
 
         self.cc.start()
 
@@ -141,7 +150,8 @@ class ConnectRestApiTest(KafkaTest):
             'config': {
                 'task.class': 'org.apache.kafka.connect.file.FileStreamSourceTask',
                 'file': self.INPUT_FILE,
-                'topic': self.TOPIC
+                'topic': self.TOPIC,
+                'batch.size': self.DEFAULT_BATCH_SIZE
             }
         }]
         source_task_info = self.cc.get_connector_tasks("local-file-source")

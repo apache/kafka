@@ -25,7 +25,7 @@ import kafka.utils.Json
 
 class JsonValueTest {
 
-  val json = """
+  private val json = """
     |{
     |  "boolean": false,
     |  "int": 1234,
@@ -66,7 +66,7 @@ class JsonValueTest {
   }
 
   @Test
-  def testAsJsonObject: Unit = {
+  def testAsJsonObject(): Unit = {
     val parsed = parse(json).asJsonObject
     val obj = parsed("object")
     assertEquals(obj, obj.asJsonObject)
@@ -74,14 +74,14 @@ class JsonValueTest {
   }
 
   @Test
-  def testAsJsonObjectOption: Unit = {
+  def testAsJsonObjectOption(): Unit = {
     val parsed = parse(json).asJsonObject
     assertTrue(parsed("object").asJsonObjectOption.isDefined)
     assertEquals(None, parsed("array").asJsonObjectOption)
   }
 
   @Test
-  def testAsJsonArray: Unit = {
+  def testAsJsonArray(): Unit = {
     val parsed = parse(json).asJsonObject
     val array = parsed("array")
     assertEquals(array, array.asJsonArray)
@@ -89,28 +89,28 @@ class JsonValueTest {
   }
 
   @Test
-  def testAsJsonArrayOption: Unit = {
+  def testAsJsonArrayOption(): Unit = {
     val parsed = parse(json).asJsonObject
     assertTrue(parsed("array").asJsonArrayOption.isDefined)
     assertEquals(None, parsed("object").asJsonArrayOption)
   }
 
   @Test
-  def testJsonObjectGet: Unit = {
+  def testJsonObjectGet(): Unit = {
     val parsed = parse(json).asJsonObject
     assertEquals(Some(parse("""{"a":true,"b":false}""")), parsed.get("object"))
     assertEquals(None, parsed.get("aaaaa"))
   }
 
   @Test
-  def testJsonObjectApply: Unit = {
+  def testJsonObjectApply(): Unit = {
     val parsed = parse(json).asJsonObject
     assertEquals(parse("""{"a":true,"b":false}"""), parsed("object"))
     assertThrow[JsonMappingException](parsed("aaaaaaaa"))
   }
 
   @Test
-  def testJsonObjectIterator: Unit = {
+  def testJsonObjectIterator(): Unit = {
     assertEquals(
       Vector("a" -> parse("true"), "b" -> parse("false")),
       parse(json).asJsonObject("object").asJsonObject.iterator.toVector
@@ -118,12 +118,12 @@ class JsonValueTest {
   }
 
   @Test
-  def testJsonArrayIterator: Unit = {
+  def testJsonArrayIterator(): Unit = {
     assertEquals(Vector("4.0", "11.1", "44.5").map(parse), parse(json).asJsonObject("array").asJsonArray.iterator.toVector)
   }
 
   @Test
-  def testJsonValueEquals: Unit = {
+  def testJsonValueEquals(): Unit = {
 
     assertEquals(parse(json), parse(json))
 
@@ -139,24 +139,24 @@ class JsonValueTest {
   }
 
   @Test
-  def testJsonValueHashCode: Unit = {
+  def testJsonValueHashCode(): Unit = {
     assertEquals(new ObjectMapper().readTree(json).hashCode, parse(json).hashCode)
   }
 
   @Test
-  def testJsonValueToString: Unit = {
+  def testJsonValueToString(): Unit = {
     val js = """{"boolean":false,"int":1234,"array":[4.0,11.1,44.5],"object":{"a":true,"b":false}}"""
     assertEquals(js, parse(js).toString)
   }
 
   @Test
-  def testDecodeBoolean: Unit = {
+  def testDecodeBoolean(): Unit = {
     assertTo[Boolean](false, _("boolean"))
     assertToFails[Boolean](_("int"))
   }
 
   @Test
-  def testDecodeString: Unit = {
+  def testDecodeString(): Unit = {
     assertTo[String]("string", _("string"))
     assertTo[String]("123", _("number_as_string"))
     assertToFails[String](_("int"))
@@ -164,20 +164,20 @@ class JsonValueTest {
   }
 
   @Test
-  def testDecodeInt: Unit = {
+  def testDecodeInt(): Unit = {
     assertTo[Int](1234, _("int"))
     assertToFails[Int](_("long"))
   }
 
   @Test
-  def testDecodeLong: Unit = {
+  def testDecodeLong(): Unit = {
     assertTo[Long](3000000000L, _("long"))
     assertTo[Long](1234, _("int"))
     assertToFails[Long](_("string"))
   }
 
   @Test
-  def testDecodeDouble: Unit = {
+  def testDecodeDouble(): Unit = {
     assertTo[Double](16.244355, _("double"))
     assertTo[Double](1234.0, _("int"))
     assertTo[Double](3000000000L, _("long"))
@@ -185,7 +185,7 @@ class JsonValueTest {
   }
 
   @Test
-  def testDecodeSeq: Unit = {
+  def testDecodeSeq(): Unit = {
     assertTo[Seq[Double]](Seq(4.0, 11.1, 44.5), _("array"))
     assertToFails[Seq[Double]](_("string"))
     assertToFails[Seq[Double]](_("object"))
@@ -193,7 +193,7 @@ class JsonValueTest {
   }
 
   @Test
-  def testDecodeMap: Unit = {
+  def testDecodeMap(): Unit = {
     assertTo[Map[String, Boolean]](Map("a" -> true, "b" -> false), _("object"))
     assertToFails[Map[String, Int]](_("object"))
     assertToFails[Map[String, String]](_("object"))
@@ -201,7 +201,7 @@ class JsonValueTest {
   }
 
   @Test
-  def testDecodeOption: Unit = {
+  def testDecodeOption(): Unit = {
     assertTo[Option[Int]](None, _("null"))
     assertTo[Option[Int]](Some(1234), _("int"))
     assertToFails[Option[String]](_("int"))

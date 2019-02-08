@@ -93,4 +93,36 @@ public abstract class BufferSupplier implements AutoCloseable {
             bufferMap.clear();
         }
     }
+
+    /**
+     * Simple buffer supplier for single-threaded usage. It caches a single buffer, which grows
+     * monotonically as needed to fulfill the allocation request.
+     */
+    public static class GrowableBufferSupplier extends BufferSupplier {
+        private ByteBuffer cachedBuffer;
+
+        @Override
+        public ByteBuffer get(int minCapacity) {
+            if (cachedBuffer != null && cachedBuffer.capacity() >= minCapacity) {
+                ByteBuffer res = cachedBuffer;
+                cachedBuffer = null;
+                return res;
+            } else {
+                cachedBuffer = null;
+                return ByteBuffer.allocate(minCapacity);
+            }
+        }
+
+        @Override
+        public void release(ByteBuffer buffer) {
+            buffer.clear();
+            cachedBuffer = buffer;
+        }
+
+        @Override
+        public void close() {
+            cachedBuffer = null;
+        }
+    }
+
 }

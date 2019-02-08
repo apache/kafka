@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.utils;
 
-import java.util.concurrent.TimeUnit;
-
 /**
  * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
  * of this class.
@@ -27,11 +25,6 @@ public class SystemTime implements Time {
     @Override
     public long milliseconds() {
         return System.currentTimeMillis();
-    }
-
-    @Override
-    public long hiResClockMs() {
-        return TimeUnit.NANOSECONDS.toMillis(nanoseconds());
     }
 
     @Override

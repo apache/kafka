@@ -68,9 +68,20 @@ public class JoinGroupResponse extends AbstractResponse {
             MEMBER_ID,
             new Field(MEMBERS_KEY_NAME, new ArrayOf(JOIN_GROUP_RESPONSE_MEMBER_V0)));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema JOIN_GROUP_RESPONSE_V3 = JOIN_GROUP_RESPONSE_V2;
+
+    /**
+     * The version number is bumped to indicate that client needs to issue a second join group request under first try
+     * with UNKNOWN_MEMBER_ID.
+     */
+    private static final Schema JOIN_GROUP_RESPONSE_V4 = JOIN_GROUP_RESPONSE_V3;
 
     public static Schema[] schemaVersions() {
-        return new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2};
+        return new Schema[] {JOIN_GROUP_RESPONSE_V0, JOIN_GROUP_RESPONSE_V1, JOIN_GROUP_RESPONSE_V2,
+            JOIN_GROUP_RESPONSE_V3, JOIN_GROUP_RESPONSE_V4};
     }
 
     public static final String UNKNOWN_PROTOCOL = "";
@@ -87,6 +98,7 @@ public class JoinGroupResponse extends AbstractResponse {
      * UNKNOWN_MEMBER_ID (25)
      * INVALID_SESSION_TIMEOUT (26)
      * GROUP_AUTHORIZATION_FAILED (30)
+     * MEMBER_ID_REQUIRED (79)
      */
 
     private final int throttleTimeMs;
@@ -139,6 +151,7 @@ public class JoinGroupResponse extends AbstractResponse {
         leaderId = struct.getString(LEADER_ID_KEY_NAME);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -214,5 +227,10 @@ public class JoinGroupResponse extends AbstractResponse {
             ", leaderId=" + leaderId +
             ", members=" + ((members == null) ? "null" :
                 Utils.join(members.keySet(), ",")) + ")";
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 3;
     }
 }

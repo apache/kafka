@@ -33,7 +33,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * This iterator must be closed after use.
      *
      * @param key the key to return sessions for
-     * @param earliestSessionEndTime
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
+     * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching key and aggregated values
      * @throws NullPointerException If null is used for key.
      */
@@ -47,11 +48,23 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      *
      * @param keyFrom The first key that could be in the range
      * @param keyTo The last key that could be in the range
-     * @param earliestSessionEndTime
+     * @param earliestSessionEndTime the end timestamp of the earliest session to search for
+     * @param latestSessionStartTime the end timestamp of the latest session to search for
      * @return iterator of sessions with the matching keys and aggregated values
      * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
+
+    /**
+     * Get the value of key from a single session.
+     *
+     * @param key            the key to fetch
+     * @param startTime      start timestamp of the session
+     * @param endTime        end timestamp of the session
+     * @return The value or {@code null} if no session associated with the key can be found
+     * @throws NullPointerException If {@code null} is used for any key.
+     */
+    AGG fetchSession(K key, long startTime, long endTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store
@@ -63,7 +76,8 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
     /**
      * Write the aggregated value for the provided key to the store
      * @param sessionKey key of the session to write
-     * @param aggregate  the aggregated value for the session
+     * @param aggregate  the aggregated value for the session, it can be null;
+     *                   if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException If null is used for sessionKey.
      */
     void put(final Windowed<K> sessionKey, final AGG aggregate);

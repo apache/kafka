@@ -34,25 +34,13 @@ class FilesUnreadableFaultSpec(TaskSpec):
         :param error_code:      The error code to use.
         """
         super(FilesUnreadableFaultSpec, self).__init__(start_ms, duration_ms)
-        self.node_names = node_names
-        self.mount_path = mount_path
-        self.prefix = prefix
-        self.error_code = error_code
+        self.message["class"] = "org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec"
+        self.message["nodeNames"] = node_names
+        self.message["mountPath"] = mount_path
+        self.message["prefix"] = prefix
+        self.message["errorCode"] = error_code
 
-    def message(self):
-        return {
-            "class": "org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec",
-            "startMs": self.start_ms,
-            "durationMs": self.duration_ms,
-            "nodeNames": self.node_names,
-            "mountPath": self.mount_path,
-            "prefix": self.prefix,
-            "errorCode": self.error_code,
-        }
-
-    def kibosh_message(self):
-        return {
-            "type": "unreadable",
-            "prefix": self.prefix,
-            "code": self.error_code,
-        }
+        self.kibosh_message = {}
+        self.kibosh_message["type"] = "unreadable"
+        self.kibosh_message["prefix"] = prefix
+        self.kibosh_message["code"] = error_code

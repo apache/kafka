@@ -264,12 +264,12 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     }
 
     @Override
-    public int available() throws IOException {
+    public int available() {
         return decompressedBuffer == null ? 0 : decompressedBuffer.remaining();
     }
 
     @Override
-    public void close() throws IOException {
+    public void close() {
         bufferSupplier.release(decompressionBuffer);
     }
 
@@ -279,7 +279,7 @@ public final class KafkaLZ4BlockInputStream extends InputStream {
     }
 
     @Override
-    public void reset() throws IOException {
+    public void reset() {
         throw new RuntimeException("reset not supported");
     }
 

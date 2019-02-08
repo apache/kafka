@@ -17,8 +17,8 @@
 
 package kafka.utils
 
-import com.typesafe.scalalogging.{LazyLogging, Logger}
-import org.slf4j.{Marker, MarkerFactory}
+import com.typesafe.scalalogging.Logger
+import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 
 
 object Log4jControllerRegistration {
@@ -38,12 +38,15 @@ private object Logging {
   private val FatalMarker: Marker = MarkerFactory.getMarker("FATAL")
 }
 
-trait Logging extends LazyLogging {
-  def loggerName: String = logger.underlying.getName
+trait Logging {
+
+  protected lazy val logger = Logger(LoggerFactory.getLogger(loggerName))
 
   protected var logIdent: String = _
 
   Log4jControllerRegistration
+
+  protected def loggerName: String = getClass.getName
 
   protected def msgWithLogIdent(msg: String): String =
     if (logIdent == null) msg else logIdent + msg

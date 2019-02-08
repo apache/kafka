@@ -26,7 +26,7 @@ class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
     private final Predicate<K, V> predicate;
     private final boolean filterNot;
 
-    public KStreamFilter(Predicate<K, V> predicate, boolean filterNot) {
+    public KStreamFilter(final Predicate<K, V> predicate, final boolean filterNot) {
         this.predicate = predicate;
         this.filterNot = filterNot;
     }
@@ -38,7 +38,7 @@ class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
 
     private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
         @Override
-        public void process(K key, V value) {
+        public void process(final K key, final V value) {
             if (filterNot ^ predicate.test(key, value)) {
                 context().forward(key, value);
             }

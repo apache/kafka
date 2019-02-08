@@ -18,9 +18,9 @@ package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.errors.CorruptRecordException;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.record.Records.HEADER_SIZE_UP_TO_MAGIC;
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 import static org.apache.kafka.common.record.Records.MAGIC_OFFSET;
 import static org.apache.kafka.common.record.Records.SIZE_OFFSET;
@@ -38,20 +38,11 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         this.maxMessageSize = maxMessageSize;
     }
 
-    public MutableRecordBatch nextBatch() throws IOException {
+    public MutableRecordBatch nextBatch() {
         int remaining = buffer.remaining();
-        if (remaining < LOG_OVERHEAD)
-            return null;
 
-        int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
-        // V0 has the smallest overhead, stricter checking is done later
-        if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
-            throw new CorruptRecordException(String.format("Record size is less than the minimum record overhead (%d)", LegacyRecord.RECORD_OVERHEAD_V0));
-        if (recordSize > maxMessageSize)
-            throw new CorruptRecordException(String.format("Record size exceeds the largest allowable message size (%d).", maxMessageSize));
-
-        int batchSize = recordSize + LOG_OVERHEAD;
-        if (remaining < batchSize)
+        Integer batchSize = nextBatchSize();
+        if (batchSize == null || remaining < batchSize)
             return null;
 
         byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
@@ -60,13 +51,38 @@ class ByteBufferLogInputStream implements LogInputStream<MutableRecordBatch> {
         batchSlice.limit(batchSize);
         buffer.position(buffer.position() + batchSize);
 
-        if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
-            throw new CorruptRecordException("Invalid magic found in record: " + magic);
-
         if (magic > RecordBatch.MAGIC_VALUE_V1)
             return new DefaultRecordBatch(batchSlice);
         else
             return new AbstractLegacyRecordBatch.ByteBufferLegacyRecordBatch(batchSlice);
     }
 
+    /**
+     * Validates the header of the next batch and returns batch size.
+     * @return next batch size including LOG_OVERHEAD if buffer contains header up to
+     *         magic byte, null otherwise
+     * @throws CorruptRecordException if record size or magic is invalid
+     */
+    Integer nextBatchSize() throws CorruptRecordException {
+        int remaining = buffer.remaining();
+        if (remaining < LOG_OVERHEAD)
+            return null;
+        int recordSize = buffer.getInt(buffer.position() + SIZE_OFFSET);
+        // V0 has the smallest overhead, stricter checking is done later
+        if (recordSize < LegacyRecord.RECORD_OVERHEAD_V0)
+            throw new CorruptRecordException(String.format("Record size %d is less than the minimum record overhead (%d)",
+                    recordSize, LegacyRecord.RECORD_OVERHEAD_V0));
+        if (recordSize > maxMessageSize)
+            throw new CorruptRecordException(String.format("Record size %d exceeds the largest allowable message size (%d).",
+                    recordSize, maxMessageSize));
+
+        if (remaining < HEADER_SIZE_UP_TO_MAGIC)
+            return null;
+
+        byte magic = buffer.get(buffer.position() + MAGIC_OFFSET);
+        if (magic < 0 || magic > RecordBatch.CURRENT_MAGIC_VALUE)
+            throw new CorruptRecordException("Invalid magic found in record: " + magic);
+
+        return recordSize + LOG_OVERHEAD;
+    }
 }

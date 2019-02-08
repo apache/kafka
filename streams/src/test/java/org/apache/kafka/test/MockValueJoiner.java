@@ -25,7 +25,7 @@ public class MockValueJoiner {
     public static <V1, V2> ValueJoiner<V1, V2, String> instance(final String separator) {
         return new ValueJoiner<V1, V2, String>() {
             @Override
-            public String apply(V1 value1, V2 value2) {
+            public String apply(final V1 value1, final V2 value2) {
                 return value1 + separator + value2;
             }
         };

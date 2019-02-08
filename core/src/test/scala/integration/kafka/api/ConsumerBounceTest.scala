@@ -13,55 +13,58 @@
 
 package kafka.api
 
+import java.time
 import java.util.concurrent._
-import java.util.{Collection, Collections}
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.locks.ReentrantLock
+import java.util.{Collection, Collections, Properties}
 
-import kafka.admin.AdminClient
-import kafka.server.KafkaConfig
+import util.control.Breaks._
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
-
+import scala.collection.mutable.ArrayBuffer
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor, Future => SFuture}
 
 /**
- * Integration tests for the new consumer that cover basic usage as well as server failures
+ * Integration tests for the consumer that cover basic usage as well as server failures
  */
-class ConsumerBounceTest extends IntegrationTestHarness with Logging {
-
-  val producerCount = 1
-  val consumerCount = 2
-  val serverCount = 3
-
+class ConsumerBounceTest extends BaseRequestTest with Logging {
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
+  val maxGroupSize = 5
 
   // Time to process commit and leave group requests in tests when brokers are available
   val gracefulCloseTimeMs = 1000
   val executor = Executors.newScheduledThreadPool(2)
 
-  // configure the servers and clients
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-  this.serverConfig.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
-  this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-  this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
-  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
-  this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
-  this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "10000")
-  this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
-  this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
   override def generateConfigs = {
-    FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
-      .map(KafkaConfig.fromProps(_, serverConfig))
+    generateKafkaConfigs()
+  }
+
+  private def generateKafkaConfigs(maxGroupSize: String = maxGroupSize.toString): Seq[KafkaConfig] = {
+    val properties = new Properties
+    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
+    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+    properties.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
+    properties.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+    properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
+    properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+
+    FixedPortTestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
+      .map(KafkaConfig.fromProps(_, properties))
   }
 
   @Before
@@ -69,7 +72,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    TestUtils.createTopic(this.zkUtils, topic, 1, serverCount, this.servers)
+    createTopic(topic, 1, numBrokers)
   }
 
   @After
@@ -93,18 +96,18 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
    */
   def consumeWithBrokerFailures(numIters: Int) {
     val numRecords = 1000
-    sendRecords(numRecords)
-    this.producers.foreach(_.close)
+    val producer = createProducer()
+    sendRecords(producer, numRecords)
 
     var consumed = 0L
-    val consumer = this.consumers.head
+    val consumer = createConsumer()
 
     consumer.subscribe(Collections.singletonList(topic))
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while (scheduler.isRunning.get()) {
+    while (scheduler.isRunning) {
       val records = consumer.poll(100).asScala
       assertEquals(Set(tp), consumer.assignment.asScala)
 
@@ -131,22 +134,22 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
 
   def seekAndCommitWithBrokerFailures(numIters: Int) {
     val numRecords = 1000
-    sendRecords(numRecords)
-    this.producers.foreach(_.close)
+    val producer = createProducer()
+    sendRecords(producer, numRecords)
 
-    val consumer = this.consumers.head
+    val consumer = createConsumer()
     consumer.assign(Collections.singletonList(tp))
     consumer.seek(tp, 0)
 
     // wait until all the followers have synced the last HW with leader
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      server.replicaManager.getReplica(tp).get.highWatermark.messageOffset == numRecords
+      server.replicaManager.localReplica(tp).get.highWatermark.messageOffset == numRecords
     ), "Failed to update high watermark for followers after timeout")
 
     val scheduler = new BounceBrokerScheduler(numIters)
     scheduler.start()
 
-    while(scheduler.isRunning.get()) {
+    while(scheduler.isRunning) {
       val coin = TestUtils.random.nextInt(3)
       if (coin == 0) {
         info("Seeking to end of log")
@@ -170,19 +173,21 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val numRecords = 1000
     val newtopic = "newtopic"
 
-    val consumer = this.consumers.head
+    val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = TestUtils.createTopic(zkUtils, newtopic, serverCount, serverCount, servers)
+        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
+
+    val producer = createProducer()
 
     def sendRecords(numRecords: Int, topic: String) {
       var remainingRecords = numRecords
       val endTimeMs = System.currentTimeMillis + 20000
       while (remainingRecords > 0 && System.currentTimeMillis < endTimeMs) {
         val futures = (0 until remainingRecords).map { i =>
-          this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+          producer.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
         }
         futures.map { future =>
           try {
@@ -197,24 +202,24 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
 
     sendRecords(numRecords, newtopic)
-    receiveRecords(consumer, numRecords, newtopic, 10000)
+    receiveRecords(consumer, numRecords, 10000)
 
     servers.foreach(server => killBroker(server.config.brokerId))
     Thread.sleep(500)
     restartDeadBrokers()
 
     val future = executor.submit(new Runnable {
-      def run() = receiveRecords(consumer, numRecords, newtopic, 10000)
+      def run() = receiveRecords(consumer, numRecords, 10000)
     })
     sendRecords(numRecords, newtopic)
     future.get
   }
 
-
   @Test
   def testClose() {
     val numRecords = 10
-    sendRecords(numRecords)
+    val producer = createProducer()
+    sendRecords(producer, numRecords)
 
     checkCloseGoodPath(numRecords, "group1")
     checkCloseWithCoordinatorFailure(numRecords, "group2", "group3")
@@ -243,9 +248,8 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     val consumer1 = createConsumerAndReceive(dynamicGroup, false, numRecords)
     val consumer2 = createConsumerAndReceive(manualGroup, true, numRecords)
 
-    val adminClient = AdminClient.createSimplePlaintext(this.brokerList)
-    killBroker(adminClient.findCoordinator(dynamicGroup).id)
-    killBroker(adminClient.findCoordinator(manualGroup).id)
+    killBroker(findCoordinator(dynamicGroup))
+    killBroker(findCoordinator(manualGroup))
 
     val future1 = submitCloseAndValidate(consumer1, Long.MaxValue, None, Some(gracefulCloseTimeMs))
     val future2 = submitCloseAndValidate(consumer2, Long.MaxValue, None, Some(gracefulCloseTimeMs))
@@ -255,7 +259,18 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     restartDeadBrokers()
     checkClosedState(dynamicGroup, 0)
     checkClosedState(manualGroup, numRecords)
-    adminClient.close()
+  }
+
+  private def findCoordinator(group: String): Int = {
+    val request = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    var nodeId = -1
+    TestUtils.waitUntilTrue(() => {
+      val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
+      val response = FindCoordinatorResponse.parse(resp, ApiKeys.FIND_COORDINATOR.latestVersion)
+      nodeId = response.node.id
+      response.error == Errors.NONE
+    }, s"Failed to find coordinator for group $group")
+    nodeId
   }
 
   /**
@@ -281,6 +296,166 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   }
 
   /**
+    * If we have a running consumer group of size N, configure consumer.group.max.size = N-1 and restart all brokers,
+    * the group should be forced to rebalance when it becomes hosted on a Coordinator with the new config.
+    * Then, 1 consumer should be left out of the group.
+    */
+  @Test
+  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(): Unit = {
+    val topic = "group-max-size-test"
+    val maxGroupSize = 2
+    val consumerCount = maxGroupSize + 1
+    var recordsProduced = maxGroupSize * 100
+    val partitionCount = consumerCount * 2
+    if (recordsProduced % partitionCount != 0) {
+      // ensure even record distribution per partition
+      recordsProduced += partitionCount - recordsProduced % partitionCount
+    }
+    val executor = Executors.newScheduledThreadPool(consumerCount * 2)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+    val producer = createProducer()
+    createTopic(topic, numPartitions = partitionCount, replicationFactor = numBrokers)
+    val stableConsumers = createConsumersWithGroupId("group2", consumerCount, executor, topic = topic)
+
+    // assert group is stable and working
+    sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+    stableConsumers.foreach { cons => {
+      receiveAndCommit(cons, recordsProduced / consumerCount, 10000)
+    }}
+
+    // roll all brokers with a lesser max group size to make sure coordinator has the new config
+    val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
+    val kickedConsumerOut = new AtomicBoolean(false)
+    var kickedOutConsumerIdx: Option[Int] = None
+    val lock = new ReentrantLock
+    // restart brokers until the group moves to a Coordinator with the new config
+    breakable { for (broker <- servers.indices) {
+      killBroker(broker)
+      sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+
+      var successfulConsumes = 0
+
+      // compute consumptions in a non-blocking way in order to account for the rebalance once the group.size takes effect
+      val consumeFutures = new ArrayBuffer[SFuture[Any]]
+      implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
+      stableConsumers.indices.foreach(idx => {
+        val currentConsumer = stableConsumers(idx)
+        val consumeFuture = SFuture {
+          try {
+            receiveAndCommit(currentConsumer, recordsProduced / consumerCount, 10000)
+            CoreUtils.inLock(lock) { successfulConsumes += 1 }
+          } catch {
+            case e: Throwable =>
+              if (!e.isInstanceOf[GroupMaxSizeReachedException]) {
+                throw e
+              }
+              if (!kickedConsumerOut.compareAndSet(false, true)) {
+                fail(s"Received more than one ${classOf[GroupMaxSizeReachedException]}")
+              }
+              kickedOutConsumerIdx = Some(idx)
+          }
+        }
+
+        consumeFutures += consumeFuture
+      })
+      Await.result(SFuture.sequence(consumeFutures), Duration("12sec"))
+
+      if (kickedConsumerOut.get()) {
+        // validate the rest N-1 consumers consumed successfully
+        assertEquals(maxGroupSize, successfulConsumes)
+        break
+      }
+
+      val config = newConfigs(broker)
+      servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+      restartDeadBrokers()
+    }}
+    if (!kickedConsumerOut.get())
+      fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
+
+    // assert that the group has gone through a rebalance and shed off one consumer
+    stableConsumers.remove(kickedOutConsumerIdx.get)
+    sendRecords(producer, recordsProduced, topic, numPartitions = Some(partitionCount))
+    // should be only maxGroupSize consumers left in the group
+    stableConsumers.foreach { cons => {
+      receiveAndCommit(cons, recordsProduced / maxGroupSize, 10000)
+    }}
+  }
+
+  /**
+    * When we have the consumer group max size configured to X, the X+1th consumer trying to join should receive a fatal exception
+    */
+  @Test
+  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(): Unit = {
+    val topic = "group-max-size-test"
+    val groupId = "group1"
+    val executor = Executors.newScheduledThreadPool(maxGroupSize * 2)
+    createTopic(topic, maxGroupSize, numBrokers)
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+
+    // Create N+1 consumers in the same consumer group and assert that the N+1th consumer receives a fatal error when it tries to join the group
+    val stableConsumers = createConsumersWithGroupId(groupId, maxGroupSize, executor, topic)
+    val newConsumer = createConsumerWithGroupId(groupId)
+    var failedRebalance = false
+    var exception: Exception = null
+    waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, onException = e => {failedRebalance = true; exception = e}),
+      executor = executor, stableConsumers:_*)
+    assertTrue("Rebalance did not fail as expected", failedRebalance)
+    assertTrue(exception.isInstanceOf[GroupMaxSizeReachedException])
+
+    // assert group continues to live
+    val producer = createProducer()
+    sendRecords(producer, maxGroupSize * 100, topic, numPartitions = Some(maxGroupSize))
+    stableConsumers.foreach { cons => {
+        receiveExactRecords(cons, 100, 10000)
+    }}
+  }
+
+  /**
+    * Creates N consumers with the same group ID and ensures the group rebalances properly at each step
+    */
+  private def createConsumersWithGroupId(groupId: String, consumerCount: Int, executor: ExecutorService, topic: String = topic): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
+    val stableConsumers = ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    for (_ <- 1.to(consumerCount)) {
+      val newConsumer = createConsumerWithGroupId(groupId)
+      waitForRebalance(5000, subscribeAndPoll(newConsumer, executor = executor, topic = topic),
+        executor = executor, stableConsumers:_*)
+      stableConsumers += newConsumer
+    }
+    stableConsumers
+  }
+
+  def subscribeAndPoll(consumer: KafkaConsumer[Array[Byte], Array[Byte]], executor: ExecutorService, revokeSemaphore: Option[Semaphore] = None,
+                       onException: Exception => Unit = e => { throw e }, topic: String = topic, pollTimeout: Int = 1000): Future[Any] = {
+    executor.submit(CoreUtils.runnable {
+      try {
+        consumer.subscribe(Collections.singletonList(topic))
+        consumer.poll(java.time.Duration.ofMillis(pollTimeout))
+      } catch {
+        case e: Exception => onException.apply(e)
+      }
+    }, 0)
+  }
+
+  def waitForRebalance(timeoutMs: Long, future: Future[Any], executor: ExecutorService, otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
+    val startMs = System.currentTimeMillis
+    implicit val executorContext: ExecutionContextExecutor = ExecutionContext.fromExecutor(executor)
+
+    while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone) {
+      val consumeFutures = otherConsumers.map(consumer => SFuture {
+        consumer.poll(time.Duration.ofMillis(1000))
+      })
+      Await.result(SFuture.sequence(consumeFutures), Duration("1500ms"))
+    }
+
+    assertTrue("Rebalance did not complete in time", future.isDone)
+  }
+
+  /**
    * Consumer is closed during rebalance. Close should leave group and close
    * immediately if rebalance is in progress. If brokers are not available,
    * close should terminate immediately without sending leave group.
@@ -288,7 +463,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    TestUtils.createTopic(this.zkUtils, topic, 10, serverCount, this.servers)
+    createTopic(topic, 10, numBrokers)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -318,7 +493,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
 
     def createConsumerToRebalance(): Future[Any] = {
-      val consumer = createConsumer(groupId)
+      val consumer = createConsumerWithGroupId(groupId)
       val rebalanceSemaphore = new Semaphore(0)
       val future = subscribeAndPoll(consumer, Some(rebalanceSemaphore))
       // Wait for consumer to poll and trigger rebalance
@@ -327,10 +502,9 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       assertFalse("Rebalance completed too early", future.isDone)
       future
     }
-
-    val consumer1 = createConsumer(groupId)
+    val consumer1 = createConsumerWithGroupId(groupId)
     waitForRebalance(2000, subscribeAndPoll(consumer1))
-    val consumer2 = createConsumer(groupId)
+    val consumer2 = createConsumerWithGroupId(groupId)
     waitForRebalance(2000, subscribeAndPoll(consumer2), consumer1)
     val rebalanceFuture = createConsumerToRebalance()
 
@@ -353,29 +527,40 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     closeFuture2.get(2000, TimeUnit.MILLISECONDS)
   }
 
-  private def createConsumer(groupId: String) : KafkaConsumer[Array[Byte], Array[Byte]] = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    val consumer = createNewConsumer
-    consumers += consumer
-    consumer
+  private def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    createConsumer()
   }
 
-  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int) : KafkaConsumer[Array[Byte], Array[Byte]] = {
-    val consumer = createConsumer(groupId)
+  private def createConsumerAndReceive(groupId: String, manualAssign: Boolean, numRecords: Int): KafkaConsumer[Array[Byte], Array[Byte]] = {
+    val consumer = createConsumerWithGroupId(groupId)
     if (manualAssign)
       consumer.assign(Collections.singleton(tp))
     else
       consumer.subscribe(Collections.singleton(topic))
-    receiveRecords(consumer, numRecords)
+    receiveExactRecords(consumer, numRecords)
     consumer
   }
 
-  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, topic: String = this.topic, timeoutMs: Long = 60000) {
+  private def receiveRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000): Long = {
     var received = 0L
     val endTimeMs = System.currentTimeMillis + timeoutMs
     while (received < numRecords && System.currentTimeMillis < endTimeMs)
-      received += consumer.poll(1000).count()
+      received += consumer.poll(time.Duration.ofMillis(100)).count()
+
+    received
+  }
+
+  private def receiveExactRecords(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long = 60000): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs)
     assertEquals(numRecords, received)
+  }
+
+  @throws(classOf[CommitFailedException])
+  private def receiveAndCommit(consumer: KafkaConsumer[Array[Byte], Array[Byte]], numRecords: Int, timeoutMs: Long): Unit = {
+    val received = receiveRecords(consumer, numRecords, timeoutMs)
+    assertTrue(s"Received $received, expected at least $numRecords", numRecords <= received)
+    consumer.commitSync()
   }
 
   private def submitCloseAndValidate(consumer: KafkaConsumer[Array[Byte], Array[Byte]],
@@ -400,7 +585,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     // Check that close was graceful with offsets committed and leave group sent.
     // New instance of consumer should be assigned partitions immediately and should see committed offsets.
     val assignSemaphore = new Semaphore(0)
-    val consumer = createConsumer(groupId)
+    val consumer = createConsumerWithGroupId(groupId)
     consumer.subscribe(Collections.singletonList(topic),  new ConsumerRebalanceListener {
       def onPartitionsAssigned(partitions: Collection[TopicPartition]) {
         assignSemaphore.release()
@@ -408,7 +593,7 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
       def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
       }})
     consumer.poll(3000)
-    assertTrue("Assigment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
+    assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
       assertEquals(committedRecords, consumer.committed(tp).offset)
     consumer.close()
@@ -431,12 +616,25 @@ class ConsumerBounceTest extends IntegrationTestHarness with Logging {
     }
   }
 
-  private def sendRecords(numRecords: Int, topic: String = this.topic) {
+  private def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]],
+                          numRecords: Int,
+                          topic: String = this.topic,
+                          numPartitions: Option[Int] = None) {
+    var partitionIndex = 0
+    def getPartition: Int = {
+      numPartitions match {
+        case Some(partitions) =>
+          val nextPart = partitionIndex % partitions
+          partitionIndex += 1
+          nextPart
+        case None => part
+      }
+    }
+
     val futures = (0 until numRecords).map { i =>
-      this.producers.head.send(new ProducerRecord(topic, part, i.toString.getBytes, i.toString.getBytes))
+      producer.send(new ProducerRecord(topic, getPartition, i.toString.getBytes, i.toString.getBytes))
     }
     futures.map(_.get)
   }
-
 
 }

@@ -19,7 +19,7 @@ package kafka.zk
 
 import javax.security.auth.login.Configuration
 
-import kafka.utils.{CoreUtils, Logging, TestUtils, ZkUtils}
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.junit.{After, AfterClass, Before, BeforeClass}
 import org.junit.Assert._
 import org.scalatest.junit.JUnitSuite
@@ -32,7 +32,9 @@ import scala.collection.JavaConverters._
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
-import kafka.zookeeper.ZooKeeperClient
+import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
+import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
 @Category(Array(classOf[IntegrationTest]))
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
@@ -41,10 +43,8 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   val zkSessionTimeout = 6000
   val zkMaxInFlightRequests = Int.MaxValue
 
-  protected val zkAclsEnabled: Option[Boolean] = None
+  protected def zkAclsEnabled: Option[Boolean] = None
 
-  var zkUtils: ZkUtils = null
-  var zooKeeperClient: ZooKeeperClient = null
   var zkClient: KafkaZkClient = null
   var adminZkClient: AdminZkClient = null
 
@@ -56,22 +56,30 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
   @Before
   def setUp() {
     zookeeper = new EmbeddedZookeeper()
-    zkUtils = ZkUtils(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
-
-    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests)
-    zkClient = new KafkaZkClient(zooKeeperClient, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled()))
+    zkClient = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSecurityEnabled), zkSessionTimeout,
+      zkConnectionTimeout, zkMaxInFlightRequests, Time.SYSTEM)
     adminZkClient = new AdminZkClient(zkClient)
   }
 
   @After
   def tearDown() {
-    if (zkUtils != null)
-     CoreUtils.swallow(zkUtils.close(), this)
     if (zkClient != null)
      zkClient.close()
     if (zookeeper != null)
       CoreUtils.swallow(zookeeper.shutdown(), this)
     Configuration.setConfiguration(null)
+  }
+
+  // Trigger session expiry by reusing the session id in another client
+  def createZooKeeperClientToTriggerSessionExpiry(zooKeeper: ZooKeeper): ZooKeeper = {
+    val dummyWatcher = new Watcher {
+      override def process(event: WatchedEvent): Unit = {}
+    }
+    val anotherZkClient = new ZooKeeper(zkConnect, 1000, dummyWatcher,
+      zooKeeper.getSessionId,
+      zooKeeper.getSessionPasswd)
+    assertNull(anotherZkClient.exists("/nonexistent", false)) // Make sure new client works
+    anotherZkClient
   }
 }
 
@@ -84,6 +92,7 @@ object ZooKeeperTestHarness {
   // which reset static JAAS configuration.
   val unexpectedThreadNames = Set(ControllerEventManager.ControllerEventThreadName,
                                   KafkaProducer.NETWORK_THREAD_PREFIX,
+                                  AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
                                   AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
                                   ZkClientEventThreadPrefix)
 
@@ -114,6 +123,10 @@ object ZooKeeperTestHarness {
     val (threads, noUnexpected) = TestUtils.computeUntilTrue(allThreads) { threads =>
       threads.forall(t => unexpectedThreadNames.forall(s => !t.contains(s)))
     }
-    assertTrue(s"Found unexpected threads during $context, allThreads=$threads", noUnexpected)
+    assertTrue(
+      s"Found unexpected threads during $context, allThreads=$threads, " +
+        s"unexpected=${threads.filterNot(t => unexpectedThreadNames.forall(s => !t.contains(s)))}",
+      noUnexpected
+    )
   }
 }

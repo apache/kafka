@@ -193,6 +193,4 @@ public class Schema extends Type {
         public void visit(ArrayOf array) {}
         public void visit(Type field) {}
     }
-
-
 }

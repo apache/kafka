@@ -39,12 +39,16 @@ class StoreChangeLogger<K, V> {
     private final ProcessorContext context;
     private final RecordCollector collector;
 
-
-    StoreChangeLogger(String storeName, ProcessorContext context, StateSerdes<K, V> serialization) {
+    StoreChangeLogger(final String storeName,
+                      final ProcessorContext context,
+                      final StateSerdes<K, V> serialization) {
         this(storeName, context, context.taskId().partition, serialization);
     }
 
-    private StoreChangeLogger(String storeName, ProcessorContext context, int partition, StateSerdes<K, V> serialization) {
+    private StoreChangeLogger(final String storeName,
+                              final ProcessorContext context,
+                              final int partition,
+                              final StateSerdes<K, V> serialization) {
         this.topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), storeName);
         this.context = context;
         this.partition = partition;
@@ -52,12 +56,13 @@ class StoreChangeLogger<K, V> {
         this.collector = ((RecordCollector.Supplier) context).recordCollector();
     }
 
-    void logChange(final K key, final V value) {
+    void logChange(final K key,
+                   final V value) {
         if (collector != null) {
             final Serializer<K> keySerializer = serialization.keySerializer();
             final Serializer<V> valueSerializer = serialization.valueSerializer();
-            collector.send(this.topic, key, value, this.partition, context.timestamp(), keySerializer, valueSerializer);
+            // Sending null headers to changelog topics (KIP-244)
+            collector.send(this.topic, key, value, null, this.partition, context.timestamp(), keySerializer, valueSerializer);
         }
     }
-
 }

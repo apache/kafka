@@ -34,10 +34,12 @@ import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -47,6 +49,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class ClientAuthenticationFailureTest {
+    private static MockTime time = new MockTime(50);
 
     private NioEchoServer server;
     private Map<String, Object> saslServerConfigs;
@@ -56,6 +59,7 @@ public class ClientAuthenticationFailureTest {
 
     @Before
     public void setup() throws Exception {
+        LoginManager.closeAll();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();
@@ -80,16 +84,17 @@ public class ClientAuthenticationFailureTest {
     public void testConsumerWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "");
         StringDeserializer deserializer = new StringDeserializer();
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             consumer.subscribe(Arrays.asList(topic));
-            consumer.poll(100);
+            consumer.poll(Duration.ofSeconds(10));
             fail("Expected an authentication error!");
         } catch (SaslAuthenticationException e) {
             // OK
         } catch (Exception e) {
-            fail("Expected only an authentication error, but another error occurred: " + e.getMessage());
+            throw new AssertionError("Expected only an authentication error, but another error occurred.", e);
         }
     }
 
@@ -124,7 +129,7 @@ public class ClientAuthenticationFailureTest {
     }
 
     @Test
-    public void testTransactionalProducerWithInvalidCredentials() throws Exception {
+    public void testTransactionalProducerWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "txclient-1");
@@ -145,6 +150,6 @@ public class ClientAuthenticationFailureTest {
 
     private NioEchoServer createEchoServer(ListenerName listenerName, SecurityProtocol securityProtocol) throws Exception {
         return NetworkTestUtils.createEchoServer(listenerName, securityProtocol,
-                new TestSecurityConfig(saslServerConfigs), new CredentialCache());
+                new TestSecurityConfig(saslServerConfigs), new CredentialCache(), time);
     }
 }

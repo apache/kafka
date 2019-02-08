@@ -21,9 +21,8 @@ import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceTy
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
-import org.apache.kafka.common.resource.{Resource => AdminResource}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-
+import org.apache.kafka.common.resource.ResourcePattern
+import org.apache.kafka.common.utils.SecurityUtils._
 import scala.util.{Failure, Success, Try}
 
 
@@ -31,11 +30,11 @@ object SecurityUtils {
 
   def convertToResourceAndAcl(filter: AclBindingFilter): Either[ApiError, (Resource, Acl)] = {
     (for {
-      resourceType <- Try(ResourceType.fromJava(filter.resourceFilter.resourceType))
-      principal <- Try(KafkaPrincipal.fromString(filter.entryFilter.principal))
+      resourceType <- Try(ResourceType.fromJava(filter.patternFilter.resourceType))
+      principal <- Try(parseKafkaPrincipal(filter.entryFilter.principal))
       operation <- Try(Operation.fromJava(filter.entryFilter.operation))
       permissionType <- Try(PermissionType.fromJava(filter.entryFilter.permissionType))
-      resource = Resource(resourceType, filter.resourceFilter.name)
+      resource = Resource(resourceType, filter.patternFilter.name, filter.patternFilter.patternType)
       acl = Acl(principal, permissionType, filter.entryFilter.host, operation)
     } yield (resource, acl)) match {
       case Failure(throwable) => Left(new ApiError(Errors.INVALID_REQUEST, throwable.getMessage))
@@ -44,10 +43,11 @@ object SecurityUtils {
   }
 
   def convertToAclBinding(resource: Resource, acl: Acl): AclBinding = {
-    val adminResource = new AdminResource(resource.resourceType.toJava, resource.name)
+    val resourcePattern = new ResourcePattern(resource.resourceType.toJava, resource.name, resource.patternType)
     val entry = new AccessControlEntry(acl.principal.toString, acl.host.toString,
       acl.operation.toJava, acl.permissionType.toJava)
-    new AclBinding(adminResource, entry)
+    new AclBinding(resourcePattern, entry)
   }
 
+  def isClusterResource(name: String): Boolean = name.equals(Resource.ClusterResourceName)
 }

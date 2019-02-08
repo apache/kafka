@@ -18,10 +18,10 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
 
-import java.io.FileNotFoundException;
-import java.io.PrintWriter;
-import java.io.UnsupportedEncodingException;
-import java.nio.charset.StandardCharsets;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Objects;
 
 /**
@@ -32,7 +32,7 @@ import java.util.Objects;
  * @see KStream#print(Printed)
  */
 public class Printed<K, V> {
-    protected final PrintWriter printWriter;
+    protected final OutputStream outputStream;
     protected String label;
     protected KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
         @Override
@@ -41,8 +41,8 @@ public class Printed<K, V> {
         }
     };
 
-    private Printed(final PrintWriter printWriter) {
-        this.printWriter = printWriter;
+    private Printed(final OutputStream outputStream) {
+        this.outputStream = outputStream;
     }
 
     /**
@@ -50,7 +50,7 @@ public class Printed<K, V> {
      * @param printed   instance of {@link Printed} to copy
      */
     protected Printed(final Printed<K, V> printed) {
-        this.printWriter = printed.printWriter;
+        this.outputStream = printed.outputStream;
         this.label = printed.label;
         this.mapper = printed.mapper;
     }
@@ -69,8 +69,8 @@ public class Printed<K, V> {
             throw new TopologyException("filePath can't be an empty string");
         }
         try {
-            return new Printed<>(new PrintWriter(filePath, StandardCharsets.UTF_8.name()));
-        } catch (final FileNotFoundException | UnsupportedEncodingException e) {
+            return new Printed<>(Files.newOutputStream(Paths.get(filePath)));
+        } catch (final IOException e) {
             throw new TopologyException("Unable to write stream to file at [" + filePath + "] " + e.getMessage());
         }
     }
@@ -83,7 +83,7 @@ public class Printed<K, V> {
      * @return a new Printed instance
      */
     public static <K, V> Printed<K, V> toSysOut() {
-        return new Printed<>((PrintWriter) null);
+        return new Printed<>(System.out);
     }
 
     /**

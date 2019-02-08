@@ -20,6 +20,7 @@ package kafka.tools
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 
+import joptsimple.OptionException
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
@@ -30,24 +31,51 @@ class ConsumerPerformanceTest {
 
   @Test
   def testDetailedHeaderMatchBody(): Unit = {
-    testHeaderMatchContent(detailed = true, useOldConsumer = false, 2,
-      () => ConsumerPerformance.printNewConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L))
-    testHeaderMatchContent(detailed = true, useOldConsumer = true, 4,
-      () => ConsumerPerformance.printOldConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1,
-      dateFormat))
+    testHeaderMatchContent(detailed = true, 2,
+      () => ConsumerPerformance.printConsumerProgress(1, 1024 * 1024, 0, 1, 0, 0, 1, dateFormat, 1L))
   }
 
   @Test
   def testNonDetailedHeaderMatchBody(): Unit = {
-    testHeaderMatchContent(detailed = false, useOldConsumer = false, 2, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
+    testHeaderMatchContent(detailed = false, 2, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
       s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0, 1, 1, 1.1, 1.1"))
-    testHeaderMatchContent(detailed = false, useOldConsumer = true, 4, () => println(s"${dateFormat.format(System.currentTimeMillis)}, " +
-      s"${dateFormat.format(System.currentTimeMillis)}, 1.0, 1.0, 1, 1.0"))
   }
 
-  private def testHeaderMatchContent(detailed: Boolean, useOldConsumer: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
+  @Test
+  def testConfig(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10"
+    )
+
+    //When
+    val config = new ConsumerPerformance.ConsumerPerfConfig(args)
+
+    //Then
+    assertEquals("localhost:9092", config.options.valueOf(config.bootstrapServersOpt))
+    assertEquals("test", config.topic)
+    assertEquals(10, config.numMessages)
+  }
+
+  @Test(expected = classOf[OptionException])
+  def testConfigWithUnrecognizedOption(): Unit = {
+    //Given
+    val args: Array[String] = Array(
+      "--broker-list", "localhost:9092",
+      "--topic", "test",
+      "--messages", "10",
+      "--new-consumer"
+    )
+
+    //When
+    new ConsumerPerformance.ConsumerPerfConfig(args)
+  }
+
+  private def testHeaderMatchContent(detailed: Boolean, expectedOutputLineCount: Int, fun: () => Unit): Unit = {
     Console.withOut(outContent) {
-      ConsumerPerformance.printHeader(detailed, useOldConsumer)
+      ConsumerPerformance.printHeader(detailed)
       fun()
 
       val contents = outContent.toString.split("\n")

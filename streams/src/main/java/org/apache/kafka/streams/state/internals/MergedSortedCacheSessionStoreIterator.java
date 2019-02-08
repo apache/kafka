@@ -20,7 +20,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.SessionKeySerde;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 /**
@@ -46,15 +45,15 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
     @Override
     Windowed<Bytes> deserializeCacheKey(final Bytes cacheKey) {
         final byte[] binaryKey = cacheFunction.key(cacheKey).get();
-        final byte[] keyBytes = SessionKeySerde.extractKeyBytes(binaryKey);
-        final Window window = SessionKeySerde.extractWindow(binaryKey);
+        final byte[] keyBytes = SessionKeySchema.extractKeyBytes(binaryKey);
+        final Window window = SessionKeySchema.extractWindow(binaryKey);
         return new Windowed<>(Bytes.wrap(keyBytes), window);
     }
 
 
     @Override
     byte[] deserializeCacheValue(final LRUCacheEntry cacheEntry) {
-        return cacheEntry.value;
+        return cacheEntry.value();
     }
 
     @Override
@@ -64,7 +63,7 @@ class MergedSortedCacheSessionStoreIterator extends AbstractMergedSortedCacheSto
 
     @Override
     public int compare(final Bytes cacheKey, final Windowed<Bytes> storeKey) {
-        Bytes storeKeyBytes = SessionKeySerde.bytesToBinary(storeKey);
+        final Bytes storeKeyBytes = SessionKeySchema.toBinary(storeKey);
         return cacheFunction.compareSegmentedKeys(cacheKey, storeKeyBytes);
     }
 }

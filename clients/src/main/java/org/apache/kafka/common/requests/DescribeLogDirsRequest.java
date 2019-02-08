@@ -49,8 +49,13 @@ public class DescribeLogDirsRequest extends AbstractRequest {
                     TOPIC_NAME,
                     new Field(PARTITIONS_KEY_NAME, new ArrayOf(INT32), "List of partition ids of the topic.")))));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema DESCRIBE_LOG_DIRS_REQUEST_V1 = DESCRIBE_LOG_DIRS_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0};
+        return new Schema[]{DESCRIBE_LOG_DIRS_REQUEST_V0, DESCRIBE_LOG_DIRS_REQUEST_V1};
     }
 
     private final Set<TopicPartition> topicPartitions;
@@ -81,7 +86,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
     }
 
     public DescribeLogDirsRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_LOG_DIRS, version);
 
         if (struct.getArray(TOPICS_KEY_NAME) == null) {
             topicPartitions = null;
@@ -100,7 +105,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
 
     // topicPartitions == null indicates requesting all partitions, and an empty list indicates requesting no partitions.
     public DescribeLogDirsRequest(Set<TopicPartition> topicPartitions, short version) {
-        super(version);
+        super(ApiKeys.DESCRIBE_LOG_DIRS, version);
         this.topicPartitions = topicPartitions;
     }
 
@@ -137,6 +142,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
         short versionId = version();
         switch (versionId) {
             case 0:
+            case 1:
                 return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
             default:
                 throw new IllegalArgumentException(

@@ -41,22 +41,22 @@ public class WallclockTimestampExtractorTest {
         private final long before;
         private final long after;
 
-        public InBetween(long before, long after) {
+        public InBetween(final long before, final long after) {
             this.before = before;
             this.after = after;
         }
 
         @Override
-        public boolean matches(Object item) {
+        public boolean matches(final Object item) {
             final long timestamp = (Long) item;
             return before <= timestamp && timestamp <= after;
         }
 
         @Override
-        public void describeMismatch(Object item, Description mismatchDescription) {}
+        public void describeMismatch(final Object item, final Description mismatchDescription) {}
 
         @Override
-        public void describeTo(Description description) {}
+        public void describeTo(final Description description) {}
     }
 
 }

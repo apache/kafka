@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
+
 import java.io.IOException;
 import java.nio.channels.GatheringByteChannel;
+import java.util.Iterator;
 
-import org.apache.kafka.common.utils.Time;
 
 /**
  * Interface for accessing the records contained in a log. The log itself is represented as a sequence of record
@@ -28,20 +31,19 @@ import org.apache.kafka.common.utils.Time;
  * For magic versions 1 and below, each batch consists of an 8 byte offset, a 4 byte record size, and a "shallow"
  * {@link Record record}. If the batch is not compressed, then each batch will have only the shallow record contained
  * inside it. If it is compressed, the batch contains "deep" records, which are packed into the value field of the
- * shallow record. To iterate over the shallow batches, use {@link #batches()}; for the deep records, use
- * {@link #records()}. Note that the deep iterator handles both compressed and non-compressed batches: if the batch is
- * not compressed, the shallow record is returned; otherwise, the shallow batch is decompressed and the deep records
- * are returned.
+ * shallow record. To iterate over the shallow batches, use {@link Records#batches()}; for the deep records, use
+ * {@link Records#records()}. Note that the deep iterator handles both compressed and non-compressed batches:
+ * if the batch is not compressed, the shallow record is returned; otherwise, the shallow batch is decompressed and the
+ * deep records are returned.
  *
  * For magic version 2, every batch contains 1 or more log record, regardless of compression. You can iterate
- * over the batches directly using {@link #batches()}. Records can be iterated either directly from an individual
- * batch or through {@link #records()}. Just as in previous versions, iterating over the records typically involves
+ * over the batches directly using {@link Records#batches()}. Records can be iterated either directly from an individual
+ * batch or through {@link Records#records()}. Just as in previous versions, iterating over the records typically involves
  * decompression and should therefore be used with caution.
  *
  * See {@link MemoryRecords} for the in-memory representation and {@link FileRecords} for the on-disk representation.
  */
-public interface Records {
-
+public interface Records extends BaseRecords {
     int OFFSET_OFFSET = 0;
     int OFFSET_LENGTH = 8;
     int SIZE_OFFSET = OFFSET_OFFSET + OFFSET_LENGTH;
@@ -53,12 +55,6 @@ public interface Records {
     int MAGIC_OFFSET = 16;
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
-
-    /**
-     * The size of these records in bytes.
-     * @return The size in bytes of the records
-     */
-    int sizeInBytes();
 
     /**
      * Attempts to write the contents of this buffer to a channel.
@@ -80,6 +76,13 @@ public interface Records {
     Iterable<? extends RecordBatch> batches();
 
     /**
+     * Get an iterator over the record batches. This is similar to {@link #batches()} but returns an {@link AbstractIterator}
+     * instead of {@link Iterator}, so that clients can use methods like {@link AbstractIterator#peek() peek}.
+     * @return An iterator over the record batches of the log
+     */
+    AbstractIterator<? extends RecordBatch> batchIterator();
+
+    /**
      * Check whether all batches in this buffer have a certain magic value.
      * @param magic The magic value to check
      * @return true if all record batches have a matching magic value, false otherwise
@@ -99,7 +102,7 @@ public interface Records {
      * deep iteration since all of the deep records must also be converted to the desired format.
      * @param toMagic The magic value to convert to
      * @param firstOffset The starting offset for returned records. This only impacts some cases. See
-     *                    {@link AbstractRecords#downConvert(Iterable, byte, long, Time) for an explanation.
+     *                    {@link RecordsUtil#downConvert(Iterable, byte, long, Time)} for an explanation.
      * @param time instance used for reporting stats
      * @return A ConvertedRecords instance which may or may not contain the same instance in its records field.
      */

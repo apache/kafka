@@ -16,10 +16,22 @@
  */
 package kafka.server
 
+import java.net.InetAddress
+import java.util
 import java.util.Collections
 
+import kafka.network.RequestChannel
+import kafka.network.RequestChannel.{EndThrottlingResponse, Session, StartThrottlingResponse}
+import kafka.server.QuotaType._
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.{AbstractRequest, FetchRequest, RequestContext, RequestHeader}
+import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.{MockTime, Sanitizer}
+import org.easymock.EasyMock
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{Before, Test}
 
@@ -29,8 +41,12 @@ class ClientQuotaManagerTest {
   private val config = ClientQuotaManagerConfig(quotaBytesPerSecondDefault = 500)
 
   var numCallbacks: Int = 0
-  def callback(delayTimeMs: Int) {
-    numCallbacks += 1
+  def callback (response: RequestChannel.Response) {
+    // Count how many times this callback is called for notifyThrottlingDone().
+    response match {
+      case _: StartThrottlingResponse =>
+      case _: EndThrottlingResponse => numCallbacks += 1
+    }
   }
 
   @Before
@@ -38,43 +54,70 @@ class ClientQuotaManagerTest {
     numCallbacks = 0
   }
 
+  private def buildRequest[T <: AbstractRequest](builder: AbstractRequest.Builder[T],
+                                                 listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)): (T, RequestChannel.Request) = {
+
+    val request = builder.build()
+    val buffer = request.serialize(new RequestHeader(builder.apiKey, request.version, "", 0))
+    val requestChannelMetrics: RequestChannel.Metrics = EasyMock.createNiceMock(classOf[RequestChannel.Metrics])
+
+    // read the header from the buffer first so that the body can be read next from the Request constructor
+    val header = RequestHeader.parse(buffer)
+    val context = new RequestContext(header, "1", InetAddress.getLocalHost, KafkaPrincipal.ANONYMOUS,
+      listenerName, SecurityProtocol.PLAINTEXT)
+    (request, new RequestChannel.Request(processor = 1, context = context, startTimeNanos =  0, MemoryPool.NONE, buffer,
+      requestChannelMetrics))
+  }
+
+  private def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, value: Double): Int = {
+    val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, user)
+    quotaManager.maybeRecordAndGetThrottleTimeMs(Session(principal, null), clientId, value, time.milliseconds())
+  }
+
+  private def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
+                       channelThrottlingCallback: (RequestChannel.Response) => Unit) {
+    val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(0, 1000, new util.HashMap[TopicPartition, PartitionData]))
+    quotaManager.throttle(request, throttleTimeMs, channelThrottlingCallback)
+  }
+
   private def testQuotaParsing(config: ClientQuotaManagerConfig, client1: UserClient, client2: UserClient, randomClient: UserClient, defaultConfigClient: UserClient) {
-    val clientMetrics = new ClientQuotaManager(config, newMetrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(config, newMetrics, Produce, time, "")
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
       clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(2000, true)))
       clientMetrics.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
 
-      assertEquals("Default producer quota should be " + config.quotaBytesPerSecondDefault, new Quota(config.quotaBytesPerSecondDefault, true), clientMetrics.quota(randomClient.user, randomClient.clientId))
-      assertEquals("Should return the overridden value (2000)", new Quota(2000, true), clientMetrics.quota(client1.user, client1.clientId))
-      assertEquals("Should return the overridden value (4000)", new Quota(4000, true), clientMetrics.quota(client2.user, client2.clientId))
+      assertEquals("Default producer quota should be " + config.quotaBytesPerSecondDefault,
+        config.quotaBytesPerSecondDefault, clientMetrics.quota(randomClient.user, randomClient.clientId).bound, 0.0)
+      assertEquals("Should return the overridden value (2000)", 2000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
+      assertEquals("Should return the overridden value (4000)", 4000, clientMetrics.quota(client2.user, client2.clientId).bound, 0.0)
 
       // p1 should be throttled using the overridden quota
-      var throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 2500 * config.numQuotaSamples, this.callback)
+      var throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 2500 * config.numQuotaSamples)
       assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
       clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(3000, true)))
-      assertEquals("Should return the newly overridden value (3000)", new Quota(3000, true), clientMetrics.quota(client1.user, client1.clientId))
+      assertEquals("Should return the newly overridden value (3000)", 3000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
 
-      throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 0, this.callback)
+      throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 0)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
       // Case 3: Change quota back to default. Should be throttled again
       clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(500, true)))
-      assertEquals("Should return the default value (500)", new Quota(500, true), clientMetrics.quota(client1.user, client1.clientId))
+      assertEquals("Should return the default value (500)", 500, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
 
-      throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 0, this.callback)
+      throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 0)
       assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
 
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
       clientMetrics.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, None)
       clientMetrics.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, defaultConfigClient.sanitizedConfigClientId, Some(new Quota(4000, true)))
-      assertEquals("Should return the newly overridden value (4000)", new Quota(4000, true), clientMetrics.quota(client1.user, client1.clientId))
+      assertEquals("Should return the newly overridden value (4000)", 4000, clientMetrics.quota(client1.user, client1.clientId).bound, 0.0)
 
-      throttleTimeMs = clientMetrics.maybeRecordAndThrottle(client1.user, client1.clientId, 1000 * config.numQuotaSamples, this.callback)
+      throttleTimeMs = maybeRecord(clientMetrics, client1.user, client1.clientId, 1000 * config.numQuotaSamples)
       assertEquals(s"throttleTimeMs should be 0. was $throttleTimeMs", 0, throttleTimeMs)
 
     } finally {
@@ -150,11 +193,11 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaConfigPrecedence() {
     val quotaManager = new ClientQuotaManager(ClientQuotaManagerConfig(quotaBytesPerSecondDefault=Long.MaxValue),
-        newMetrics, QuotaType.Produce, time, "")
+        newMetrics, Produce, time, "")
 
     def checkQuota(user: String, clientId: String, expectedBound: Int, value: Int, expectThrottle: Boolean) {
-      assertEquals(new Quota(expectedBound, true), quotaManager.quota(user, clientId))
-      val throttleTimeMs = quotaManager.maybeRecordAndThrottle(user, clientId, value * config.numQuotaSamples, this.callback)
+      assertEquals(expectedBound, quotaManager.quota(user, clientId).bound, 0.0)
+      val throttleTimeMs = maybeRecord(quotaManager, user, clientId, value * config.numQuotaSamples)
       if (expectThrottle)
         assertTrue(s"throttleTimeMs should be > 0. was $throttleTimeMs", throttleTimeMs > 0)
       else
@@ -223,46 +266,46 @@ class ClientQuotaManagerTest {
   @Test
   def testQuotaViolation() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
       /* We have 10 second windows. Make sure that there is no quota violation
        * if we produce under the quota
        */
       for (_ <- 0 until 10) {
-        clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "unknown", 400, callback)
+        assertEquals(0, maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 400))
         time.sleep(1000)
       }
-      assertEquals(10, numCallbacks)
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // Create a spike.
       // 400*10 + 2000 + 300 = 6300/10.5 = 600 bytes per second.
       // (600 - quota)/quota*window-size = (600-500)/500*10.5 seconds = 2100
       // 10.5 seconds because the last window is half complete
       time.sleep(500)
-      val sleepTime = clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "unknown", 2300, callback)
+      val sleepTime = maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 2300)
 
       assertEquals("Should be throttled", 2100, sleepTime)
-      assertEquals(1, queueSizeMetric.value().toInt)
+      throttle(clientMetrics, "ANONYMOYUS", "unknown", sleepTime, callback)
+      assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
-      clientMetrics.throttledRequestReaper.doWork()
-      assertEquals(10, numCallbacks)
+      clientMetrics.throttledChannelReaper.doWork()
+      assertEquals(0, numCallbacks)
       time.sleep(sleepTime)
 
       // Callback can only be triggered after the delay time passes
-      clientMetrics.throttledRequestReaper.doWork()
-      assertEquals(0, queueSizeMetric.value().toInt)
-      assertEquals(11, numCallbacks)
+      clientMetrics.throttledChannelReaper.doWork()
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
+      assertEquals(1, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
       for (_ <- 0 until 10) {
-        clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "unknown", 400, callback)
+        maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 400)
         time.sleep(1000)
       }
 
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "unknown", 0, callback))
+                   0, maybeRecord(clientMetrics, "ANONYMOUS", "unknown", 0))
     } finally {
       clientMetrics.shutdown()
     }
@@ -271,7 +314,7 @@ class ClientQuotaManagerTest {
   @Test
   def testRequestPercentageQuotaViolation() {
     val metrics = newMetrics
-    val quotaManager = new ClientRequestQuotaManager(config, metrics, time, "")
+    val quotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
     quotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Request", ""))
     def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientQuotaManagerConfig.NanosToPercentagePerSecond
@@ -280,11 +323,10 @@ class ClientQuotaManagerTest {
        * if we are under the quota
        */
       for (_ <- 0 until 10) {
-        quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", millisToPercent(4), callback)
+        assertEquals(0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(4)))
         time.sleep(1000)
       }
-      assertEquals(10, numCallbacks)
-      assertEquals(0, queueSizeMetric.value().toInt)
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
 
       // Create a spike.
       // quota = 1% (10ms per second)
@@ -292,38 +334,40 @@ class ClientQuotaManagerTest {
       // (10.2 - quota)/quota*window-size = (10.2-10)/10*10.5 seconds = 210ms
       // 10.5 seconds interval because the last window is half complete
       time.sleep(500)
-      val throttleTime = quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", millisToPercent(67.1), callback)
+      val throttleTime = maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(67.1))
 
       assertEquals("Should be throttled", 210, throttleTime)
-      assertEquals(1, queueSizeMetric.value().toInt)
+
+      throttle(quotaManager, "ANONYMOYUS", "test-client", throttleTime, callback)
+      assertEquals(1, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
       // After a request is delayed, the callback cannot be triggered immediately
-      quotaManager.throttledRequestReaper.doWork()
-      assertEquals(10, numCallbacks)
+      quotaManager.throttledChannelReaper.doWork()
+      assertEquals(0, numCallbacks)
       time.sleep(throttleTime)
 
       // Callback can only be triggered after the delay time passes
-      quotaManager.throttledRequestReaper.doWork()
-      assertEquals(0, queueSizeMetric.value().toInt)
-      assertEquals(11, numCallbacks)
+      quotaManager.throttledChannelReaper.doWork()
+      assertEquals(0, queueSizeMetric.metricValue.asInstanceOf[Double].toInt)
+      assertEquals(1, numCallbacks)
 
       // Could continue to see delays until the bursty sample disappears
       for (_ <- 0 until 11) {
-        quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", millisToPercent(4), callback)
+        maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(4))
         time.sleep(1000)
       }
 
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", 0, callback))
+                   0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
 
       // Create a very large spike which requires > one quota window to bring within quota
-      assertEquals(1000, quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", millisToPercent(500), callback))
+      assertEquals(1000, maybeRecord(quotaManager, "ANONYMOUS", "test-client", millisToPercent(500)))
       for (_ <- 0 until 10) {
         time.sleep(1000)
-        assertEquals(1000, quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", 0, callback))
+        assertEquals(1000, maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
       }
       time.sleep(1000)
       assertEquals("Should be unthrottled since bursty sample has rolled over",
-                   0, quotaManager.maybeRecordAndThrottle("ANONYMOUS", "test-client", 0, callback))
+                   0, maybeRecord(quotaManager, "ANONYMOUS", "test-client", 0))
 
     } finally {
       quotaManager.shutdown()
@@ -333,16 +377,17 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireThrottleTimeSensor() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
-      clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
+      maybeRecord(clientMetrics, "ANONYMOUS", "client1", 100)
       // remove the throttle time sensor
       metrics.removeSensor("ProduceThrottleTime-:client1")
       // should not throw an exception even if the throttle time sensor does not exist.
-      val throttleTime = clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 10000, callback)
+      val throttleTime = maybeRecord(clientMetrics, "ANONYMOUS", "client1", 10000)
       assertTrue("Should be throttled", throttleTime > 0)
       // the sensor should get recreated
       val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:client1")
+      assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
       assertTrue("Throttle time sensor should exist", throttleTimeSensor != null)
     } finally {
       clientMetrics.shutdown()
@@ -352,14 +397,14 @@ class ClientQuotaManagerTest {
   @Test
   def testExpireQuotaSensors() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     try {
-      clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 100, callback)
+      maybeRecord(clientMetrics, "ANONYMOUS", "client1", 100)
       // remove all the sensors
       metrics.removeSensor("ProduceThrottleTime-:client1")
       metrics.removeSensor("Produce-ANONYMOUS:client1")
       // should not throw an exception
-      val throttleTime = clientMetrics.maybeRecordAndThrottle("ANONYMOUS", "client1", 10000, callback)
+      val throttleTime = maybeRecord(clientMetrics, "ANONYMOUS", "client1", 10000)
       assertTrue("Should be throttled", throttleTime > 0)
 
       // all the sensors should get recreated
@@ -376,10 +421,10 @@ class ClientQuotaManagerTest {
   @Test
   def testClientIdNotSanitized() {
     val metrics = newMetrics
-    val clientMetrics = new ClientQuotaManager(config, metrics, QuotaType.Produce, time, "")
+    val clientMetrics = new ClientQuotaManager(config, metrics, Produce, time, "")
     val clientId = "client@#$%"
     try {
-      clientMetrics.maybeRecordAndThrottle("ANONYMOUS", clientId, 100, callback)
+      maybeRecord(clientMetrics, "ANONYMOUS", clientId, 100)
 
       // The metrics should use the raw client ID, even if the reporters internally sanitize them
       val throttleTimeSensor = metrics.getSensor("ProduceThrottleTime-:" + clientId)

@@ -87,12 +87,12 @@ public class MockScheduler implements Scheduler, MockTime.MockTimeListener {
                                   final Callable<T> callable, long delayMs) {
         final KafkaFutureImpl<T> future = new KafkaFutureImpl<>();
         KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-        waiter.thenApply(new KafkaFuture.Function<Long, Void>() {
+        waiter.thenApply(new KafkaFuture.BaseFunction<Long, Void>() {
             @Override
             public Void apply(final Long now) {
                 executor.submit(new Callable<Void>() {
                     @Override
-                    public Void call() throws Exception {
+                    public Void call() {
                         // Note: it is possible that we'll execute Callable#call right after
                         // the future is cancelled.  This is a valid sequence of events
                         // that the author of the Callable needs to be able to handle.

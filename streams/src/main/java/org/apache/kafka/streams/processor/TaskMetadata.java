@@ -47,14 +47,14 @@ public class TaskMetadata {
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (this == o) {
             return true;
         }
         if (o == null || getClass() != o.getClass()) {
             return false;
         }
-        TaskMetadata that = (TaskMetadata) o;
+        final TaskMetadata that = (TaskMetadata) o;
         return Objects.equals(taskId, that.taskId) &&
                Objects.equals(topicPartitions, that.topicPartitions);
     }

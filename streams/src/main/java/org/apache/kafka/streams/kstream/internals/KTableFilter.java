@@ -30,8 +30,10 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    public KTableFilter(final KTableImpl<K, ?, V> parent, final Predicate<? super K, ? super V> predicate,
-                        final boolean filterNot, final String queryableName) {
+    KTableFilter(final KTableImpl<K, ?, V> parent,
+                 final Predicate<? super K, ? super V> predicate,
+                 final boolean filterNot,
+                 final String queryableName) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;
@@ -44,34 +46,17 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public KTableValueGetterSupplier<K, V> view() {
-
-        final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
-
-        return new KTableValueGetterSupplier<K, V>() {
-
-            public KTableValueGetter<K, V> get() {
-                return new KTableFilterValueGetter(parentValueGetterSupplier.get());
-            }
-
-            @Override
-            public String[] storeNames() {
-                return parentValueGetterSupplier.storeNames();
-            }
-        };
-    }
-
-    @Override
     public void enableSendingOldValues() {
         parent.enableSendingOldValues();
         sendOldValues = true;
     }
 
-    private V computeValue(K key, V value) {
+    private V computeValue(final K key, final V value) {
         V newValue = null;
 
-        if (value != null && (filterNot ^ predicate.test(key, value)))
+        if (value != null && (filterNot ^ predicate.test(key, value))) {
             newValue = value;
+        }
 
         return newValue;
     }
@@ -82,21 +67,22 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
             }
         }
 
         @Override
-        public void process(K key, Change<V> change) {
-            V newValue = computeValue(key, change.newValue);
-            V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
+        public void process(final K key, final Change<V> change) {
+            final V newValue = computeValue(key, change.newValue);
+            final V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
-            if (sendOldValues && oldValue == null && newValue == null)
+            if (sendOldValues && oldValue == null && newValue == null) {
                 return; // unnecessary to forward here.
+            }
 
             if (queryableName != null) {
                 store.put(key, newValue);
@@ -108,24 +94,50 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
     }
 
-    private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
+    @Override
+    public KTableValueGetterSupplier<K, V> view() {
+        // if the KTable is materialized, use the materialized store to return getter value;
+        // otherwise rely on the parent getter and apply filter on-the-fly
+        if (queryableName != null) {
+            return new KTableMaterializedValueGetterSupplier<>(queryableName);
+        } else {
+            return new KTableValueGetterSupplier<K, V>() {
+                final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
+                public KTableValueGetter<K, V> get() {
+                    return new KTableFilterValueGetter(parentValueGetterSupplier.get());
+                }
+
+                @Override
+                public String[] storeNames() {
+                    return parentValueGetterSupplier.storeNames();
+                }
+            };
+        }
+    }
+
+    private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
         private final KTableValueGetter<K, V> parentGetter;
 
-        public KTableFilterValueGetter(KTableValueGetter<K, V> parentGetter) {
+        KTableFilterValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
+        @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             parentGetter.init(context);
         }
 
         @Override
-        public V get(K key) {
+        public V get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
 
+        @Override
+        public void close() {
+            parentGetter.close();
+        }
     }
 
 }

@@ -51,8 +51,14 @@ public class SyncGroupRequest extends AbstractRequest {
     /* v1 request is the same as v0. Throttle time has been added to response */
     private static final Schema SYNC_GROUP_REQUEST_V1 = SYNC_GROUP_REQUEST_V0;
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema SYNC_GROUP_REQUEST_V2 = SYNC_GROUP_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1};
+        return new Schema[] {SYNC_GROUP_REQUEST_V0, SYNC_GROUP_REQUEST_V1,
+            SYNC_GROUP_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<SyncGroupRequest> {
@@ -95,7 +101,7 @@ public class SyncGroupRequest extends AbstractRequest {
 
     private SyncGroupRequest(String groupId, int generationId, String memberId,
                              Map<String, ByteBuffer> groupAssignment, short version) {
-        super(version);
+        super(ApiKeys.SYNC_GROUP, version);
         this.groupId = groupId;
         this.generationId = generationId;
         this.memberId = memberId;
@@ -103,7 +109,7 @@ public class SyncGroupRequest extends AbstractRequest {
     }
 
     public SyncGroupRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.SYNC_GROUP, version);
         this.groupId = struct.get(GROUP_ID);
         this.generationId = struct.get(GENERATION_ID);
         this.memberId = struct.get(MEMBER_ID);
@@ -127,6 +133,7 @@ public class SyncGroupRequest extends AbstractRequest {
                         Errors.forException(e),
                         ByteBuffer.wrap(new byte[]{}));
             case 1:
+            case 2:
                 return new SyncGroupResponse(
                         throttleTimeMs,
                         Errors.forException(e),

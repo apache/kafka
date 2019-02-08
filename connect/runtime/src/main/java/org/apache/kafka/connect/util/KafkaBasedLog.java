@@ -35,6 +35,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -145,6 +146,10 @@ public class KafkaBasedLog<K, V> {
             partitions.add(new TopicPartition(partition.topic(), partition.partition()));
         consumer.assign(partitions);
 
+        // Always consume from the beginning of all partitions. Necessary to ensure that we don't use committed offsets
+        // when a 'group.id' is specified (if offsets happen to have been committed unexpectedly).
+        consumer.seekToBeginning(partitions);
+
         readToLogEnd();
 
         thread = new WorkThread();
@@ -253,7 +258,7 @@ public class KafkaBasedLog<K, V> {
 
     private void poll(long timeoutMs) {
         try {
-            ConsumerRecords<K, V> records = consumer.poll(timeoutMs);
+            ConsumerRecords<K, V> records = consumer.poll(Duration.ofMillis(timeoutMs));
             for (ConsumerRecord<K, V> record : records)
                 consumedCallback.onCompletion(null, record);
         } catch (WakeupException e) {

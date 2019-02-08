@@ -43,7 +43,7 @@ public interface StateRestoreListener {
      * @param topicPartition the TopicPartition containing the values to restore
      * @param storeName      the name of the store undergoing restoration
      * @param startingOffset the starting offset of the entire restoration process for this TopicPartition
-     * @param endingOffset   the ending offset of the entire restoration process for this TopicPartition
+     * @param endingOffset   the exclusive ending offset of the entire restoration process for this TopicPartition
      */
     void onRestoreStart(final TopicPartition topicPartition,
                         final String storeName,
@@ -62,7 +62,7 @@ public interface StateRestoreListener {
      *
      * @param topicPartition the TopicPartition containing the values to restore
      * @param storeName the name of the store undergoing restoration
-     * @param batchEndOffset the ending offset for the current restored batch for this TopicPartition
+     * @param batchEndOffset the inclusive ending offset for the current restored batch for this TopicPartition
      * @param numRestored the total number of records restored in this batch for this TopicPartition
      */
     void onBatchRestored(final TopicPartition topicPartition,

@@ -44,8 +44,13 @@ public class InitProducerIdResponse extends AbstractResponse {
             PRODUCER_ID,
             PRODUCER_EPOCH);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema INIT_PRODUCER_ID_RESPONSE_V1 = INIT_PRODUCER_ID_RESPONSE_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{INIT_PRODUCER_ID_RESPONSE_V0};
+        return new Schema[]{INIT_PRODUCER_ID_RESPONSE_V0, INIT_PRODUCER_ID_RESPONSE_V1};
     }
 
     private final int throttleTimeMs;
@@ -71,6 +76,7 @@ public class InitProducerIdResponse extends AbstractResponse {
         this(throttleTimeMs, errors, RecordBatch.NO_PRODUCER_ID, (short) 0);
     }
 
+    @Override
     public int throttleTimeMs() {
         return throttleTimeMs;
     }
@@ -114,5 +120,10 @@ public class InitProducerIdResponse extends AbstractResponse {
                 ", producerEpoch=" + epoch +
                 ", throttleTimeMs=" + throttleTimeMs +
                 ')';
+    }
+
+    @Override
+    public boolean shouldClientThrottle(short version) {
+        return version >= 1;
     }
 }

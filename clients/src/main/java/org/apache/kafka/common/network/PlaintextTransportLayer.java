@@ -87,10 +87,9 @@ public class PlaintextTransportLayer implements TransportLayer {
     /**
      * Performs SSL handshake hence is a no-op for the non-secure
      * implementation
-     * @throws IOException
-    */
+     */
     @Override
-    public void handshake() throws IOException {}
+    public void handshake() {}
 
     /**
     * Reads a sequence of bytes from this channel into the given buffer.
@@ -121,7 +120,7 @@ public class PlaintextTransportLayer implements TransportLayer {
      * @param dsts - The buffers into which bytes are to be transferred
      * @param offset - The offset within the buffer array of the first buffer into which bytes are to be transferred; must be non-negative and no larger than dsts.length.
      * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than dsts.length - offset
-     * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
+     * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream.
      * @throws IOException if some other I/O error occurs
      */
     @Override
@@ -133,7 +132,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     * Writes a sequence of bytes to this channel from the given buffer.
     *
     * @param src The buffer from which bytes are to be retrieved
-    * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
     @Override
@@ -145,7 +144,7 @@ public class PlaintextTransportLayer implements TransportLayer {
     * Writes a sequence of bytes to this channel from the given buffer.
     *
     * @param srcs The buffer from which bytes are to be retrieved
-    * @returns The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
     * @throws IOException If some other I/O error occurs
     */
     @Override
@@ -180,7 +179,7 @@ public class PlaintextTransportLayer implements TransportLayer {
      * Returns ANONYMOUS as Principal.
      */
     @Override
-    public Principal peerPrincipal() throws IOException {
+    public Principal peerPrincipal() {
         return principal;
     }
 

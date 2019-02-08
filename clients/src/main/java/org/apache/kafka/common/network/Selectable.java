@@ -30,7 +30,7 @@ public interface Selectable {
     /**
      * See {@link #connect(String, InetSocketAddress, int, int) connect()}
      */
-    public static final int USE_DEFAULT_BUFFER_SIZE = -1;
+    int USE_DEFAULT_BUFFER_SIZE = -1;
 
     /**
      * Begin establishing a socket connection to the given address identified by the given address
@@ -40,83 +40,83 @@ public interface Selectable {
      * @param receiveBufferSize The receive buffer for the socket
      * @throws IOException If we cannot begin connecting
      */
-    public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
+    void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException;
 
     /**
      * Wakeup this selector if it is blocked on I/O
      */
-    public void wakeup();
+    void wakeup();
 
     /**
      * Close this selector
      */
-    public void close();
+    void close();
 
     /**
      * Close the connection identified by the given id
      */
-    public void close(String id);
+    void close(String id);
 
     /**
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
-    public void send(Send send);
+    void send(Send send);
 
     /**
      * Do I/O. Reads, writes, connection establishment, etc.
      * @param timeout The amount of time to block if there is nothing to do
      * @throws IOException
      */
-    public void poll(long timeout) throws IOException;
+    void poll(long timeout) throws IOException;
 
     /**
      * The list of sends that completed on the last {@link #poll(long) poll()} call.
      */
-    public List<Send> completedSends();
+    List<Send> completedSends();
 
     /**
      * The list of receives that completed on the last {@link #poll(long) poll()} call.
      */
-    public List<NetworkReceive> completedReceives();
+    List<NetworkReceive> completedReceives();
 
     /**
      * The connections that finished disconnecting on the last {@link #poll(long) poll()}
      * call. Channel state indicates the local channel state at the time of disconnection.
      */
-    public Map<String, ChannelState> disconnected();
+    Map<String, ChannelState> disconnected();
 
     /**
      * The list of connections that completed their connection on the last {@link #poll(long) poll()}
      * call.
      */
-    public List<String> connected();
+    List<String> connected();
 
     /**
      * Disable reads from the given connection
      * @param id The id for the connection
      */
-    public void mute(String id);
+    void mute(String id);
 
     /**
      * Re-enable reads from the given connection
      * @param id The id for the connection
      */
-    public void unmute(String id);
+    void unmute(String id);
 
     /**
      * Disable reads from all connections
      */
-    public void muteAll();
+    void muteAll();
 
     /**
      * Re-enable reads from all connections
      */
-    public void unmuteAll();
+    void unmuteAll();
 
     /**
      * returns true  if a channel is ready
      * @param id The id for the connection
      */
-    public boolean isChannelReady(String id);
+    boolean isChannelReady(String id);
 }

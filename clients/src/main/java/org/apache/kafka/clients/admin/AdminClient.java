@@ -17,6 +17,8 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
@@ -24,6 +26,7 @@ import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 
+import java.time.Duration;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Properties;
@@ -49,7 +52,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Properties props) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(props), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(props, true), null);
     }
 
     /**
@@ -59,7 +62,7 @@ public abstract class AdminClient implements AutoCloseable {
      * @return The new KafkaAdminClient.
      */
     public static AdminClient create(Map<String, Object> conf) {
-        return KafkaAdminClient.createInternal(new AdminClientConfig(conf), null);
+        return KafkaAdminClient.createInternal(new AdminClientConfig(conf, true), null);
     }
 
     /**
@@ -82,8 +85,24 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param duration  The duration to use for the wait time.
      * @param unit      The time unit to use for the wait time.
+     * @deprecated Since 2.2. Use {@link #close(Duration)} or {@link #close()}.
      */
-    public abstract void close(long duration, TimeUnit unit);
+    @Deprecated
+    public void close(long duration, TimeUnit unit) {
+        close(Duration.ofMillis(unit.toMillis(duration)));
+    }
+
+    /**
+     * Close the AdminClient and release all associated resources.
+     *
+     * The close operation has a grace period during which current operations will be allowed to
+     * complete, specified by the given duration.
+     * New operations will not be accepted during the grace period.  Once the grace period is over,
+     * all operations that have not yet been completed will be aborted with a TimeoutException.
+     *
+     * @param timeout  The time to use for the wait time.
+     */
+    public abstract void close(Duration timeout);
 
     /**
      * Create a batch of new topics with the default options.
@@ -105,7 +124,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after this method returns
+     * It may take several seconds after {@code CreateTopicsResult} returns
      * success for all the brokers to become aware that the topics have been created.
      * During this time, {@link AdminClient#listTopics()} and {@link AdminClient#describeTopics(Collection)}
      * may not return information about the new topics.
@@ -138,7 +157,7 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * This operation is not transactional so it may succeed for some topics while fail for others.
      *
-     * It may take several seconds after AdminClient#deleteTopics returns
+     * It may take several seconds after the {@code DeleteTopicsResult} returns
      * success for all the brokers to become aware that the topics are gone.
      * During this time, AdminClient#listTopics and AdminClient#describeTopics
      * may continue to return information about the deleted topics.
@@ -370,14 +389,17 @@ public abstract class AdminClient implements AutoCloseable {
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
-     * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that have already been created after
-     * KIP-113 is fully implemented.
+     * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
+     * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
+     * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
+     * log directory if it is not already there.
+     *
+     * This operation is not transactional so it may succeed for some replicas while fail for others.
      *
      * This is a convenience method for #{@link AdminClient#alterReplicaLogDirs(Map, AlterReplicaLogDirsOptions)} with default options.
      * See the overload for more details.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @return                   The AlterReplicaLogDirsResult
@@ -387,13 +409,14 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Change the log directory for the specified replicas. This API is currently only useful if it is used
-     * before the replica has been created on the broker. It will support moving replicas that have already been created after
-     * KIP-113 is fully implemented.
+     * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result
+     * shows REPLICA_NOT_AVAILABLE for the given replica and the replica will be created in the given log directory on the
+     * broker when it is created later. If the replica already exists on the broker, the replica will be moved to the given
+     * log directory if it is not already there.
      *
      * This operation is not transactional so it may succeed for some replicas while fail for others.
      *
-     * This operation is supported by brokers with version 1.0.0 or higher.
+     * This operation is supported by brokers with version 1.1.0 or higher.
      *
      * @param replicaAssignment  The replicas with their log directory absolute path
      * @param options            The options to use when changing replica dir
@@ -535,4 +558,294 @@ public abstract class AdminClient implements AutoCloseable {
      */
     public abstract DeleteRecordsResult deleteRecords(Map<TopicPartition, RecordsToDelete> recordsToDelete,
                                                       DeleteRecordsOptions options);
+
+    /**
+     * <p>Create a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #createDelegationToken(CreateDelegationTokenOptions)} with default options.
+     * See the overload for more details.</p>
+     *
+     * @return                      The CreateDelegationTokenResult.
+     */
+    public CreateDelegationTokenResult createDelegationToken() {
+        return createDelegationToken(new CreateDelegationTokenOptions());
+    }
+
+
+    /**
+     * <p>Create a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link CreateDelegationTokenResult#delegationToken() delegationToken()} method of the returned {@code CreateDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.InvalidPrincipalTypeException}
+     *     if the renewers principal type is not supported.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link CreateDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param options               The options to use when creating delegation token.
+     * @return                      The DeleteRecordsResult.
+     */
+    public abstract CreateDelegationTokenResult createDelegationToken(CreateDelegationTokenOptions options);
+
+
+    /**
+     * <p>Renew a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #renewDelegationToken(byte[], RenewDelegationTokenOptions)} with default options.
+     * See the overload for more details.</p>
+     *
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @return                      The RenewDelegationTokenResult.
+     */
+    public RenewDelegationTokenResult renewDelegationToken(byte[] hmac) {
+        return renewDelegationToken(hmac, new RenewDelegationTokenOptions());
+    }
+
+    /**
+     * <p> Renew a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link RenewDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code RenewDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenNotFoundException}
+     *     if the delegation token is not found on server.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException}
+     *     if the authenticated user is not owner/renewer of the token.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
+     *     if the delegation token is expired.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link RenewDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @param options               The options to use when renewing delegation token.
+     * @return                      The RenewDelegationTokenResult.
+     */
+    public abstract RenewDelegationTokenResult renewDelegationToken(byte[] hmac, RenewDelegationTokenOptions options);
+
+    /**
+     * <p>Expire a Delegation Token.</p>
+     *
+     * <p>This is a convenience method for {@link #expireDelegationToken(byte[], ExpireDelegationTokenOptions)} with default options.
+     * This will expire the token immediately. See the overload for more details.</p>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @return                      The ExpireDelegationTokenResult.
+     */
+    public ExpireDelegationTokenResult expireDelegationToken(byte[] hmac) {
+        return expireDelegationToken(hmac, new ExpireDelegationTokenOptions());
+    }
+
+    /**
+     * <p>Expire a Delegation Token.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link ExpireDelegationTokenResult#expiryTimestamp() expiryTimestamp()} method of the returned {@code ExpireDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenNotFoundException}
+     *     if the delegation token is not found on server.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException}
+     *     if the authenticated user is not owner/renewer of the requested token.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenExpiredException}
+     *     if the delegation token is expired.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link ExpireDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param hmac                  HMAC of the Delegation token
+     * @param options               The options to use when expiring delegation token.
+     * @return                      The ExpireDelegationTokenResult.
+     */
+    public abstract ExpireDelegationTokenResult expireDelegationToken(byte[] hmac, ExpireDelegationTokenOptions options);
+
+    /**
+     *<p>Describe the Delegation Tokens.</p>
+     *
+     * <p>This is a convenience method for {@link #describeDelegationToken(DescribeDelegationTokenOptions)} with default options.
+     * This will return all the user owned tokens and tokens where user have Describe permission. See the overload for more details.</p>
+     *
+     * @return                      The DescribeDelegationTokenResult.
+     */
+    public DescribeDelegationTokenResult describeDelegationToken() {
+        return describeDelegationToken(new DescribeDelegationTokenOptions());
+    }
+
+    /**
+     * <p>Describe the Delegation Tokens.</p>
+     *
+     * <p>This operation is supported by brokers with version 1.1.0 or higher.</p>
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from the
+     * {@link DescribeDelegationTokenResult#delegationTokens() delegationTokens()} method of the returned {@code DescribeDelegationTokenResult}</p>
+     * <ul>
+     *     <li>{@link org.apache.kafka.common.errors.UnsupportedByAuthenticationException}
+     *     If the request sent on PLAINTEXT/1-way SSL channels or delegation token authenticated channels.</li>
+     *     <li>{@link org.apache.kafka.common.errors.DelegationTokenDisabledException}
+     *     if the delegation token feature is disabled.</li>
+     *     <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *     if the request was not completed in within the given {@link DescribeDelegationTokenOptions#timeoutMs()}.</li>
+     * </ul>
+     *
+     * @param options               The options to use when describing delegation tokens.
+     * @return                      The DescribeDelegationTokenResult.
+     */
+    public abstract DescribeDelegationTokenResult describeDelegationToken(DescribeDelegationTokenOptions options);
+
+    /**
+     * Describe some group IDs in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public abstract DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds,
+                                                                        DescribeConsumerGroupsOptions options);
+
+    /**
+     * Describe some group IDs in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for
+     * #{@link AdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)} with
+     * default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeConsumerGroupResult.
+     */
+    public DescribeConsumerGroupsResult describeConsumerGroups(Collection<String> groupIds) {
+        return describeConsumerGroups(groupIds, new DescribeConsumerGroupsOptions());
+    }
+
+    /**
+     * List the consumer groups available in the cluster.
+     *
+     * @param options           The options to use when listing the consumer groups.
+     * @return The ListGroupsResult.
+     */
+    public abstract ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
+
+    /**
+     * List the consumer groups available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroups(ListConsumerGroupsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @return The ListGroupsResult.
+     */
+    public ListConsumerGroupsResult listConsumerGroups() {
+        return listConsumerGroups(new ListConsumerGroupsOptions());
+    }
+
+    /**
+     * List the consumer group offsets available in the cluster.
+     *
+     * @param options           The options to use when listing the consumer group offsets.
+     * @return The ListGroupOffsetsResult
+     */
+    public abstract ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options);
+
+    /**
+     * List the consumer group offsets available in the cluster with the default options.
+     *
+     * This is a convenience method for #{@link AdminClient#listConsumerGroupOffsets(String, ListConsumerGroupOffsetsOptions)} with default options.
+     *
+     * @return The ListGroupOffsetsResult.
+     */
+    public ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId) {
+        return listConsumerGroupOffsets(groupId, new ListConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * Delete consumer groups from the cluster.
+     *
+     * @param options           The options to use when deleting a consumer group.
+     * @return The DeletConsumerGroupResult.
+     */
+    public abstract DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options);
+
+    /**
+     * Delete consumer groups from the cluster with the default options.
+     *
+     * @return The DeleteConsumerGroupResult.
+     */
+    public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
+        return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
+    }
+
+    /**
+     * Elect the preferred broker of the given {@code partitions} as leader, or
+     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This is a convenience method for {@link #electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
+     * with default options.
+     * See the overload for more details.
+     *
+     * @param partitions      The partitions for which the preferred leader should be elected.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
+        return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
+    }
+
+    /**
+     * Elect the preferred broker of the given {@code partitions} as leader, or
+     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     *
+     * This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * It may take several seconds after this method returns
+     * success for all the brokers in the cluster to become aware that the partitions have new leaders.
+     * During this time, {@link AdminClient#describeTopics(Collection)}
+     * may not return information about the partitions' new leaders.
+     *
+     * This operation is supported by brokers with version 2.2.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code ElectPreferredLeadersResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   if the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   if the topic or partition did not exist within the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidTopicException}
+     *   if the topic was already queued for deletion.</li>
+     *   <li>{@link org.apache.kafka.common.errors.NotControllerException}
+     *   if the request was sent to a broker that was not the controller for the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   if the request timed out before the election was complete.</li>
+     *   <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
+     *   if the preferred leader was not alive or not in the ISR.</li>
+     * </ul>
+     *
+     * @param partitions      The partitions for which the preferred leader should be elected.
+     * @param options         The options to use when electing the preferred leaders.
+     * @return                The ElectPreferredLeadersResult.
+     */
+    public abstract ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
+                                                                      ElectPreferredLeadersOptions options);
+
+    /**
+     * Get the metrics kept by the adminClient
+     */
+    public abstract Map<MetricName, ? extends Metric> metrics();
 }

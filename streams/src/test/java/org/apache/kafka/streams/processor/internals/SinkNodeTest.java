@@ -17,14 +17,15 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.producer.MockProducer;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.state.StateSerdes;
-import org.apache.kafka.test.MockProcessorContext;
-import org.junit.After;
+import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -34,24 +35,33 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
 public class SinkNodeTest {
-    private final Serializer anySerializer = Serdes.Bytes().serializer();
-    private final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
-    private final MockProcessorContext context = new MockProcessorContext(anyStateSerde,
-        new RecordCollectorImpl(new MockProducer<byte[], byte[]>(true, anySerializer, anySerializer), null, new LogContext("sinknode-test ")));
-    private final SinkNode sink = new SinkNode<>("anyNodeName", "any-output-topic", anySerializer, anySerializer, null);
+    private final Serializer<byte[]> anySerializer = Serdes.ByteArray().serializer();
+    private final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+    private final RecordCollector recordCollector =  new RecordCollectorImpl(
+        null,
+        new LogContext("sinknode-test "),
+        new DefaultProductionExceptionHandler(),
+        new Metrics().sensor("skipped-records")
+    );
+
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        anyStateSerde,
+        recordCollector
+    );
+    private final SinkNode<byte[], byte[]> sink = new SinkNode<>("anyNodeName",
+            new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
+
+    // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
+    @SuppressWarnings("unchecked")
+    private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
 
     @Before
     public void before() {
+        recordCollector.init(new MockProducer<>(true, anySerializer, anySerializer));
         sink.init(context);
     }
 
-    @After
-    public void after() {
-        context.close();
-    }
-
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowStreamsExceptionOnInputRecordWithInvalidTimestamp() {
         final Bytes anyKey = new Bytes("any key".getBytes());
         final Bytes anyValue = new Bytes("any value".getBytes());
@@ -59,7 +69,7 @@ public class SinkNodeTest {
         // When/Then
         context.setTime(-1); // ensures a negative timestamp is set for the record we send next
         try {
-            sink.process(anyKey, anyValue);
+            illTypedSink.process(anyKey, anyValue);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException ignored) {
             // expected
@@ -67,7 +77,6 @@ public class SinkNodeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldThrowStreamsExceptionOnKeyValueTypeSerializerMismatch() {
         final String keyOfDifferentTypeThanSerializer = "key with different type";
         final String valueOfDifferentTypeThanSerializer = "value with different type";
@@ -75,7 +84,7 @@ public class SinkNodeTest {
         // When/Then
         context.setTime(0);
         try {
-            sink.process(keyOfDifferentTypeThanSerializer, valueOfDifferentTypeThanSerializer);
+            illTypedSink.process(keyOfDifferentTypeThanSerializer, valueOfDifferentTypeThanSerializer);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
@@ -83,14 +92,13 @@ public class SinkNodeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldHandleNullKeysWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
         final String invalidValueToTriggerSerializerMismatch = "";
 
         // When/Then
         context.setTime(1);
         try {
-            sink.process(null, invalidValueToTriggerSerializerMismatch);
+            illTypedSink.process(null, invalidValueToTriggerSerializerMismatch);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));
@@ -99,14 +107,13 @@ public class SinkNodeTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldHandleNullValuesWhenThrowingStreamsExceptionOnKeyValueTypeSerializerMismatch() {
         final String invalidKeyToTriggerSerializerMismatch = "";
 
         // When/Then
         context.setTime(1);
         try {
-            sink.process(invalidKeyToTriggerSerializerMismatch, null);
+            illTypedSink.process(invalidKeyToTriggerSerializerMismatch, null);
             fail("Should have thrown StreamsException");
         } catch (final StreamsException e) {
             assertThat(e.getCause(), instanceOf(ClassCastException.class));

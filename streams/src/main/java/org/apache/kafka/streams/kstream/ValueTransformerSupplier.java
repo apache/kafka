@@ -23,7 +23,10 @@ package org.apache.kafka.streams.kstream;
  * @param <V>  value type
  * @param <VR> transformed value type
  * @see ValueTransformer
+ * @see ValueTransformerWithKey
+ * @see ValueTransformerWithKeySupplier
  * @see KStream#transformValues(ValueTransformerSupplier, String...)
+ * @see KStream#transformValues(ValueTransformerWithKeySupplier, String...)
  * @see Transformer
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)

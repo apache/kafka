@@ -51,8 +51,9 @@ object ReplicationQuotaManagerConfig {
 }
 
 trait ReplicaQuota {
+  def record(value: Long): Unit
   def isThrottled(topicPartition: TopicPartition): Boolean
-  def isQuotaExceeded(): Boolean
+  def isQuotaExceeded: Boolean
 }
 
 object Constants {
@@ -99,7 +100,7 @@ class ReplicationQuotaManager(val config: ReplicationQuotaManagerConfig,
     *
     * @return
     */
-  override def isQuotaExceeded(): Boolean = {
+  override def isQuotaExceeded: Boolean = {
     try {
       sensor().checkQuotas()
     } catch {

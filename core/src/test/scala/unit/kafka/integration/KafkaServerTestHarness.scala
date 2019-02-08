@@ -20,7 +20,6 @@ package kafka.integration
 import java.io.File
 import java.util.Arrays
 
-import kafka.common.KafkaException
 import kafka.server._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
@@ -30,7 +29,9 @@ import org.junit.{After, Before}
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import java.util.Properties
 
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.utils.Time
 
 /**
  * A test harness that brings up some number of broker nodes
@@ -61,6 +62,12 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
    */
   def configureSecurityBeforeServersStart() {}
 
+  /**
+   * Override this in case Tokens or security credentials needs to be created after `servers` are started.
+   * The default implementation of this method is a no-op.
+   */
+  def configureSecurityAfterServersStart() {}
+
   def configs: Seq[KafkaConfig] = {
     if (instanceConfigs == null)
       instanceConfigs = generateConfigs
@@ -76,6 +83,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
   protected def trustStoreFile: Option[File] = None
   protected def serverSaslProperties: Option[Properties] = None
   protected def clientSaslProperties: Option[Properties] = None
+  protected def brokerTime(brokerId: Int): Time = Time.SYSTEM
 
   @Before
   override def setUp() {
@@ -90,10 +98,13 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     // Add each broker to `servers` buffer as soon as it is created to ensure that brokers
     // are shutdown cleanly in tearDown even if a subsequent broker fails to start
     for (config <- configs)
-      servers += TestUtils.createServer(config)
+      servers += TestUtils.createServer(config, time = brokerTime(config.brokerId))
     brokerList = TestUtils.bootstrapServers(servers, listenerName)
     alive = new Array[Boolean](servers.length)
     Arrays.fill(alive, true)
+
+    // default implementation is a no-op, it is overridden by subclasses if required
+    configureSecurityAfterServersStart()
   }
 
   @After
@@ -101,8 +112,25 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
     if (servers != null) {
       TestUtils.shutdownServers(servers)
     }
-    super.tearDown
+    super.tearDown()
   }
+
+  /**
+   * Create a topic in ZooKeeper.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+                  topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, topicConfig)
+
+  /**
+   * Create a topic in ZooKeeper using a customized replica assignment.
+   * Wait until the leader is elected and the metadata is propagated to all brokers.
+   * Return the leader for each partition.
+   */
+  def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): scala.collection.immutable.Map[Int, Int] =
+    TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment, servers)
 
   /**
    * Pick a broker at random and kill it if it isn't already dead

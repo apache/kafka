@@ -133,7 +133,7 @@ class KiboshService(Service):
         :param node:        The node.
         :param spec:        An array of FaultSpec objects describing the faults.
         """
-        fault_array = [spec.kibosh_message() for spec in specs]
+        fault_array = [spec.kibosh_message for spec in specs]
         obj = { 'faults': fault_array }
         obj_json = json.dumps(obj)
         node.account.create_file(self.control_path, obj_json)

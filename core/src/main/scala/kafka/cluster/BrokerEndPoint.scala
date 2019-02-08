@@ -19,7 +19,7 @@ package kafka.cluster
 import java.nio.ByteBuffer
 
 import kafka.api.ApiUtils._
-import kafka.common.KafkaException
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.utils.Utils._
 
 object BrokerEndPoint {
@@ -76,4 +76,8 @@ case class BrokerEndPoint(id: Int, host: String, port: Int) {
     4 + /* broker Id */
     4 + /* port */
     shortStringLength(host)
+
+  override def toString: String = {
+    s"BrokerEndPoint(id=$id, host=$host:$port)"
+  }
 }

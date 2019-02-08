@@ -17,15 +17,12 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.server.KafkaConfig$;
-import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.config.SslConfigs;
-import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.AfterClass;
+import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -40,49 +37,48 @@ import java.util.Properties;
 @Category({IntegrationTest.class})
 public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
 
-    private static Map<String, Object> sslConfig;
-    static {
-        try {
-            sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
-        } catch (final Exception e) {
-            throw new RuntimeException(e);
-        }
-    }
-
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER;
+
+    private static final String TEST_ID = "reset-with-ssl-integration-test";
+
+    private static Map<String, Object> sslConfig;
+
     static {
-        final Properties props = new Properties();
+        final Properties brokerProps = new Properties();
         // we double the value passed to `time.sleep` in each iteration in one of the map functions, so we disable
         // expiration of connections by the brokers to avoid errors when `AdminClient` sends requests after potentially
         // very long sleep times
-        props.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
-        props.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
-        props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
-        props.putAll(sslConfig);
-        CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, props);
-        cluster = CLUSTER;
+        brokerProps.put(KafkaConfig$.MODULE$.ConnectionsMaxIdleMsProp(), -1L);
+
+        try {
+            sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, TestUtils.tempFile(), "testCert");
+
+            brokerProps.put(KafkaConfig$.MODULE$.ListenersProp(), "SSL://localhost:0");
+            brokerProps.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(), "SSL");
+            brokerProps.putAll(sslConfig);
+        } catch (final Exception e) {
+            throw new RuntimeException(e);
+        }
+
+        CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 
-    @AfterClass
-    public static void globalCleanup() {
-        afterClassGlobalCleanup();
+    @Override
+    Map<String, Object> getClientSslConfig() {
+        return sslConfig;
     }
 
     @Before
     public void before() throws Exception {
-        beforePrepareTest();
+        testId = TEST_ID;
+        cluster = CLUSTER;
+        prepareTest();
     }
 
-    Properties getClientSslConfig() {
-        final Properties props = new Properties();
-
-        props.put("bootstrap.servers", CLUSTER.bootstrapServers());
-        props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
-        props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) sslConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());
-        props.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SSL");
-
-        return props;
+    @After
+    public void after() throws Exception {
+        cleanupTest();
     }
 
     @Test
@@ -90,4 +86,8 @@ public class ResetIntegrationWithSslTest extends AbstractResetIntegrationTest {
         super.testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic();
     }
 
+    @Test
+    public void testReprocessingFromScratchAfterResetWithIntermediateUserTopic() throws Exception {
+        super.testReprocessingFromScratchAfterResetWithIntermediateUserTopic();
+    }
 }

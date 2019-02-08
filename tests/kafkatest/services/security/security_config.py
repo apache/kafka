@@ -112,7 +112,7 @@ class SecurityConfig(TemplateRenderer):
 
     def __init__(self, context, security_protocol=None, interbroker_security_protocol=None,
                  client_sasl_mechanism=SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SASL_MECHANISM_GSSAPI,
-                 zk_sasl=False, template_props="", static_jaas_conf=True):
+                 zk_sasl=False, template_props="", static_jaas_conf=True, jaas_override_variables=None):
         """
         Initialize the security properties for the node and copy
         keystore and truststore to the remote node if the transport protocol 
@@ -156,15 +156,20 @@ class SecurityConfig(TemplateRenderer):
             'sasl.mechanism.inter.broker.protocol' : interbroker_sasl_mechanism,
             'sasl.kerberos.service.name' : 'kafka'
         }
+        self.jaas_override_variables = jaas_override_variables or {}
 
-    def client_config(self, template_props="", node=None):
+    def client_config(self, template_props="", node=None, jaas_override_variables=None):
         # If node is not specified, use static jaas config which will be created later.
         # Otherwise use static JAAS configuration files with SASL_SSL and sasl.jaas.config
         # property with SASL_PLAINTEXT so that both code paths are tested by existing tests.
         # Note that this is an artibtrary choice and it is possible to run all tests with
         # either static or dynamic jaas config files if required.
         static_jaas_conf = node is None or (self.has_sasl and self.has_ssl)
-        return SecurityConfig(self.context, self.security_protocol, client_sasl_mechanism=self.client_sasl_mechanism, template_props=template_props, static_jaas_conf=static_jaas_conf)
+        return SecurityConfig(self.context, self.security_protocol,
+                              client_sasl_mechanism=self.client_sasl_mechanism,
+                              template_props=template_props,
+                              static_jaas_conf=static_jaas_conf,
+                              jaas_override_variables=jaas_override_variables)
 
     def enable_security_protocol(self, security_protocol):
         self.has_sasl = self.has_sasl or self.is_sasl(security_protocol)
@@ -179,15 +184,18 @@ class SecurityConfig(TemplateRenderer):
         node.account.ssh("mkdir -p %s" % SecurityConfig.CONFIG_DIR, allow_fail=False)
         jaas_conf_file = "jaas.conf"
         java_version = node.account.ssh_capture("java -version")
-        if any('IBM' in line for line in java_version):
-            is_ibm_jdk = True
-        else:
-            is_ibm_jdk = False
-        jaas_conf = self.render(jaas_conf_file,  node=node, is_ibm_jdk=is_ibm_jdk,
-                                SecurityConfig=SecurityConfig,
-                                client_sasl_mechanism=self.client_sasl_mechanism,
-                                enabled_sasl_mechanisms=self.enabled_sasl_mechanisms,
-                                static_jaas_conf=self.static_jaas_conf)
+
+        jaas_conf = self.render_jaas_config(
+            jaas_conf_file,
+            {
+                'node': node,
+                'is_ibm_jdk': any('IBM' in line for line in java_version),
+                'SecurityConfig': SecurityConfig,
+                'client_sasl_mechanism': self.client_sasl_mechanism,
+                'enabled_sasl_mechanisms': self.enabled_sasl_mechanisms
+            }
+        )
+
         if self.static_jaas_conf:
             node.account.create_file(SecurityConfig.JAAS_CONF_PATH, jaas_conf)
         else:
@@ -195,6 +203,18 @@ class SecurityConfig(TemplateRenderer):
         if self.has_sasl_kerberos:
             node.account.copy_to(MiniKdc.LOCAL_KEYTAB_FILE, SecurityConfig.KEYTAB_PATH)
             node.account.copy_to(MiniKdc.LOCAL_KRB5CONF_FILE, SecurityConfig.KRB5CONF_PATH)
+
+    def render_jaas_config(self, jaas_conf_file, config_variables):
+        """
+        Renders the JAAS config file contents
+
+        :param jaas_conf_file: name of the JAAS config template file
+        :param config_variables: dict of variables used in the template
+        :return: the rendered template string
+        """
+        variables = config_variables.copy()
+        variables.update(self.jaas_override_variables)  # override variables
+        return self.render(jaas_conf_file, **variables)
 
     def setup_node(self, node):
         if self.has_ssl:

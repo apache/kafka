@@ -33,7 +33,10 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
     private boolean sendOldValues = false;
 
-    public KTableAggregate(String storeName, Initializer<T> initializer, Aggregator<? super K, ? super V, T> add, Aggregator<? super K, ? super V, T> remove) {
+    KTableAggregate(final String storeName,
+                    final Initializer<T> initializer,
+                    final Aggregator<? super K, ? super V, T> add,
+                    final Aggregator<? super K, ? super V, T> remove) {
         this.storeName = storeName;
         this.initializer = initializer;
         this.add = add;
@@ -51,7 +54,6 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
-
         private KeyValueStore<K, T> store;
         private TupleForwarder<K, T> tupleForwarder;
 
@@ -60,22 +62,24 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
         public void init(final ProcessorContext context) {
             super.init(context);
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context, sendOldValues), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
         }
 
         /**
          * @throws StreamsException if key is null
          */
         @Override
-        public void process(K key, Change<V> value) {
+        public void process(final K key, final Change<V> value) {
             // the keys should never be null
-            if (key == null)
+            if (key == null) {
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
+            }
 
             T oldAgg = store.get(key);
 
-            if (oldAgg == null)
+            if (oldAgg == null) {
                 oldAgg = initializer.apply();
+            }
 
             T newAgg = oldAgg;
 
@@ -91,42 +95,13 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
             // update the store with the new value
             store.put(key, newAgg);
-            tupleForwarder.maybeForward(key, newAgg, oldAgg);
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
 
     }
 
     @Override
     public KTableValueGetterSupplier<K, T> view() {
-
-        return new KTableValueGetterSupplier<K, T>() {
-
-            public KTableValueGetter<K, T> get() {
-                return new KTableAggregateValueGetter();
-            }
-
-            @Override
-            public String[] storeNames() {
-                return new String[]{storeName};
-            }
-        };
+        return new KTableMaterializedValueGetterSupplier<>(storeName);
     }
-
-    private class KTableAggregateValueGetter implements KTableValueGetter<K, T> {
-
-        private KeyValueStore<K, T> store;
-
-        @SuppressWarnings("unchecked")
-        @Override
-        public void init(ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-        }
-
-        @Override
-        public T get(K key) {
-            return store.get(key);
-        }
-
-    }
-
 }

@@ -60,4 +60,8 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
         }
         return new ChangeLoggingSessionBytesStore(inner);
     }
+
+    public long retentionPeriod() {
+        return storeSupplier.retentionPeriod();
+    }
 }

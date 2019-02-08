@@ -19,26 +19,26 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
-    private final String topic;
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
+    private final TopicNameExtractor<K, V> topicExtractor;
     private final StreamPartitioner<? super K, ? super V> partitioner;
 
-    private ProcessorContext context;
+    private InternalProcessorContext context;
 
-    public SinkNode(final String name,
-                    final String topic,
-                    final Serializer<K> keySerializer,
-                    final Serializer<V> valSerializer,
-                    final StreamPartitioner<? super K, ? super V> partitioner) {
+    SinkNode(final String name,
+             final TopicNameExtractor<K, V> topicExtractor,
+             final Serializer<K> keySerializer,
+             final Serializer<V> valSerializer,
+             final StreamPartitioner<? super K, ? super V> partitioner) {
         super(name);
 
-        this.topic = topic;
+        this.topicExtractor = topicExtractor;
         this.keySerializer = keySerializer;
         this.valSerializer = valSerializer;
         this.partitioner = partitioner;
@@ -54,7 +54,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
 
@@ -83,8 +83,10 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
             throw new StreamsException("Invalid (negative) timestamp of " + timestamp + " for output record <" + key + ":" + value + ">.");
         }
 
+        final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+
         try {
-            collector.send(topic, key, value, timestamp, keySerializer, valSerializer, partitioner);
+            collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
@@ -115,7 +117,7 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     public String toString(final String indent) {
         final StringBuilder sb = new StringBuilder(super.toString(indent));
         sb.append(indent).append("\ttopic:\t\t");
-        sb.append(topic);
+        sb.append(topicExtractor);
         sb.append("\n");
         return sb.toString();
     }

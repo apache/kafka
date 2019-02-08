@@ -20,10 +20,12 @@ package kafka.api
 import org.junit._
 import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
+
 import scala.util.Random
 import java.nio.ByteBuffer
-import kafka.common.KafkaException
+
 import kafka.utils.TestUtils
+import org.apache.kafka.common.KafkaException
 
 object ApiUtilsTest {
   val rnd: Random = new Random()

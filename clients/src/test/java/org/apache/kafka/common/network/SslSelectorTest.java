@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.common.network;
 
+import java.nio.channels.SelectionKey;
+import javax.net.ssl.SSLEngine;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.TestCondition;
@@ -39,6 +42,9 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -61,7 +67,7 @@ public class SslSelectorTest extends SelectorTest {
         this.server.start();
         this.time = new MockTime();
         sslClientConfigs = TestSslUtils.createSslConfig(false, false, Mode.CLIENT, trustStoreFile, "client");
-        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder = new SslChannelBuilder(Mode.CLIENT, null, false);
         this.channelBuilder.configure(sslClientConfigs);
         this.metrics = new Metrics();
         this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
@@ -83,10 +89,23 @@ public class SslSelectorTest extends SelectorTest {
     public void testDisconnectWithIntermediateBufferedBytes() throws Exception {
         int requestSize = 100 * 1024;
         final String node = "0";
-        connect(node, new InetSocketAddress("localhost", server.port));
         String request = TestUtils.randomString(requestSize);
+
+        this.selector.close();
+
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
+        connect(node, new InetSocketAddress("localhost", server.port));
         selector.send(createSend(node, request));
 
+        waitForBytesBuffered(selector, node);
+
+        selector.close(node);
+        verifySelectorEmpty();
+    }
+
+    private void waitForBytesBuffered(Selector selector, String node) throws Exception {
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
@@ -98,8 +117,72 @@ public class SslSelectorTest extends SelectorTest {
                 }
             }
         }, 2000L, "Failed to reach socket state with bytes buffered");
+    }
 
-        selector.close(node);
+    @Test
+    public void testBytesBufferedChannelWithNoIncomingBytes() throws Exception {
+        verifyNoUnnecessaryPollWithBytesBuffered(key ->
+            key.interestOps(key.interestOps() & ~SelectionKey.OP_READ));
+    }
+
+    @Test
+    public void testBytesBufferedChannelAfterMute() throws Exception {
+        verifyNoUnnecessaryPollWithBytesBuffered(key -> ((KafkaChannel) key.attachment()).mute());
+    }
+
+    private void verifyNoUnnecessaryPollWithBytesBuffered(Consumer<SelectionKey> disableRead)
+            throws Exception {
+        this.selector.close();
+
+        String node1 = "1";
+        String node2 = "2";
+        final AtomicInteger node1Polls = new AtomicInteger();
+
+        this.channelBuilder = new TestSslChannelBuilder(Mode.CLIENT);
+        this.channelBuilder.configure(sslClientConfigs);
+        this.selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            void pollSelectionKeys(Set<SelectionKey> selectionKeys, boolean isImmediatelyConnected, long currentTimeNanos) {
+                for (SelectionKey key : selectionKeys) {
+                    KafkaChannel channel = (KafkaChannel) key.attachment();
+                    if (channel != null && channel.id().equals(node1))
+                        node1Polls.incrementAndGet();
+                }
+                super.pollSelectionKeys(selectionKeys, isImmediatelyConnected, currentTimeNanos);
+            }
+        };
+
+        // Get node1 into bytes buffered state and then disable read on the socket.
+        // Truncate the read buffers to ensure that there is buffered data, but not enough to make progress.
+        int largeRequestSize = 100 * 1024;
+        connect(node1, new InetSocketAddress("localhost", server.port));
+        selector.send(createSend(node1,  TestUtils.randomString(largeRequestSize)));
+        waitForBytesBuffered(selector, node1);
+        TestSslChannelBuilder.TestSslTransportLayer.transportLayers.get(node1).truncateReadBuffer();
+        disableRead.accept(selector.channel(node1).selectionKey());
+
+        // Clear poll count and count the polls from now on
+        node1Polls.set(0);
+
+        // Process sends and receives on node2. Test verifies that we don't process node1
+        // unnecessarily on each of these polls.
+        connect(node2, new InetSocketAddress("localhost", server.port));
+        int received = 0;
+        String request = TestUtils.randomString(10);
+        selector.send(createSend(node2, request));
+        while (received < 100) {
+            received += selector.completedReceives().size();
+            if (!selector.completedSends().isEmpty()) {
+                selector.send(createSend(node2, request));
+            }
+            selector.poll(5);
+        }
+
+        // Verify that pollSelectionKeys was invoked once to process buffered data
+        // but not again since there isn't sufficient data to process.
+        assertEquals(1, node1Polls.get());
+        selector.close(node1);
+        selector.close(node2);
         verifySelectorEmpty();
     }
 
@@ -140,9 +223,9 @@ public class SslSelectorTest extends SelectorTest {
         //the initial channel builder is for clients, we need a server one
         File trustStoreFile = File.createTempFile("truststore", ".jks");
         Map<String, Object> sslServerConfigs = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
-        channelBuilder = new SslChannelBuilder(Mode.SERVER);
+        channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
-        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup", 
+        selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
                 new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
@@ -222,6 +305,54 @@ public class SslSelectorTest extends SelectorTest {
 
     private SslSender createSender(InetSocketAddress serverAddress, byte[] payload) {
         return new SslSender(serverAddress, payload);
+    }
+
+    private static class TestSslChannelBuilder extends SslChannelBuilder {
+
+        public TestSslChannelBuilder(Mode mode) {
+            super(mode, null, false);
+        }
+
+        @Override
+        protected SslTransportLayer buildTransportLayer(SslFactory sslFactory, String id, SelectionKey key, String host) throws IOException {
+            SocketChannel socketChannel = (SocketChannel) key.channel();
+            SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
+            TestSslTransportLayer transportLayer = new TestSslTransportLayer(id, key, sslEngine);
+            return transportLayer;
+        }
+
+        /*
+         * TestSslTransportLayer will read from socket once every two tries. This increases
+         * the chance that there will be bytes buffered in the transport layer after read().
+         */
+        static class TestSslTransportLayer extends SslTransportLayer {
+            static Map<String, TestSslTransportLayer> transportLayers = new HashMap<>();
+            boolean muteSocket = false;
+
+            public TestSslTransportLayer(String channelId, SelectionKey key, SSLEngine sslEngine) throws IOException {
+                super(channelId, key, sslEngine);
+                transportLayers.put(channelId, this);
+            }
+
+            @Override
+            protected int readFromSocketChannel() throws IOException {
+                if (muteSocket) {
+                    if ((selectionKey().interestOps() & SelectionKey.OP_READ) != 0)
+                        muteSocket = false;
+                    return 0;
+                }
+                muteSocket = true;
+                return super.readFromSocketChannel();
+            }
+
+            // Leave one byte in network read buffer so that some buffered bytes are present,
+            // but not enough to make progress on a read.
+            void truncateReadBuffer() throws Exception {
+                netReadBuffer().position(1);
+                appReadBuffer().position(0);
+                muteSocket = true;
+            }
+        }
     }
 
 }

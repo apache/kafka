@@ -88,7 +88,6 @@ class ProducerPerformanceService(HttpMetricsCollector, PerformanceService):
             # tool from the development branch
             tools_jar = self.path.jar(TOOLS_JAR_NAME, DEV_BRANCH)
             tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
-            tools_dependant_libs_jar = self.path.jar(TOOLS_DEPENDANT_TEST_LIBS_JAR_NAME, DEV_BRANCH)
 
             for jar in (tools_jar, tools_dependant_libs_jar):
                 cmd += "for file in %s; do CLASSPATH=$CLASSPATH:$file; done; " % jar

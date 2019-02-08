@@ -29,6 +29,10 @@ case class MemberSummary(memberId: String,
                          metadata: Array[Byte],
                          assignment: Array[Byte])
 
+private object MemberMetadata {
+  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
+}
+
 /**
  * Member metadata contains the following metadata:
  *
@@ -64,8 +68,9 @@ private[group] class MemberMetadata(val memberId: String,
   var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
+  var isNew: Boolean = false
 
-  def protocols = supportedProtocols.map(_._1).toSet
+  def isAwaitingJoin = awaitingJoinCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
@@ -76,6 +81,13 @@ private[group] class MemberMetadata(val memberId: String,
       case None =>
         throw new IllegalArgumentException("Member does not support protocol")
     }
+  }
+
+  def shouldKeepAlive(deadlineMs: Long): Boolean = {
+    if (isAwaitingJoin)
+      !isNew || latestHeartbeat + GroupCoordinator.NewMemberJoinTimeoutMs > deadlineMs
+    else awaitingSyncCallback != null ||
+      latestHeartbeat + sessionTimeoutMs > deadlineMs
   }
 
   /**

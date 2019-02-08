@@ -38,8 +38,13 @@ public class EndTxnRequest extends AbstractRequest {
             PRODUCER_EPOCH,
             new Field(TRANSACTION_RESULT_KEY_NAME, BOOLEAN, "The result of the transaction (0 = ABORT, 1 = COMMIT)"));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema END_TXN_REQUEST_V1 = END_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{END_TXN_REQUEST_V0};
+        return new Schema[]{END_TXN_REQUEST_V0, END_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<EndTxnRequest> {
@@ -84,7 +89,7 @@ public class EndTxnRequest extends AbstractRequest {
     private final TransactionResult result;
 
     private EndTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, TransactionResult result) {
-        super(version);
+        super(ApiKeys.END_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -92,7 +97,7 @@ public class EndTxnRequest extends AbstractRequest {
     }
 
     public EndTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.END_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import java.security.AccessController;
+import java.util.List;
 import java.util.Map;
 
 import javax.security.auth.Subject;
@@ -23,51 +25,51 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.NameCallback;
 import javax.security.auth.callback.PasswordCallback;
 import javax.security.auth.callback.UnsupportedCallbackException;
+import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.AuthorizeCallback;
 import javax.security.sasl.RealmCallback;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
+import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.auth.SaslExtensions;
+import org.apache.kafka.common.security.scram.ScramExtensionsCallback;
+import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 
 /**
- * Callback handler for Sasl clients. The callbacks required for the SASL mechanism
+ * Default callback handler for Sasl clients. The callbacks required for the SASL mechanism
  * configured for the client should be supported by this callback handler. See
  * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/sasl/sasl-refguide.html">Java SASL API</a>
  * for the list of SASL callback handlers required for each SASL mechanism.
+ *
+ * For adding custom SASL extensions, a {@link SaslExtensions} may be added to the subject's public credentials
  */
-public class SaslClientCallbackHandler implements AuthCallbackHandler {
+public class SaslClientCallbackHandler implements AuthenticateCallbackHandler {
 
-    private boolean isKerberos;
-    private Subject subject;
+    private String mechanism;
 
     @Override
-    public void configure(Map<String, ?> configs, Mode mode, Subject subject, String mechanism) {
-        this.isKerberos = mechanism.equals(SaslConfigs.GSSAPI_MECHANISM);
-        this.subject = subject;
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        this.mechanism  = saslMechanism;
     }
 
     @Override
     public void handle(Callback[] callbacks) throws UnsupportedCallbackException {
+        Subject subject = Subject.getSubject(AccessController.getContext());
         for (Callback callback : callbacks) {
             if (callback instanceof NameCallback) {
                 NameCallback nc = (NameCallback) callback;
-                if (!isKerberos && subject != null && !subject.getPublicCredentials(String.class).isEmpty()) {
+                if (subject != null && !subject.getPublicCredentials(String.class).isEmpty()) {
                     nc.setName(subject.getPublicCredentials(String.class).iterator().next());
                 } else
                     nc.setName(nc.getDefaultName());
             } else if (callback instanceof PasswordCallback) {
-                if (!isKerberos && subject != null && !subject.getPrivateCredentials(String.class).isEmpty()) {
+                if (subject != null && !subject.getPrivateCredentials(String.class).isEmpty()) {
                     char[] password = subject.getPrivateCredentials(String.class).iterator().next().toCharArray();
                     ((PasswordCallback) callback).setPassword(password);
                 } else {
                     String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
                              " client code does not currently support obtaining a password from the user.";
-                    if (isKerberos) {
-                        errorMessage += " Make sure -Djava.security.auth.login.config property passed to JVM and" +
-                             " the client is configured to use a ticket cache (using" +
-                             " the JAAS configuration setting 'useTicketCache=true)'. Make sure you are using" +
-                             " FQDN of the Kafka broker you are trying to connect to.";
-                    }
                     throw new UnsupportedCallbackException(callback, errorMessage);
                 }
             } else if (callback instanceof RealmCallback) {
@@ -80,7 +82,19 @@ public class SaslClientCallbackHandler implements AuthCallbackHandler {
                 ac.setAuthorized(authId.equals(authzId));
                 if (ac.isAuthorized())
                     ac.setAuthorizedID(authzId);
-            } else {
+            } else if (callback instanceof ScramExtensionsCallback) {
+                if (ScramMechanism.isScram(mechanism) && subject != null && !subject.getPublicCredentials(Map.class).isEmpty()) {
+                    @SuppressWarnings("unchecked")
+                    Map<String, String> extensions = (Map<String, String>) subject.getPublicCredentials(Map.class).iterator().next();
+                    ((ScramExtensionsCallback) callback).extensions(extensions);
+                }
+            } else if (callback instanceof SaslExtensionsCallback) {
+                if (!SaslConfigs.GSSAPI_MECHANISM.equals(mechanism) &&
+                        subject != null && !subject.getPublicCredentials(SaslExtensions.class).isEmpty()) {
+                    SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
+                    ((SaslExtensionsCallback) callback).extensions(extensions);
+                }
+            }  else {
                 throw new UnsupportedCallbackException(callback, "Unrecognized SASL ClientCallback");
             }
         }

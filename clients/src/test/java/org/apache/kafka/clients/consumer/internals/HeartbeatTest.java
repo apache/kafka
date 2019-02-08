@@ -26,47 +26,82 @@ import static org.junit.Assert.assertTrue;
 
 public class HeartbeatTest {
 
-    private long timeout = 300L;
-    private long interval = 100L;
-    private long maxPollInterval = 900L;
-    private long retryBackoff = 10L;
+    private int sessionTimeoutMs = 300;
+    private int heartbeatIntervalMs = 100;
+    private int maxPollIntervalMs = 900;
+    private long retryBackoffMs = 10L;
     private MockTime time = new MockTime();
-    private Heartbeat heartbeat = new Heartbeat(timeout, interval, maxPollInterval, retryBackoff);
+    private Heartbeat heartbeat = new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs,
+            maxPollIntervalMs, retryBackoffMs);
 
     @Test
     public void testShouldHeartbeat() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep((long) ((float) interval * 1.1));
+        time.sleep((long) ((float) heartbeatIntervalMs * 1.1));
         assertTrue(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testShouldNotHeartbeat() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep(interval / 2);
+        time.sleep(heartbeatIntervalMs / 2);
         assertFalse(heartbeat.shouldHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testTimeToNextHeartbeat() {
-        heartbeat.sentHeartbeat(0);
-        assertEquals(100, heartbeat.timeToNextHeartbeat(0));
-        assertEquals(0, heartbeat.timeToNextHeartbeat(100));
-        assertEquals(0, heartbeat.timeToNextHeartbeat(200));
+        heartbeat.sentHeartbeat(time.milliseconds());
+        assertEquals(heartbeatIntervalMs, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+
+        time.sleep(heartbeatIntervalMs);
+        assertEquals(0, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+
+        time.sleep(heartbeatIntervalMs);
+        assertEquals(0, heartbeat.timeToNextHeartbeat(time.milliseconds()));
     }
 
     @Test
     public void testSessionTimeoutExpired() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep(305);
+        time.sleep(sessionTimeoutMs + 5);
         assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()));
     }
 
     @Test
     public void testResetSession() {
         heartbeat.sentHeartbeat(time.milliseconds());
-        time.sleep(305);
-        heartbeat.resetTimeouts(time.milliseconds());
+        time.sleep(sessionTimeoutMs + 5);
+        heartbeat.resetSessionTimeout();
         assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+
+        // Resetting the session timeout should not reset the poll timeout
+        time.sleep(maxPollIntervalMs + 1);
+        heartbeat.resetSessionTimeout();
+        assertTrue(heartbeat.pollTimeoutExpired(time.milliseconds()));
     }
+
+    @Test
+    public void testResetTimeouts() {
+        time.sleep(maxPollIntervalMs);
+        assertTrue(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+        assertEquals(0, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+        assertTrue(heartbeat.pollTimeoutExpired(time.milliseconds()));
+
+        heartbeat.resetTimeouts();
+        assertFalse(heartbeat.sessionTimeoutExpired(time.milliseconds()));
+        assertEquals(heartbeatIntervalMs, heartbeat.timeToNextHeartbeat(time.milliseconds()));
+        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
+    }
+
+    @Test
+    public void testPollTimeout() {
+        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
+        time.sleep(maxPollIntervalMs / 2);
+
+        assertFalse(heartbeat.pollTimeoutExpired(time.milliseconds()));
+        time.sleep(maxPollIntervalMs / 2 + 1);
+
+        assertTrue(heartbeat.pollTimeoutExpired(time.milliseconds()));
+    }
+
 }

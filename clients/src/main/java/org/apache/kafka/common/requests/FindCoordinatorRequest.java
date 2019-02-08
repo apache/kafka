@@ -41,8 +41,13 @@ public class FindCoordinatorRequest extends AbstractRequest {
                             "for transactional producers, this is the transactional id)"),
             new Field("coordinator_type", INT8, "The type of coordinator to find (0 = group, 1 = transaction)"));
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema FIND_COORDINATOR_REQUEST_V2 = FIND_COORDINATOR_REQUEST_V1;
+
     public static Schema[] schemaVersions() {
-        return new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1};
+        return new Schema[] {FIND_COORDINATOR_REQUEST_V0, FIND_COORDINATOR_REQUEST_V1, FIND_COORDINATOR_REQUEST_V2};
     }
 
     public static class Builder extends AbstractRequest.Builder<FindCoordinatorRequest> {
@@ -89,13 +94,13 @@ public class FindCoordinatorRequest extends AbstractRequest {
     private final CoordinatorType coordinatorType;
 
     private FindCoordinatorRequest(CoordinatorType coordinatorType, String coordinatorKey, short version) {
-        super(version);
+        super(ApiKeys.FIND_COORDINATOR, version);
         this.coordinatorType = coordinatorType;
         this.coordinatorKey = coordinatorKey;
     }
 
     public FindCoordinatorRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.FIND_COORDINATOR, version);
 
         if (struct.hasField(COORDINATOR_TYPE_KEY_NAME))
             this.coordinatorType = CoordinatorType.forId(struct.getByte(COORDINATOR_TYPE_KEY_NAME));
@@ -114,6 +119,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
             case 0:
                 return new FindCoordinatorResponse(Errors.forException(e), Node.noNode());
             case 1:
+            case 2:
                 return new FindCoordinatorResponse(throttleTimeMs, Errors.forException(e), Node.noNode());
 
             default:

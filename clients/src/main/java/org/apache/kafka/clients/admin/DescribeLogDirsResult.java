@@ -51,7 +51,7 @@ public class DescribeLogDirsResult {
      */
     public KafkaFuture<Map<Integer, Map<String, LogDirInfo>>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).
-            thenApply(new KafkaFuture.Function<Void, Map<Integer, Map<String, LogDirInfo>>>() {
+            thenApply(new KafkaFuture.BaseFunction<Void, Map<Integer, Map<String, LogDirInfo>>>() {
                 @Override
                 public Map<Integer, Map<String, LogDirInfo>> apply(Void v) {
                     Map<Integer, Map<String, LogDirInfo>> descriptions = new HashMap<>(futures.size());

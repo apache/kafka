@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -76,7 +77,9 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
 
     private final short version;
 
-    public AbstractRequest(short version) {
+    public AbstractRequest(ApiKeys api, short version) {
+        if (!api.isVersionSupported(version))
+            throw new UnsupportedVersionException("The " + api + " protocol does not support version " + version);
         this.version = version;
     }
 
@@ -214,6 +217,18 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new SaslAuthenticateRequest(struct, apiVersion);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsRequest(struct, apiVersion);
+            case CREATE_DELEGATION_TOKEN:
+                return new CreateDelegationTokenRequest(struct, apiVersion);
+            case RENEW_DELEGATION_TOKEN:
+                return new RenewDelegationTokenRequest(struct, apiVersion);
+            case EXPIRE_DELEGATION_TOKEN:
+                return new ExpireDelegationTokenRequest(struct, apiVersion);
+            case DESCRIBE_DELEGATION_TOKEN:
+                return new DescribeDelegationTokenRequest(struct, apiVersion);
+            case DELETE_GROUPS:
+                return new DeleteGroupsRequest(struct, apiVersion);
+            case ELECT_PREFERRED_LEADERS:
+                return new ElectPreferredLeadersRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

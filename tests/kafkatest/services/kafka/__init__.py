@@ -15,3 +15,4 @@
 
 from kafka import KafkaService
 from util import TopicPartition
+from config import KafkaConfig

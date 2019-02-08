@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -36,7 +37,6 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
-    private StateSerdes<Bytes, byte[]> innerStateSerde;
     private int seqnum = 0;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
@@ -47,12 +47,19 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     }
 
     @Override
+    public byte[] fetch(final Bytes key, final long timestamp) {
+        return bytesStore.fetch(key, timestamp);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
         return bytesStore.fetch(key, from, to);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(Bytes keyFrom, Bytes keyTo, long from, long to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
         return bytesStore.fetch(keyFrom, keyTo, from, to);
     }
 
@@ -60,32 +67,33 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore.AbstractStateStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         return bytesStore.all();
     }
-    
+
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         return bytesStore.fetchAll(timeFrom, timeTo);
     }
-    
+
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value, final long timestamp) {
-        bytesStore.put(key, value, timestamp);
-        changeLogger.logChange(WindowStoreUtils.toBinaryKey(key, timestamp, maybeUpdateSeqnumForDups(), innerStateSerde), value);
+    public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+        bytesStore.put(key, value, windowStartTimestamp);
+        changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         bytesStore.init(context, root);
-        innerStateSerde = WindowStoreUtils.getInnerStateSerde(ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name()));
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), bytesStore.name());
         changeLogger = new StoreChangeLogger<>(
             name(),
             context,
-            innerStateSerde);
+            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
     }
 
     private int maybeUpdateSeqnumForDups() {

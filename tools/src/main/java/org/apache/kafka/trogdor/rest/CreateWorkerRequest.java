@@ -25,19 +25,27 @@ import org.apache.kafka.trogdor.task.TaskSpec;
  * A request to the Trogdor agent to create a worker.
  */
 public class CreateWorkerRequest extends Message {
-    private final String id;
+    private final long workerId;
+    private final String taskId;
     private final TaskSpec spec;
 
     @JsonCreator
-    public CreateWorkerRequest(@JsonProperty("id") String id,
+    public CreateWorkerRequest(@JsonProperty("workerId") long workerId,
+            @JsonProperty("taskId") String taskId,
             @JsonProperty("spec") TaskSpec spec) {
-        this.id = id;
+        this.workerId = workerId;
+        this.taskId = taskId;
         this.spec = spec;
     }
 
     @JsonProperty
-    public String id() {
-        return id;
+    public long workerId() {
+        return workerId;
+    }
+
+    @JsonProperty
+    public String taskId() {
+        return taskId;
     }
 
     @JsonProperty

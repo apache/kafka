@@ -26,6 +26,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -44,7 +45,7 @@ public class PluginUtilsTest {
     }
 
     @Test
-    public void testJavaLibraryClasses() throws Exception {
+    public void testJavaLibraryClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("java."));
         assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.Object"));
         assertFalse(PluginUtils.shouldLoadInIsolation("java.lang.String"));
@@ -63,13 +64,13 @@ public class PluginUtilsTest {
     }
 
     @Test
-    public void testThirdPartyClasses() throws Exception {
+    public void testThirdPartyClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j."));
         assertFalse(PluginUtils.shouldLoadInIsolation("org.slf4j.LoggerFactory"));
     }
 
     @Test
-    public void testConnectFrameworkClasses() throws Exception {
+    public void testConnectFrameworkClasses() {
         assertFalse(PluginUtils.shouldLoadInIsolation("org.apache.kafka.common."));
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.common.config.AbstractConfig")
@@ -104,10 +105,22 @@ public class PluginUtilsTest {
         assertFalse(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.OffsetBackingStore")
         );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.clients.producer.ProducerConfig")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.clients.consumer.ConsumerConfig")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.clients.admin.KafkaAdminClient")
+        );
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.rest.ConnectRestExtension")
+        );
     }
 
     @Test
-    public void testAllowedConnectFrameworkClasses() throws Exception {
+    public void testAllowedConnectFrameworkClasses() {
         assertTrue(PluginUtils.shouldLoadInIsolation("org.apache.kafka.connect.transforms."));
         assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.transforms.ExtractField")
@@ -134,7 +147,41 @@ public class PluginUtilsTest {
                 "org.apache.kafka.connect.converters.ByteArrayConverter")
         );
         assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.DoubleConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.FloatConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.IntegerConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.LongConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.converters.ShortConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
                 "org.apache.kafka.connect.storage.StringConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.storage.SimpleHeaderConverter")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+            "org.apache.kafka.connect.rest.basic.auth.extension.BasicAuthSecurityRestExtension"
+        ));
+    }
+
+    @Test
+    public void testClientConfigProvider() {
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.ConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.FileConfigProvider")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.common.config.provider.FutureConfigProvider")
         );
     }
 
@@ -156,6 +203,22 @@ public class PluginUtilsTest {
         List<Path> expectedUrls = createBasicExpectedUrls();
 
         assertUrls(expectedUrls, PluginUtils.pluginUrls(pluginPath));
+    }
+
+    @Test
+    public void testOrderOfPluginUrlsWithJars() throws Exception {
+        createBasicDirectoryLayout();
+        // Here this method is just used to create the files. The result is not used.
+        createBasicExpectedUrls();
+
+        List<Path> actual = PluginUtils.pluginUrls(pluginPath);
+        // 'simple-transform.jar' is created first. In many cases, without sorting within the
+        // PluginUtils, this jar will be placed before 'another-transform.jar'. However this is
+        // not guaranteed because a DirectoryStream does not maintain a certain order in its
+        // results. Besides this test case, sorted order in every call to assertUrls below.
+        int i = Arrays.toString(actual.toArray()).indexOf("another-transform.jar");
+        int j = Arrays.toString(actual.toArray()).indexOf("simple-transform.jar");
+        assertTrue(i < j);
     }
 
     @Test
@@ -262,9 +325,8 @@ public class PluginUtilsTest {
     }
 
     private void assertUrls(List<Path> expected, List<Path> actual) {
-        List<Path> actualCopy = new ArrayList<>(actual);
         Collections.sort(expected);
-        Collections.sort(actualCopy);
-        assertEquals(expected, actualCopy);
+        // not sorting 'actual' because it should be returned sorted from withing the PluginUtils.
+        assertEquals(expected, actual);
     }
 }

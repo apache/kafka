@@ -80,12 +80,12 @@ public class SaslHandshakeRequest extends AbstractRequest {
     }
 
     public SaslHandshakeRequest(String mechanism, short version) {
-        super(version);
+        super(ApiKeys.SASL_HANDSHAKE, version);
         this.mechanism = mechanism;
     }
 
     public SaslHandshakeRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.SASL_HANDSHAKE, version);
         mechanism = struct.getString(MECHANISM_KEY_NAME);
     }
 

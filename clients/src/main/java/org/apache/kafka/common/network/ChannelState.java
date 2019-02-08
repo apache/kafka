@@ -62,7 +62,8 @@ public class ChannelState {
         FAILED_SEND,
         AUTHENTICATION_FAILED,
         LOCAL_CLOSE
-    };
+    }
+
     // AUTHENTICATION_FAILED has a custom exception. For other states,
     // create a reusable `ChannelState` instance per-state.
     public static final ChannelState NOT_CONNECTED = new ChannelState(State.NOT_CONNECTED);
@@ -74,12 +75,20 @@ public class ChannelState {
 
     private final State state;
     private final AuthenticationException exception;
+    private final String remoteAddress;
+
     public ChannelState(State state) {
-        this(state, null);
+        this(state, null, null);
     }
-    public ChannelState(State state, AuthenticationException exception) {
+
+    public ChannelState(State state, String remoteAddress) {
+        this(state, null, remoteAddress);
+    }
+    
+    public ChannelState(State state, AuthenticationException exception, String remoteAddress) {
         this.state = state;
         this.exception = exception;
+        this.remoteAddress = remoteAddress;
     }
 
     public State state() {
@@ -88,5 +97,9 @@ public class ChannelState {
 
     public AuthenticationException exception() {
         return exception;
+    }
+
+    public String remoteAddress() {
+        return remoteAddress;
     }
 }

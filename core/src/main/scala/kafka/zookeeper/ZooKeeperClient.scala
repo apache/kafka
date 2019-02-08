@@ -17,19 +17,25 @@
 
 package kafka.zookeeper
 
+import java.util
+import java.util.Locale
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap, CountDownLatch, Semaphore, TimeUnit}
+import java.util.concurrent._
 
+import com.yammer.metrics.core.{Gauge, MetricName}
+import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
-import kafka.utils.Logging
-import org.apache.zookeeper.AsyncCallback.{ACLCallback, Children2Callback, DataCallback, StatCallback, StringCallback, VoidCallback}
+import kafka.utils.{KafkaScheduler, Logging}
+import org.apache.kafka.common.utils.Time
+import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.{CreateMode, KeeperException, WatchedEvent, Watcher, ZooKeeper}
+import org.apache.zookeeper._
 
 import scala.collection.JavaConverters._
+import scala.collection.mutable.Set
 
 /**
  * A ZooKeeper client that encourages pipelined requests.
@@ -42,7 +48,10 @@ import scala.collection.JavaConverters._
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
                       connectionTimeoutMs: Int,
-                      maxInFlightRequests: Int) extends Logging {
+                      maxInFlightRequests: Int,
+                      time: Time,
+                      metricGroup: String,
+                      metricType: String) extends Logging with KafkaMetricsGroup {
   this.logIdent = "[ZooKeeperClient] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
@@ -51,10 +60,54 @@ class ZooKeeperClient(connectString: String,
   private val zNodeChildChangeHandlers = new ConcurrentHashMap[String, ZNodeChildChangeHandler]().asScala
   private val inFlightRequests = new Semaphore(maxInFlightRequests)
   private val stateChangeHandlers = new ConcurrentHashMap[String, StateChangeHandler]().asScala
+  private[zookeeper] val expiryScheduler = new KafkaScheduler(threads = 1, "zk-session-expiry-handler")
+
+  private val metricNames = Set[String]()
+
+  // The state map has to be created before creating ZooKeeper since it's needed in the ZooKeeper callback.
+  private val stateToMeterMap = {
+    import KeeperState._
+    val stateToEventTypeMap = Map(
+      Disconnected -> "Disconnects",
+      SyncConnected -> "SyncConnects",
+      AuthFailed -> "AuthFailures",
+      ConnectedReadOnly -> "ReadOnlyConnects",
+      SaslAuthenticated -> "SaslAuthentications",
+      Expired -> "Expires"
+    )
+    stateToEventTypeMap.map { case (state, eventType) =>
+      val name = s"ZooKeeper${eventType}PerSec"
+      metricNames += name
+      state -> newMeter(name, eventType.toLowerCase(Locale.ROOT), TimeUnit.SECONDS)
+    }
+  }
 
   info(s"Initializing a new session to $connectString.")
+  // Fail-fast if there's an error during construction (so don't call initialize, which retries forever)
   @volatile private var zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
-  waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+
+  newGauge("SessionState", new Gauge[String] {
+    override def value: String = Option(connectionState.toString).getOrElse("DISCONNECTED")
+  })
+
+  metricNames += "SessionState"
+
+  expiryScheduler.startup()
+  try waitUntilConnected(connectionTimeoutMs, TimeUnit.MILLISECONDS)
+  catch {
+    case e: Throwable =>
+      close()
+      throw e
+  }
+
+  override def metricName(name: String, metricTags: scala.collection.Map[String, String]): MetricName = {
+    explicitMetricName(metricGroup, metricType, name, metricTags)
+  }
+
+  /**
+   * Return the state of the ZooKeeper connection.
+   */
+  def connectionState: States = zooKeeper.getState
 
   /**
    * Send a request and wait for its response. See handle(Seq[AsyncRequest]) for details.
@@ -77,7 +130,7 @@ class ZooKeeperClient(connectString: String,
    * response type (e.g. Seq[CreateRequest] -> Seq[CreateResponse]). Otherwise, the most specific common supertype
    * will be used (e.g. Seq[AsyncRequest] -> Seq[AsyncResponse]).
    */
-  def handleRequests[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = inReadLock(initializationLock) {
+  def handleRequests[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
     if (requests.isEmpty)
       Seq.empty
     else {
@@ -87,10 +140,12 @@ class ZooKeeperClient(connectString: String,
       requests.foreach { request =>
         inFlightRequests.acquire()
         try {
-          send(request) { response =>
-            responseQueue.add(response)
-            inFlightRequests.release()
-            countDownLatch.countDown()
+          inReadLock(initializationLock) {
+            send(request) { response =>
+              responseQueue.add(response)
+              inFlightRequests.release()
+              countDownLatch.countDown()
+            }
           }
         } catch {
           case e: Throwable =>
@@ -103,52 +158,67 @@ class ZooKeeperClient(connectString: String,
     }
   }
 
-  private def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
+  // Visibility to override for testing
+  private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
     // Safe to cast as we always create a response of the right type
     def callback(response: AsyncResponse): Unit = processResponse(response.asInstanceOf[Req#Response])
 
+    def responseMetadata(sendTimeMs: Long) = new ResponseMetadata(sendTimeMs, receivedTimeMs = time.hiResClockMs())
+
+    val sendTimeMs = time.hiResClockMs()
     request match {
       case ExistsRequest(path, ctx) =>
         zooKeeper.exists(path, shouldWatch(request), new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
-            callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat))
+            callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case GetDataRequest(path, ctx) =>
         zooKeeper.getData(path, shouldWatch(request), new DataCallback {
           override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat): Unit =
-            callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat))
+            callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case GetChildrenRequest(path, ctx) =>
         zooKeeper.getChildren(path, shouldWatch(request), new Children2Callback {
           override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat): Unit =
             callback(GetChildrenResponse(Code.get(rc), path, Option(ctx),
-              Option(children).map(_.asScala).getOrElse(Seq.empty), stat))
+              Option(children).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case CreateRequest(path, data, acl, createMode, ctx) =>
         zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
           override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
-            callback(CreateResponse(Code.get(rc), path, Option(ctx), name))
+            callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case SetDataRequest(path, data, version, ctx) =>
         zooKeeper.setData(path, data, version, new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
-            callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat))
+            callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case DeleteRequest(path, version, ctx) =>
         zooKeeper.delete(path, version, new VoidCallback {
           override def processResult(rc: Int, path: String, ctx: Any): Unit =
-            callback(DeleteResponse(Code.get(rc), path, Option(ctx)))
+            callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs)))
         }, ctx.orNull)
       case GetAclRequest(path, ctx) =>
         zooKeeper.getACL(path, null, new ACLCallback {
           override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
             callback(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
-              stat))
-        }}, ctx.orNull)
+              stat, responseMetadata(sendTimeMs)))
+          }}, ctx.orNull)
       case SetAclRequest(path, acl, version, ctx) =>
         zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
-            callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat))
+            callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case MultiRequest(zkOps, ctx) =>
+        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, new MultiCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]): Unit = {
+            callback(MultiResponse(Code.get(rc), path, Option(ctx),
+              if (opResults == null)
+                null
+              else
+                zkOps.zip(opResults.asScala) map { case (zkOp, result) => ZkOpResult(zkOp, result) },
+              responseMetadata(sendTimeMs)))
+          }
         }, ctx.orNull)
     }
   }
@@ -166,13 +236,13 @@ class ZooKeeperClient(connectString: String,
     info("Waiting until connected.")
     var nanos = timeUnit.toNanos(timeout)
     inLock(isConnectedOrExpiredLock) {
-      var state = zooKeeper.getState
+      var state = connectionState
       while (!state.isConnected && state.isAlive) {
         if (nanos <= 0) {
           throw new ZooKeeperClientTimeoutException(s"Timed out waiting for connection while in state: $state")
         }
         nanos = isConnectedOrExpiredCondition.awaitNanos(nanos)
-        state = zooKeeper.getState
+        state = connectionState
       }
       if (state == States.AUTH_FAILED) {
         throw new ZooKeeperClientAuthFailedException("Auth failed either before or while waiting for connection")
@@ -248,12 +318,18 @@ class ZooKeeperClient(connectString: String,
     stateChangeHandlers.remove(name)
   }
 
-  def close(): Unit = inWriteLock(initializationLock) {
+  def close(): Unit = {
     info("Closing.")
-    zNodeChangeHandlers.clear()
-    zNodeChildChangeHandlers.clear()
-    stateChangeHandlers.clear()
-    zooKeeper.close()
+    inWriteLock(initializationLock) {
+      zNodeChangeHandlers.clear()
+      zNodeChildChangeHandlers.clear()
+      stateChangeHandlers.clear()
+      zooKeeper.close()
+      metricNames.foreach(removeMetric(_))
+    }
+    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
+    // is waiting for lock to process session expiry
+    expiryScheduler.shutdown()
     info("Closed.")
   }
 
@@ -261,57 +337,88 @@ class ZooKeeperClient(connectString: String,
     zooKeeper.getSessionId
   }
 
-  private def initialize(): Unit = {
-    if (!zooKeeper.getState.isAlive) {
-      info(s"Initializing a new session to $connectString.")
-      var now = System.currentTimeMillis()
-      val threshold = now + connectionTimeoutMs
-      while (now < threshold) {
-        try {
-          zooKeeper.close()
-          zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
-          waitUntilConnected(threshold - now, TimeUnit.MILLISECONDS)
-          return
-        } catch {
-          case _: Exception =>
-            now = System.currentTimeMillis()
-            if (now < threshold) {
+  // Only for testing
+  private[kafka] def currentZooKeeper: ZooKeeper = inReadLock(initializationLock) {
+    zooKeeper
+  }
+
+  private def reinitialize(): Unit = {
+    // Initialization callbacks are invoked outside of the lock to avoid deadlock potential since their completion
+    // may require additional Zookeeper requests, which will block to acquire the initialization lock
+    stateChangeHandlers.values.foreach(callBeforeInitializingSession _)
+
+    inWriteLock(initializationLock) {
+      if (!connectionState.isAlive) {
+        zooKeeper.close()
+        info(s"Initializing a new session to $connectString.")
+        // retry forever until ZooKeeper can be instantiated
+        var connected = false
+        while (!connected) {
+          try {
+            zooKeeper = new ZooKeeper(connectString, sessionTimeoutMs, ZooKeeperClientWatcher)
+            connected = true
+          } catch {
+            case e: Exception =>
+              info("Error when recreating ZooKeeper, retrying after a short sleep", e)
               Thread.sleep(1000)
-              now = System.currentTimeMillis()
-            }
+          }
         }
       }
-      info(s"Timed out waiting for connection during session initialization while in state: ${zooKeeper.getState}")
-      stateChangeHandlers.foreach {case (name, handler) => handler.onReconnectionTimeout()}
     }
+
+    stateChangeHandlers.values.foreach(callAfterInitializingSession _)
   }
 
   /**
-   * reinitialize method to use in unit tests
+   * Close the zookeeper client to force session reinitialization. This is visible for testing only.
    */
-  private[zookeeper] def reinitialize(): Unit = {
+  private[zookeeper] def forceReinitialize(): Unit = {
     zooKeeper.close()
-    initialize()
+    reinitialize()
   }
 
-  private object ZooKeeperClientWatcher extends Watcher {
+  private def callBeforeInitializingSession(handler: StateChangeHandler): Unit = {
+    try {
+      handler.beforeInitializingSession()
+    } catch {
+      case t: Throwable =>
+        error(s"Uncaught error in handler ${handler.name}", t)
+    }
+  }
+
+  private def callAfterInitializingSession(handler: StateChangeHandler): Unit = {
+    try {
+      handler.afterInitializingSession()
+    } catch {
+      case t: Throwable =>
+        error(s"Uncaught error in handler ${handler.name}", t)
+    }
+  }
+
+  // Visibility for testing
+  private[zookeeper] def scheduleSessionExpiryHandler(): Unit = {
+    expiryScheduler.scheduleOnce("zk-session-expired", () => {
+      info("Session expired.")
+      reinitialize()
+    })
+  }
+
+  // package level visibility for testing only
+  private[zookeeper] object ZooKeeperClientWatcher extends Watcher {
     override def process(event: WatchedEvent): Unit = {
-      debug("Received event: " + event)
+      debug(s"Received event: $event")
       Option(event.getPath) match {
         case None =>
+          val state = event.getState
+          stateToMeterMap.get(state).foreach(_.mark())
           inLock(isConnectedOrExpiredLock) {
             isConnectedOrExpiredCondition.signalAll()
           }
-          if (event.getState == KeeperState.AuthFailed) {
+          if (state == KeeperState.AuthFailed) {
             error("Auth failed.")
-            stateChangeHandlers.foreach {case (name, handler) => handler.onAuthFailure()}
-          } else if (event.getState == KeeperState.Expired) {
-            inWriteLock(initializationLock) {
-              info("Session expired.")
-              stateChangeHandlers.foreach {case (name, handler) => handler.beforeInitializingSession()}
-              initialize()
-              stateChangeHandlers.foreach {case (name, handler) => handler.afterInitializingSession()}
-            }
+            stateChangeHandlers.values.foreach(_.onAuthFailure())
+          } else if (state == KeeperState.Expired) {
+            scheduleSessionExpiryHandler()
           }
         case Some(path) =>
           (event.getType: @unchecked) match {
@@ -330,7 +437,6 @@ trait StateChangeHandler {
   def beforeInitializingSession(): Unit = {}
   def afterInitializingSession(): Unit = {}
   def onAuthFailure(): Unit = {}
-  def onReconnectionTimeout(): Unit = {}
 }
 
 trait ZNodeChangeHandler {
@@ -344,6 +450,29 @@ trait ZNodeChildChangeHandler {
   val path: String
   def handleChildChange(): Unit = {}
 }
+
+// Thin wrapper for zookeeper.Op
+sealed trait ZkOp {
+  def toZookeeperOp: Op
+}
+
+case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
+  override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
+}
+
+case class DeleteOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.delete(path, version)
+}
+
+case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.setData(path, data, version)
+}
+
+case class CheckOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.check(path, version)
+}
+
+case class ZkOpResult(zkOp: ZkOp, rawOpResult: OpResult)
 
 sealed trait AsyncRequest {
   /**
@@ -388,6 +517,13 @@ case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends Asy
   type Response = GetChildrenResponse
 }
 
+case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = MultiResponse
+
+  override def path: String = null
+}
+
+
 sealed abstract class AsyncResponse {
   def resultCode: Code
   def path: String
@@ -404,15 +540,32 @@ sealed abstract class AsyncResponse {
     if (resultCode != Code.OK)
       throw KeeperException.create(resultCode, path)
   }
+
+  def metadata: ResponseMetadata
 }
-case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String) extends AsyncResponse
-case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any]) extends AsyncResponse
-case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
-case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat) extends AsyncResponse
-case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
-case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat) extends AsyncResponse
-case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat) extends AsyncResponse
-case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat) extends AsyncResponse
+
+case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
+  def responseTimeMs: Long = receivedTimeMs - sendTimeMs
+}
+
+case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String,
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any],
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat,
+                           metadata: ResponseMetadata) extends AsyncResponse
+case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                           metadata: ResponseMetadata) extends AsyncResponse
+case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat,
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
+                          metadata: ResponseMetadata) extends AsyncResponse
+case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
+                               metadata: ResponseMetadata) extends AsyncResponse
+case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
+                         metadata: ResponseMetadata) extends AsyncResponse
 
 class ZooKeeperClientException(message: String) extends RuntimeException(message)
 class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)

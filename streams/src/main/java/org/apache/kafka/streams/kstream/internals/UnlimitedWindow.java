@@ -51,7 +51,7 @@ public class UnlimitedWindow extends Window {
      *
      * @param other another window
      * @return {@code true}
-     * @throws IllegalArgumentException if the {@code other} window has a different type than {@link this} window
+     * @throws IllegalArgumentException if the {@code other} window has a different type than {@code this} window
      */
     @Override
     public boolean overlap(final Window other) {

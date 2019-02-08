@@ -35,8 +35,13 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
             PRODUCER_EPOCH,
             GROUP_ID);
 
+    /**
+     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
+     */
+    private static final Schema ADD_OFFSETS_TO_TXN_REQUEST_V1 = ADD_OFFSETS_TO_TXN_REQUEST_V0;
+
     public static Schema[] schemaVersions() {
-        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0};
+        return new Schema[]{ADD_OFFSETS_TO_TXN_REQUEST_V0, ADD_OFFSETS_TO_TXN_REQUEST_V1};
     }
 
     public static class Builder extends AbstractRequest.Builder<AddOffsetsToTxnRequest> {
@@ -81,7 +86,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     private final String consumerGroupId;
 
     private AddOffsetsToTxnRequest(short version, String transactionalId, long producerId, short producerEpoch, String consumerGroupId) {
-        super(version);
+        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
         this.transactionalId = transactionalId;
         this.producerId = producerId;
         this.producerEpoch = producerEpoch;
@@ -89,7 +94,7 @@ public class AddOffsetsToTxnRequest extends AbstractRequest {
     }
 
     public AddOffsetsToTxnRequest(Struct struct, short version) {
-        super(version);
+        super(ApiKeys.ADD_OFFSETS_TO_TXN, version);
         this.transactionalId = struct.get(TRANSACTIONAL_ID);
         this.producerId = struct.get(PRODUCER_ID);
         this.producerEpoch = struct.get(PRODUCER_EPOCH);

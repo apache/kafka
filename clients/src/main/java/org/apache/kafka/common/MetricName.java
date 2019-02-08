@@ -106,9 +106,9 @@ public final class MetricName {
             return hash;
         final int prime = 31;
         int result = 1;
-        result = prime * result + ((group == null) ? 0 : group.hashCode());
-        result = prime * result + ((name == null) ? 0 : name.hashCode());
-        result = prime * result + ((tags == null) ? 0 : tags.hashCode());
+        result = prime * result + group.hashCode();
+        result = prime * result + name.hashCode();
+        result = prime * result + tags.hashCode();
         this.hash = result;
         return result;
     }
@@ -122,22 +122,7 @@ public final class MetricName {
         if (getClass() != obj.getClass())
             return false;
         MetricName other = (MetricName) obj;
-        if (group == null) {
-            if (other.group != null)
-                return false;
-        } else if (!group.equals(other.group))
-            return false;
-        if (name == null) {
-            if (other.name != null)
-                return false;
-        } else if (!name.equals(other.name))
-            return false;
-        if (tags == null) {
-            if (other.tags != null)
-                return false;
-        } else if (!tags.equals(other.tags))
-            return false;
-        return true;
+        return group.equals(other.group) && name.equals(other.name) && tags.equals(other.tags);
     }
 
     @Override

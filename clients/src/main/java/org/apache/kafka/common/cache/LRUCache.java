@@ -29,7 +29,7 @@ public class LRUCache<K, V> implements Cache<K, V> {
         cache = new LinkedHashMap<K, V>(16, .75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<K, V> eldest) {
-                return size() > maxSize;
+                return this.size() > maxSize; // require this. prefix to make lgtm.com happy
             }
         };
     }

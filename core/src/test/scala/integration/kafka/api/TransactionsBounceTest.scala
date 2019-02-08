@@ -22,16 +22,13 @@ import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{ShutdownableThread, TestUtils}
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-
 
 class TransactionsBounceTest extends KafkaServerTestHarness {
   private val producerBufferSize =  65536
@@ -150,18 +147,13 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
     verifyingConsumer.close()
   }
 
-  private def createConsumerAndSubscribeToTopics(groupId: String, topics: List[String], readCommitted: Boolean = false) = {
-    val props = new Properties()
-    if (readCommitted)
-      props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
-    props.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "2000")
-    props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "10000")
-    props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "3000")
-    props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-
-    val consumer = TestUtils.createNewConsumer(TestUtils.getBrokerListStrFromServers(servers), groupId = groupId,
-      securityProtocol = SecurityProtocol.PLAINTEXT, props = Some(props))
+  private def createConsumerAndSubscribeToTopics(groupId: String,
+                                                 topics: List[String],
+                                                 readCommitted: Boolean = false) = {
+    val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers),
+      groupId = groupId,
+      readCommitted = readCommitted,
+      enableAutoCommit = false)
     consumer.subscribe(topics.asJava)
     consumer
   }
@@ -169,8 +161,8 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
   private def createTopics() =  {
     val topicConfig = new Properties()
     topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-    TestUtils.createTopic(zkUtils, inputTopic, numPartitions, 3, servers, topicConfig)
-    TestUtils.createTopic(zkUtils, outputTopic, numPartitions, 3, servers, topicConfig)
+    createTopic(inputTopic, numPartitions, 3, topicConfig)
+    createTopic(outputTopic, numPartitions, 3, topicConfig)
   }
 
   private class BounceScheduler extends ShutdownableThread("daemon-broker-bouncer", false) {
@@ -186,7 +178,7 @@ class TransactionsBounceTest extends KafkaServerTestHarness {
         Thread.sleep(500)
       }
 
-      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkUtils, outputTopic, partition))
+      (0 until numPartitions).foreach(partition => TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, outputTopic, partition))
     }
 
     override def shutdown(){
