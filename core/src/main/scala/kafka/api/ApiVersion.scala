@@ -308,5 +308,5 @@ object ApiVersionValidator extends Validator {
     }
   }
 
-  override def toString: String = "[" + ApiVersion.allVersions.groupBy(_.shortVersion).keys.mkString(", ") + "]"
+  override def toString: String = "[" + ApiVersion.allVersions.map(_.shortVersion).distinct.mkString(", ") + "]"
 }

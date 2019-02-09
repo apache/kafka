@@ -121,8 +121,9 @@ class ApiVersionTest {
 
   @Test
   def testApiVersionValidator(): Unit = {
-    assertEquals(ApiVersion.allVersions.groupBy(_.shortVersion).keySet.size,
-      ApiVersionValidator.toString.split(",").length)
+    val str = ApiVersionValidator.toString
+    val apiVersions = str.slice(1, str.length).split(",")
+    assertEquals(ApiVersion.allVersions.groupBy(_.shortVersion).keySet.size, apiVersions.length)
   }
 
 }
