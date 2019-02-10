@@ -148,7 +148,7 @@ public class CompositeReadOnlyWindowStoreTest {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, () -> windowStoreIterator.peekNextKey());
+        assertThrows(NoSuchElementException.class, windowStoreIterator::peekNextKey);
     }
 
     @Test
@@ -156,7 +156,7 @@ public class CompositeReadOnlyWindowStoreTest {
         final CompositeReadOnlyWindowStore<Object, Object> store = new CompositeReadOnlyWindowStore<>(new
                 StateStoreProviderStub(false), QueryableStoreTypes.windowStore(), "foo");
         final WindowStoreIterator<Object> windowStoreIterator = store.fetch("key", ofEpochMilli(1), ofEpochMilli(10));
-        assertThrows(NoSuchElementException.class, () -> windowStoreIterator.next());
+        assertThrows(NoSuchElementException.class, windowStoreIterator::next);
     }
 
     @Test

@@ -293,7 +293,7 @@ public class StructTest {
                 .build();
 
         Struct struct = new Struct(schema);
-        Exception e = assertThrows(DataException.class, () -> struct.validate());
+        Exception e = assertThrows(DataException.class, struct::validate);
         assertEquals(e.getMessage(), "Invalid value: null used for required field: \"one\", schema type: STRING");
     }
 

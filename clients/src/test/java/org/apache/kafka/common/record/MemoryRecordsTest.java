@@ -907,11 +907,11 @@ public class MemoryRecordsTest {
         buffer.limit(size);
         byte magic = buffer.get(Records.MAGIC_OFFSET);
         buffer.put(Records.MAGIC_OFFSET, (byte) 10);
-        assertThrows(CorruptRecordException.class, () -> records.firstBatchSize());
+        assertThrows(CorruptRecordException.class, records::firstBatchSize);
         buffer.put(Records.MAGIC_OFFSET, magic);
 
         buffer.put(Records.SIZE_OFFSET + 3, (byte) 0);
-        assertThrows(CorruptRecordException.class, () -> records.firstBatchSize());
+        assertThrows(CorruptRecordException.class, records::firstBatchSize);
     }
 
     @Test
@@ -923,7 +923,7 @@ public class MemoryRecordsTest {
             String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
             assertEquals("key1", key);
         } else {
-            assertThrows(IllegalArgumentException.class, () -> recordsSupplier.get());
+            assertThrows(IllegalArgumentException.class, recordsSupplier::get);
         }
     }
 
