@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.plain.internals;
 
 import java.io.UnsupportedEncodingException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -67,7 +68,7 @@ public class PlainSaslServer implements SaslServer {
      * </p>
      */
     @Override
-    public byte[] evaluateResponse(byte[] response) throws SaslException, SaslAuthenticationException {
+    public byte[] evaluateResponse(byte[] responseBytes) throws SaslException, SaslAuthenticationException {
         /*
          * Message format (from https://tools.ietf.org/html/rfc4616):
          *
@@ -81,14 +82,11 @@ public class PlainSaslServer implements SaslServer {
          *                ;; any UTF-8 encoded Unicode character except NUL
          */
 
-        String[] tokens;
-        try {
-            tokens = new String(response, "UTF-8").split("\u0000");
-        } catch (UnsupportedEncodingException e) {
-            throw new SaslException("UTF-8 encoding not supported", e);
-        }
-        if (tokens.length != 3)
+        String response = new String(responseBytes, StandardCharsets.UTF_8);
+        String[] tokens = split(response, "\u0000");
+        if (tokens.length != 3) {
             throw new SaslException("Invalid SASL/PLAIN response: expected 3 tokens, got " + tokens.length);
+        }
         String authorizationIdFromClient = tokens[0];
         String username = tokens[1];
         String password = tokens[2];
@@ -116,6 +114,21 @@ public class PlainSaslServer implements SaslServer {
 
         complete = true;
         return new byte[0];
+    }
+
+    private String[] split(String string, String split) {
+        String[] result = {"", "", ""};
+        int startIndex = 0;
+        for (int i = 0; i < result.length; ++i) {
+            int endIndex = string.indexOf(split, startIndex);
+            if (endIndex == -1) {
+                result[i] = string.substring(startIndex);
+                break;
+            }
+            result[i] = string.substring(startIndex, endIndex);
+            startIndex = endIndex + 1;
+        }
+        return result;
     }
 
     @Override
