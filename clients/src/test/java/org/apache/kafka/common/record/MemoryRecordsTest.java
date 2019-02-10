@@ -444,55 +444,54 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToBatchDiscard() {
-        if ((compression != CompressionType.NONE && compression != CompressionType.ZSTD) ||
-            magic >= RecordBatch.MAGIC_VALUE_V2) {
+        assumeV2OrNotZstd();
+        assumeTrue(compression != CompressionType.NONE || magic >= MAGIC_VALUE_V2);
 
-            ByteBuffer buffer = ByteBuffer.allocate(2048);
-            MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
-            builder.append(10L, "1".getBytes(), "a".getBytes());
-            builder.close();
+        ByteBuffer buffer = ByteBuffer.allocate(2048);
+        MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
+        builder.append(10L, "1".getBytes(), "a".getBytes());
+        builder.close();
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
-            builder.append(11L, "2".getBytes(), "b".getBytes());
-            builder.append(12L, "3".getBytes(), "c".getBytes());
-            builder.close();
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 1L);
+        builder.append(11L, "2".getBytes(), "b".getBytes());
+        builder.append(12L, "3".getBytes(), "c".getBytes());
+        builder.close();
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
-            builder.append(13L, "4".getBytes(), "d".getBytes());
-            builder.append(20L, "5".getBytes(), "e".getBytes());
-            builder.append(15L, "6".getBytes(), "f".getBytes());
-            builder.close();
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 3L);
+        builder.append(13L, "4".getBytes(), "d".getBytes());
+        builder.append(20L, "5".getBytes(), "e".getBytes());
+        builder.append(15L, "6".getBytes(), "f".getBytes());
+        builder.close();
 
-            builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
-            builder.append(16L, "7".getBytes(), "g".getBytes());
-            builder.close();
+        builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 6L);
+        builder.append(16L, "7".getBytes(), "g".getBytes());
+        builder.close();
 
-            buffer.flip();
+        buffer.flip();
 
-            ByteBuffer filtered = ByteBuffer.allocate(2048);
-            MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
-                @Override
-                protected BatchRetention checkBatchRetention(RecordBatch batch) {
-                    // discard the second and fourth batches
-                    if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
-                        return BatchRetention.DELETE;
-                    return BatchRetention.DELETE_EMPTY;
-                }
+        ByteBuffer filtered = ByteBuffer.allocate(2048);
+        MemoryRecords.readableRecords(buffer).filterTo(new TopicPartition("foo", 0), new MemoryRecords.RecordFilter() {
+            @Override
+            protected BatchRetention checkBatchRetention(RecordBatch batch) {
+                // discard the second and fourth batches
+                if (batch.lastOffset() == 2L || batch.lastOffset() == 6L)
+                    return BatchRetention.DELETE;
+                return BatchRetention.DELETE_EMPTY;
+            }
 
-                @Override
-                protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
-                    return true;
-                }
-            }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+            @Override
+            protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
+                return true;
+            }
+        }, filtered, Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
 
-            filtered.flip();
-            MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
+        filtered.flip();
+        MemoryRecords filteredRecords = MemoryRecords.readableRecords(filtered);
 
-            List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
-            assertEquals(2, batches.size());
-            assertEquals(0L, batches.get(0).lastOffset());
-            assertEquals(5L, batches.get(1).lastOffset());
-        }
+        List<MutableRecordBatch> batches = TestUtils.toList(filteredRecords.batches());
+        assertEquals(2, batches.size());
+        assertEquals(0L, batches.get(0).lastOffset());
+        assertEquals(5L, batches.get(1).lastOffset());
     }
 
     @Test

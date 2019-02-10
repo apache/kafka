@@ -840,8 +840,8 @@ public class KafkaConsumerTest {
         } finally {
             // clear interrupted state again since this thread may be reused by JUnit
             Thread.interrupted();
+            consumer.close(Duration.ofMillis(0));
         }
-        consumer.close(Duration.ofMillis(0));
     }
 
     @Test
