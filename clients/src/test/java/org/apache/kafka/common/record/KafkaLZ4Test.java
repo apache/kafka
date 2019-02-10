@@ -111,7 +111,7 @@ public class KafkaLZ4Test {
     public void testHeaderPrematureEnd() {
         ByteBuffer buffer = ByteBuffer.allocate(2);
         IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
-        assertEquals(e.getMessage(), KafkaLZ4BlockInputStream.PREMATURE_EOS);
+        assertEquals(KafkaLZ4BlockInputStream.PREMATURE_EOS, e.getMessage());
     }
 
     private KafkaLZ4BlockInputStream makeInputStream(ByteBuffer buffer) throws IOException {
@@ -124,7 +124,7 @@ public class KafkaLZ4Test {
         compressed[0] = 0x00;
         ByteBuffer buffer = ByteBuffer.wrap(compressed);
         IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
-        assertEquals(e.getMessage(), KafkaLZ4BlockInputStream.NOT_SUPPORTED);
+        assertEquals(KafkaLZ4BlockInputStream.NOT_SUPPORTED, e.getMessage());
     }
 
     @Test
@@ -137,7 +137,7 @@ public class KafkaLZ4Test {
             makeInputStream(buffer);
         } else {
             IOException e = assertThrows(IOException.class, () -> makeInputStream(buffer));
-            assertEquals(e.getMessage(), KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH);
+            assertEquals(KafkaLZ4BlockInputStream.DESCRIPTOR_HASH_MISMATCH, e.getMessage());
         }
     }
 

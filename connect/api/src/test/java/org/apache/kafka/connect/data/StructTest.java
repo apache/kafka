@@ -294,7 +294,8 @@ public class StructTest {
 
         Struct struct = new Struct(schema);
         Exception e = assertThrows(DataException.class, struct::validate);
-        assertEquals(e.getMessage(), "Invalid value: null used for required field: \"one\", schema type: STRING");
+        assertEquals("Invalid value: null used for required field: \"one\", schema type: STRING",
+            e.getMessage());
     }
 
     @Test
@@ -304,11 +305,13 @@ public class StructTest {
 
         Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
             fakeSchema, new Object()));
-        assertEquals(e.getMessage(), "Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
+        assertEquals("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"",
+            e.getMessage());
 
         e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
             Schema.INT8_SCHEMA, new Object()));
-        assertEquals(e.getMessage(), "Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
+        assertEquals("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"",
+            e.getMessage());
     }
 
     @Test
@@ -329,6 +332,7 @@ public class StructTest {
         Struct struct = new Struct(testSchema);
 
         Exception e = assertThrows(DataException.class, () -> struct.put(fieldName, null));
-        assertEquals(e.getMessage(), "Invalid value: null used for required field: \"fieldName\", schema type: STRING");
+        assertEquals("Invalid value: null used for required field: \"fieldName\", schema type: STRING",
+            e.getMessage());
     }
 }
