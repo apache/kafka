@@ -22,9 +22,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
@@ -32,6 +30,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.function.Supplier;
 import java.util.List;
 
 import static java.util.Arrays.asList;
@@ -40,14 +39,13 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assume.assumeTrue;
 
 @RunWith(value = Parameterized.class)
 public class MemoryRecordsTest {
-    @Rule
-    public ExpectedException exceptionRule = ExpectedException.none();
-
     private CompressionType compression;
     private byte magic;
     private long firstOffset;
@@ -74,7 +72,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -159,8 +157,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testHasRoomForMethod() {
-        expectExceptionWithZStd(compression, magic);
-
+        assumeV2OrNotZstd();
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "a".getBytes(), "1".getBytes());
@@ -447,8 +444,8 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToBatchDiscard() {
-        if (compression != CompressionType.NONE || magic >= RecordBatch.MAGIC_VALUE_V2) {
-            expectExceptionWithZStd(compression, magic);
+        if ((compression != CompressionType.NONE && compression != CompressionType.ZSTD) ||
+            magic >= RecordBatch.MAGIC_VALUE_V2) {
 
             ByteBuffer buffer = ByteBuffer.allocate(2048);
             MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -500,7 +497,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToAlreadyCompactedLog() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
@@ -642,7 +639,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToWithUndersizedBuffer() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -694,7 +691,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testToString() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         long timestamp = 1000000;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
@@ -726,7 +723,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterTo() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -841,7 +838,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToPreservesLogAppendTime() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         long logAppendTime = System.currentTimeMillis();
 
@@ -887,7 +884,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testNextBatchSize() {
-        expectExceptionWithZStd(compression, magic);
+        assumeV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
@@ -902,37 +899,37 @@ public class MemoryRecordsTest {
         assertEquals(0, buffer.position());
 
         buffer.limit(1); // size not in buffer
-        assertEquals(null, records.firstBatchSize());
+        assertNull(records.firstBatchSize());
         buffer.limit(Records.LOG_OVERHEAD); // magic not in buffer
-        assertEquals(null, records.firstBatchSize());
+        assertNull(records.firstBatchSize());
         buffer.limit(Records.HEADER_SIZE_UP_TO_MAGIC); // payload not in buffer
         assertEquals(size, records.firstBatchSize().intValue());
 
         buffer.limit(size);
         byte magic = buffer.get(Records.MAGIC_OFFSET);
         buffer.put(Records.MAGIC_OFFSET, (byte) 10);
-        try {
-            records.firstBatchSize();
-            fail("Did not fail with corrupt magic");
-        } catch (CorruptRecordException e) {
-            // Expected exception
-        }
+        assertThrows(CorruptRecordException.class, () -> records.firstBatchSize());
         buffer.put(Records.MAGIC_OFFSET, magic);
 
         buffer.put(Records.SIZE_OFFSET + 3, (byte) 0);
-        try {
-            records.firstBatchSize();
-            fail("Did not fail with corrupt size");
-        } catch (CorruptRecordException e) {
-            // Expected exception
+        assertThrows(CorruptRecordException.class, () -> records.firstBatchSize());
+    }
+
+    @Test
+    public void testWithRecords() {
+        Supplier<MemoryRecords> recordsSupplier = () -> MemoryRecords.withRecords(magic, compression,
+            new SimpleRecord(10L, "key1".getBytes(), "value1".getBytes()));
+        if (compression != CompressionType.ZSTD || magic >= MAGIC_VALUE_V2) {
+            MemoryRecords memoryRecords = recordsSupplier.get();
+            String key = Utils.utf8(memoryRecords.batches().iterator().next().iterator().next().key());
+            assertEquals("key1", key);
+        } else {
+            assertThrows(IllegalArgumentException.class, () -> recordsSupplier.get());
         }
     }
 
-    private void expectExceptionWithZStd(CompressionType compressionType, byte magic) {
-        if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2) {
-            exceptionRule.expect(IllegalArgumentException.class);
-            exceptionRule.expectMessage("ZStandard compression is not supported for magic " + magic);
-        }
+    private void assumeV2OrNotZstd() {
+        assumeTrue(compression != CompressionType.ZSTD || magic == MAGIC_VALUE_V2);
     }
 
     @Parameterized.Parameters(name = "{index} magic={0}, firstOffset={1}, compressionType={2}")

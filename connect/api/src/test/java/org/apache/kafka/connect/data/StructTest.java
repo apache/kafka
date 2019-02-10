@@ -17,9 +17,7 @@
 package org.apache.kafka.connect.data;
 
 import org.apache.kafka.connect.errors.DataException;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -30,6 +28,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 
 
 public class StructTest {
@@ -285,9 +284,6 @@ public class StructTest {
         assertNotEquals(struct2.hashCode(), struct3.hashCode());
     }
 
-    @Rule
-    public ExpectedException thrown = ExpectedException.none();
-
     @Test
     public void testValidateStructWithNullValue() {
         Schema schema = SchemaBuilder.struct()
@@ -297,9 +293,8 @@ public class StructTest {
                 .build();
 
         Struct struct = new Struct(schema);
-        thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid value: null used for required field: \"one\", schema type: STRING");
-        struct.validate();
+        Exception e = assertThrows(DataException.class, () -> struct.validate());
+        assertEquals(e.getMessage(), "Invalid value: null used for required field: \"one\", schema type: STRING");
     }
 
     @Test
@@ -307,13 +302,13 @@ public class StructTest {
         String fieldName = "field";
         FakeSchema fakeSchema = new FakeSchema();
 
-        thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
-        ConnectSchema.validateValue(fieldName, fakeSchema, new Object());
+        Exception e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
+            fakeSchema, new Object()));
+        assertEquals(e.getMessage(), "Invalid Java object for schema type null: class java.lang.Object for field: \"field\"");
 
-        thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
-        ConnectSchema.validateValue(fieldName, Schema.INT8_SCHEMA, new Object());
+        e = assertThrows(DataException.class, () -> ConnectSchema.validateValue(fieldName,
+            Schema.INT8_SCHEMA, new Object()));
+        assertEquals(e.getMessage(), "Invalid Java object for schema type INT8: class java.lang.Object for field: \"field\"");
     }
 
     @Test
@@ -323,9 +318,7 @@ public class StructTest {
             .field(fieldName, Schema.STRING_SCHEMA);
         Struct struct = new Struct(testSchema);
 
-        thrown.expect(DataException.class);
-        Field field = null;
-        struct.put(field, "valid");
+        assertThrows(DataException.class, () -> struct.put((Field) null, "valid"));
     }
 
     @Test
@@ -335,8 +328,7 @@ public class StructTest {
             .field(fieldName, Schema.STRING_SCHEMA);
         Struct struct = new Struct(testSchema);
 
-        thrown.expect(DataException.class);
-        thrown.expectMessage("Invalid value: null used for required field: \"fieldName\", schema type: STRING");
-        struct.put(fieldName, null);
+        Exception e = assertThrows(DataException.class, () -> struct.put(fieldName, null));
+        assertEquals(e.getMessage(), "Invalid value: null used for required field: \"fieldName\", schema type: STRING");
     }
 }

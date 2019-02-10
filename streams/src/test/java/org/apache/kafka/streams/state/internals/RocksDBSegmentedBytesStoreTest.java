@@ -36,7 +36,6 @@ import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -377,7 +376,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         // Bulk loading is enabled during recovery.
         for (final KeyValueSegment segment : bytesStore.getSegments()) {
-            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+            assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
@@ -401,12 +400,12 @@ public class RocksDBSegmentedBytesStoreTest {
         restoreListener.onRestoreStart(null, bytesStore.name(), 0L, 0L);
 
         for (final KeyValueSegment segment : bytesStore.getSegments()) {
-            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
+            assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
         restoreListener.onRestoreEnd(null, bytesStore.name(), 0L);
         for (final KeyValueSegment segment : bytesStore.getSegments()) {
-            Assert.assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
+            assertThat(segment.getOptions().level0FileNumCompactionTrigger(), equalTo(4));
         }
     }
 
