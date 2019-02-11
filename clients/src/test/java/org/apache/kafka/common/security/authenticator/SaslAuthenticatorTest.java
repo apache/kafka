@@ -296,6 +296,12 @@ public class SaslAuthenticatorTest {
     }
 
     public static class InvalidScramServerCallbackHandler implements AuthenticateCallbackHandler {
+        // We want to test three types of exceptions:
+        //   1) IOException since we can throw this from callback handlers. This may be sensitive.
+        //   2) SaslException (also an IOException) which may contain data from external (or JRE) servers and callbacks and may be sensitive
+        //   3) SaslAuthenticationException which is from our own code and is used only for client-friendly exceptions
+        // We use two different exceptions here since the only checked exception CallbackHandler can throw is IOException,
+        // covering case 1) and 2). For case 3), SaslAuthenticationException is a RuntimeExceptiom.
         static volatile IOException sensitiveException;
         static volatile SaslAuthenticationException clientFriendlyException;
 
