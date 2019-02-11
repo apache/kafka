@@ -3295,15 +3295,14 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
               <ul>
                 <li>
                   The bugfix version <code>2.0.1</code> fixed several important flaws in  <code class="docutils literal"><span class="pre">kafka-streams-scala</span></code>.
-                  It's strongly recommended to use the latest bugfix release in general and to avoid <code>kafka-streams-scala 2.0.0</code> specifically.
+                  We strongly recommend that you use the latest bugfix release in general and avoid <code>kafka-streams-scala 2.0.0</code> specifically.
                 </li>
                 <li>
                   <p>
-                    There is an upstream dependency that causes trouble in SBT builds. This problem is fixed in <code>2.0.2</code>, <code>2.1.1</code>, and <code>2.2.0</code>.
-                    Please consider using one of those versions or higher.
+                    There is an upstream dependency that causes trouble in SBT builds. This issue is only present in <code>2.0.0</code>, <code>2.0.1</code>, and <code>2.1.0</code> and is fixed in subsequent major, minor, and bugfix releases.
                   </p>
                   <p>
-                    If you must use an earlier version, you may add an explicit dependency on the problematic library as a workaround:
+                    If you must use an affected version, add an explicit dependency on the problematic library as a workaround:
                     <dl>
                       <dt><code>2.0.0</code></dt>
                       <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
@@ -3311,6 +3310,8 @@ t=5 (blue), which lead to a merge of sessions and an extension of a session, res
                       <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
                       <dt><code>2.1.0</code></dt>
                       <dd><pre class="brush: scala;">libraryDependencies += "javax.ws.rs" % "javax.ws.rs-api" % "2.1.1" artifacts(Artifact("javax.ws.rs-api", "jar", "jar"))</pre></dd>
+                      <dt><code>(any later release)</code></dt>
+                      <dd>No workaround needed</dd>
                     </dl>
                   </p>
                 </li>
