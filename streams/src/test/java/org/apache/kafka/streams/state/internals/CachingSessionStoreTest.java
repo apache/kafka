@@ -60,17 +60,17 @@ public class CachingSessionStoreTest {
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private static final Long DEFAULT_TIMESTAMP = 10L;
     private static final long SEGMENT_INTERVAL = 100L;
-    private RocksDBSegmentedBytesStore underlying;
-    private CachingSessionStore<String, String> cachingStore;
-    private ThreadCache cache;
     private final Bytes keyA = Bytes.wrap("a".getBytes());
     private final Bytes keyAA = Bytes.wrap("aa".getBytes());
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
+    private CachingSessionStore<String, String> cachingStore;
+    private ThreadCache cache;
+
     @Before
     public void setUp() {
         final SessionKeySchema schema = new SessionKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
+        final RocksDBSegmentedBytesStore underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
@@ -179,7 +179,6 @@ public class CachingSessionStoreTest {
         cachingStore.put(b, "2".getBytes());
         cachingStore.flush();
         cachingStore.remove(a);
-        //cachingStore.flush();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
             cachingStore.findSessions(keyA, 0, 0);
