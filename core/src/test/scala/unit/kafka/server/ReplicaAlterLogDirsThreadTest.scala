@@ -420,7 +420,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.epochs).andReturn(Some(futureReplicaLeaderEpochs)).anyTimes()
 
     expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
-    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch)
+    expect(futureReplicaLeaderEpochs.latestEpoch).andReturn(leaderEpoch).anyTimes()
     expect(replica.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, replicaLEO))
     expect(futureReplica.endOffsetFor(leaderEpoch)).andReturn((leaderEpoch, futureReplicaLEO))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
@@ -443,7 +443,7 @@ class ReplicaAlterLogDirsThreadTest {
     // loop few times
     (0 to 3).foreach { _ =>
       thread.doWork()
-                     }
+    }
 
     //Assert that truncate to is called exactly once (despite more loops)
     verify(partition)
