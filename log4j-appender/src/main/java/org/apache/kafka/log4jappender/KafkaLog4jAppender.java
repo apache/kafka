@@ -277,9 +277,9 @@ public class KafkaLog4jAppender extends AppenderSkeleton {
         if (securityProtocol != null && securityProtocol.contains("SASL") && saslKerberosServiceName != null && clientJaasConfPath != null) {
             props.put(SASL_KERBEROS_SERVICE_NAME, saslKerberosServiceName);
             System.setProperty("java.security.auth.login.config", clientJaasConfPath);
-            if (kerb5ConfPath != null) {
-                System.setProperty("java.security.krb5.conf", kerb5ConfPath);
-            }
+        }
+        if (kerb5ConfPath != null) {
+            System.setProperty("java.security.krb5.conf", kerb5ConfPath);
         }
         if (saslMechanism != null) {
             props.put(SASL_MECHANISM, saslMechanism);
