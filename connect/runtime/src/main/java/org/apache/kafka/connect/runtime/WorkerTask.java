@@ -216,31 +216,28 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        LoggingContext.forTask(id());
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
-        String savedName = Thread.currentThread().getName();
-        try {
-            Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
-            doRun();
-            onShutdown();
-        } catch (Throwable t) {
-            onFailure(t);
-
-            if (t instanceof Error)
-                throw (Error) t;
-        } finally {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
+            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+            String savedName = Thread.currentThread().getName();
             try {
-                Thread.currentThread().setName(savedName);
-                Plugins.compareAndSwapLoaders(savedLoader);
-                shutdownLatch.countDown();
+                Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
+                doRun();
+                onShutdown();
+            } catch (Throwable t) {
+                onFailure(t);
+
+                if (t instanceof Error)
+                    throw (Error) t;
             } finally {
                 try {
-                    releaseResources();
+                    Thread.currentThread().setName(savedName);
+                    Plugins.compareAndSwapLoaders(savedLoader);
+                    shutdownLatch.countDown();
                 } finally {
                     try {
-                        taskMetricsGroup.close();
+                        releaseResources();
                     } finally {
-                        LoggingContext.clear();
+                        taskMetricsGroup.close();
                     }
                 }
             }

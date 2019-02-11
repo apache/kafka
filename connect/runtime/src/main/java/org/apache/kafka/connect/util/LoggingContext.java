@@ -18,10 +18,15 @@ package org.apache.kafka.connect.util;
 
 import org.slf4j.MDC;
 
+import java.util.Map;
+
 /**
  * A utility for defining Mapped Diagnostic Context (MDC) for SLF4J logs.
+ *
+ * <p>{@link LoggingContext} instances should be created in a try-with-resources block to ensure that the logging context is properly
+ * closed. The only exception is the logging context created upon thread creation that is to be used for the entire lifetime of the thread.
  */
-public final class LoggingContext {
+public final class LoggingContext implements AutoCloseable {
 
     /**
      * The parameter keys used by Connect.
@@ -64,12 +69,14 @@ public final class LoggingContext {
          */
         OFFSETS("offsets");
 
-        private final String value;
+        private final String text;
         Scope(String value) {
-            this.value = value;
+            this.text = value;
         }
-        public String value() {
-            return this.value;
+
+        @Override
+        public String toString() {
+            return text;
         }
     }
 
@@ -79,10 +86,12 @@ public final class LoggingContext {
      *
      * @param connectorName the connector name; may not be null
      */
-    public static void forConnector(String connectorName) {
+    public static LoggingContext forConnector(String connectorName) {
+        LoggingContext context = new LoggingContext();
         MDC.put(Parameters.CONNECTOR_NAME, connectorName);
         MDC.remove(Parameters.CONNECTOR_TASK);
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.value());
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.toString());
+        return context;
     }
 
     /**
@@ -91,10 +100,12 @@ public final class LoggingContext {
      *
      * @param id the connector task ID; may not be null
      */
-    public static void forTask(ConnectorTaskId id) {
+    public static LoggingContext forTask(ConnectorTaskId id) {
+        LoggingContext context = new LoggingContext();
         MDC.put(Parameters.CONNECTOR_NAME, id.connector());
         MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.TASK.value());
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.TASK.toString());
+        return context;
     }
 
     /**
@@ -104,18 +115,28 @@ public final class LoggingContext {
      *
      * @param id the connector task ID; may not be null
      */
-    public static void forOffsets(ConnectorTaskId id) {
+    public static LoggingContext forOffsets(ConnectorTaskId id) {
+        LoggingContext context = new LoggingContext();
         MDC.put(Parameters.CONNECTOR_NAME, id.connector());
         MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.OFFSETS.value());
+        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.OFFSETS.toString());
+        return context;
+    }
+
+    private final Map<String, String> previous;
+
+    private LoggingContext() {
+        previous = MDC.getCopyOfContextMap(); // may be null!
     }
 
     /**
-     * Remove all of the Connect-specific {@link Parameters parameters} from the current {@link MDC} logging context.
+     * Close this logging context, restoring all {@link MDC} parameters back to the state just before this context was created.
      */
-    public static void clear() {
-        MDC.remove(Parameters.CONNECTOR_NAME);
-        MDC.remove(Parameters.CONNECTOR_TASK);
-        MDC.remove(Parameters.CONNECTOR_SCOPE);
+    @Override
+    public void close() {
+        MDC.clear();
+        if (previous != null && !previous.isEmpty()) {
+            MDC.setContextMap(previous);
+        }
     }
 }

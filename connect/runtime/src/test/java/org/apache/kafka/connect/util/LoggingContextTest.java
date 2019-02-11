@@ -76,15 +76,26 @@ public class LoggingContextTest {
     }
 
     @Test
+    public void shouldCreateAndCloseLoggingContextEvenWithNullContextMap() {
+        MDC.clear();
+        assertMdc(null, null, null);
+        try (LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME)) {
+            assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
+            log.info("Starting Connector");
+        }
+        assertMdc(null, null, null);
+    }
+
+    @Test
     public void shouldCreateConnectorLoggingContext() {
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
 
-        LoggingContext.forConnector(CONNECTOR_NAME);
-        assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
-        log.info("Starting Connector");
+        try (LoggingContext loggingContext = LoggingContext.forConnector(CONNECTOR_NAME)) {
+            assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
+            log.info("Starting Connector");
+        }
 
-        LoggingContext.clear();
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
     }
@@ -92,11 +103,11 @@ public class LoggingContextTest {
     @Test
     public void shouldCreateTaskLoggingContext() {
         assertMdcExtrasUntouched();
-        LoggingContext.forTask(TASK_ID1);
-        assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
-        log.info("Running task");
+        try (LoggingContext loggingContext = LoggingContext.forTask(TASK_ID1)) {
+            assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
+            log.info("Running task");
+        }
 
-        LoggingContext.clear();
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
     }
@@ -104,11 +115,39 @@ public class LoggingContextTest {
     @Test
     public void shouldCreateOffsetsLoggingContext() {
         assertMdcExtrasUntouched();
-        LoggingContext.forOffsets(TASK_ID1);
-        assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
-        log.info("Running task");
+        try (LoggingContext loggingContext = LoggingContext.forOffsets(TASK_ID1)) {
+            assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
+            log.info("Running task");
+        }
 
-        LoggingContext.clear();
+        assertMdcExtrasUntouched();
+        assertMdc(null, null, null);
+    }
+
+    @Test
+    public void shouldAllowNestedLoggingContexts() {
+        assertMdcExtrasUntouched();
+        assertMdc(null, null, null);
+        try (LoggingContext loggingContext1 = LoggingContext.forConnector(CONNECTOR_NAME)) {
+            assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
+            log.info("Starting Connector");
+
+            try (LoggingContext loggingContext2 = LoggingContext.forTask(TASK_ID1)) {
+                assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
+                log.info("Starting task");
+
+                try (LoggingContext loggingContext3 = LoggingContext.forOffsets(TASK_ID1)) {
+                    assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
+                    log.info("Offsets for task");
+                }
+
+                assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
+                log.info("Stopping task");
+            }
+
+            assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
+            log.info("Stopping Connector");
+        }
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
     }
@@ -116,7 +155,7 @@ public class LoggingContextTest {
     protected void assertMdc(String connectorName, Integer taskId, Scope scope) {
         assertEquals(connectorName, MDC.get(Parameters.CONNECTOR_NAME));
         assertEquals(taskId == null ? null : Integer.toString(taskId), MDC.get(Parameters.CONNECTOR_TASK));
-        assertEquals(scope == null ? null : scope.value(), MDC.get(Parameters.CONNECTOR_SCOPE));
+        assertEquals(scope == null ? null : scope.toString(), MDC.get(Parameters.CONNECTOR_SCOPE));
     }
 
     protected void assertMdcExtrasUntouched() {

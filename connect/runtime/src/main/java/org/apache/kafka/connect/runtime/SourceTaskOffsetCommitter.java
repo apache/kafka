@@ -80,11 +80,8 @@ class SourceTaskOffsetCommitter {
         ScheduledFuture<?> commitFuture = commitExecutorService.scheduleWithFixedDelay(new Runnable() {
             @Override
             public void run() {
-                try {
-                    LoggingContext.forOffsets(id);
+                try (LoggingContext loggingContext = LoggingContext.forOffsets(id)) {
                     commit(workerTask);
-                } finally {
-                    LoggingContext.clear();
                 }
             }
         }, commitIntervalMs, commitIntervalMs, TimeUnit.MILLISECONDS);
@@ -96,8 +93,7 @@ class SourceTaskOffsetCommitter {
         if (task == null)
             return;
 
-        try {
-            LoggingContext.forTask(id);
+        try (LoggingContext loggingContext = LoggingContext.forTask(id)) {
             task.cancel(false);
             if (!task.isDone())
                 task.get();
@@ -106,15 +102,12 @@ class SourceTaskOffsetCommitter {
             log.trace("Offset commit thread was cancelled by another thread while removing connector task with id: {}", id);
         } catch (ExecutionException | InterruptedException e) {
             throw new ConnectException("Unexpected interruption in SourceTaskOffsetCommitter while removing task with id: " + id, e);
-        } finally {
-            LoggingContext.clear();
         }
     }
 
     private void commit(WorkerSourceTask workerTask) {
         log.debug("{} Committing offsets", workerTask);
-        try {
-            LoggingContext.forOffsets(workerTask.id);
+        try (LoggingContext loggingContext = LoggingContext.forOffsets(workerTask.id)) {
             if (workerTask.commitOffsets()) {
                 return;
             }
@@ -124,8 +117,6 @@ class SourceTaskOffsetCommitter {
             // thread would cause the fixed interval schedule on the ExecutorService to stop running
             // for that task
             log.error("{} Unhandled exception when committing: ", workerTask, t);
-        } finally {
-            LoggingContext.clear();
         }
     }
 }
