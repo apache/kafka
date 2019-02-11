@@ -35,9 +35,9 @@ import org.apache.kafka.streams.scala.kstream._
 import scala.language.implicitConversions
 
 /**
- * Implicit conversions between the Scala wrapper objects and the underlying Java
- * objects.
- */
+  * Implicit conversions between the Scala wrapper objects and the underlying Java
+  * objects.
+  */
 object ImplicitConversions {
 
   implicit def wrapKStream[K, V](inner: KStreamJ[K, V]): KStream[K, V] =
@@ -64,7 +64,7 @@ object ImplicitConversions {
   // and these implicits will convert them to `Grouped`, `Produced`, `Consumed`, `Materialized` and `Joined`
 
   implicit def groupedFromNameAndSerde[K, V](repartitionTopicName: String)
-                                         (implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] = {
+                                            (implicit keySerde: Serde[K], valueSerde: Serde[V]): Grouped[K, V] = {
     Grouped.`with`[K, V](repartitionTopicName)
   }
 
@@ -81,8 +81,8 @@ object ImplicitConversions {
   }
 
   implicit def materializedFromNameAndSerde[K, V, S <: StateStore](stateStoreName: String)
-                                                               (implicit keySerde: Serde[K],
-                                                                valueSerde: Serde[V]): Materialized[K, V, S] = {
+                                                                  (implicit keySerde: Serde[K],
+                                                                   valueSerde: Serde[V]): Materialized[K, V, S] = {
     Materialized.as[K, V, S](stateStoreName)
   }
 
@@ -92,9 +92,9 @@ object ImplicitConversions {
   }
 
   implicit def joinedFromNameAndKeyValueOtherSerde[K, V, VO](name: String)
-                                                         (implicit keySerde: Serde[K],
-                                                          valueSerde: Serde[V],
-                                                          otherValueSerde: Serde[VO]): Joined[K, V, VO] = {
+                                                            (implicit keySerde: Serde[K],
+                                                             valueSerde: Serde[V],
+                                                             otherValueSerde: Serde[VO]): Joined[K, V, VO] = {
     Joined.`with`[K, V, VO](name)
   }
 
