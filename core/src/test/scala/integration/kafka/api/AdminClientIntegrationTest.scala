@@ -1425,17 +1425,23 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     createTopic(topic2)
 
     // Alter topics
-    var topicAlterEntries = Seq(
+    var topicConfigEntries1 = Seq(
       //first topic
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.FlushMsProp, "1000"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE),
-      //second topic
-      new AlterConfigOp(topicResource2, new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(topicResource2, new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
-    ).asJava
+      new AlterConfigOp(new ConfigEntry(LogConfig.FlushMsProp, "1000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
 
-    var alterResult = client.alterConfigs(topicAlterEntries)
+    var topicConfigEntries2 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1,
+      topicResource2 -> topicConfigEntries2
+    ).asJava)
+
     assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     alterResult.all.get
 
@@ -1453,11 +1459,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals("lz4", configs.get(topicResource2).get(LogConfig.CompressionTypeProp).value)
 
     //verify config value substract
-    topicAlterEntries = Seq(
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBSTRACT)
+    topicConfigEntries1 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBSTRACT)
     ).asJava
 
-    alterResult = client.alterConfigs(topicAlterEntries)
+   alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1
+    ).asJava)
     alterResult.all.get
 
     // Verify that topics were updated correctly
@@ -1467,11 +1475,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals("delete", configs.get(topicResource1).get(LogConfig.CleanupPolicyProp).value)
 
     // Alter topics with validateOnly=true
-    topicAlterEntries = Seq(
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
+    topicConfigEntries1 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
     ).asJava
 
-    alterResult = client.alterConfigs(topicAlterEntries, new IncrementalAlterConfigsOptions().validateOnly(true))
+    alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1
+    ).asJava, new IncrementalAlterConfigsOptions().validateOnly(true))
     alterResult.all.get
 
     // Verify that topics were not updated due to validateOnly = true
@@ -1481,11 +1491,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals("delete", configs.get(topicResource1).get(LogConfig.CleanupPolicyProp).value)
 
     //Alter topics with validateOnly=true with invalid configs
-    topicAlterEntries = Seq(
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
+    topicConfigEntries1 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
     ).asJava
 
-    alterResult = client.alterConfigs(topicAlterEntries, new IncrementalAlterConfigsOptions().validateOnly(true))
+    alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1
+    ).asJava, new IncrementalAlterConfigsOptions().validateOnly(true))
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topicResource1), classOf[InvalidRequestException],
       Some("Invalid config value for resource"))
@@ -1507,13 +1519,22 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // Alter topics
     var topicAlterEntries = Seq(
       //invalid configs for first topic
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.DELETE),
-      //valid configs second topic
-      new AlterConfigOp(topicResource2, new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET)
+       //valid configs second topic
     ).asJava
 
-    var alterResult = client.alterConfigs(topicAlterEntries)
+    var topicConfigEntries1 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    var topicConfigEntries2 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1,
+      topicResource2 -> topicConfigEntries2
+    ).asJava)
     assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
     //valid result
     alterResult.values().get(topicResource2).get()
@@ -1523,13 +1544,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
 
     //invalid use of append/substract operation type
-    topicAlterEntries = Seq(
-      new AlterConfigOp(topicResource1, new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.APPEND),
-      new AlterConfigOp(topicResource2, new ConfigEntry(LogConfig.CompressionTypeProp, "snappy"), AlterConfigOp.OpType.SUBSTRACT)
-    ).asJava
+    topicConfigEntries1 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.APPEND)
+    ).asJavaCollection
 
+    topicConfigEntries2 = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy"), AlterConfigOp.OpType.SUBSTRACT)
+    ).asJavaCollection
 
-    alterResult = client.alterConfigs(topicAlterEntries)
+    alterResult = client.incrementalAlterConfigs(Map(
+      topicResource1 -> topicConfigEntries1,
+      topicResource2 -> topicConfigEntries2
+    ).asJava)
     assertEquals(Set(topicResource1, topicResource2).asJava, alterResult.values.keySet)
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topicResource1), classOf[InvalidRequestException],

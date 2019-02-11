@@ -1955,30 +1955,28 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public IncrementalAlterConfigsResult alterConfigs(Collection<AlterConfigOp> configs, final IncrementalAlterConfigsOptions options) {
+    public IncrementalAlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                 final IncrementalAlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
         // a single request that may be sent to any broker.
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>();
 
-        Map<ConfigResource, List<AlterConfigOp>> result =
-                configs.stream().collect(Collectors.groupingBy(AlterConfigOp::resource));
-
-        for (ConfigResource resource : result.keySet()) {
+        for (ConfigResource resource : configs.keySet()) {
             if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
                 NodeProvider nodeProvider = new ConstantNodeIdProvider(Integer.parseInt(resource.name()));
-                allFutures.putAll(alterConfigs(result, options, Collections.singleton(resource), nodeProvider));
+                allFutures.putAll(incrementalAlterConfigs(configs, options, Collections.singleton(resource), nodeProvider));
             } else
                 unifiedRequestResources.add(resource);
         }
         if (!unifiedRequestResources.isEmpty())
-            allFutures.putAll(alterConfigs(result, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
+            allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
 
         return new IncrementalAlterConfigsResult(new HashMap<>(allFutures));
     }
 
-    private Map<ConfigResource, KafkaFutureImpl<Void>> alterConfigs(Map<ConfigResource, List<AlterConfigOp>> configs,
+    private Map<ConfigResource, KafkaFutureImpl<Void>> incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
                                                                     final IncrementalAlterConfigsOptions options,
                                                                     Collection<ConfigResource> resources,
                                                                     NodeProvider nodeProvider) {
@@ -2019,7 +2017,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private  IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
-                                                                   final Map<ConfigResource, List<AlterConfigOp>> configs,
+                                                                   final Map<ConfigResource, Collection<AlterConfigOp>> configs,
                                                                    final boolean validateOnly) {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);

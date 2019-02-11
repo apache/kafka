@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.config.ConfigResource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -57,18 +56,12 @@ public class AlterConfigOp {
         }
     }
 
-    private final ConfigResource configResource;
     private final ConfigEntry configEntry;
     private final OpType opType;
 
-    public AlterConfigOp(ConfigResource configResource, ConfigEntry configEntry, OpType operationType) {
-        this.configResource = configResource;
+    public AlterConfigOp(ConfigEntry configEntry, OpType operationType) {
         this.configEntry = configEntry;
         this.opType =  operationType;
-    }
-
-    public ConfigResource resource() {
-        return configResource;
     }
 
     public ConfigEntry configEntry() {
@@ -85,20 +78,18 @@ public class AlterConfigOp {
         if (o == null || getClass() != o.getClass()) return false;
         final AlterConfigOp that = (AlterConfigOp) o;
         return opType == that.opType &&
-                Objects.equals(configResource, that.configResource) &&
                 Objects.equals(configEntry, that.configEntry);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(opType, configResource, configEntry);
+        return Objects.hash(opType, configEntry);
     }
 
     @Override
     public String toString() {
         return "AlterConfigOp{" +
                 "opType=" + opType +
-                ", configResource=" + configResource +
                 ", configEntry=" + configEntry +
                 '}';
     }

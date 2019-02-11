@@ -1231,16 +1231,18 @@ public class KafkaAdminClientTest {
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "topic1");
 
             AlterConfigOp alterConfigOp1 = new AlterConfigOp(
-                    brokerResource,
                     new ConfigEntry("log.segment.bytes", "1073741"),
                     AlterConfigOp.OpType.SET);
 
             AlterConfigOp alterConfigOp2 = new AlterConfigOp(
-                    topicResource,
                     new ConfigEntry("compression.type", "gzip"),
                     AlterConfigOp.OpType.APPEND);
 
-            IncrementalAlterConfigsResult result = env.adminClient().alterConfigs(asList(alterConfigOp1, alterConfigOp2));
+            final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
+            configs.put(brokerResource, Collections.singletonList(alterConfigOp1));
+            configs.put(topicResource, Collections.singletonList(alterConfigOp2));
+
+            IncrementalAlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
 
@@ -1253,7 +1255,7 @@ public class KafkaAdminClientTest {
                     .setErrorMessage(ApiError.NONE.message()));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
-            env.adminClient().alterConfigs(asList(alterConfigOp1)).all().get();
+            env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, asList(alterConfigOp1))).all().get();
         }
     }
 
