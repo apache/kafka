@@ -72,7 +72,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testIterator() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
 
@@ -157,7 +157,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testHasRoomForMethod() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic, compression,
                 TimestampType.CREATE_TIME, 0L);
         builder.append(0L, "a".getBytes(), "1".getBytes());
@@ -444,7 +444,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToBatchDiscard() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
         assumeTrue(compression != CompressionType.NONE || magic >= MAGIC_VALUE_V2);
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
@@ -496,7 +496,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToAlreadyCompactedLog() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
 
@@ -638,7 +638,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToWithUndersizedBuffer() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(1024);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -690,7 +690,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testToString() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         long timestamp = 1000000;
         MemoryRecords memoryRecords = MemoryRecords.withRecords(magic, compression,
@@ -722,7 +722,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterTo() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression, TimestampType.CREATE_TIME, 0L);
@@ -837,7 +837,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testFilterToPreservesLogAppendTime() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         long logAppendTime = System.currentTimeMillis();
 
@@ -883,7 +883,7 @@ public class MemoryRecordsTest {
 
     @Test
     public void testNextBatchSize() {
-        assumeV2OrNotZstd();
+        assumeAtLeastV2OrNotZstd();
 
         ByteBuffer buffer = ByteBuffer.allocate(2048);
         MemoryRecordsBuilder builder = MemoryRecords.builder(buffer, magic, compression,
@@ -927,8 +927,8 @@ public class MemoryRecordsTest {
         }
     }
 
-    private void assumeV2OrNotZstd() {
-        assumeTrue(compression != CompressionType.ZSTD || magic == MAGIC_VALUE_V2);
+    private void assumeAtLeastV2OrNotZstd() {
+        assumeTrue(compression != CompressionType.ZSTD || magic >= MAGIC_VALUE_V2);
     }
 
     @Parameterized.Parameters(name = "{index} magic={0}, firstOffset={1}, compressionType={2}")
