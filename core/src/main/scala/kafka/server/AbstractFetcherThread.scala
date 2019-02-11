@@ -338,7 +338,7 @@ abstract class AbstractFetcherThread(name: String,
     } else {
       // get (leader epoch, end offset) pair that corresponds to the largest leader epoch
       // less than or equal to the requested epoch.
-      val (followerEpoch, followerEndOffset) = replica.epochs.get.endOffsetFor(leaderEpochOffset.leaderEpoch)
+      val (followerEpoch, followerEndOffset) = replica.endOffsetFor(leaderEpochOffset.leaderEpoch)
       if (followerEndOffset == UNDEFINED_EPOCH_OFFSET) {
         // This can happen if the follower was not tracking leader epochs at that point (before the
         // upgrade, or if this broker is new). Since the leader replied with epoch <

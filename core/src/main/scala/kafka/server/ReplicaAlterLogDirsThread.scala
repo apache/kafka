@@ -142,7 +142,7 @@ class ReplicaAlterLogDirsThread(name: String,
    * on latest epochs of the future replicas (the one that is fetching)
    */
   def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
-    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochFileCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).map(_.epochs.get)
+    def epochCacheOpt(tp: TopicPartition): Option[LeaderEpochFileCache] = replicaMgr.getReplica(tp, Request.FutureLocalReplicaId).flatMap(_.epochs)
 
     val partitionEpochOpts = allPartitions
       .filter { case (_, state) => state.isTruncatingLog }
@@ -162,7 +162,7 @@ class ReplicaAlterLogDirsThread(name: String,
   def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
     partitions.map { case (tp, epoch) =>
       try {
-        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).epochs.get.endOffsetFor(epoch)
+        val (leaderEpoch, leaderOffset) = replicaMgr.getReplicaOrException(tp).endOffsetFor(epoch)
         tp -> new EpochEndOffset(Errors.NONE, leaderEpoch, leaderOffset)
       } catch {
         case t: Throwable =>
