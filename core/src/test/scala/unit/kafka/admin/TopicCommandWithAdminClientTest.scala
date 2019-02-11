@@ -26,7 +26,7 @@ import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Rule, Test}
@@ -527,7 +527,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   @Test
-  def testDescribeUnderreplicatedPartitions(): Unit = {
+  def testDescribeUnderReplicatedPartitions(): Unit = {
     adminClient.createTopics(
       Collections.singletonList(new NewTopic(testTopicName, 1, 6))).all().get()
     waitForTopicCreated(testTopicName)
@@ -538,6 +538,70 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
+  @Test
+  def testDescribeUnderMinIsrPartitions(): Unit = {
+    val configMap = new java.util.HashMap[String, String]()
+    configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6")
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6).configs(configMap))).all().get()
+    waitForTopicCreated(testTopicName)
+
+    try {
+      killBroker(0)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
+      val rows = output.split("\n")
+      assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
+  /**
+    * Test describe --under-min-isr-partitions option with four topics:
+    *   (1) topic with partition under the configured min ISR count
+    *   (2) topic with under-replicated partition (but not under min ISR count)
+    *   (3) topic with offline partition
+    *   (4) topic with fully replicated partition
+    *
+    * Output should only display the (1) topic with partition under min ISR count and (3) topic with offline partition
+    */
+  @Test
+  def testDescribeUnderMinIsrPartitionsMixed(): Unit = {
+    val underMinIsrTopic = "under-min-isr-topic"
+    val notUnderMinIsrTopic = "not-under-min-isr-topic"
+    val offlineTopic = "offline-topic"
+    val fullyReplicatedTopic = "fully-replicated-topic"
+
+    val configMap = new java.util.HashMap[String, String]()
+    configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "6")
+
+    adminClient.createTopics(
+      java.util.Arrays.asList(
+        new NewTopic(underMinIsrTopic, 1, 6).configs(configMap),
+        new NewTopic(notUnderMinIsrTopic, 1, 6),
+        new NewTopic(offlineTopic, Collections.singletonMap(0, Collections.singletonList(0))),
+        new NewTopic(fullyReplicatedTopic, Collections.singletonMap(0, java.util.Arrays.asList(1, 2, 3))))).all().get()
+
+    waitForTopicCreated(underMinIsrTopic)
+    waitForTopicCreated(notUnderMinIsrTopic)
+    waitForTopicCreated(offlineTopic)
+    waitForTopicCreated(fullyReplicatedTopic)
+
+    try {
+      killBroker(0)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
+      val rows = output.split("\n")
+      assertTrue(rows(0).startsWith(s"\tTopic: $underMinIsrTopic"))
+      assertTrue(rows(1).startsWith(s"\tTopic: $offlineTopic"))
+      assertEquals(2, rows.length);
     } finally {
       restartDeadBrokers()
     }

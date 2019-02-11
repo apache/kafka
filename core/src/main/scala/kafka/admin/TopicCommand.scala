@@ -30,7 +30,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ListTopicsOptions, NewPartitions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.{InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.internals.Topic
@@ -99,17 +99,18 @@ object TopicCommand extends Logging {
                                    leader: Option[Int],
                                    assignedReplicas: Seq[Int],
                                    isr: Seq[Int],
+                                   minIsrCount: Int,
                                    markedForDeletion: Boolean,
                                    describeConfigs: Boolean)
 
   class DescribeOptions(opts: TopicCommandOptions, liveBrokers: Set[Int]) {
-    val describeConfigs: Boolean = !opts.reportUnavailablePartitions && !opts.reportUnderReplicatedPartitions
+    val describeConfigs: Boolean = !opts.reportUnavailablePartitions && !opts.reportUnderReplicatedPartitions && !opts.reportUnderMinIsrPartitions
     val describePartitions: Boolean = !opts.reportOverriddenConfigs
-    private def hasUnderreplicatedPartitions(partitionDescription: PartitionDescription) = {
+    private def hasUnderReplicatedPartitions(partitionDescription: PartitionDescription) = {
       partitionDescription.isr.size < partitionDescription.assignedReplicas.size
     }
     private def shouldPrintUnderReplicatedPartitions(partitionDescription: PartitionDescription) = {
-      opts.reportUnderReplicatedPartitions && hasUnderreplicatedPartitions(partitionDescription)
+      opts.reportUnderReplicatedPartitions && hasUnderReplicatedPartitions(partitionDescription)
     }
     private def hasUnavailablePartitions(partitionDescription: PartitionDescription) = {
       partitionDescription.leader.isEmpty || !liveBrokers.contains(partitionDescription.leader.get)
@@ -117,11 +118,18 @@ object TopicCommand extends Logging {
     private def shouldPrintUnavailablePartitions(partitionDescription: PartitionDescription) = {
       opts.reportUnavailablePartitions && hasUnavailablePartitions(partitionDescription)
     }
+    private def hasUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
+      partitionDescription.isr.size < partitionDescription.minIsrCount
+    }
+    private def shouldPrintUnderMinIsrPartitions(partitionDescription: PartitionDescription) = {
+      opts.reportUnderMinIsrPartitions && hasUnderMinIsrPartitions(partitionDescription)
+    }
 
     def shouldPrintTopicPartition(partitionDesc: PartitionDescription): Boolean = {
       describeConfigs ||
         shouldPrintUnderReplicatedPartitions(partitionDesc) ||
-        shouldPrintUnavailablePartitions(partitionDesc)
+        shouldPrintUnavailablePartitions(partitionDesc) ||
+        shouldPrintUnderMinIsrPartitions(partitionDesc)
     }
   }
 
@@ -220,6 +228,8 @@ object TopicCommand extends Logging {
           }
         }
         if (describeOptions.describePartitions) {
+          val computedMinIsrCount = if (opts.reportUnderMinIsrPartitions)
+            allConfigs.get(new ConfigResource(ConfigResource.Type.TOPIC, td.name())).get().get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).value().toInt else 0
           for (partition <- sortedPartitions) {
             val partitionDesc = PartitionDescription(
               topic = td.name(),
@@ -227,6 +237,7 @@ object TopicCommand extends Logging {
               leader = Option(partition.leader()).map(_.id()),
               assignedReplicas = partition.replicas().asScala.map(_.id()),
               isr = partition.isr().asScala.map(_.id()),
+              minIsrCount = computedMinIsrCount,
               markedForDeletion = false,
               describeOptions.describeConfigs
             )
@@ -357,6 +368,7 @@ object TopicCommand extends Logging {
                   leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
                   assignedReplicas,
                   isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
+                  minIsrCount = 0,
                   markedForDeletion,
                   describeOptions.describeConfigs
                 )
@@ -536,6 +548,8 @@ object TopicCommand extends Logging {
                                                             "if set when describing topics, only show under replicated partitions")
     private val reportUnavailablePartitionsOpt = parser.accepts("unavailable-partitions",
                                                             "if set when describing topics, only show partitions whose leader is not available")
+    private val reportUnderMinIsrPartitionsOpt = parser.accepts("under-min-isr-partitions",
+                                                            "if set when describing topics, only show partitions whose isr count is less than the configured minimum. Not supported with the --zookeeper option.")
     private val topicsWithOverridesOpt = parser.accepts("topics-with-overrides",
                                                 "if set when describing topics, only show topics that have overridden configs")
     private val ifExistsOpt = parser.accepts("if-exists",
@@ -577,6 +591,7 @@ object TopicCommand extends Logging {
     def rackAwareMode: RackAwareMode = if (has(disableRackAware)) RackAwareMode.Disabled else RackAwareMode.Enforced
     def reportUnderReplicatedPartitions: Boolean = has(reportUnderReplicatedPartitionsOpt)
     def reportUnavailablePartitions: Boolean = has(reportUnavailablePartitionsOpt)
+    def reportUnderMinIsrPartitions: Boolean = has(reportUnderMinIsrPartitionsOpt)
     def reportOverriddenConfigs: Boolean = has(topicsWithOverridesOpt)
     def ifExists: Boolean = has(ifExistsOpt)
     def ifNotExists: Boolean = has(ifNotExistsOpt)
@@ -620,11 +635,13 @@ object TopicCommand extends Logging {
       if(options.has(createOpt))
           CommandLineUtils.checkInvalidArgs(parser, options, replicaAssignmentOpt, Set(partitionsOpt, replicationFactorOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnderReplicatedPartitionsOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnavailablePartitionsOpt + topicsWithOverridesOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderMinIsrPartitionsOpt + reportUnavailablePartitionsOpt + topicsWithOverridesOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, reportUnderMinIsrPartitionsOpt,
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt + topicsWithOverridesOpt + zkConnectOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, reportUnavailablePartitionsOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnderReplicatedPartitionsOpt + topicsWithOverridesOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, topicsWithOverridesOpt,
-        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnavailablePartitionsOpt)
+        allTopicLevelOpts -- Set(describeOpt) + reportUnderReplicatedPartitionsOpt + reportUnderMinIsrPartitionsOpt + reportUnavailablePartitionsOpt)
       CommandLineUtils.checkInvalidArgs(parser, options, ifExistsOpt, allTopicLevelOpts -- Set(alterOpt, deleteOpt, describeOpt) ++ Set(bootstrapServerOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, ifNotExistsOpt, allTopicLevelOpts -- Set(createOpt) ++ Set(bootstrapServerOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, excludeInternalTopicOpt, allTopicLevelOpts -- Set(listOpt, describeOpt))
