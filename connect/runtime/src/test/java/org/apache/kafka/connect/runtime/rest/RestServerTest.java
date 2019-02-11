@@ -16,6 +16,13 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpOptions;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
@@ -24,29 +31,29 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
-import org.apache.kafka.connect.util.clients.HttpClient;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.junit.After;
 import org.junit.Assert;
-import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 
 import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.Response;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertEquals;
-
 @RunWith(PowerMockRunner.class)
+@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*"})
 public class RestServerTest {
 
     @MockStrict
@@ -54,10 +61,6 @@ public class RestServerTest {
     @MockStrict
     private Plugins plugins;
     private RestServer server;
-
-    @Before
-    public void setUp() {
-    }
 
     @After
     public void tearDown() {
@@ -81,12 +84,12 @@ public class RestServerTest {
     }
 
     @Test
-    public void testCORSEnabled() {
+    public void testCORSEnabled() throws IOException {
         checkCORSRequest("*", "http://bar.com", "http://bar.com", "PUT");
     }
 
     @Test
-    public void testCORSDisabled() {
+    public void testCORSDisabled() throws IOException {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
@@ -159,7 +162,7 @@ public class RestServerTest {
     }
 
     @Test
-    public void testOptionsDoesNotIncludeWadlOutput() {
+    public void testOptionsDoesNotIncludeWadlOutput() throws IOException {
         Map<String, String> configMap = new HashMap<>(baseWorkerProps());
         DistributedConfig workerConfig = new DistributedConfig(configMap);
 
@@ -173,18 +176,26 @@ public class RestServerTest {
         server = new RestServer(workerConfig);
         server.start(new HerderProvider(herder), herder.plugins());
 
-        HttpClient httpClient = new HttpClient(String.valueOf(server.advertisedUrl()));
-        Response response = httpClient.executeOptions("/connectors", MediaType.WILDCARD_TYPE, Collections.emptyMap());
-        Assert.assertEquals(MediaType.TEXT_PLAIN_TYPE, response.getMediaType());
-        Assert.assertArrayEquals(
-            response.getAllowedMethods().toArray(new String[0]),
-            response.readEntity(String.class).split(", ")
+        HttpRequest request = new HttpOptions("/connectors");
+        request.addHeader("Content-Type", MediaType.WILDCARD);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+            server.advertisedUrl().getHost(),
+            server.advertisedUrl().getPort()
         );
-
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(MediaType.TEXT_PLAIN, response.getEntity().getContentType().getValue());
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        response.getEntity().writeTo(baos);
+        Assert.assertArrayEquals(
+            ((HttpOptions) request).getAllowedMethods(response).toArray(),
+            new String(baos.toByteArray(), StandardCharsets.UTF_8).split(", ")
+        );
         PowerMock.verifyAll();
     }
 
-    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
+    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method)
+        throws IOException {
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
@@ -205,29 +216,39 @@ public class RestServerTest {
 
         PowerMock.replayAll();
 
-
         server = new RestServer(workerConfig);
         server.start(new HerderProvider(herder), herder.plugins());
+        HttpRequest request = new HttpGet("/connectors");
+        request.addHeader("Referer", origin + "/page");
+        request.addHeader("Origin", origin);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+            server.advertisedUrl().getHost(),
+            server.advertisedUrl().getPort()
+        );
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
 
-        HttpClient httpClient = new HttpClient(String.valueOf(server.advertisedUrl()));
-        Response response = httpClient.executeGet("/connectors",
-            new HashMap<String, String>() {{
-                    put("Referer", origin + "/page");
-                    put("Origin", origin);
-                }});
-        assertEquals(200, response.getStatus());
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
-        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
+        if (expectedHeader != null) {
+            Assert.assertEquals(expectedHeader,
+                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+        }
 
-        response = httpClient.executeOptions("/connector-plugins/FileStreamSource/validate",
-            new HashMap<String, String>() {{
-                    put("Referer", origin + "/page");
-                    put("Origin", origin);
-                    put("Access-Control-Request-Method", method);
-                }});
-        assertEquals(404, response.getStatus());
-        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
-        assertEquals(method, response.getHeaderString("Access-Control-Allow-Methods"));
+        request = new HttpOptions("/connector-plugins/FileStreamSource/validate");
+        request.addHeader("Referer", origin + "/page");
+        request.addHeader("Origin", origin);
+        request.addHeader("Access-Control-Request-Method", method);
+        response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+        if (expectedHeader != null) {
+            Assert.assertEquals(expectedHeader,
+                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+        }
+        if (method != null) {
+            Assert.assertEquals(method,
+                response.getFirstHeader("Access-Control-Allow-Methods").getValue());
+        }
         PowerMock.verifyAll();
     }
 }
