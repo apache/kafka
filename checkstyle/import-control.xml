@@ -305,12 +305,6 @@
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
-    <allow class="java.net.InetSocketAddress" />
-    <allow class="java.net.MalformedURLException" />
-    <allow class="java.net.URI" />
-    <allow class="java.net.URL" />
-    <allow class="java.net.URLClassLoader" />
-    <allow class="java.net.URISyntaxException" />
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />
