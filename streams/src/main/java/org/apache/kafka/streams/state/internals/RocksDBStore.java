@@ -377,6 +377,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         fOptions.close();
         db.close();
 
+        dbAccessor = null;
         userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
