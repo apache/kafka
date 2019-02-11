@@ -42,7 +42,6 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueS
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
         this.changeLogger = new StoreChangeLogger<>(name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
 
-        // TODO: brittle
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (wrappedStore() instanceof MemoryLRUCache) {
             ((MemoryLRUCache<Bytes, byte[]>) wrappedStore()).setWhenEldestRemoved((key, value) -> {

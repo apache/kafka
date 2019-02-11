@@ -83,12 +83,14 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore<SegmentedBytesSt
         return serdes.valueFrom(bytesValue);
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
@@ -101,6 +103,7 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore<SegmentedBytesSt
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetchAll(timeFrom, timeTo);
