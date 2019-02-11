@@ -45,6 +45,7 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import javax.security.sasl.SaslException;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
@@ -256,6 +257,68 @@ public class SaslAuthenticatorTest {
             fail("SASL/PLAIN channel created without password");
         } catch (IOException e) {
             // Expected exception
+        }
+    }
+
+    /**
+     * Verify that messages from SaslExceptions thrown in the server during authentication are not
+     * propagated to the client since these may contain sensitive data.
+     */
+    @Test
+    public void testClientExceptionDoesNotContainSensitiveData() throws Exception {
+        InvalidScramServerCallbackHandler.reset();
+
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("SCRAM-SHA-256");
+        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                InvalidScramServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+
+        try {
+            InvalidScramServerCallbackHandler.sensitiveException =
+                    new IOException("Could not connect to password database locahost:8000");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256", null);
+
+            InvalidScramServerCallbackHandler.sensitiveException =
+                    new SaslException("Password for existing user " + TestServerCallbackHandler.USERNAME + " is invalid");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256", null);
+
+            InvalidScramServerCallbackHandler.reset();
+            InvalidScramServerCallbackHandler.clientFriendlyException =
+                    new SaslAuthenticationException("Credential verification failed");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256",
+                    InvalidScramServerCallbackHandler.clientFriendlyException.getMessage());
+        } finally {
+            InvalidScramServerCallbackHandler.reset();
+        }
+    }
+
+    public static class InvalidScramServerCallbackHandler implements AuthenticateCallbackHandler {
+        static volatile IOException sensitiveException;
+        static volatile SaslAuthenticationException clientFriendlyException;
+
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
+
+        @Override
+        public void handle(Callback[] callbacks) throws IOException {
+            if (sensitiveException != null)
+                throw sensitiveException;
+            if (clientFriendlyException != null)
+                throw clientFriendlyException;
+        }
+
+        @Override
+        public void close() {
+            reset();
+        }
+
+        static void reset() {
+            sensitiveException = null;
+            clientFriendlyException = null;
         }
     }
 
@@ -1819,8 +1882,8 @@ public class SaslAuthenticatorTest {
             assertEquals(expectedErrorMessage, exception.getMessage());
         else {
             String expectedErrorMessagePrefix = "Authentication failed during authentication due to invalid credentials with SASL mechanism "
-                    + mechanism + ": ";
-            if (exception.getMessage().startsWith(expectedErrorMessagePrefix))
+                    + mechanism;
+            if (exception.getMessage().equals(expectedErrorMessagePrefix))
                 return;
             // we didn't match a recognized error message, so fail
             fail("Incorrect failure message: " + exception.getMessage());
