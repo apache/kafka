@@ -82,12 +82,6 @@ public class KafkaLog4jAppenderTest {
         }
     }
 
-    private void testProducerPropertyNotSet(String name) {
-        PropertyConfigurator.configure(getLog4jConfig(false));
-        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
-        Assert.assertThat(mockKafkaLog4jAppender.getProducerProperties().stringPropertyNames(), not(hasItem(name)));
-    }
-
     @Test
     public void testSetSaslMechanism() {
         Properties props = getLog4jConfig(false);
@@ -120,6 +114,12 @@ public class KafkaLog4jAppenderTest {
     @Test
     public void testJaasConfigNotSet() {
         testProducerPropertyNotSet(SaslConfigs.SASL_JAAS_CONFIG);
+    }
+
+    private void testProducerPropertyNotSet(String name) {
+        PropertyConfigurator.configure(getLog4jConfig(false));
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        Assert.assertThat(mockKafkaLog4jAppender.getProducerProperties().stringPropertyNames(), not(hasItem(name)));
     }
 
     @Test
