@@ -270,7 +270,7 @@ public class SaslAuthenticatorTest {
 
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
         TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
-        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<>());
         String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("SCRAM-SHA-256");
         saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
                 InvalidScramServerCallbackHandler.class.getName());
@@ -1877,17 +1877,9 @@ public class SaslAuthenticatorTest {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
         assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
-        if (expectedErrorMessage != null)
-            // check for full equality
-            assertEquals(expectedErrorMessage, exception.getMessage());
-        else {
-            String expectedErrorMessagePrefix = "Authentication failed during authentication due to invalid credentials with SASL mechanism "
-                    + mechanism;
-            if (exception.getMessage().equals(expectedErrorMessagePrefix))
-                return;
-            // we didn't match a recognized error message, so fail
-            fail("Incorrect failure message: " + exception.getMessage());
-        }
+        String expectedExceptionMessage = expectedErrorMessage != null ? expectedErrorMessage :
+                "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
+        assertEquals(expectedExceptionMessage, exception.getMessage());
     }
 
     private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)
