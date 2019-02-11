@@ -777,6 +777,12 @@ class GroupCoordinator(val brokerId: Int,
 
     maybePrepareRebalance(group, s"Adding new member $memberId")
     group.removePendingMember(memberId)
+
+    // attempt to complete JoinGroup
+    if (group.hasAllMembersJoined) {
+      info(s"all members have joined. attempting to complete JoinGroup for group ${group.groupId}")
+      onCompleteJoin(group)
+    }
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,

@@ -1122,7 +1122,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         public boolean isValid() {
-            return generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID;
+            return this != NO_GENERATION;
         }
 
         @Override
