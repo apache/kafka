@@ -176,7 +176,7 @@ public class RestServerTest {
         server = new RestServer(workerConfig);
         server.start(new HerderProvider(herder), herder.plugins());
 
-        HttpRequest request = new HttpOptions("/connectors");
+        HttpOptions request = new HttpOptions("/connectors");
         request.addHeader("Content-Type", MediaType.WILDCARD);
         CloseableHttpClient httpClient = HttpClients.createMinimal();
         HttpHost httpHost = new HttpHost(
@@ -188,7 +188,7 @@ public class RestServerTest {
         ByteArrayOutputStream baos = new ByteArrayOutputStream();
         response.getEntity().writeTo(baos);
         Assert.assertArrayEquals(
-            ((HttpOptions) request).getAllowedMethods(response).toArray(),
+            request.getAllowedMethods(response).toArray(),
             new String(baos.toByteArray(), StandardCharsets.UTF_8).split(", ")
         );
         PowerMock.verifyAll();
