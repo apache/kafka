@@ -219,10 +219,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
-        T getInner() {
-            return wrappedStore();
-        }
-
         @Override
         public void flush() {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
@@ -250,23 +246,23 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public V get(final K key) {
-            return getInner().get(key);
+            return wrappedStore().get(key);
         }
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
                                             final K to) {
-            return getInner().range(from, to);
+            return wrappedStore().range(from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return getInner().all();
+            return wrappedStore().all();
         }
 
         @Override
         public long approximateNumEntries() {
-            return getInner().approximateNumEntries();
+            return wrappedStore().approximateNumEntries();
         }
 
         @Override
@@ -316,7 +312,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public V fetch(final K key,
                        final long time) {
-            return getInner().fetch(key, time);
+            return wrappedStore().fetch(key, time);
         }
 
         @Deprecated
@@ -324,7 +320,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
-            return getInner().fetch(key, timeFrom, timeTo);
+            return wrappedStore().fetch(key, timeFrom, timeTo);
         }
 
         @Deprecated
@@ -333,19 +329,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                       final K to,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return getInner().fetch(from, to, timeFrom, timeTo);
+            return wrappedStore().fetch(from, to, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> all() {
-            return getInner().all();
+            return wrappedStore().all();
         }
 
         @Deprecated
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
-            return getInner().fetchAll(timeFrom, timeTo);
+            return wrappedStore().fetchAll(timeFrom, timeTo);
         }
     }
 
@@ -361,7 +357,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return getInner().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+            return wrappedStore().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -369,7 +365,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                                final K keyTo,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return getInner().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            return wrappedStore().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -385,18 +381,18 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return getInner().fetchSession(key, startTime, endTime);
+            return wrappedStore().fetchSession(key, startTime, endTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return getInner().fetch(key);
+            return wrappedStore().fetch(key);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
-            return getInner().fetch(from, to);
+            return wrappedStore().fetch(from, to);
         }
     }
 
