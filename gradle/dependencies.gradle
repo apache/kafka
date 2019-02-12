@@ -52,6 +52,7 @@ versions += [
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
   bcpkix: "1.60",
+  httpclient: "4.5.7",
   easymock: "4.0.2",
   jackson: "2.9.8",
   jetty: "9.4.14.v20181114",
@@ -150,4 +151,5 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
 ]
