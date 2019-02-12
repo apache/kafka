@@ -44,6 +44,7 @@ final object Validator {
                    authorizer: Option[Authorizer]): Validator[FetchRequest, FetchRequestValidation] = {
     ChainValidator(
       List(
+        MaxBytesFetchRequestValidator(),
         AuthorizeFetchRequestValidator(authorizer),
         MetadataCacheFetchRequestValidator(metadataCache)
       )

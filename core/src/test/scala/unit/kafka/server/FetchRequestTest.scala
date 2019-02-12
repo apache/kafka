@@ -76,6 +76,55 @@ class FetchRequestTest extends BaseRequestTest {
   }
 
   @Test
+  def testInvalidMaxBytes(): Unit = {
+    initProducer()
+
+    val topicPartitionToLeader = createTopics(numTopics = 1, numPartitions = 6)
+    val brokerId = servers.head.config.brokerId
+    val partitionsForBroker = topicPartitionToLeader.toVector.collect {
+      case (topicPartition, partitionLeader) if partitionLeader == brokerId => topicPartition
+    }
+
+    produceData(topicPartitionToLeader.keySet, 9)
+
+    // 0 is valid max bytes; that that all of the partitions succeeded
+    val request1 = createFetchRequest(0, 0, partitionsForBroker, Map.empty)
+    val response1 = sendFetchRequest(brokerId, request1)
+    assertEquals(Errors.NONE, response1.error)
+    response1.responseData.asScala.foreach { case (topicPartition, partitionData) =>
+      assertEquals(Errors.NONE, partitionData.error)
+    }
+
+    // It is invalid to send a request with negative max bytes for the fetch partitions
+    val request2 = createFetchRequest(0, -1, partitionsForBroker, Map.empty)
+    val response2 = sendFetchRequest(brokerId, request2)
+    assertEquals(Errors.NONE, response2.error)
+    response2.responseData.asScala.foreach { case (topicPartition, partitionData) =>
+      assertEquals(Errors.INVALID_REQUEST, partitionData.error)
+    }
+    val request3 = createFetchRequest(0, Int.MinValue, partitionsForBroker, Map.empty)
+    val response3 = sendFetchRequest(brokerId, request3)
+    assertEquals(Errors.NONE, response3.error)
+    response3.responseData.asScala.foreach { case (topicPartition, partitionData) =>
+      assertEquals(Errors.INVALID_REQUEST, partitionData.error)
+    }
+
+    // It is invalid to send a request with negative max bytes for the fetch request
+    val request4 = createFetchRequest(-1, 0, partitionsForBroker, Map.empty)
+    val response4 = sendFetchRequest(brokerId, request4)
+    assertEquals(Errors.NONE, response4.error)
+    response4.responseData.asScala.foreach { case (topicPartition, partitionData) =>
+      assertEquals(Errors.INVALID_REQUEST, partitionData.error)
+    }
+    val request5 = createFetchRequest(Int.MinValue, 0, partitionsForBroker, Map.empty)
+    val response5 = sendFetchRequest(brokerId, request5)
+    assertEquals(Errors.NONE, response5.error)
+    response5.responseData.asScala.foreach { case (topicPartition, partitionData) =>
+      assertEquals(Errors.INVALID_REQUEST, partitionData.error)
+    }
+  }
+
+  @Test
   def testBrokerRespectsPartitionsOrderAndSizeLimits(): Unit = {
     initProducer()
 
