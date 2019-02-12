@@ -232,13 +232,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         numMembersAwaitingJoin -= 1
     }
 
-    if (isLeader(memberId)) {
-      leaderId = if (members.isEmpty) {
-        None
-      } else {
-        Some(members.keys.head)
-      }
-    }
+    if (isLeader(memberId))
+      leaderId = members.keys.headOption
   }
 
   def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
