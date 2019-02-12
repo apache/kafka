@@ -1338,16 +1338,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     changePreferredLeader(prefer1)
     // but shut it down...
     servers(1).shutdown()
-    waitUntilTrue (
-      () => {
-        val description = client.describeTopics(Set (partition1.topic(), partition2.topic()).asJava).all().get()
-        return !description.asScala.flatMap{
-          case (topic, description) => description.partitions().asScala.map(
-            partition => partition.isr().asScala).flatten
-        }.exists(node => node.id == 1)
-      },
-      "Expect broker 1 to no longer be in any ISR"
-    )
+    waitUntilTrue (() => {
+      val description = client.describeTopics(Set(partition1.topic, partition2.topic).asJava).all().get()
+      !description.asScala.flatMap { case (topic, description) =>
+        description.partitions.asScala.flatMap(_.isr.asScala)
+      }.exists(_.id == 1)
+    }, "Expect broker 1 to no longer be in any ISR")
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
