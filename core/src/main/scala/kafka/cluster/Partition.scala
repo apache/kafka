@@ -715,7 +715,7 @@ class Partition(val topic: String,
     inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
-          new EpochEndOffset(NONE, leaderReplica.epochs.get.endOffsetFor(leaderEpoch))
+          new EpochEndOffset(NONE, leaderReplica.endOffsetFor(leaderEpoch))
         case None =>
           new EpochEndOffset(NOT_LEADER_FOR_PARTITION, UNDEFINED_EPOCH_OFFSET)
       }

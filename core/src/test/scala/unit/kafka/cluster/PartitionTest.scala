@@ -22,16 +22,16 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
 import kafka.common.UnexpectedAppendOffsetException
-import kafka.log.{LogConfig, LogManager, CleanerConfig}
+import kafka.log.{CleanerConfig, LogConfig, LogManager}
 import kafka.server._
-import kafka.utils.{MockTime, TestUtils, MockScheduler}
+import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
+import org.apache.kafka.common.requests.{EpochEndOffset, LeaderAndIsrRequest}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.scalatest.Assertions.assertThrows
@@ -55,10 +55,7 @@ class PartitionTest {
 
   @Before
   def setup(): Unit = {
-    val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    val logProps = createLogProperties(Map.empty)
     logConfig = LogConfig(logProps)
 
     tmpDir = TestUtils.tempDir()
@@ -82,6 +79,15 @@ class PartitionTest {
     EasyMock.replay(kafkaZkClient)
   }
 
+  private def createLogProperties(overrides: Map[String, String]): Properties = {
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
+    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
+    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    overrides.foreach { case (k, v) => logProps.put(k, v) }
+    logProps
+  }
+
   @After
   def tearDown(): Unit = {
     brokerTopicStats.close()
@@ -91,6 +97,76 @@ class PartitionTest {
     Utils.delete(tmpDir)
     logManager.liveLogDirs.foreach(Utils.delete)
     replicaManager.shutdown(checkpointHW = false)
+  }
+
+  @Test
+  def testMakeLeaderUpdatesEpochCache(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower = brokerId + 1
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower).asJava
+    val isr = List[Integer](leader, follower).asJava
+    val leaderEpoch = 8
+
+    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)
+    ), leaderEpoch = 0)
+    log.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 5,
+      new SimpleRecord("k3".getBytes, "v3".getBytes),
+      new SimpleRecord("k4".getBytes, "v4".getBytes)
+    ), leaderEpoch = 5)
+    assertEquals(4, log.logEndOffset)
+
+    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+    assertTrue("Expected makeLeader to succeed",
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch,
+        isr, 1, replicas, true), 0))
+
+    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+
+    val epochEndOffset = partition.lastOffsetForLeaderEpoch(leaderEpoch)
+    assertEquals(4, epochEndOffset.endOffset)
+  }
+
+  @Test
+  def testMakeLeaderDoesNotUpdateEpochCacheForOldFormats(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower = brokerId + 1
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower).asJava
+    val isr = List[Integer](leader, follower).asJava
+
+    val leaderEpoch = 8
+
+    val logConfig = LogConfig(createLogProperties(Map(
+      LogConfig.MessageFormatVersionProp -> kafka.api.KAFKA_0_10_2_IV0.version)))
+    val log = logManager.getOrCreateLog(topicPartition, logConfig)
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("k1".getBytes, "v1".getBytes),
+      new SimpleRecord("k2".getBytes, "v2".getBytes)),
+      magicValue = RecordFormat.V1.value
+    ), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(
+      new SimpleRecord("k3".getBytes, "v3".getBytes),
+      new SimpleRecord("k4".getBytes, "v4".getBytes)),
+      magicValue = RecordFormat.V1.value
+    ), leaderEpoch = 5)
+    assertEquals(4, log.logEndOffset)
+
+    val partition = new Partition(topicPartition.topic, topicPartition.partition, time, replicaManager)
+    assertTrue("Expected makeLeader to succeed",
+      partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch,
+        isr, 1, replicas, true), 0))
+
+    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+    assertEquals(EpochEndOffset.UNDEFINED_EPOCH, log.leaderEpochCache.latestEpoch)
+
+    val epochEndOffset = partition.lastOffsetForLeaderEpoch(leaderEpoch)
+    assertEquals(EpochEndOffset.UNDEFINED_EPOCH_OFFSET, epochEndOffset.endOffset)
   }
 
   @Test

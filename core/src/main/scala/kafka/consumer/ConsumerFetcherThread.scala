@@ -123,8 +123,8 @@ class ConsumerFetcherThread(consumerIdString: String,
       new TopicPartition(t, p) -> new PartitionData(value)
     }
 
-  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]] = {
-    ResultWithPartitions(Map(), Set())
+  override def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): (Map[TopicPartition, Int], Set[TopicPartition]) = {
+    (Map(), Set())
   }
 
   override def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = { Map() }

@@ -625,7 +625,7 @@ class ReplicaManagerTest {
     val mockBrokerTopicStats = new BrokerTopicStats
     val mockLogDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
     val mockLeaderEpochCache = EasyMock.createMock(classOf[LeaderEpochFileCache])
-    EasyMock.expect(mockLeaderEpochCache.latestEpoch).andReturn(leaderEpochFromLeader)
+    EasyMock.expect(mockLeaderEpochCache.latestEpoch).andReturn(leaderEpochFromLeader).anyTimes()
     EasyMock.expect(mockLeaderEpochCache.endOffsetFor(leaderEpochFromLeader))
       .andReturn(localLogOffset)
     EasyMock.replay(mockLeaderEpochCache)

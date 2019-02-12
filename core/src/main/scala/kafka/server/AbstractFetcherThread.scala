@@ -72,7 +72,7 @@ abstract class AbstractFetcherThread(name: String,
   // deal with partitions with errors, potentially due to leadership changes
   protected def handlePartitionsWithErrors(partitions: Iterable[TopicPartition])
 
-  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): ResultWithPartitions[Map[TopicPartition, Int]]
+  protected def buildLeaderEpochRequest(allPartitions: Seq[(TopicPartition, PartitionFetchState)]): (Map[TopicPartition, Int], Set[TopicPartition])
 
   protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset]
 
@@ -121,15 +121,22 @@ abstract class AbstractFetcherThread(name: String,
     *   occur during truncation.
     */
   def maybeTruncate(): Unit = {
-    val ResultWithPartitions(epochRequests, partitionsWithError) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
-    handlePartitionsWithErrors(partitionsWithError)
+    val (partitionsWithEpochs, partitionsWithoutEpochs) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
+    val epochEndOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
 
-    if (epochRequests.nonEmpty) {
-      val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
+    // If the latest epoch is not available, then we are likely on an older format and should
+    // use the high watermark for truncation
+    for (tp <- partitionsWithoutEpochs)
+      epochEndOffsets.put(tp, new EpochEndOffset(Errors.NONE, EpochEndOffset.UNDEFINED_EPOCH_OFFSET))
+
+    if (partitionsWithEpochs.nonEmpty)
+      epochEndOffsets ++= fetchEpochsFromLeader(partitionsWithEpochs)
+
+    if (epochEndOffsets.nonEmpty) {
       //Ensure we hold a lock during truncation.
       inLock(partitionMapLock) {
         //Check no leadership changes happened whilst we were unlocked, fetching epochs
-        val leaderEpochs = fetchedEpochs.filter { case (tp, _) => partitionStates.contains(tp) }
+        val leaderEpochs = epochEndOffsets.filter { case (tp, _) => partitionStates.contains(tp) }
         val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
         handlePartitionsWithErrors(partitionsWithError)
         markTruncationCompleteAndUpdateFetchOffset(fetchOffsets)
@@ -433,7 +440,7 @@ case class PartitionFetchState(fetchOffset: Long, delay: DelayedItem, truncating
 
   def this(offset: Long, truncatingLog: Boolean) = this(offset, new DelayedItem(0), truncatingLog)
 
-  def this(offset: Long, delay: DelayedItem) = this(offset, new DelayedItem(0), false)
+  def this(offset: Long, delay: DelayedItem) = this(offset, delay, false)
 
   def this(fetchOffset: Long) = this(fetchOffset, new DelayedItem(0))
 
