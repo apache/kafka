@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -106,6 +107,23 @@ public class SmokeTestClient extends SmokeTestUtil {
     }
 
     private KafkaStreams createKafkaStreams(final Properties props) {
+        final Topology build = getTopology();
+        final KafkaStreams streamsClient = new KafkaStreams(build, getStreamsConfig(props));
+        streamsClient.setStateListener((newState, oldState) -> {
+            System.out.printf("%s: %s -> %s%n", name, oldState, newState);
+            if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
+                started = true;
+            }
+        });
+        streamsClient.setUncaughtExceptionHandler((t, e) -> {
+            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
+            streamsClient.close(Duration.ofSeconds(30));
+        });
+
+        return streamsClient;
+    }
+
+    public Topology getTopology() {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<String, Integer> stringIntConsumed = Consumed.with(stringSerde, intSerde);
         final KStream<String, Integer> source = builder.stream("data", stringIntConsumed);
@@ -200,18 +218,6 @@ public class SmokeTestClient extends SmokeTestUtil {
                 .toStream()
                 .to("tagg", Produced.with(stringSerde, longSerde));
 
-        final KafkaStreams streamsClient = new KafkaStreams(builder.build(), getStreamsConfig(props));
-        streamsClient.setStateListener((newState, oldState) -> {
-            System.out.printf("%s: %s -> %s%n", name, oldState, newState);
-            if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
-                started = true;
-            }
-        });
-        streamsClient.setUncaughtExceptionHandler((t, e) -> {
-            System.out.println(name + ": FATAL: An unexpected exception is encountered on thread " + t + ": " + e);
-            streamsClient.close(Duration.ofSeconds(30));
-        });
-
-        return streamsClient;
+        return builder.build();
     }
 }

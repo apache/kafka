@@ -76,12 +76,12 @@ public class SmokeTestDriverIntegrationTest {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        CLUSTER.createTopics("data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
+        CLUSTER.createTopics(SmokeTestDriver.topics());
 
         final String bootstrapServers = CLUSTER.bootstrapServers();
         final Driver driver = new Driver(bootstrapServers, 10, 1000);
         driver.start();
-        System.out.println("started streams");
+        System.out.println("started driver");
 
 
         final Properties props = new Properties();
@@ -124,8 +124,11 @@ public class SmokeTestDriverIntegrationTest {
         }
 
         // check to make sure that it actually succeeded
-        Assert.assertNull(driver.exception());
-        Assert.assertTrue(driver.result().passed());
+        if (driver.exception() != null) {
+            driver.exception().printStackTrace();
+            throw new AssertionError(driver.exception());
+        }
+        Assert.assertTrue(driver.result().result(), driver.result().passed());
     }
 
 }

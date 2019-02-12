@@ -28,8 +28,8 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
@@ -38,7 +38,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -54,11 +56,23 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 
 public class SmokeTestDriver extends SmokeTestUtil {
+    private static final String[] TOPICS = new String[] {
+        "data",
+        "echo",
+        "max",
+        "min", "min-suppressed", "min-raw",
+        "dif",
+        "sum",
+        "cnt",
+        "avg",
+        "tagg"
+    };
 
-    private static final int MAX_RECORD_EMPTY_RETRIES = 60;
+    private static final int MAX_RECORD_EMPTY_RETRIES = 30;
 
     private static class ValueList {
         public final String key;
@@ -83,6 +97,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
         int next() {
             return (index < values.length) ? values[index++] : -1;
         }
+    }
+
+    public static String[] topics() {
+        return Arrays.copyOf(TOPICS, TOPICS.length);
     }
 
     public static Map<String, Set<Integer>> generate(final String kafka,
@@ -148,6 +166,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         while (!needRetry.isEmpty()) {
             final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
             for (final ProducerRecord<byte[], byte[]> record : needRetry) {
+                System.out.println("retry producing " + stringSerde.deserializer().deserialize("", record.key()));
                 producer.send(record, new TestCallback(record, needRetry2));
             }
             producer.flush();
@@ -199,6 +218,46 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
     }
 
+    public static class NumberDeserializer implements Deserializer<Number> {
+
+        @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+
+        }
+
+        @Override
+        public Number deserialize(final String topic, final byte[] data) {
+            final Number value;
+            switch (topic) {
+                case "data":
+                case "echo":
+                case "min":
+                case "min-raw":
+                case "min-suppressed":
+                case "max":
+                case "dif":
+                    value = intSerde.deserializer().deserialize(topic, data);
+                    break;
+                case "sum":
+                case "cnt":
+                case "tagg":
+                    value = longSerde.deserializer().deserialize(topic, data);
+                    break;
+                case "avg":
+                    value = doubleSerde.deserializer().deserialize(topic, data);
+                    break;
+                default:
+                    throw new RuntimeException("unknown topic: " + topic);
+            }
+            return value;
+        }
+
+        @Override
+        public void close() {
+
+        }
+    }
+
     public static VerificationResult verify(final String kafka,
                                             final Map<String, Set<Integer>> inputs,
                                             final int maxRecordsPerKey) {
@@ -206,38 +265,39 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.CLIENT_ID_CONFIG, "verifier");
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
-        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, NumberDeserializer.class);
 
-        final KafkaConsumer<String, byte[]> consumer = new KafkaConsumer<>(props);
-        final String[] topics = {"data", "echo", "max", "min", "dif", "sum", "cnt", "avg", "tagg"};
-        final List<TopicPartition> partitions = getAllPartitions(consumer, topics);
+        final KafkaConsumer<String, Number> consumer = new KafkaConsumer<>(props);
+        final List<TopicPartition> partitions = getAllPartitions(consumer, TOPICS);
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
         final int recordsGenerated = inputs.size() * maxRecordsPerKey;
         int recordsProcessed = 0;
         final Map<String, AtomicInteger> processed =
-            Stream.of(topics)
+            Stream.of(TOPICS)
                   .collect(Collectors.toMap(t -> t, t -> new AtomicInteger(0)));
 
-        final Map<String, Map<String, LinkedList<Number>>> events = new HashMap<>();
+        final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events = new HashMap<>();
 
         VerificationResult verificationResult = new VerificationResult(false, "no results yet");
         int retry = 0;
         final long start = System.currentTimeMillis();
         while (System.currentTimeMillis() - start < TimeUnit.MINUTES.toMillis(6)) {
-            final ConsumerRecords<String, byte[]> records = consumer.poll(Duration.ofMillis(500));
+            final ConsumerRecords<String, Number> records = consumer.poll(Duration.ofSeconds(1));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
                 verificationResult = verifyAll(inputs, events);
                 if (verificationResult.passed()) {
                     break;
-                }
-                if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
+                } else if (retry++ > MAX_RECORD_EMPTY_RETRIES) {
+                    System.out.println(Instant.now() + " Didn't get any more results, verification hasn't passed, and out of retries.");
                     break;
+                } else {
+                    System.out.println(Instant.now() + " Didn't get any more results, but verification hasn't passed (yet). Retrying...");
                 }
             } else {
                 retry = 0;
-                for (final ConsumerRecord<String, byte[]> record : records) {
+                for (final ConsumerRecord<String, Number> record : records) {
                     final String key = record.key();
 
                     final String topic = record.topic();
@@ -252,7 +312,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
                     events.computeIfAbsent(topic, t -> new HashMap<>())
                           .computeIfAbsent(key, k -> new LinkedList<>())
-                          .add(deserializeValue(record));
+                          .add(record);
                 }
 
                 System.out.println(processed);
@@ -275,11 +335,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         boolean success;
 
-        final Map<String, HashSet<Number>> received =
+        final Map<String, Set<Number>> received =
             events.get("echo")
                   .entrySet()
                   .stream()
-                  .map(entry -> mkEntry(entry.getKey(), new HashSet<>(entry.getValue())))
+                  .map(entry -> mkEntry(
+                      entry.getKey(),
+                      entry.getValue().stream().map(ConsumerRecord::value).collect(Collectors.toSet()))
+                  )
                   .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         success = inputs.equals(received);
@@ -306,51 +369,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return verificationResult;
     }
 
-    private static Number deserializeValue(final ConsumerRecord<String, byte[]> record) {
-        final Number value;
-        switch (record.topic()) {
-            case "data": {
-                value = intSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "echo": {
-                value = intSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "min": {
-                value = intSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "max": {
-                value = intSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "dif": {
-                value = intSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "sum": {
-                value = longSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "cnt": {
-                value = longSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "avg": {
-                value = doubleSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            case "tagg": {
-                value = longSerde.deserializer().deserialize("", record.value());
-                break;
-            }
-            default:
-                throw new RuntimeException("unknown topic: " + record.topic());
-        }
-        return value;
-    }
-
     public static class VerificationResult {
         private final boolean passed;
         private final String result;
@@ -370,7 +388,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
-                                                final Map<String, Map<String, LinkedList<Number>>> events) {
+                                                final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
         final PrintStream resultStream = new PrintStream(byteArrayOutputStream);
         boolean pass;
@@ -386,34 +404,34 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
     private static boolean verify(final PrintStream resultStream,
-                                  final String topicName,
+                                  final String topic,
                                   final Map<String, Set<Integer>> inputData,
-                                  final Map<String, Map<String, LinkedList<Number>>> events,
+                                  final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
                                   final Function<String, Number> keyToExpectation) {
-        final Map<String, LinkedList<Number>> consumedInputEvents = events.get("data");
-
-        final Map<String, LinkedList<Number>> outputEvents = events.get(topicName);
+        final Map<String, LinkedList<ConsumerRecord<String, Number>>> observedInputEvents = events.get("data");
+        final Map<String, LinkedList<ConsumerRecord<String, Number>>> outputEvents = events.getOrDefault(topic, emptyMap());
         if (outputEvents.isEmpty()) {
-            resultStream.println(topicName + " is empty");
+            resultStream.println(topic + " is empty");
             return false;
         } else {
-            resultStream.println("verifying " + topicName);
+            resultStream.printf("verifying %s with %d keys%n", topic, outputEvents.size());
 
             if (outputEvents.size() != inputData.size()) {
-                resultStream.println("fail: resultCount=" + outputEvents.size() + " expectedCount=" + inputData.size());
+                resultStream.printf("fail: resultCount=%d expectedCount=%s%n\tresult=%s%n\texpected=%s%n",
+                                    outputEvents.size(), inputData.size(), outputEvents.keySet(), inputData.keySet());
                 return false;
             }
-            for (final Map.Entry<String, LinkedList<Number>> entry : outputEvents.entrySet()) {
+            for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : outputEvents.entrySet()) {
                 final String key = entry.getKey();
                 final Number expected = keyToExpectation.apply(key);
-                final Number actual = entry.getValue().getLast();
+                final Number actual = entry.getValue().getLast().value();
                 if (!expected.equals(actual)) {
-                    resultStream.printf("fail: key=%s %s=%s expected=%s%n\t inputEvents=%s%n\toutputEvents=%s%n",
+                    resultStream.printf("%s fail: key=%s actual=%s expected=%s%n\t inputEvents=%s%n\toutputEvents=%s%n",
+                                        topic,
                                         key,
-                                        topicName,
                                         actual,
                                         expected,
-                                        consumedInputEvents.get(key),
+                                        observedInputEvents.get(key),
                                         entry.getValue());
                     return false;
                 }
@@ -437,8 +455,11 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
     private static boolean verifyTAgg(final PrintStream resultStream,
                                       final Map<String, Set<Integer>> allData,
-                                      final Map<String, LinkedList<Number>> taggEvents) {
-        if (taggEvents.isEmpty()) {
+                                      final Map<String, LinkedList<ConsumerRecord<String, Number>>> taggEvents) {
+        if (taggEvents == null) {
+            resultStream.println("tagg is missing");
+            return false;
+        } else if (taggEvents.isEmpty()) {
             resultStream.println("tagg is empty");
             return false;
         } else {
@@ -455,14 +476,14 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
 
             // check the result
-            for (final Map.Entry<String, LinkedList<Number>> entry : taggEvents.entrySet()) {
+            for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : taggEvents.entrySet()) {
                 final String key = entry.getKey();
                 Long expectedCount = expected.remove(key);
                 if (expectedCount == null) {
                     expectedCount = 0L;
                 }
 
-                if (entry.getValue().getLast().longValue() != expectedCount) {
+                if (entry.getValue().getLast().value().longValue() != expectedCount) {
                     resultStream.println("fail: key=" + key + " tagg=" + entry.getValue() + " expected=" + expected.get(key));
                     resultStream.println("\t outputEvents: " + entry.getValue());
                     return false;
