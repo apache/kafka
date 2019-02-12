@@ -356,7 +356,8 @@ class Log(@volatile var dir: File,
 
   private def recoverSegment(segment: LogSegment, leaderEpochCache: Option[LeaderEpochFileCache] = None): Int = lock synchronized {
     val stateManager = new ProducerStateManager(topicPartition, dir, maxProducerIdExpirationMs)
-    stateManager.truncateAndReload(logStartOffset, segment.baseOffset, time.milliseconds)
+    val recoveryStartOffset = math.min(logStartOffset, segment.baseOffset)
+    stateManager.truncateAndReload(recoveryStartOffset, segment.baseOffset, time.milliseconds)
     logSegments(stateManager.mapEndOffset, segment.baseOffset).foreach { segment =>
       val startOffset = math.max(segment.baseOffset, stateManager.mapEndOffset)
       val fetchDataInfo = segment.read(startOffset, None, Int.MaxValue)

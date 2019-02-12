@@ -1103,6 +1103,15 @@ class LogCleanerTest extends JUnitSuite {
    */
   @Test
   def testRecoveryAfterCrash(): Unit = {
+    testRecoveryAfterCrash(incrLogStartOffset = false)
+  }
+
+  @Test
+  def testRecoveryAfterCrashAndIncrementedLogStartOffset(): Unit = {
+    testRecoveryAfterCrash(incrLogStartOffset = true)
+  }
+
+  private def testRecoveryAfterCrash(incrLogStartOffset: Boolean = false): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, 300: java.lang.Integer)
@@ -1111,10 +1120,10 @@ class LogCleanerTest extends JUnitSuite {
 
     val config = LogConfig.fromProps(logConfig.originals, logProps)
 
-    def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Int]): Log = {
+    def recoverAndCheck(config: LogConfig, expectedKeys: Iterable[Int], logStartOffset: Long): Log = {
       // Recover log file and check that after recovery, keys are as expected
       // and all temporary files have been deleted
-      val recoveredLog = makeLog(config = config)
+      val recoveredLog = makeLog(config = config, logStartOffset = logStartOffset)
       time.sleep(config.fileDeleteDelayMs + 1)
       for (file <- dir.listFiles) {
         assertFalse("Unexpected .deleted file after recovery", file.getName.endsWith(Log.DeletedFileSuffix))
@@ -1132,6 +1141,8 @@ class LogCleanerTest extends JUnitSuite {
       log.appendAsLeader(record(log.logEndOffset.toInt, log.logEndOffset.toInt), leaderEpoch = 0)
       messageCount += 1
     }
+    val newLogStartOffset = if (incrLogStartOffset) log.logSegments.take(2).last.baseOffset else 0
+    log.maybeIncrementLogStartOffset(newLogStartOffset)
     val allKeys = keysInLog(log)
 
     // pretend we have odd-numbered keys
@@ -1152,7 +1163,7 @@ class LogCleanerTest extends JUnitSuite {
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
-    log = recoverAndCheck(config, allKeys)
+    log = recoverAndCheck(config, allKeys, newLogStartOffset)
 
     // clean again
     cleaner.cleanSegments(log, log.logSegments.take(9).toSeq, offsetMap, 0L, new CleanerStats())
@@ -1167,7 +1178,7 @@ class LogCleanerTest extends JUnitSuite {
     for (file <- dir.listFiles if file.getName.endsWith(Log.DeletedFileSuffix)) {
       Utils.atomicMoveWithFallback(file.toPath, Paths.get(CoreUtils.replaceSuffix(file.getPath, Log.DeletedFileSuffix, "")))
     }
-    log = recoverAndCheck(config, cleanedKeys)
+    log = recoverAndCheck(config, cleanedKeys, newLogStartOffset)
 
     // add some more messages and clean the log again
     while (log.numberOfSegments < 10) {
@@ -1184,7 +1195,7 @@ class LogCleanerTest extends JUnitSuite {
     // 3) Simulate recovery after swap file is created and old segments files are renamed
     //    to .deleted. Clean operation is resumed during recovery.
     log.logSegments.head.changeFileSuffixes("", Log.SwapFileSuffix)
-    log = recoverAndCheck(config, cleanedKeys)
+    log = recoverAndCheck(config, cleanedKeys, newLogStartOffset)
 
     // add some more messages and clean the log again
     while (log.numberOfSegments < 10) {
@@ -1201,7 +1212,7 @@ class LogCleanerTest extends JUnitSuite {
 
     // 4) Simulate recovery after swap is complete, but async deletion
     //    is not yet complete. Clean operation is resumed during recovery.
-    log = recoverAndCheck(config, cleanedKeys)
+    log = recoverAndCheck(config, cleanedKeys, newLogStartOffset)
     log.close()
   }
 
@@ -1381,8 +1392,8 @@ class LogCleanerTest extends JUnitSuite {
   private def messageWithOffset(key: Int, value: Int, offset: Long): MemoryRecords =
     messageWithOffset(key.toString.getBytes, value.toString.getBytes, offset)
 
-  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L) =
-    Log(dir = dir, config = config, logStartOffset = 0L, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
+  private def makeLog(dir: File = dir, config: LogConfig = logConfig, recoveryPoint: Long = 0L, logStartOffset: Long = 0L) =
+    Log(dir = dir, config = config, logStartOffset = logStartOffset, recoveryPoint = recoveryPoint, scheduler = time.scheduler,
       time = time, brokerTopicStats = new BrokerTopicStats, maxProducerIdExpirationMs = 60 * 60 * 1000,
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
