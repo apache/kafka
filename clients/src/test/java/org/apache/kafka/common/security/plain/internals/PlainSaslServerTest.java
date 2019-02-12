@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.plain.internals;
 
-import javax.security.sasl.SaslException;
 import org.apache.kafka.common.security.plain.PlainLoginModule;
 import org.junit.Before;
 import org.junit.Test;
