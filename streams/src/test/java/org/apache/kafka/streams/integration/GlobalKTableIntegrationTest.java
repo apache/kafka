@@ -53,7 +53,7 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.hamcrest.core.IsEqual.equalTo;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 @Category({IntegrationTest.class})
 public class GlobalKTableIntegrationTest {
