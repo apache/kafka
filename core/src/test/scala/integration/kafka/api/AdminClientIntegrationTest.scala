@@ -1432,7 +1432,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
     ).asJavaCollection
 
-    var topicConfigEntries2 = Seq(
+    val topicConfigEntries2 = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
       new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
     ).asJavaCollection
@@ -1515,12 +1515,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val topic2 = "incremental-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
     createTopic(topic2)
-
-    // Alter topics
-    var topicAlterEntries = Seq(
-      //invalid configs for first topic
-       //valid configs second topic
-    ).asJava
 
     var topicConfigEntries1 = Seq(
       new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
