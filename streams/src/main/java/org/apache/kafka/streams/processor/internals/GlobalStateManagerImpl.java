@@ -47,10 +47,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.rawValueToTimestampedValue;
-import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
-import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
-
 /**
  * This class is responsible for the initialization, restoration, closing, flushing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
@@ -205,7 +201,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 topicPartitions,
                 highWatermarks,
                 store.name(),
-                isTimestamped(store) ? rawValueToTimestampedValue() : identity()
+                converterForStore(store)
             );
             globalStores.put(store.name(), store);
         } finally {
