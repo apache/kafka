@@ -390,16 +390,16 @@ public class SmokeTestDriver extends SmokeTestUtil {
     private static VerificationResult verifyAll(final Map<String, Set<Integer>> inputs,
                                                 final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
         final ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
-        final PrintStream resultStream = new PrintStream(byteArrayOutputStream);
         boolean pass;
-        pass = verifyTAgg(resultStream, inputs, events.get("tagg"));
-        pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin);
-        pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax);
-        pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue());
-        pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum);
-        pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L);
-        pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg);
-        resultStream.close();
+        try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
+            pass = verifyTAgg(resultStream, inputs, events.get("tagg"));
+            pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin);
+            pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax);
+            pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue());
+            pass &= verify(resultStream, "sum", inputs, events, SmokeTestDriver::getSum);
+            pass &= verify(resultStream, "cnt", inputs, events, key1 -> getMax(key1).intValue() - getMin(key1).intValue() + 1L);
+            pass &= verify(resultStream, "avg", inputs, events, SmokeTestDriver::getAvg);
+        }
         return new VerificationResult(pass, new String(byteArrayOutputStream.toByteArray(), StandardCharsets.UTF_8));
     }
 
