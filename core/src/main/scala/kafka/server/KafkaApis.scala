@@ -1402,7 +1402,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           setTopics(results)
         val responseBody = new CreateTopicsResponse(responseData)
         trace(s"Sending create topics response $responseData for correlation id " +
-          "${request.header.correlationId} to client ${request.header.clientId}.")
+          s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)

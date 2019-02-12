@@ -558,7 +558,7 @@ class PartitionTest {
       case Right(Some(offsetAndTimestamp)) => fail("Should have failed")
       case Right(None) => fail("Should have failed")
       case Left(e: OffsetNotAvailableException) => // ok
-      case Left(e: ApiException) => fail("Should have seen OffsetNotAvailableException, saw $e")
+      case Left(e: ApiException) => fail(s"Should have seen OffsetNotAvailableException, saw $e")
     }
 
 
