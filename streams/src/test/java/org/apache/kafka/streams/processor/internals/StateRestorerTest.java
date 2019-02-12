@@ -26,6 +26,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 
+import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -43,7 +44,7 @@ public class StateRestorerTest {
         OFFSET_LIMIT,
         true,
         "storeName",
-        RecordConverter.RecordConverters.identity());
+        identity());
 
     @Before
     public void setUp() {
@@ -80,7 +81,7 @@ public class StateRestorerTest {
             0,
             true,
             "storeName",
-            RecordConverter.RecordConverters.identity());
+            identity());
         assertTrue(restorer.hasCompleted(0, 10));
     }
 
