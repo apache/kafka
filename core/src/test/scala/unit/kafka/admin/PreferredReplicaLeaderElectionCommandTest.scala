@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.network.RequestChannel
 import kafka.security.auth._

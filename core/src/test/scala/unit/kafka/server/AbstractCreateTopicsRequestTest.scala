@@ -29,7 +29,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
-import scala.collection.JavaConverters
 import scala.collection.JavaConverters._
 
 class AbstractCreateTopicsRequestTest extends BaseRequestTest {

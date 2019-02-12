@@ -172,7 +172,6 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    val topic = "testTopic"
     topicService.createTopic(new TopicCommandOptions(
       Array("--partitions", "1", "--replication-factor", "1", "--topic", testTopicName)))
 
