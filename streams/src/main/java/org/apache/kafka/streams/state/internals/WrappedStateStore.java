@@ -35,50 +35,50 @@ public abstract class WrappedStateStore<S extends StateStore> implements StateSt
         }
     }
 
-    private final S innerState;
+    private final S wrapped;
 
-    public WrappedStateStore(final S innerState) {
-        this.innerState = innerState;
+    public WrappedStateStore(final S wrapped) {
+        this.wrapped = wrapped;
     }
 
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        innerState.init(context, root);
+        wrapped.init(context, root);
     }
 
     @Override
     public String name() {
-        return innerState.name();
+        return wrapped.name();
     }
 
     @Override
     public boolean persistent() {
-        return innerState.persistent();
+        return wrapped.persistent();
     }
 
     @Override
     public boolean isOpen() {
-        return innerState.isOpen();
+        return wrapped.isOpen();
     }
 
     void validateStoreOpen() {
-        if (!innerState.isOpen()) {
-            throw new InvalidStateStoreException("Store " + innerState.name() + " is currently closed.");
+        if (!wrapped.isOpen()) {
+            throw new InvalidStateStoreException("Store " + wrapped.name() + " is currently closed.");
         }
     }
 
     @Override
     public void flush() {
-        innerState.flush();
+        wrapped.flush();
     }
 
     @Override
     public void close() {
-        innerState.close();
+        wrapped.close();
     }
 
     public S wrappedStore() {
-        return innerState;
+        return wrapped;
     }
 }
