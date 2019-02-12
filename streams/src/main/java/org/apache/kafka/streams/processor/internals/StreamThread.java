@@ -267,7 +267,7 @@ public class StreamThread extends Thread {
                 taskManager.suspendedStandbyTaskIds());
 
             if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-                log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
+                log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
                 streamThread.shutdown();
                 streamThread.setStateListener(null);
                 return;
