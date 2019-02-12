@@ -181,6 +181,8 @@ class Log(@volatile var dir: File,
   /* last time it was flushed */
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
+  def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
