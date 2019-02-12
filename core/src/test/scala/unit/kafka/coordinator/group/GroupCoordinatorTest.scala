@@ -40,6 +40,7 @@ import org.junit.{After, Assert, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
 
@@ -58,6 +59,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   val ClientHost = "localhost"
   val GroupMinSessionTimeout = 10
   val GroupMaxSessionTimeout = 10 * 60 * 1000
+  val GroupMaxSize = 3
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
   val GroupInitialRebalanceDelay = 50
@@ -82,6 +84,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
     props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
+    props.setProperty(KafkaConfig.GroupMaxSizeProp, GroupMaxSize.toString)
     props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
@@ -188,6 +191,28 @@ class GroupCoordinatorTest extends JUnitSuite {
     val joinGroupResult = joinGroup(otherGroupId, memberId, protocolType, protocols)
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NOT_COORDINATOR, joinGroupError)
+  }
+
+  @Test
+  def testJoinGroupShouldReceiveErrorIfGroupOverMaxSize() {
+    var futures = ArrayBuffer[Future[JoinGroupResult]]()
+    val rebalanceTimeout = GroupInitialRebalanceDelay * 2
+
+    for (i <- 1.to(GroupMaxSize)) {
+      futures += sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+      if (i != 1)
+        timer.advanceClock(GroupInitialRebalanceDelay)
+      EasyMock.reset(replicaManager)
+    }
+    // advance clock beyond rebalanceTimeout
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    for (future <- futures) {
+      assertEquals(Errors.NONE, await(future, 1).error)
+    }
+
+    // Should receive an error since the group is full
+    val errorFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+    assertEquals(Errors.GROUP_MAX_SIZE_REACHED, await(errorFuture, 1).error)
   }
 
   @Test

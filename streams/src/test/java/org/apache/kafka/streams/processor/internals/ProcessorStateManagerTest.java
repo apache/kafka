@@ -53,9 +53,7 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Collections.singletonList;
-import static org.hamcrest.CoreMatchers.endsWith;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.startsWith;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertEquals;
@@ -619,14 +617,18 @@ public class ProcessorStateManagerTest {
         stateMgr.checkpoint(Collections.singletonMap(persistentStorePartition, 10L));
         LogCaptureAppender.unregister(appender);
 
-        final List<LogCaptureAppender.Event> messages = appender.getEvents();
+        boolean foundExpectedLogMessage = false;
+        for (final LogCaptureAppender.Event event : appender.getEvents()) {
+            if ("WARN".equals(event.getLevel())
+                && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
+                && event.getMessage().endsWith(".checkpoint]")
+                && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
 
-        final LogCaptureAppender.Event lastEvent = messages.get(messages.size() - 1);
-
-        assertThat(lastEvent.getLevel(), is("WARN"));
-        assertThat(lastEvent.getMessage(), startsWith("process-state-manager-test Failed to write offset checkpoint file to ["));
-        assertThat(lastEvent.getMessage(), endsWith(".checkpoint]"));
-        assertThat(lastEvent.getThrowableInfo().get(), startsWith("java.io.FileNotFoundException: "));
+                foundExpectedLogMessage = true;
+                break;
+            }
+        }
+        assertTrue(foundExpectedLogMessage);
     }
 
     @Test
