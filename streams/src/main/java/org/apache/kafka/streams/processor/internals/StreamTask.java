@@ -567,9 +567,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
-                    // In #commit, we don't do checkpoint file writing when eos is turned on. To avoid race condition when writing checkpoint file
-                    // through StateManager #closeSuspendedwe, we decide to always checkpoint offsets after commit for EOS.
-                    // The check here is to avoid double checkpoint file write through #commit and #suspend.
+                    // In #commit(), we don't write a checkpoint file when EOS is turned on.
+                    // To avoid a race condition between writing and reading a checkpoint file,
+                    // iff a task is migrated from one thread to another within the same instance,
+                    // we need to always checkpoint offsets in #suspend() if EOS is enabled
+                    // (instead of StateManager#closeSuspended()).
+                    // Cf. https://issues.apache.org/jira/browse/KAFKA-7672
                     stateMgr.checkpoint(activeTaskCheckpointableOffsets());
                     try {
                         recordCollector.close();
