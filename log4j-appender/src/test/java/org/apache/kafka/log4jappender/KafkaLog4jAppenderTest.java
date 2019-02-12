@@ -19,6 +19,7 @@ package org.apache.kafka.log4jappender;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -89,9 +90,9 @@ public class KafkaLog4jAppenderTest {
         PropertyConfigurator.configure(props);
 
         MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
-        Assert.assertThat(
-            mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_MECHANISM),
-            equalTo("PLAIN"));
+        assertThat(
+                mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_MECHANISM),
+                equalTo("PLAIN"));
     }
 
     @Test
@@ -106,9 +107,9 @@ public class KafkaLog4jAppenderTest {
         PropertyConfigurator.configure(props);
 
         MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
-        Assert.assertThat(
-            mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_JAAS_CONFIG),
-            equalTo("jaas-config"));
+        assertThat(
+                mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_JAAS_CONFIG),
+                equalTo("jaas-config"));
     }
 
     @Test
@@ -119,7 +120,7 @@ public class KafkaLog4jAppenderTest {
     private void testProducerPropertyNotSet(String name) {
         PropertyConfigurator.configure(getLog4jConfig(false));
         MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
-        Assert.assertThat(mockKafkaLog4jAppender.getProducerProperties().stringPropertyNames(), not(hasItem(name)));
+        assertThat(mockKafkaLog4jAppender.getProducerProperties().stringPropertyNames(), not(hasItem(name)));
     }
 
     @Test
