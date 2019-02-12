@@ -117,12 +117,8 @@ public class KeyValueStoreMaterializerTest {
         final KeyValueStoreMaterializer<String, Integer> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, Integer>> builder = materializer.materialize();
         final KeyValueStore<String, Integer> built = builder.build();
-        StateStore innerMost = built;
-        while (innerMost instanceof WrappedStateStore) {
-            innerMost = ((WrappedStateStore) built).wrappedStore();
-        }
 
-        assertThat(innerMost, CoreMatchers.equalTo(store));
+        assertThat(store.name(), CoreMatchers.equalTo(built.name()));
     }
 
 }
