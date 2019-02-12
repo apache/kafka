@@ -38,7 +38,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -186,13 +185,14 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertEquals("a", cacheFlushListener.forwarded.get("1").newValue);
         assertNull(cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), bytesValue("b"));
+        store.put(bytesKey("1"), bytesValue("c"));
         store.flush();
-        assertEquals("b", cacheFlushListener.forwarded.get("1").newValue);
+        assertEquals("c", cacheFlushListener.forwarded.get("1").newValue);
         assertEquals("a", cacheFlushListener.forwarded.get("1").oldValue);
         store.put(bytesKey("1"), null);
         store.flush();
         assertNull(cacheFlushListener.forwarded.get("1").newValue);
-        assertEquals("b", cacheFlushListener.forwarded.get("1").oldValue);
+        assertEquals("c", cacheFlushListener.forwarded.get("1").oldValue);
         cacheFlushListener.forwarded.clear();
         store.put(bytesKey("1"), bytesValue("a"));
         store.put(bytesKey("1"), bytesValue("b"));

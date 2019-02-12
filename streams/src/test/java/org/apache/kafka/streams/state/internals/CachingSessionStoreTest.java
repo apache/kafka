@@ -177,7 +177,6 @@ public class CachingSessionStoreTest {
         final Windowed<Bytes> b = new Windowed<>(keyB, new SessionWindow(0, 0));
         cachingStore.put(a, "2".getBytes());
         cachingStore.put(b, "2".getBytes());
-        cachingStore.flush();
         cachingStore.remove(a);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
@@ -218,7 +217,6 @@ public class CachingSessionStoreTest {
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
         cachingStore.put(aa3, "3".getBytes());
-        cachingStore.flush();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
             cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);

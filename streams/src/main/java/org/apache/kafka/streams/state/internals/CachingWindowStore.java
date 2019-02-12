@@ -97,7 +97,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         final Bytes key = windowedKeyBytes.key();
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = underlying.fetch(key, windowStartTimestamp);
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.fetch(key, windowStartTimestamp) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store

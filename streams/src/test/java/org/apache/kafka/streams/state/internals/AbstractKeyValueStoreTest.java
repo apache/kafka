@@ -152,6 +152,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertNull(store.get(3));
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
+        // Flush now so that for caching store, we will not skip the deletion following an put
         store.flush();
         store.delete(5);
         assertEquals(4, driver.sizeOf(store));

@@ -87,7 +87,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
                                     final InternalProcessorContext context) {
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = underlying.get(entry.key());
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.get(entry.key()) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store

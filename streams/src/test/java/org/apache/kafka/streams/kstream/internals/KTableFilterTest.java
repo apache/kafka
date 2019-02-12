@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyTestDriverWrapper;
@@ -30,13 +30,13 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
@@ -51,6 +51,12 @@ public class KTableFilterTest {
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
     private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
+
+    @Before
+    public void setUp() {
+        // disable caching at the config level
+        props.setProperty(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, "0");
+    }
 
     private final Predicate<String, Integer> predicate = (key, value) -> (value % 2) == 0;
 
@@ -78,32 +84,34 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testKTable() {
+    public void shouldPassThroughWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
 
         final KTable<String, Integer> table1 = builder.table(topic1, consumed);
-
         final KTable<String, Integer> table2 = table1.filter(predicate);
         final KTable<String, Integer> table3 = table1.filterNot(predicate);
+
+        assertNull(table1.queryableStoreName());
+        assertNull(table2.queryableStoreName());
+        assertNull(table3.queryableStoreName());
 
         doTestKTable(builder, table2, table3, topic1);
     }
 
     @Test
-    public void testQueryableKTable() {
+    public void shouldPassThroughOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
 
         final KTable<String, Integer> table1 = builder.table(topic1, consumed);
-
-        final KTable<String, Integer> table2 = table1.filter(predicate,
-            Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter").withCachingDisabled());
+        final KTable<String, Integer> table2 = table1.filter(predicate, Materialized.as("store2"));
         final KTable<String, Integer> table3 = table1.filterNot(predicate);
 
-        assertEquals("anyStoreNameFilter", table2.queryableStoreName());
+        assertNull(table1.queryableStoreName());
+        assertEquals("store2", table2.queryableStoreName());
         assertNull(table3.queryableStoreName());
 
         doTestKTable(builder, table2, table3, topic1);
@@ -178,7 +186,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableValueGetter() {
+    public void shouldGetValuesOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -192,6 +200,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table4 =
             (KTableImpl<String, Integer, Integer>) table1.filterNot(predicate);
 
+        assertNull(table1.queryableStoreName());
         assertEquals("store2", table2.queryableStoreName());
         assertEquals("store3", table3.queryableStoreName());
         assertNull(table4.queryableStoreName());
@@ -240,7 +249,7 @@ public class KTableFilterTest {
 
 
     @Test
-    public void testNotSendingOldValue() {
+    public void shouldNotSendOldValuesWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -253,7 +262,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableNotSendingOldValue() {
+    public void shouldNotSendOldValuesOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -261,8 +270,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate,
-                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyStoreNameFilter").withCachingDisabled());
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
@@ -310,7 +318,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSendingOldValue() {
+    public void shouldSendOldValuesWhenEnabledWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -324,7 +332,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSendingOldValue() {
+    public void shouldSendOldValuesWhenEnabledOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final String topic1 = "topic1";
@@ -332,7 +340,7 @@ public class KTableFilterTest {
         final KTableImpl<String, Integer, Integer> table1 =
             (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
         final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("anyStoreNameFilter"));
+            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -361,7 +369,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testSkipNullOnMaterialization() {
+    public void shouldSkipNullToRepartitionWithoutMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -379,7 +387,7 @@ public class KTableFilterTest {
     }
 
     @Test
-    public void testQueryableSkipNullOnMaterialization() {
+    public void shouldSkipNullToRepartitionOnMaterialization() {
         // Do not explicitly set enableSendingOldValues. Let a further downstream stateful operator trigger it instead.
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -389,7 +397,7 @@ public class KTableFilterTest {
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"), Materialized.as("anyStoreNameFilter"))
+            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"), Materialized.as("store2"))
                 .groupBy(MockMapper.noOpKeyValueMapper())
                 .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.as("mock-result"));
 
