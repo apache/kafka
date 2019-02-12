@@ -145,16 +145,6 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
     }
 
     @Override
-    public boolean persistent() {
-        return super.persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return super.isOpen();
-    }
-
-    @Override
     public byte[] get(final Bytes key) {
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
