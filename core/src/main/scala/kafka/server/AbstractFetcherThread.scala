@@ -127,13 +127,13 @@ abstract class AbstractFetcherThread(name: String,
     val (partitionsWithEpochs, partitionsWithoutEpochs) = inLock(partitionMapLock) { buildLeaderEpochRequest(states) }
     val epochEndOffsets = mutable.Map[TopicPartition, EpochEndOffset]()
 
-    for (tp <- partitionsWithoutEpochs) {
+    // If the latest epoch is not available, then we are likely on an older format and should
+    // use the high watermark for truncation
+    for (tp <- partitionsWithoutEpochs)
       epochEndOffsets.put(tp, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET))
-    }
 
-    if (partitionsWithEpochs.nonEmpty) {
+    if (partitionsWithEpochs.nonEmpty)
       epochEndOffsets ++= fetchEpochsFromLeader(partitionsWithEpochs)
-    }
 
     if (epochEndOffsets.nonEmpty) {
       //Ensure we hold a lock during truncation.
