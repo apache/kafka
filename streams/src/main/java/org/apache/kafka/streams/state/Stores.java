@@ -152,51 +152,32 @@ public class Stores {
      *                              windowed data's entire life cycle, from window-start through window-end,
      *                              and for the entire grace period.
      * @param windowSize            size of the windows (cannot be negative)
-     * @param gracePeriod           length of time over which late-arriving data can still be inserted/modified
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
     public static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
                                                                final Duration retentionPeriod,
-                                                               final Duration windowSize,
-                                                               final Duration gracePeriod) throws IllegalArgumentException {
+                                                               final Duration windowSize) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
         final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
         final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
-        final String gpMsgPrefix = prepareMillisCheckFailMsgPrefix(gracePeriod, "gracePeriod");
-        final long gracePeriodMs = ApiUtils.validateMillisecondDuration(gracePeriod, gpMsgPrefix);
 
-        return inMemoryWindowStore(name, retentionMs, windowSizeMs, gracePeriodMs);
-    }
-
-    private static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
-                                                                final long retentionPeriod,
-                                                                final long windowSize,
-                                                                final long gracePeriod) {
         Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0L) {
+        if (retentionMs < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        if (windowSize < 0L) {
+        if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
-        if (gracePeriod < 0L) {
-            throw new IllegalArgumentException("gracePeriod cannot be negative");
-        }
-        if (windowSize > retentionPeriod) {
+        if (windowSizeMs > retentionMs) {
             throw new IllegalArgumentException("The retention period of the window store "
                 + name + " must be no smaller than its window size. Got size=["
                 + windowSize + "], retention=[" + retentionPeriod + "]");
         }
-        if (gracePeriod > retentionPeriod) {
-            throw new IllegalArgumentException("The grace period of the window store "
-                + name + " must not exceed its retention period. Got grace period=["
-                + gracePeriod + "], retention=[" + retentionPeriod + "]");
-        }
 
-        return new InMemoryWindowBytesStoreSupplier(name, retentionPeriod, windowSize, gracePeriod);
+        return new InMemoryWindowBytesStoreSupplier(name, retentionMs, windowSizeMs);
     }
 
     /**

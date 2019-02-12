@@ -25,18 +25,13 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     private final String name;
     private final long retentionPeriod;
     private final long windowSize;
-    private final long gracePeriod;
-    private final long segmentInterval;
 
     public InMemoryWindowBytesStoreSupplier(final String name,
                                             final long retentionPeriod,
-                                            final long windowSize,
-                                            final long gracePeriod) {
+                                            final long windowSize) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
-        this.gracePeriod = gracePeriod;
-        this.segmentInterval = 1;
     }
 
     @Override
@@ -51,7 +46,6 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
                                          Serdes.ByteArray(),
                                          retentionPeriod,
                                          windowSize,
-                                         gracePeriod,
                                          metricsScope());
     }
 
@@ -63,7 +57,7 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     @Deprecated
     @Override
     public int segments() {
-        return (int) (retentionPeriod / segmentInterval);
+        return (int) retentionPeriod;
     }
 
     @Override
@@ -77,13 +71,10 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
         return windowSize;
     }
 
-    public long gracePeriod() {
-        return gracePeriod;
-    }
-
+    // In-memory window store is not *really* segmented, so just say size is 1 ms
     @Override
     public long segmentIntervalMs() {
-        return segmentInterval;
+        return 1;
     }
 
     @Override

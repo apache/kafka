@@ -67,7 +67,6 @@ public class InMemoryWindowStoreTest {
     private final String storeName = "InMemoryWindowStore";
     private final long retentionPeriod = 40L * 1000L;
     private final long windowSize = 10L;
-    private final long gracePeriod = retentionPeriod / 2;
 
     private final StateSerdes<Integer, String> serdes = new StateSerdes<>("", Serdes.Integer(), Serdes.String());
 
@@ -106,8 +105,7 @@ public class InMemoryWindowStoreTest {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(Stores.inMemoryWindowStore(
                                                                              storeName,
                                                                              ofMillis(retentionPeriod),
-                                                                             ofMillis(windowSize),
-                                                                             ofMillis(gracePeriod)),
+                                                                             ofMillis(windowSize)),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -275,28 +273,6 @@ public class InMemoryWindowStoreTest {
         assertEquals(windowedPair(2, "two", windowSize * 10), iterator.next());
         assertEquals(windowedPair(3, "three", windowSize * 20), iterator.next());
         assertEquals(windowedPair(4, "four", windowSize * 30), iterator.next());
-        assertFalse(iterator.hasNext());
-    }
-
-    @Test
-    public void testGracePeriod() {
-        windowStore = createInMemoryWindowStore(context);
-
-        long currentTime = 0L;
-        setCurrentTime(currentTime);
-        windowStore.put(1, "one");
-
-        currentTime += gracePeriod / 2;
-        setCurrentTime(currentTime);
-        windowStore.put(2, "two", 0L);
-
-        currentTime += gracePeriod / 2;
-        setCurrentTime(currentTime);
-        windowStore.put(3, "three", 0L);
-
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(1, 2, 0L, currentTime);
-        assertEquals(windowedPair(1, "one", 0), iterator.next());
-        assertEquals(windowedPair(2, "two", 0), iterator.next());
         assertFalse(iterator.hasNext());
     }
 

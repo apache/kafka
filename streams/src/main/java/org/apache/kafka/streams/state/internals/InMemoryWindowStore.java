@@ -48,7 +48,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKey;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
 
-public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
+public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowStore<K, V> {
 
     private static final Logger LOG = LoggerFactory.getLogger(InMemoryWindowStore.class);
 
@@ -62,25 +62,22 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
 
     private final long retentionPeriod;
     private final long windowSize;
-    private final long gracePeriod;
 
     private final NavigableMap<Long, NavigableMap<K, V>> segmentMap;
 
     private volatile boolean open = false;
 
-    public InMemoryWindowStore(final String name,
-        final Serde<K> keySerde,
-        final Serde<V> valueSerde,
-        final long retentionPeriod,
-        final long windowSize,
-        final long gracePeriod,
-        final String metricScope) {
+    InMemoryWindowStore(final String name,
+                               final Serde<K> keySerde,
+                               final Serde<V> valueSerde,
+                               final long retentionPeriod,
+                               final long windowSize,
+                               final String metricScope) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
-        this.gracePeriod = gracePeriod;
         this.metricScope = metricScope;
 
         this.segmentMap = new TreeMap<>();
@@ -133,7 +130,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
     @Override
     public void put(final K key, final V value, final long windowStartTimestamp) {
         removeExpiredSegments();
-        if (windowStartTimestamp <= this.context.streamTime() - this.gracePeriod) {
+        if (windowStartTimestamp <= this.context.streamTime() - this.retentionPeriod) {
             expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
         } else {
@@ -163,7 +160,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         removeExpiredSegments();
@@ -181,7 +178,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         return new InMemoryWindowStoreIterator<>(returnSet.listIterator());
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
         removeExpiredSegments();
@@ -198,7 +195,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         return new InMemoryWindowedKeyValueIterator<>(returnSet.listIterator());
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
         removeExpiredSegments();
@@ -264,7 +261,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         return new KeyValue<>(windowedK, value);
     }
 
-    private class InMemoryWindowStoreIterator<V> implements WindowStoreIterator<V> {
+    private static class InMemoryWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
         private ListIterator<KeyValue<Long, V>> iterator;
 
@@ -299,7 +296,7 @@ public class InMemoryWindowStore<K, V> implements WindowStore<K, V> {
         }
     }
 
-    private class InMemoryWindowedKeyValueIterator<K, V> implements
+    private static class InMemoryWindowedKeyValueIterator<K, V> implements
         KeyValueIterator<Windowed<K>, V> {
 
         ListIterator<KeyValue<Windowed<K>, V>> iterator;
