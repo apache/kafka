@@ -239,7 +239,8 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store1) {},
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store1) {
+            },
             stateRestoreCallback
         );
 
@@ -266,7 +267,8 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store2) {},
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store2) {
+            },
             stateRestoreCallback
         );
 
@@ -326,7 +328,7 @@ public class GlobalStateManagerImplTest {
         offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
 
         stateManager.initialize();
-        stateManager.register(store1,  stateRestoreCallback);
+        stateManager.register(store1, stateRestoreCallback);
         assertEquals(5, stateRestoreCallback.restored.size());
     }
 
@@ -653,15 +655,15 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldDeleteAndRecreateStoreDirectoryOnReinitialize() throws IOException {
         final File storeDirectory1 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-            + File.separator + "rocksdb"
-            + File.separator + storeName1);
+                                                  + File.separator + "rocksdb"
+                                                  + File.separator + storeName1);
         final File storeDirectory2 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-            + File.separator + "rocksdb"
-            + File.separator + storeName2);
+                                                  + File.separator + "rocksdb"
+                                                  + File.separator + storeName2);
         final File storeDirectory3 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-            + File.separator + storeName3);
+                                                  + File.separator + storeName3);
         final File storeDirectory4 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-            + File.separator + storeName4);
+                                                  + File.separator + storeName4);
         final File testFile1 = new File(storeDirectory1.getAbsolutePath() + File.separator + "testFile");
         final File testFile2 = new File(storeDirectory2.getAbsolutePath() + File.separator + "testFile");
         final File testFile3 = new File(storeDirectory3.getAbsolutePath() + File.separator + "testFile");

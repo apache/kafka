@@ -18,8 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 
-import java.nio.ByteBuffer;
-
 public interface RecordConverter {
     ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
 }
