@@ -85,27 +85,33 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore im
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
                                     final InternalProcessorContext context) {
-        final ProcessorRecordContext current = context.recordContext();
-        try {
-            context.setRecordContext(entry.entry().context());
-            if (flushListener != null) {
-                V oldValue = null;
-                if (sendOldValues) {
-                    final byte[] oldBytesValue = underlying.get(entry.key());
-                    oldValue = oldBytesValue == null ? null : serdes.valueFrom(oldBytesValue);
+        if (flushListener != null) {
+            final byte[] newValueBytes = entry.newValue();
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.get(entry.key()) : null;
+
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (newValueBytes != null || oldValueBytes != null) {
+                final K key = serdes.keyFrom(entry.key().get());
+                final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
+                final V oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
+                // we need to get the old values if needed, and then put to store, and then flush
+                underlying.put(entry.key(), entry.newValue());
+
+                final ProcessorRecordContext current = context.recordContext();
+                context.setRecordContext(entry.entry().context());
+                try {
+                    flushListener.apply(
+                        key,
+                        newValue,
+                        oldValue,
+                        entry.entry().context().timestamp());
+                } finally {
+                    context.setRecordContext(current);
                 }
-                // we rely on underlying store to handle null new value bytes as deletes
-                underlying.put(entry.key(), entry.newValue());
-                flushListener.apply(
-                    serdes.keyFrom(entry.key().get()),
-                    serdes.valueFrom(entry.newValue()),
-                    oldValue,
-                    entry.entry().context().timestamp());
-            } else {
-                underlying.put(entry.key(), entry.newValue());
             }
-        } finally {
-            context.setRecordContext(current);
+        } else {
+            underlying.put(entry.key(), entry.newValue());
         }
     }
 

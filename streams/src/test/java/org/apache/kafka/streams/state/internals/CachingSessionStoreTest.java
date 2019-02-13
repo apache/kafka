@@ -44,12 +44,15 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
+import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class CachingSessionStoreTest {
@@ -57,17 +60,17 @@ public class CachingSessionStoreTest {
     private static final int MAX_CACHE_SIZE_BYTES = 600;
     private static final Long DEFAULT_TIMESTAMP = 10L;
     private static final long SEGMENT_INTERVAL = 100L;
-    private RocksDBSegmentedBytesStore underlying;
-    private CachingSessionStore<String, String> cachingStore;
-    private ThreadCache cache;
     private final Bytes keyA = Bytes.wrap("a".getBytes());
     private final Bytes keyAA = Bytes.wrap("aa".getBytes());
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
+    private CachingSessionStore<String, String> cachingStore;
+    private ThreadCache cache;
+
     @Before
     public void setUp() {
         final SessionKeySchema schema = new SessionKeySchema();
-        underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
+        final RocksDBSegmentedBytesStore underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
         final RocksDBSessionStore<Bytes, byte[]> sessionStore = new RocksDBSessionStore<>(underlying, Serdes.Bytes(), Serdes.ByteArray());
         cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
@@ -174,12 +177,15 @@ public class CachingSessionStoreTest {
         final Windowed<Bytes> b = new Windowed<>(keyB, new SessionWindow(0, 0));
         cachingStore.put(a, "2".getBytes());
         cachingStore.put(b, "2".getBytes());
-        cachingStore.flush();
         cachingStore.remove(a);
-        cachingStore.flush();
+
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeIter =
             cachingStore.findSessions(keyA, 0, 0);
         assertFalse(rangeIter.hasNext());
+
+        assertNull(cachingStore.fetchSession(keyA, 0, 0));
+        assertThat(cachingStore.fetchSession(keyB, 0, 0), equalTo("2".getBytes()));
+
     }
 
     @Test
@@ -211,7 +217,6 @@ public class CachingSessionStoreTest {
         cachingStore.put(a2, "2".getBytes());
         cachingStore.put(a3, "3".getBytes());
         cachingStore.put(aa3, "3".getBytes());
-        cachingStore.flush();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> rangeResults =
             cachingStore.findSessions(keyA, keyAA, 0, SEGMENT_INTERVAL * 2);
@@ -270,35 +275,17 @@ public class CachingSessionStoreTest {
             flushed
         );
         flushed.clear();
-    }
-
-    @Test
-    public void shouldForwardChangedValuesDuringFlushWhenSendOldValuesDisabledNewRecordIsNull() {
-        final Windowed<Bytes> a = new Windowed<>(keyA, new SessionWindow(0, 0));
-        final Windowed<String> aDeserialized = new Windowed<>("a", new SessionWindow(0, 0));
-        final List<KeyValue<Windowed<String>, Change<String>>> flushed = new ArrayList<>();
-        cachingStore.setFlushListener(
-            (key, newValue, oldValue, timestamp) -> flushed.add(KeyValue.pair(key, new Change<>(newValue, oldValue))),
-            false
-        );
 
         cachingStore.put(a, "1".getBytes());
-        cachingStore.flush();
-
         cachingStore.put(a, "2".getBytes());
-        cachingStore.flush();
-
         cachingStore.remove(a);
         cachingStore.flush();
 
         assertEquals(
-            flushed,
-            Arrays.asList(
-                KeyValue.pair(aDeserialized, new Change<>("1", null)),
-                KeyValue.pair(aDeserialized, new Change<>("2", null)),
-                KeyValue.pair(aDeserialized, new Change<>(null, "2"))
-            )
+            Collections.emptyList(),
+            flushed
         );
+        flushed.clear();
     }
 
     @Test
@@ -317,13 +304,29 @@ public class CachingSessionStoreTest {
         cachingStore.put(a, "2".getBytes());
         cachingStore.flush();
 
+        cachingStore.remove(a);
+        cachingStore.flush();
+
         assertEquals(
-            flushed,
             Arrays.asList(
                 KeyValue.pair(aDeserialized, new Change<>("1", null)),
-                KeyValue.pair(aDeserialized, new Change<>("2", null))
-            )
+                KeyValue.pair(aDeserialized, new Change<>("2", null)),
+                KeyValue.pair(aDeserialized, new Change<>(null, null))
+            ),
+            flushed
         );
+        flushed.clear();
+
+        cachingStore.put(a, "1".getBytes());
+        cachingStore.put(a, "2".getBytes());
+        cachingStore.remove(a);
+        cachingStore.flush();
+
+        assertEquals(
+            Collections.emptyList(),
+            flushed
+        );
+        flushed.clear();
     }
 
     @Test

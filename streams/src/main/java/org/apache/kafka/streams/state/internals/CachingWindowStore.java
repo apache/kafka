@@ -64,13 +64,13 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        initInternal(context);
+        initInternal((InternalProcessorContext) context);
         underlying.init(context, root);
     }
 
     @SuppressWarnings("unchecked")
-    private void initInternal(final ProcessorContext context) {
-        this.context = (InternalProcessorContext) context;
+    private void initInternal(final InternalProcessorContext context) {
+        this.context = context;
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), underlying.name());
         serdes = new StateSerdes<>(topic,
                                    keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
@@ -84,34 +84,44 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
 
         cache.addDirtyEntryFlushListener(name, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
-                final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
-                final long timestamp = WindowKeySchema.extractStoreTimestamp(binaryWindowKey);
-
-                final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(binaryWindowKey, windowSize, serdes.keyDeserializer(), serdes.topic());
-                final Bytes key = Bytes.wrap(WindowKeySchema.extractStoreKeyBytes(binaryWindowKey));
-                maybeForward(entry, key, windowedKey, (InternalProcessorContext) context);
-                underlying.put(key, entry.newValue(), timestamp);
+                putAndMaybeForward(entry, context);
             }
         });
     }
 
-    private void maybeForward(final ThreadCache.DirtyEntry entry,
-                              final Bytes key,
-                              final Windowed<K> windowedKey,
-                              final InternalProcessorContext context) {
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
+                                    final InternalProcessorContext context) {
+        final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
+        final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
+        final long windowStartTimestamp = windowedKeyBytes.window().start();
+        final Bytes key = windowedKeyBytes.key();
         if (flushListener != null) {
-            final ProcessorRecordContext current = context.recordContext();
-            context.setRecordContext(entry.entry().context());
-            try {
-                final V oldValue = sendOldValues ? fetchPrevious(key, windowedKey.window().start()) : null;
-                flushListener.apply(
-                    windowedKey,
-                    serdes.valueFrom(entry.newValue()),
-                    oldValue,
-                    entry.entry().context().timestamp());
-            } finally {
-                context.setRecordContext(current);
+            final byte[] newValueBytes = entry.newValue();
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? underlying.fetch(key, windowStartTimestamp) : null;
+
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (newValueBytes != null || oldValueBytes != null) {
+                final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(windowedKeyBytes, serdes.keyDeserializer(), serdes.topic());
+                final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
+                final V oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
+                // we need to get the old values if needed, and then put to store, and then flush
+                underlying.put(key, entry.newValue(), windowStartTimestamp);
+
+                final ProcessorRecordContext current = context.recordContext();
+                context.setRecordContext(entry.entry().context());
+                try {
+                    flushListener.apply(
+                        windowedKey,
+                        newValue,
+                        oldValue,
+                        entry.entry().context().timestamp());
+                } finally {
+                    context.setRecordContext(current);
+                }
             }
+        } else {
+            underlying.put(key, entry.newValue(), windowStartTimestamp);
         }
     }
 
@@ -231,14 +241,6 @@ class CachingWindowStore<K, V> extends WrappedStateStore.AbstractStateStore impl
         );
     }
 
-    private V fetchPrevious(final Bytes key, final long timestamp) {
-        final byte[] value = underlying.fetch(key, timestamp);
-        if (value != null) {
-            return serdes.valueFrom(value);
-        }
-        return null;
-    }
-    
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         validateStoreOpen();
