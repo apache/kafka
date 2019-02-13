@@ -53,9 +53,7 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -71,9 +69,10 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -90,9 +89,6 @@ public class KStreamImplTest {
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private Serde<String> mySerde = new Serdes.StringSerde();
-
-    @Rule
-    public final ExpectedException exception = ExpectedException.none();
 
     @Before
     public void before() {
@@ -547,16 +543,14 @@ public class KStreamImplTest {
 
     @Test
     public void shouldNotAllowNullTransformSupplierOnTransform() {
-        exception.expect(NullPointerException.class);
-        exception.expectMessage("transformerSupplier can't be null");
-        testStream.transform(null);
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.transform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
     @Test
     public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
-        exception.expect(NullPointerException.class);
-        exception.expectMessage("transformerSupplier can't be null");
-        testStream.flatTransform(null);
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.flatTransform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
     @Test(expected = NullPointerException.class)
