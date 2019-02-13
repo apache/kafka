@@ -34,7 +34,6 @@ import java.util.Properties;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-import static org.apache.kafka.streams.kstream.Grouped.as;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
@@ -86,8 +85,8 @@ public class RepartitionTopicNamingTest {
     public void shouldFailWithSameRepartitionTopicName() {
         try {
             final StreamsBuilder builder = new StreamsBuilder();
-            builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(as("grouping")).count().toStream();
-            builder.<String, String>stream("topicII").selectKey((k, v) -> k).groupByKey(as("grouping")).count().toStream();
+            builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping")).count().toStream();
+            builder.<String, String>stream("topicII").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping")).count().toStream();
             builder.build();
             fail("Should not build re-using repartition topic name");
         } catch (final TopologyException te) {
@@ -98,7 +97,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(as("grouping"));
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count().toStream().to("output-one");
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count().toStream().to("output-two");
         final String topologyString = builder.build().describe().toString();
@@ -141,7 +140,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStreamOptimizationsOn() {
         final StreamsBuilder builder = new StreamsBuilder();
-        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(as("grouping"));
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
         final Properties properties = new Properties();
@@ -175,7 +174,7 @@ public class RepartitionTopicNamingTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Properties properties = new Properties();
         properties.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE);
-        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(as("grouping"));
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
         kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
         builder.build(properties);
@@ -293,9 +292,9 @@ public class RepartitionTopicNamingTest {
         final KTable<String, String> ktable = builder.table("topic");
 
         if (otherOperations) {
-            ktable.filter((k, v) -> true).groupBy(KeyValue::pair, as(ktableGroupByTopicName)).count();
+            ktable.filter((k, v) -> true).groupBy(KeyValue::pair, Grouped.as(ktableGroupByTopicName)).count();
         } else {
-            ktable.groupBy(KeyValue::pair, as(ktableGroupByTopicName)).count();
+            ktable.groupBy(KeyValue::pair, Grouped.as(ktableGroupByTopicName)).count();
         }
 
         return builder.build().describe().toString();
@@ -311,15 +310,15 @@ public class RepartitionTopicNamingTest {
 
         if (isGroupByKey) {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupByKey(as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
+                selectKeyStream.groupByKey(Grouped.as(groupedTimeWindowRepartitionTopicName)).windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
             }
         } else {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, as(groupedTimeWindowRepartitionTopicName)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, Grouped.as(groupedTimeWindowRepartitionTopicName)).count();
             } else {
-                selectKeyStream.groupBy(kvMapper, as(groupedTimeWindowRepartitionTopicName)).count();
+                selectKeyStream.groupBy(kvMapper, Grouped.as(groupedTimeWindowRepartitionTopicName)).count();
             }
         }
 
@@ -336,15 +335,15 @@ public class RepartitionTopicNamingTest {
         final String groupedSessionWindowRepartitionTopicName = "session-window-grouping";
         if (isGroupByKey) {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupByKey(as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
+                selectKeyStream.groupByKey(Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             }
         } else {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             } else {
-                selectKeyStream.groupBy(kvMapper, as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
+                selectKeyStream.groupBy(kvMapper, Grouped.as(groupedSessionWindowRepartitionTopicName)).windowedBy(SessionWindows.with(Duration.ofMillis(10L))).count();
             }
         }
 
@@ -361,15 +360,15 @@ public class RepartitionTopicNamingTest {
         final String groupByAndCountRepartitionTopicName = "kstream-grouping";
         if (isGroupByKey) {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(as(groupByAndCountRepartitionTopicName)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupByKey(Grouped.as(groupByAndCountRepartitionTopicName)).count();
             } else {
-                selectKeyStream.groupByKey(as(groupByAndCountRepartitionTopicName)).count();
+                selectKeyStream.groupByKey(Grouped.as(groupByAndCountRepartitionTopicName)).count();
             }
         } else {
             if (otherOperations) {
-                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, as(groupByAndCountRepartitionTopicName)).count();
+                selectKeyStream.filter((k, v) -> true).mapValues(v -> v).groupBy(kvMapper, Grouped.as(groupByAndCountRepartitionTopicName)).count();
             } else {
-                selectKeyStream.groupBy(kvMapper, as(groupByAndCountRepartitionTopicName)).count();
+                selectKeyStream.groupBy(kvMapper, Grouped.as(groupByAndCountRepartitionTopicName)).count();
             }
         }
 
@@ -426,17 +425,17 @@ public class RepartitionTopicNamingTest {
         mappedStream.filter((k, v) -> k.equals("B")).mapValues(v -> v.toUpperCase(Locale.getDefault()))
                 .process(() -> new SimpleProcessor(processorValueCollector));
 
-        final KStream<String, Long> countStream = mappedStream.groupByKey(as(firstRepartitionTopicName)).count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
+        final KStream<String, Long> countStream = mappedStream.groupByKey(Grouped.as(firstRepartitionTopicName)).count(Materialized.with(Serdes.String(), Serdes.Long())).toStream();
 
         countStream.to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
-        mappedStream.groupByKey(as(secondRepartitionTopicName)).aggregate(initializer,
+        mappedStream.groupByKey(Grouped.as(secondRepartitionTopicName)).aggregate(initializer,
                 aggregator,
                 Materialized.with(Serdes.String(), Serdes.Integer()))
                 .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
         // adding operators for case where the repartition node is further downstream
-        mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey(as(thirdRepartitionTopicName))
+        mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey(Grouped.as(thirdRepartitionTopicName))
                 .reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
                 .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
 
