@@ -20,7 +20,7 @@ import java.util.Optional
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import com.yammer.metrics.core.Gauge
-import kafka.api.{LeaderAndIsr, Request}
+import kafka.api.{ApiVersion, LeaderAndIsr, Request}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.controller.KafkaController
 import kafka.log._
@@ -734,7 +734,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, apiVersion: ApiVersion = ApiVersion.latestVersion,
+                            requiredAcks: Int = 0): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -748,7 +749,7 @@ class Partition(val topicPartition: TopicPartition,
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
-          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient)
+          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient, apiVersion)
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
