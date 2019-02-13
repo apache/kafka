@@ -831,7 +831,7 @@ public class WorkerTest extends ThreadedTest {
     public void testProducerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
-        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID, config));
+        assertEquals(expectedConfigs, Worker.producerConfigs("connector-producer-" + TASK_ID, config));
     }
 
     @Test
@@ -846,7 +846,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("acks", "-1");
         expectedConfigs.put("linger.ms", "1000");
         expectedConfigs.put("client.id", "producer-test-id");
-        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID, configWithOverrides));
+        assertEquals(expectedConfigs, Worker.producerConfigs("connector-producer-" + TASK_ID, configWithOverrides));
     }
 
     @Test
