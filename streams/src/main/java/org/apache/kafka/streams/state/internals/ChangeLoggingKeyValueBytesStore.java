@@ -40,7 +40,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueS
                      final StateStore root) {
         super.init(context, root);
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
-        this.changeLogger = new StoreChangeLogger<>(name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+        changeLogger = new StoreChangeLogger<>(name(), context, new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (wrapped() instanceof MemoryLRUCache) {
@@ -66,9 +66,10 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueS
     @Override
     public byte[] putIfAbsent(final Bytes key,
                               final byte[] value) {
-        final byte[] previous = get(key);
+        final byte[] previous = wrapped().putIfAbsent(key, value);
         if (previous == null) {
-            put(key, value);
+            // then it was absent
+            changeLogger.logChange(key, value);
         }
         return previous;
     }
