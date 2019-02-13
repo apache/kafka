@@ -174,11 +174,9 @@ object JmxTool extends Logging {
           names.map{name: ObjectName =>
             val mbean = mbsc.getMBeanInfo(name)
             val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
-            attributes.removeIf(name => {
-              val attr = name.asInstanceOf[Attribute]
-              !attributesWhitelist.get.contains(attr.getName)
-            })
-            (name, attributes.size)}.toMap.filter(_._2 > 0)
+            val expectedAttributes = attributes.asScala.asInstanceOf[mutable.Buffer[Attribute]]
+              .filter(attr => attributesWhitelist.get.contains(attr.getName))
+            (name, expectedAttributes.size)}.toMap.filter(_._2 > 0)
         else
           queries.map((_, attributesWhitelist.get.length)).toMap
       }
