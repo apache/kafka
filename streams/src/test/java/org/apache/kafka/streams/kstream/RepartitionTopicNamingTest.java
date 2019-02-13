@@ -94,22 +94,25 @@ public class RepartitionTopicNamingTest {
         }
     }
 
-    // each KGroupedStream will result in repartition, can't reuse
-    // KGroupedStreams when specifying repartition topic names and Optimization is turned off
-    // need to have separate groupByKey calls when naming repartition topics
-    // see test shouldHandleUniqueGroupedInstances below for an example
     @Test
-    public void shouldFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {
-        try {
-            final StreamsBuilder builder = new StreamsBuilder();
-            final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
-            kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count();
-            kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count();
-            builder.build();
-            fail("Should not build re-using repartition topic name");
-        } catch (final TopologyException te) {
-            // ok
-        }
+    public void shouldNotFailWithSameRepartitionTopicNameUsingSameKGroupedStream() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey(Grouped.as("grouping"));
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count().toStream().to("output-one");
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count().toStream().to("output-two");
+        final String toplogyString = builder.build().describe().toString();
+        assertThat(1, is(getCountOfRepartitionTopicsFound(toplogyString, repartitionTopicPattern)));
+        assertTrue(toplogyString.contains("grouping" + "-repartition"));
+    }
+
+    @Test
+    public void shouldNotReuseRepartitionNodeWithUnamedRepartitionTopics() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KGroupedStream<String, String> kGroupedStream = builder.<String, String>stream("topic").selectKey((k, v) -> k).groupByKey();
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(10L))).count().toStream().to("output-one");
+        kGroupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(30L))).count().toStream().to("output-two");
+        final String toplogyString = builder.build().describe().toString();
+        assertThat(2, is(getCountOfRepartitionTopicsFound(toplogyString, repartitionTopicPattern)));
     }
 
     @Test
