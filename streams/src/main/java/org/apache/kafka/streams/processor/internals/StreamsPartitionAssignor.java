@@ -463,6 +463,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             for (final String topic : topicsInfo.sourceTopics) {
                 if (!topicsInfo.repartitionSourceTopics.keySet().contains(topic) &&
                     !metadata.topics().contains(topic)) {
+                    log.error("Missing source topic {} durign assignment. Returning error {}.",
+                              topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
                     return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
                 }
             }
