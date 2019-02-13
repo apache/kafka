@@ -431,13 +431,22 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                         key,
                                         actual,
                                         expected,
-                                        observedInputEvents.get(key),
-                                        entry.getValue());
+                                        indent("\t\t", observedInputEvents.get(key)),
+                                        indent("\t\t", entry.getValue()));
                     return false;
                 }
             }
             return true;
         }
+    }
+
+    private static String indent(@SuppressWarnings("SameParameterValue") final String prefix,
+                                 final LinkedList<ConsumerRecord<String, Number>> list) {
+        final StringBuilder stringBuilder = new StringBuilder();
+        for (final ConsumerRecord<String, Number> record : list) {
+            stringBuilder.append(prefix).append(record).append('\n');
+        }
+        return stringBuilder.toString();
     }
 
     private static Long getSum(final String key) {
