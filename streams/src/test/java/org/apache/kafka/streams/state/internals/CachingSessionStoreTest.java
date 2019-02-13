@@ -44,15 +44,15 @@ import java.util.Random;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.streams.state.internals.RocksDBSessionStoreTest.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class CachingSessionStoreTest {
