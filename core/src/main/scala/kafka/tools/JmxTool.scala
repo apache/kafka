@@ -20,9 +20,9 @@ package kafka.tools
 
 import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
-
 import javax.management._
 import javax.management.remote._
+
 import joptsimple.OptionParser
 
 import scala.collection.JavaConverters._
@@ -165,12 +165,22 @@ object JmxTool extends Logging {
     }
 
     val numExpectedAttributes: Map[ObjectName, Int] =
-      if (attributesWhitelistExists)
-        queries.map((_, attributesWhitelist.get.length)).toMap
-      else {
+      if (!attributesWhitelistExists)
         names.map{(name: ObjectName) =>
           val mbean = mbsc.getMBeanInfo(name)
           (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
+      else {
+        if (!hasPatternQueries)
+          names.map{(name: ObjectName) =>
+            val mbean = mbsc.getMBeanInfo(name)
+            val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
+            attributes.removeIf(name => {
+              val attr = name.asInstanceOf[Attribute]
+              !attributesWhitelist.get.contains(attr.getName)
+            })
+            (name, attributes.size)}.toMap.filter(_._2 > 0)
+        else
+          queries.map((_, attributesWhitelist.get.length)).toMap
       }
 
     if(numExpectedAttributes.isEmpty) {
