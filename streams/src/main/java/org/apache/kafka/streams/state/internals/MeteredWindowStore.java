@@ -114,7 +114,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
                     final long windowStartTimestamp) {
         final long startNs = time.nanoseconds();
         try {
-            wrappedStore().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
+            wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
@@ -132,7 +132,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
                    final long timestamp) {
         final long startNs = time.nanoseconds();
         try {
-            final byte[] result = wrappedStore().fetch(keyBytes(key), timestamp);
+            final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
             if (result == null) {
                 return null;
             }
@@ -147,7 +147,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
                                         final long timeTo) {
-        return new MeteredWindowStoreIterator<>(wrappedStore().fetch(keyBytes(key), timeFrom, timeTo),
+        return new MeteredWindowStoreIterator<>(wrapped().fetch(keyBytes(key), timeFrom, timeTo),
                                                 fetchTime,
                                                 metrics,
                                                 serdes,
@@ -156,7 +156,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
-        return new MeteredWindowedKeyValueIterator<>(wrappedStore().all(), fetchTime, metrics, serdes, time);
+        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, metrics, serdes, time);
     }
 
     @SuppressWarnings("deprecation")
@@ -164,7 +164,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                      final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrappedStore().fetchAll(timeFrom, timeTo),
+            wrapped().fetchAll(timeFrom, timeTo),
             fetchTime,
             metrics,
             serdes,
@@ -178,7 +178,7 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
                                                   final long timeFrom,
                                                   final long timeTo) {
         return new MeteredWindowedKeyValueIterator<>(
-            wrappedStore().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
+            wrapped().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
             fetchTime,
             metrics,
             serdes,

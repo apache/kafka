@@ -59,7 +59,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore<SegmentedByte
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
             Bytes.wrap(serdes.rawKey(key)),
             earliestSessionEndTime,
             latestSessionStartTime
@@ -69,7 +69,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore<SegmentedByte
 
     @Override
     public KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(
             Bytes.wrap(serdes.rawKey(keyFrom)),
             Bytes.wrap(serdes.rawKey(keyTo)),
             earliestSessionEndTime,
@@ -80,7 +80,7 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore<SegmentedByte
 
     @Override
     public AGG fetchSession(final K key, final long startTime, final long endTime) {
-        return serdes.valueFrom(wrappedStore().get(SessionKeySchema.toBinary(Bytes.wrap(serdes.rawKey(key)), startTime, endTime)));
+        return serdes.valueFrom(wrapped().get(SessionKeySchema.toBinary(Bytes.wrap(serdes.rawKey(key)), startTime, endTime)));
     }
 
     @Override
@@ -95,11 +95,11 @@ public class RocksDBSessionStore<K, AGG> extends WrappedStateStore<SegmentedByte
 
     @Override
     public void remove(final Windowed<K> key) {
-        wrappedStore().remove(Bytes.wrap(SessionKeySchema.toBinary(key, serdes.keySerializer(), topic)));
+        wrapped().remove(Bytes.wrap(SessionKeySchema.toBinary(key, serdes.keySerializer(), topic)));
     }
 
     @Override
     public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-        wrappedStore().put(Bytes.wrap(SessionKeySchema.toBinary(sessionKey, serdes.keySerializer(), topic)), serdes.rawValue(aggregate));
+        wrapped().put(Bytes.wrap(SessionKeySchema.toBinary(sessionKey, serdes.keySerializer(), topic)), serdes.rawValue(aggregate));
     }
 }

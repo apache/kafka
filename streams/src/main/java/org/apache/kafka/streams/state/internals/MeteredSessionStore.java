@@ -110,7 +110,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore<SessionStore<By
         Objects.requireNonNull(key, "key cannot be null");
         final Bytes bytesKey = keyBytes(key);
         return new MeteredWindowedKeyValueIterator<>(
-            wrappedStore().findSessions(
+            wrapped().findSessions(
                 bytesKey,
                 earliestSessionEndTime,
                 latestSessionStartTime),
@@ -130,7 +130,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore<SessionStore<By
         final Bytes bytesKeyFrom = keyBytes(keyFrom);
         final Bytes bytesKeyTo = keyBytes(keyTo);
         return new MeteredWindowedKeyValueIterator<>(
-            wrappedStore().findSessions(
+            wrapped().findSessions(
                 bytesKeyFrom,
                 bytesKeyTo,
                 earliestSessionEndTime,
@@ -147,7 +147,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore<SessionStore<By
         final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
-            wrappedStore().remove(new Windowed<>(key, sessionKey.window()));
+            wrapped().remove(new Windowed<>(key, sessionKey.window()));
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
@@ -163,7 +163,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore<SessionStore<By
         final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
-            wrappedStore().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
@@ -183,7 +183,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore<SessionStore<By
         final Bytes bytesKey = keyBytes(key);
         final long startNs = time.nanoseconds();
         try {
-            value = serdes.valueFrom(wrappedStore().fetchSession(bytesKey, startTime, endTime));
+            value = serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
         } finally {
             metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }

@@ -53,30 +53,30 @@ class ChangeLoggingSessionBytesStore extends WrappedStateStore<SessionStore<Byte
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        return wrappedStore().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+        return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes keyFrom, final Bytes keyTo, final long earliestSessionEndTime, final long latestSessionStartTime) {
-        return wrappedStore().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
     }
 
     @Override
     public void remove(final Windowed<Bytes> sessionKey) {
-        wrappedStore().remove(sessionKey);
+        wrapped().remove(sessionKey);
         changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), null);
     }
 
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
-        wrappedStore().put(sessionKey, aggregate);
+        wrapped().put(sessionKey, aggregate);
         changeLogger.logChange(SessionKeySchema.toBinary(sessionKey), aggregate);
 
     }
 
     @Override
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
-        return wrappedStore().fetchSession(key, startTime, endTime);
+        return wrapped().fetchSession(key, startTime, endTime);
     }
 
     @Override

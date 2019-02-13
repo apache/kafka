@@ -46,30 +46,30 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes,
 
     @Override
     public byte[] fetch(final Bytes key, final long timestamp) {
-        return wrappedStore().fetch(key, timestamp);
+        return wrapped().fetch(key, timestamp);
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
-        return wrappedStore().fetch(key, from, to);
+        return wrapped().fetch(key, from, to);
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
-        return wrappedStore().fetch(keyFrom, keyTo, from, to);
+        return wrapped().fetch(keyFrom, keyTo, from, to);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return wrappedStore().all();
+        return wrapped().all();
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        return wrappedStore().fetchAll(timeFrom, timeTo);
+        return wrapped().fetchAll(timeFrom, timeTo);
     }
 
     @Override
@@ -79,7 +79,7 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes,
 
     @Override
     public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
-        wrappedStore().put(key, value, windowStartTimestamp);
+        wrapped().put(key, value, windowStartTimestamp);
         changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 

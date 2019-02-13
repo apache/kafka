@@ -123,16 +123,16 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
 
     @Override
     public long approximateNumEntries() {
-        return wrappedStore().approximateNumEntries();
+        return wrapped().approximateNumEntries();
     }
 
     @Override
     public V get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrappedStore().get(keyBytes(key))), getTime);
+                return measureLatency(() -> outerValue(wrapped().get(keyBytes(key))), getTime);
             } else {
-                return outerValue(wrappedStore().get(keyBytes(key)));
+                return outerValue(wrapped().get(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -146,11 +146,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         try {
             if (putTime.shouldRecord()) {
                 measureLatency(() -> {
-                    wrappedStore().put(keyBytes(key), serdes.rawValue(value));
+                    wrapped().put(keyBytes(key), serdes.rawValue(value));
                     return null;
                 }, putTime);
             } else {
-                wrappedStore().put(keyBytes(key), serdes.rawValue(value));
+                wrapped().put(keyBytes(key), serdes.rawValue(value));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -163,10 +163,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
                          final V value) {
         if (putIfAbsentTime.shouldRecord()) {
             return measureLatency(
-                () -> outerValue(wrappedStore().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+                () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
                 putIfAbsentTime);
         } else {
-            return outerValue(wrappedStore().putIfAbsent(keyBytes(key), serdes.rawValue(value)));
+            return outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value)));
         }
     }
 
@@ -175,12 +175,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         if (putAllTime.shouldRecord()) {
             measureLatency(
                 () -> {
-                    wrappedStore().putAll(innerEntries(entries));
+                    wrapped().putAll(innerEntries(entries));
                     return null;
                 },
                 putAllTime);
         } else {
-            wrappedStore().putAll(innerEntries(entries));
+            wrapped().putAll(innerEntries(entries));
         }
     }
 
@@ -188,9 +188,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
     public V delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(wrappedStore().delete(keyBytes(key))), deleteTime);
+                return measureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), deleteTime);
             } else {
-                return outerValue(wrappedStore().delete(keyBytes(key)));
+                return outerValue(wrapped().delete(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -202,13 +202,13 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
     public KeyValueIterator<K, V> range(final K from,
                                         final K to) {
         return new MeteredKeyValueIterator(
-            wrappedStore().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
+            wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeTime);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(wrappedStore().all(), allTime);
+        return new MeteredKeyValueIterator(wrapped().all(), allTime);
     }
 
     @Override

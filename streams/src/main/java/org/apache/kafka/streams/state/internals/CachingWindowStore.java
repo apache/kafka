@@ -95,7 +95,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
         final Bytes key = windowedKeyBytes.key();
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrappedStore().fetch(key, windowStartTimestamp) : null;
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrapped().fetch(key, windowStartTimestamp) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
@@ -104,7 +104,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
                 final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
                 final V oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrappedStore().put(key, entry.newValue(), windowStartTimestamp);
+                wrapped().put(key, entry.newValue(), windowStartTimestamp);
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
@@ -119,7 +119,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
                 }
             }
         } else {
-            wrappedStore().put(key, entry.newValue(), windowStartTimestamp);
+            wrapped().put(key, entry.newValue(), windowStartTimestamp);
         }
     }
 
@@ -133,14 +133,14 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
     @Override
     public synchronized void flush() {
         cache.flush(name);
-        wrappedStore().flush();
+        wrapped().flush();
     }
 
     @Override
     public void close() {
         flush();
         cache.close(name);
-        wrappedStore().close();
+        wrapped().close();
     }
 
     @Override
@@ -173,11 +173,11 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
         final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
         if (cache == null) {
-            return wrappedStore().fetch(key, timestamp);
+            return wrapped().fetch(key, timestamp);
         }
         final LRUCacheEntry entry = cache.get(name, cacheKey);
         if (entry == null) {
-            return wrappedStore().fetch(key, timestamp);
+            return wrapped().fetch(key, timestamp);
         } else {
             return entry.value();
         }
@@ -190,7 +190,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
         // if store is open outside as well.
         validateStoreOpen();
 
-        final WindowStoreIterator<byte[]> underlyingIterator = wrappedStore().fetch(key, timeFrom, timeTo);
+        final WindowStoreIterator<byte[]> underlyingIterator = wrapped().fetch(key, timeFrom, timeTo);
         if (cache == null) {
             return underlyingIterator;
         }
@@ -216,7 +216,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
         // if store is open outside as well.
         validateStoreOpen();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrappedStore().fetch(from, to, timeFrom, timeTo);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetch(from, to, timeFrom, timeTo);
         if (cache == null) {
             return underlyingIterator;
         }
@@ -243,7 +243,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         validateStoreOpen();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]>  underlyingIterator = wrappedStore().all();
+        final KeyValueIterator<Windowed<Bytes>, byte[]>  underlyingIterator = wrapped().all();
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
@@ -260,7 +260,7 @@ class CachingWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
         validateStoreOpen();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrappedStore().fetchAll(timeFrom, timeTo);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);

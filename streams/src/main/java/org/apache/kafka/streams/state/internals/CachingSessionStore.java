@@ -87,9 +87,9 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrappedStore().findSessions(key,
-                                                                                                earliestSessionEndTime,
-                                                                                                latestSessionStartTime);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
+                                                                                               earliestSessionEndTime,
+                                                                                               latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
@@ -109,7 +109,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrappedStore().findSessions(
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
         );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
@@ -147,13 +147,13 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
         if (cache == null) {
-            return wrappedStore().fetchSession(key, startTime, endTime);
+            return wrapped().fetchSession(key, startTime, endTime);
         } else {
             final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
             final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
             final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
             if (entry == null) {
-                return wrappedStore().fetchSession(key, startTime, endTime);
+                return wrapped().fetchSession(key, startTime, endTime);
             } else {
                 return entry.value();
             }
@@ -179,7 +179,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
             final byte[] oldValueBytes = newValueBytes == null || sendOldValues ?
-                wrappedStore().fetchSession(bytesKey.key(), bytesKey.window().start(), bytesKey.window().end()) : null;
+                wrapped().fetchSession(bytesKey.key(), bytesKey.window().start(), bytesKey.window().end()) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
@@ -188,7 +188,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
                 final AGG newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
                 final AGG oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrappedStore().put(bytesKey, entry.newValue());
+                wrapped().put(bytesKey, entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
@@ -203,7 +203,7 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore<SessionStore<Bytes, 
                 }
             }
         } else {
-            wrappedStore().put(bytesKey, entry.newValue());
+            wrapped().put(bytesKey, entry.newValue());
         }
     }
 

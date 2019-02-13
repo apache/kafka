@@ -85,7 +85,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
                                     final InternalProcessorContext context) {
         if (flushListener != null) {
             final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrappedStore().get(entry.key()) : null;
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrapped().get(entry.key()) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
@@ -94,7 +94,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
                 final V newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
                 final V oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrappedStore().put(entry.key(), entry.newValue());
+                wrapped().put(entry.key(), entry.newValue());
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
@@ -109,7 +109,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
                 }
             }
         } else {
-            wrappedStore().put(entry.key(), entry.newValue());
+            wrapped().put(entry.key(), entry.newValue());
         }
     }
 
@@ -168,7 +168,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
             entry = cache.get(cacheName, key);
         }
         if (entry == null) {
-            final byte[] rawValue = wrappedStore().get(key);
+            final byte[] rawValue = wrapped().get(key);
             if (rawValue == null) {
                 return null;
             }
@@ -187,7 +187,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = wrappedStore().range(from, to);
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
@@ -195,7 +195,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), wrappedStore().all());
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }
@@ -205,7 +205,7 @@ class CachingKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, 
         validateStoreOpen();
         lock.readLock().lock();
         try {
-            return wrappedStore().approximateNumEntries();
+            return wrapped().approximateNumEntries();
         } finally {
             lock.readLock().unlock();
         }

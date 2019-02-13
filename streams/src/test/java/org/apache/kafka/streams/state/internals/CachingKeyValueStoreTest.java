@@ -95,7 +95,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final KeyValueStore<K, V> store = (KeyValueStore<K, V>) storeBuilder.build();
         final CacheFlushListenerStub<K, V> cacheFlushListener = new CacheFlushListenerStub<>();
 
-        final CachedStateStore inner = (CachedStateStore) ((WrappedStateStore) store).wrappedStore();
+        final CachedStateStore inner = (CachedStateStore) ((WrappedStateStore) store).wrapped();
         inner.setFlushListener(cacheFlushListener, false);
         store.init(context, store);
         return store;
@@ -357,7 +357,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldReturnUnderlying() {
-        assertEquals(store.wrappedStore(), underlyingStore);
+        assertEquals(store.wrapped(), underlyingStore);
     }
 
     @Test(expected = InvalidStateStoreException.class)

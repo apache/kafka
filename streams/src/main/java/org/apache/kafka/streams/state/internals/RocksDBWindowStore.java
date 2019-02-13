@@ -71,12 +71,12 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore<SegmentedBytesSt
     public void put(final K key, final V value, final long windowStartTimestamp) {
         maybeUpdateSeqnumForDups();
 
-        wrappedStore().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum, serdes), serdes.rawValue(value));
+        wrapped().put(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, seqnum, serdes), serdes.rawValue(value));
     }
 
     @Override
     public V fetch(final K key, final long timestamp) {
-        final byte[] bytesValue = wrappedStore().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes));
+        final byte[] bytesValue = wrapped().get(WindowKeySchema.toStoreKeyBinary(key, timestamp, seqnum, serdes));
         if (bytesValue == null) {
             return null;
         }
@@ -86,27 +86,27 @@ public class RocksDBWindowStore<K, V> extends WrappedStateStore<SegmentedBytesSt
     @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(Bytes.wrap(serdes.rawKey(key)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).valuesIterator();
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to)), timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().all();
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().all();
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 
     @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom, final long timeTo) {
-        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrappedStore().fetchAll(timeFrom, timeTo);
+        final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetchAll(timeFrom, timeTo);
         return new WindowStoreIteratorWrapper<>(bytesIterator, serdes, windowSize).keyValueIterator();
     }
 

@@ -29,7 +29,7 @@ public abstract class WrappedStateStore<S extends StateStore> implements StateSt
         if (stateStore instanceof TimestampedBytesStore) {
             return true;
         } else if (stateStore instanceof WrappedStateStore) {
-            return isTimestamped(((WrappedStateStore) stateStore).wrappedStore());
+            return isTimestamped(((WrappedStateStore) stateStore).wrapped());
         } else {
             return false;
         }
@@ -78,7 +78,7 @@ public abstract class WrappedStateStore<S extends StateStore> implements StateSt
         wrapped.close();
     }
 
-    public S wrappedStore() {
+    public S wrapped() {
         return wrapped;
     }
 }

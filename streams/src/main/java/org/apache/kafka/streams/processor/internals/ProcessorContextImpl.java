@@ -248,23 +248,23 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public V get(final K key) {
-            return wrappedStore().get(key);
+            return wrapped().get(key);
         }
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
                                             final K to) {
-            return wrappedStore().range(from, to);
+            return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return wrappedStore().all();
+            return wrapped().all();
         }
 
         @Override
         public long approximateNumEntries() {
-            return wrappedStore().approximateNumEntries();
+            return wrapped().approximateNumEntries();
         }
 
         @Override
@@ -314,7 +314,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public V fetch(final K key,
                        final long time) {
-            return wrappedStore().fetch(key, time);
+            return wrapped().fetch(key, time);
         }
 
         @Deprecated
@@ -322,7 +322,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
-            return wrappedStore().fetch(key, timeFrom, timeTo);
+            return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Deprecated
@@ -331,19 +331,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                       final K to,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return wrappedStore().fetch(from, to, timeFrom, timeTo);
+            return wrapped().fetch(from, to, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> all() {
-            return wrappedStore().all();
+            return wrapped().all();
         }
 
         @Deprecated
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
-            return wrappedStore().fetchAll(timeFrom, timeTo);
+            return wrapped().fetchAll(timeFrom, timeTo);
         }
     }
 
@@ -359,7 +359,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return wrappedStore().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -367,7 +367,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                                final K keyTo,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return wrappedStore().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -383,18 +383,18 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return wrappedStore().fetchSession(key, startTime, endTime);
+            return wrapped().fetchSession(key, startTime, endTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return wrappedStore().fetch(key);
+            return wrapped().fetch(key);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
-            return wrappedStore().fetch(from, to);
+            return wrapped().fetch(from, to);
         }
     }
 
@@ -427,45 +427,45 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public V get(final K key) {
-            return wrappedStore().get(key);
+            return wrapped().get(key);
         }
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
                                             final K to) {
-            return wrappedStore().range(from, to);
+            return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return wrappedStore().all();
+            return wrapped().all();
         }
 
         @Override
         public long approximateNumEntries() {
-            return wrappedStore().approximateNumEntries();
+            return wrapped().approximateNumEntries();
         }
 
         @Override
         public void put(final K key,
                         final V value) {
-            wrappedStore().put(key, value);
+            wrapped().put(key, value);
         }
 
         @Override
         public V putIfAbsent(final K key,
                              final V value) {
-            return wrappedStore().putIfAbsent(key, value);
+            return wrapped().putIfAbsent(key, value);
         }
 
         @Override
         public void putAll(final List<KeyValue<K, V>> entries) {
-            wrappedStore().putAll(entries);
+            wrapped().putAll(entries);
         }
 
         @Override
         public V delete(final K key) {
-            return wrappedStore().delete(key);
+            return wrapped().delete(key);
         }
     }
 
@@ -480,20 +480,20 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final K key,
                         final V value) {
-            wrappedStore().put(key, value);
+            wrapped().put(key, value);
         }
 
         @Override
         public void put(final K key,
                         final V value,
                         final long windowStartTimestamp) {
-            wrappedStore().put(key, value, windowStartTimestamp);
+            wrapped().put(key, value, windowStartTimestamp);
         }
 
         @Override
         public V fetch(final K key,
                        final long time) {
-            return wrappedStore().fetch(key, time);
+            return wrapped().fetch(key, time);
         }
 
         @Deprecated
@@ -501,7 +501,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
-            return wrappedStore().fetch(key, timeFrom, timeTo);
+            return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Deprecated
@@ -510,19 +510,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                       final K to,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return wrappedStore().fetch(from, to, timeFrom, timeTo);
+            return wrapped().fetch(from, to, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> all() {
-            return wrappedStore().all();
+            return wrapped().all();
         }
 
         @Deprecated
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
-            return wrappedStore().fetchAll(timeFrom, timeTo);
+            return wrapped().fetchAll(timeFrom, timeTo);
         }
     }
 
@@ -538,7 +538,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return wrappedStore().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -546,33 +546,33 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                                final K keyTo,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return wrappedStore().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
         public void remove(final Windowed<K> sessionKey) {
-            wrappedStore().remove(sessionKey);
+            wrapped().remove(sessionKey);
         }
 
         @Override
         public void put(final Windowed<K> sessionKey, final AGG aggregate) {
-            wrappedStore().put(sessionKey, aggregate);
+            wrapped().put(sessionKey, aggregate);
         }
 
         @Override
         public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return wrappedStore().fetchSession(key, startTime, endTime);
+            return wrapped().fetchSession(key, startTime, endTime);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return wrappedStore().fetch(key);
+            return wrapped().fetch(key);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
-            return wrappedStore().fetch(from, to);
+            return wrapped().fetch(from, to);
         }
     }
 }
