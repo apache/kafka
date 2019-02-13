@@ -33,8 +33,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
-import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.rawValueToTimestampedValue;
+import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
 abstract class AbstractStateManager implements StateManager {

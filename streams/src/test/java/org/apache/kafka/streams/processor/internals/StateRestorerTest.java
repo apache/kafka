@@ -18,7 +18,6 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Before;
@@ -26,7 +25,7 @@ import org.junit.Test;
 
 import java.util.Collections;
 
-import static org.apache.kafka.streams.state.internals.RecordConverter.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
