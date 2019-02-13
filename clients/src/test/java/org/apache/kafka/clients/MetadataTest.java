@@ -595,8 +595,8 @@ public class MetadataTest {
 
         // still works
         assertTrue(metadata.partitionInfoIfCurrent(tp).isPresent());
-        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partition(), 0);
-        assertEquals(metadata.partitionInfoIfCurrent(tp).get().leader().id(), 0);
+        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partitionInfo().partition(), 0);
+        assertEquals(metadata.partitionInfoIfCurrent(tp).get().partitionInfo().leader().id(), 0);
     }
 
     @Test
