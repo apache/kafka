@@ -72,7 +72,6 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
 
-
         cacheName = context.taskId() + "-" + bytesStore.name();
         cache = context.getCache();
         cache.addDirtyEntryFlushListener(cacheName, entries -> {
@@ -178,27 +177,35 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
 
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
         final Bytes binaryKey = cacheFunction.key(entry.key());
-        final ProcessorRecordContext current = context.recordContext();
-        context.setRecordContext(entry.entry().context());
-        try {
-            final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);
-            final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
-            if (flushListener != null) {
-                final AGG newValue = serdes.valueFrom(entry.newValue());
-                final AGG oldValue = newValue == null || sendOldValues ?
-                    serdes.valueFrom(bytesStore.fetchSession(rawKey, key.window().start(), key.window().end())) :
-                    null;
-                if (!(newValue == null && oldValue == null)) {
+        final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
+        if (flushListener != null) {
+            final byte[] newValueBytes = entry.newValue();
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ?
+                bytesStore.fetchSession(bytesKey.key(), bytesKey.window().start(), bytesKey.window().end()) : null;
+
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (newValueBytes != null || oldValueBytes != null) {
+                final Windowed<K> key = SessionKeySchema.from(bytesKey, serdes.keyDeserializer(), topic);
+                final AGG newValue = newValueBytes != null ? serdes.valueFrom(newValueBytes) : null;
+                final AGG oldValue = sendOldValues && oldValueBytes != null ? serdes.valueFrom(oldValueBytes) : null;
+                // we need to get the old values if needed, and then put to store, and then flush
+                bytesStore.put(bytesKey, entry.newValue());
+
+                final ProcessorRecordContext current = context.recordContext();
+                context.setRecordContext(entry.entry().context());
+                try {
                     flushListener.apply(
                         key,
                         newValue,
                         oldValue,
                         entry.entry().context().timestamp());
+                } finally {
+                    context.setRecordContext(current);
                 }
             }
-            bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());
-        } finally {
-            context.setRecordContext(current);
+        } else {
+            bytesStore.put(bytesKey, entry.newValue());
         }
     }
 
