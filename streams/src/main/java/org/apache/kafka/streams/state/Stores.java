@@ -157,7 +157,8 @@ public class Stores {
      */
     public static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
                                                                final Duration retentionPeriod,
-                                                               final Duration windowSize) throws IllegalArgumentException {
+                                                               final Duration windowSize,
+                                                               final boolean retainDuplicates) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
         final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
         final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
@@ -177,7 +178,7 @@ public class Stores {
                 + windowSize + "], retention=[" + retentionPeriod + "]");
         }
 
-        return new InMemoryWindowBytesStoreSupplier(name, retentionMs, windowSizeMs);
+        return new InMemoryWindowBytesStoreSupplier(name, retentionMs, windowSizeMs, retainDuplicates);
     }
 
     /**

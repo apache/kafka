@@ -59,11 +59,13 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     private StateSerdes<K, V> serdes;
     private InternalProcessorContext context;
     private Sensor expiredRecordSensor;
+    private int seqnum = 0;
 
     private final long retentionPeriod;
     private final long windowSize;
+    private final boolean retainDuplicates;
 
-    private final NavigableMap<Long, NavigableMap<K, V>> segmentMap;
+    private final NavigableMap<Long, NavigableMap<WrappedK<K>, V>> segmentMap;
 
     private volatile boolean open = false;
 
@@ -72,12 +74,14 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
                                final Serde<V> valueSerde,
                                final long retentionPeriod,
                                final long windowSize,
+                               final boolean retainDuplicates,
                                final String metricScope) {
         this.name = name;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
+        this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
 
         this.segmentMap = new TreeMap<>();
@@ -130,16 +134,18 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     @Override
     public void put(final K key, final V value, final long windowStartTimestamp) {
         removeExpiredSegments();
+        maybeUpdateSeqnumForDups();
+
         if (windowStartTimestamp <= this.context.streamTime() - this.retentionPeriod) {
             expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
         } else {
             if (value != null) {
                 this.segmentMap.computeIfAbsent(windowStartTimestamp, t -> new TreeMap<>());
-                this.segmentMap.get(windowStartTimestamp).put(key, value);
+                this.segmentMap.get(windowStartTimestamp).put(new WrappedK<>(key, seqnum), value);
             } else {
                 this.segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
-                    kvMap.remove(key);
+                    kvMap.remove(new WrappedK<>(key, seqnum));
                     return kvMap;
                 });
             }
@@ -152,11 +158,11 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         if (windowStartTimestamp <= this.context.streamTime() - this.retentionPeriod)
             return null;
 
-        final NavigableMap<K, V> kvMap = this.segmentMap.get(windowStartTimestamp);
+        final NavigableMap<WrappedK<K>, V> kvMap = this.segmentMap.get(windowStartTimestamp);
         if (kvMap == null) {
             return null;
         } else {
-            return kvMap.get(key);
+            return kvMap.get(new WrappedK<>(key, seqnum));
         }
     }
 
@@ -164,18 +170,9 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     @Override
     public WindowStoreIterator<V> fetch(final K key, final long timeFrom, final long timeTo) {
         removeExpiredSegments();
-        final List<KeyValue<Long, V>> returnSet = new LinkedList<>();
+        final List<KeyValue<Long, V>> records = retainDuplicates ? fetchWithDuplicates(key, timeFrom, timeTo) : fetchUnique(key, timeFrom, timeTo);
 
-        // add one b/c records expire exactly retentionPeriod ms after created
-        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
-
-        for (final Map.Entry<Long, NavigableMap<K, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
-            final V value = segmentMapEntry.getValue().get(key);
-            if (value != null) {
-                returnSet.add(new KeyValue<>(segmentMapEntry.getKey(), value));
-            }
-        }
-        return new InMemoryWindowStoreIterator<>(returnSet.listIterator());
+        return new InMemoryWindowStoreIterator<>(records.listIterator());
     }
 
     @Deprecated
@@ -186,10 +183,13 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final WrappedK<K> keyFrom = new WrappedK<>(from, 0);
+        final WrappedK<K> keyTo = new WrappedK<>(to, Integer.MAX_VALUE);
 
-        for (final Map.Entry<Long, NavigableMap<K, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
-            for (final Map.Entry<K, V> kvMapEntry : segmentMapEntry.getValue().subMap(from, true, to, true).entrySet()) {
-                returnSet.add(getWindowedKeyValue(kvMapEntry.getKey(), segmentMapEntry.getKey(), kvMapEntry.getValue()));
+        for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
+            for (final Map.Entry<WrappedK<K>, V> kvMapEntry : segmentMapEntry.getValue().subMap(keyFrom, true, keyTo, true).entrySet()) {
+                final WrappedK<K> wrappedKey = kvMapEntry.getKey();
+                returnSet.add(getWindowedKeyValue(wrappedKey.getKey(), segmentMapEntry.getKey(), kvMapEntry.getValue()));
             }
         }
         return new InMemoryWindowedKeyValueIterator<>(returnSet.listIterator());
@@ -204,9 +204,10 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
 
-        for (final Map.Entry<Long, NavigableMap<K, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
-            for (final Map.Entry<K, V> kvMapEntry : segmentMapEntry.getValue().entrySet()) {
-                returnSet.add(getWindowedKeyValue(kvMapEntry.getKey(), segmentMapEntry.getKey(), kvMapEntry.getValue()));
+        for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
+            for (final Map.Entry<WrappedK<K>, V> kvMapEntry : segmentMapEntry.getValue().entrySet()) {
+                final WrappedK<K> wrappedKey = kvMapEntry.getKey();
+                returnSet.add(getWindowedKeyValue(wrappedKey.getKey(), segmentMapEntry.getKey(), kvMapEntry.getValue()));
             }
         }
         return new InMemoryWindowedKeyValueIterator<>(returnSet.listIterator());
@@ -217,9 +218,10 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         removeExpiredSegments();
         final List<KeyValue<Windowed<K>, V>> returnSet = new LinkedList<>();
 
-        for (final Entry<Long, NavigableMap<K, V>> segmentMapEntry : this.segmentMap.entrySet()) {
-            for (final Entry<K, V> kvMapEntry : segmentMapEntry.getValue().entrySet()) {
-                returnSet.add(getWindowedKeyValue(kvMapEntry.getKey(), segmentMapEntry.getKey(),
+        for (final Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.entrySet()) {
+            for (final Entry<WrappedK<K>, V> kvMapEntry : segmentMapEntry.getValue().entrySet()) {
+                final WrappedK<K> wrappedKey = kvMapEntry.getKey();
+                returnSet.add(getWindowedKeyValue(wrappedKey.getKey(), segmentMapEntry.getKey(),
                     kvMapEntry.getValue()));
             }
         }
@@ -247,10 +249,41 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         this.open = false;
     }
 
+    private List<KeyValue<Long, V>> fetchUnique(final K key, final long timeFrom, final long timeTo) {
+        final List<KeyValue<Long, V>> returnSet = new LinkedList<>();
+
+        // add one b/c records expire exactly retentionPeriod ms after created
+        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+
+        for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
+            final V value = segmentMapEntry.getValue().get(new WrappedK<>(key, seqnum));
+            if (value != null) {
+                returnSet.add(new KeyValue<>(segmentMapEntry.getKey(), value));
+            }
+        }
+        return returnSet;
+    }
+
+    private List<KeyValue<Long, V>> fetchWithDuplicates(final K key, final long timeFrom, final long timeTo) {
+        final List<KeyValue<Long, V>> returnSet = new LinkedList<>();
+
+        // add one b/c records expire exactly retentionPeriod ms after created
+        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final WrappedK<K> keyFrom = new WrappedK<>(key, 0);
+        final WrappedK<K> keyTo = new WrappedK<>(key, Integer.MAX_VALUE);
+
+        for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
+            for (final Map.Entry<WrappedK<K>, V> kvMapEntry : segmentMapEntry.getValue().subMap(keyFrom, true, keyTo, true).entrySet()) {
+                returnSet.add(new KeyValue<>(segmentMapEntry.getKey(), kvMapEntry.getValue()));
+            }
+        }
+        return returnSet;
+    }
+
     private void removeExpiredSegments() {
         final long minLiveTime = this.context.streamTime() - this.retentionPeriod;
-        final NavigableMap<Long, NavigableMap<K, V>> expiredSegments = this.segmentMap.headMap(minLiveTime, true);
-        for (Iterator<Entry<Long, NavigableMap<K, V>>> it = expiredSegments.entrySet().iterator(); it.hasNext(); ) {
+        final NavigableMap<Long, NavigableMap<WrappedK<K>, V>> expiredSegments = this.segmentMap.headMap(minLiveTime, true);
+        for (Iterator<Entry<Long, NavigableMap<WrappedK<K>, V>>> it = expiredSegments.entrySet().iterator(); it.hasNext(); ) {
             it.next();
             it.remove();
         }
@@ -259,6 +292,35 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     private KeyValue<Windowed<K>, V> getWindowedKeyValue(final K key, final long startTimestamp, final V value) {
         final Windowed<K> windowedK = new Windowed<>(key, new TimeWindow(startTimestamp, startTimestamp + windowSize));
         return new KeyValue<>(windowedK, value);
+    }
+
+    private void maybeUpdateSeqnumForDups() {
+        if (retainDuplicates) {
+            seqnum = (seqnum + 1) & 0x7FFFFFFF;
+        }
+    }
+
+    private static class WrappedK<K extends Comparable<K>> implements Comparable<WrappedK<K>> {
+        private final K key;
+        private final int seqnum;
+
+        WrappedK(final K key, final int seqnum) {
+            this.key = key;
+            this.seqnum = seqnum;
+        }
+
+        public K getKey() {
+            return this.key;
+        }
+
+        public int compareTo(final WrappedK<K> k) {
+            final int compareKeys = this.key.compareTo(k.key);
+            if (compareKeys == 0) {
+                return this.seqnum - k.seqnum;
+            } else {
+                return compareKeys;
+            }
+        }
     }
 
     private static class InMemoryWindowStoreIterator<V> implements WindowStoreIterator<V> {
@@ -296,8 +358,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         }
     }
 
-    private static class InMemoryWindowedKeyValueIterator<K, V> implements
-        KeyValueIterator<Windowed<K>, V> {
+    private static class InMemoryWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
 
         ListIterator<KeyValue<Windowed<K>, V>> iterator;
 

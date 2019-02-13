@@ -101,11 +101,12 @@ public class InMemoryWindowStoreTest {
     private final InternalMockProcessorContext context = new InternalMockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
     private WindowStore<Integer, String> windowStore;
 
-    private WindowStore<Integer, String> createInMemoryWindowStore(final ProcessorContext context) {
+    private WindowStore<Integer, String> createInMemoryWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
         final WindowStore<Integer, String> store = Stores.windowStoreBuilder(Stores.inMemoryWindowStore(
                                                                              storeName,
                                                                              ofMillis(retentionPeriod),
-                                                                             ofMillis(windowSize)),
+                                                                             ofMillis(windowSize),
+                                                                             retainDuplicates),
             Serdes.Integer(),
             Serdes.String()).build();
 
@@ -144,7 +145,7 @@ public class InMemoryWindowStoreTest {
 
     @Test
     public void testSingleFetch() {
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -165,7 +166,7 @@ public class InMemoryWindowStoreTest {
 
     @Test
     public void testDeleteAndUpdate() {
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         final long currentTime = 0;
         setCurrentTime(currentTime);
@@ -182,7 +183,7 @@ public class InMemoryWindowStoreTest {
 
     @Test
     public void testFetchAll() {
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -200,7 +201,39 @@ public class InMemoryWindowStoreTest {
         setCurrentTime(currentTime);
         windowStore.put(2, "four");
 
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime);
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(2, "five");
+
+        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(windowSize * 10, windowSize * 30);
+
+        assertEquals(windowedPair(1, "two", windowSize * 10), iterator.next());
+        assertEquals(windowedPair(1, "three", windowSize * 20), iterator.next());
+        assertEquals(windowedPair(2, "four", windowSize * 30), iterator.next());
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void testAll() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        long currentTime = 0;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "one");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "two");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "three");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(2, "four");
+
+        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.all();
 
         assertEquals(windowedPair(1, "one", 0), iterator.next());
         assertEquals(windowedPair(1, "two", windowSize * 10), iterator.next());
@@ -212,7 +245,7 @@ public class InMemoryWindowStoreTest {
     @Test
     public void testTimeRangeFetch() {
 
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -246,7 +279,7 @@ public class InMemoryWindowStoreTest {
     @Test
     public void testKeyRangeFetch() {
 
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -277,8 +310,36 @@ public class InMemoryWindowStoreTest {
     }
 
     @Test
+    public void testFetchDuplicates() {
+        windowStore = createInMemoryWindowStore(context, true);
+
+        long currentTime = 0;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "one");
+        windowStore.put(1, "one-2");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "two");
+        windowStore.put(1, "two-2");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "three");
+        windowStore.put(1, "three-2");
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, windowSize * 10);
+
+        assertEquals(new KeyValue<>(0L, "one"), iterator.next());
+        assertEquals(new KeyValue<>(0L, "one-2"), iterator.next());
+        assertEquals(new KeyValue<>(windowSize * 10, "two"), iterator.next());
+        assertEquals(new KeyValue<>(windowSize * 10, "two-2"), iterator.next());
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void testSegmentExpiration() {
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         long currentTime = 0;
         setCurrentTime(currentTime);
@@ -318,8 +379,8 @@ public class InMemoryWindowStoreTest {
     }
 
     @Test
-    public void testIteratorPeek() {
-        windowStore = createInMemoryWindowStore(context);
+    public void testWindowIteratorPeek() {
+        windowStore = createInMemoryWindowStore(context, false);
 
         final long currentTime = 0;
         setCurrentTime(currentTime);
@@ -332,8 +393,22 @@ public class InMemoryWindowStoreTest {
     }
 
     @Test
+    public void testValueIteratorPeek() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        final long currentTime = 0;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "one");
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, currentTime);
+
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldRestore() {
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
 
         // should be empty initially
         assertFalse(windowStore.all().hasNext());
@@ -358,7 +433,7 @@ public class InMemoryWindowStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        windowStore = createInMemoryWindowStore(context);
+        windowStore = createInMemoryWindowStore(context, false);
         setCurrentTime(retentionPeriod);
         windowStore.put(1, "too late", 0L);
         windowStore.put(1, "ok");

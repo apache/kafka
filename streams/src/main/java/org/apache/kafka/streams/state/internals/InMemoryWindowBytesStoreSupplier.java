@@ -25,13 +25,16 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
     private final String name;
     private final long retentionPeriod;
     private final long windowSize;
+    private final boolean retainDuplicates;
 
     public InMemoryWindowBytesStoreSupplier(final String name,
                                             final long retentionPeriod,
-                                            final long windowSize) {
+                                            final long windowSize,
+                                            final boolean retainDuplicates) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.windowSize = windowSize;
+        this.retainDuplicates = retainDuplicates;
     }
 
     @Override
@@ -46,6 +49,7 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
                                          Serdes.ByteArray(),
                                          retentionPeriod,
                                          windowSize,
+                                         retainDuplicates,
                                          metricsScope());
     }
 
@@ -79,6 +83,6 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
 
     @Override
     public boolean retainDuplicates() {
-        return false;
+        return retainDuplicates;
     }
 }
