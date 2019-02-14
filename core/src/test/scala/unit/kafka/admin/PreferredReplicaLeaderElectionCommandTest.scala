@@ -33,8 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging /*with RackAwareTest*/ {
-
+class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
 
   @After
