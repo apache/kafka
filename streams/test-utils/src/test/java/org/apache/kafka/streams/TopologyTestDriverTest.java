@@ -473,10 +473,6 @@ public class TopologyTestDriverTest {
                     }
                     return Serdes.Integer().serializer().serialize(topic, (Integer) data);
                 }
-                @Override
-                public void close() {}
-                @Override
-                public void configure(final Map configs, final boolean isKey) {}
             },
             new Serializer<Object>() {
                 @Override
@@ -486,10 +482,6 @@ public class TopologyTestDriverTest {
                     }
                     return Serdes.Double().serializer().serialize(topic, (Double) data);
                 }
-                @Override
-                public void close() {}
-                @Override
-                public void configure(final Map configs, final boolean isKey) {}
             },
             processor);
 

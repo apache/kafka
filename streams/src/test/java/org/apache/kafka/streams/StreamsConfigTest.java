@@ -646,9 +646,6 @@ public class StreamsConfigTest {
         }
 
         @Override
-        public void close() {}
-
-        @Override
         public Serializer serializer() {
             return null;
         }
