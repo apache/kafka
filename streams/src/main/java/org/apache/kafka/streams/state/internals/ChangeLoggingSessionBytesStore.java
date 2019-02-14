@@ -81,11 +81,11 @@ class ChangeLoggingSessionBytesStore extends WrappedStateStore<SessionStore<Byte
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
-        return findSessions(key, 0, Long.MAX_VALUE);
+        return wrapped().fetch(key);
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
-        return findSessions(from, to, 0, Long.MAX_VALUE);
+        return wrapped().fetch(from, to);
     }
 }

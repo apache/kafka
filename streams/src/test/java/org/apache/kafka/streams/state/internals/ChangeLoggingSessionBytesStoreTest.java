@@ -113,7 +113,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetching() {
-        EasyMock.expect(inner.findSessions(bytesKey, 0, Long.MAX_VALUE)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(inner.fetch(bytesKey)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
 
@@ -123,7 +123,7 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldDelegateToUnderlyingStoreWhenFetchingRange() {
-        EasyMock.expect(inner.findSessions(bytesKey, bytesKey, 0, Long.MAX_VALUE)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        EasyMock.expect(inner.fetch(bytesKey, bytesKey)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
 
         init();
 
