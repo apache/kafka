@@ -1274,17 +1274,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForLeaderToBecome(partition1, 1)
 
     // topic 2 unchanged
-    try {
-      electResult.partitionResult(partition2).get()
-      fail("topic 2 wasn't requested")
-    } catch {
-      case e: ExecutionException =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
-          cause.getMessage)
-        assertEquals(0, currentLeader(partition2))
-    }
+    var e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
+      e.getMessage)
+    assertEquals(0, currentLeader(partition2))
 
     // meaningful election with null partitions
     electResult = client.electPreferredLeaders(null)
@@ -1298,17 +1292,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
     electResult = client.electPreferredLeaders(asList(unknownPartition))
     assertEquals(Set(unknownPartition).asJava, electResult.partitions.get)
-    try {
-      electResult.partitionResult(unknownPartition).get()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition does not exist.",
-          cause.getMessage)
-        assertEquals(1, currentLeader(partition1))
-        assertEquals(1, currentLeader(partition2))
-    }
+    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("The partition does not exist.", e.getMessage)
+    assertEquals(1, currentLeader(partition1))
+    assertEquals(1, currentLeader(partition2))
 
     // Now change the preferred leader to 2
     changePreferredLeader(prefer2)
@@ -1318,15 +1306,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get)
     waitForLeaderToBecome(partition1, 2)
     assertEquals(1, currentLeader(partition2))
-    try {
-      electResult.partitionResult(unknownPartition).get()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition does not exist.",
-          cause.getMessage)
-    }
+    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("The partition does not exist.", e.getMessage)
 
     // dupe partitions
     electResult = client.electPreferredLeaders(asList(partition2, partition2))
@@ -1340,16 +1322,15 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     servers(1).shutdown()
     waitUntilTrue (() => {
       val description = client.describeTopics(Set(partition1.topic, partition2.topic).asJava).all().get()
-      !description.asScala.flatMap { case (topic, description) =>
-        description.partitions.asScala.flatMap(_.isr.asScala)
-      }.exists(_.id == 1)
+      val isr = description.asScala.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+      !isr.exists(_.id == 1)
     }, "Expect broker 1 to no longer be in any ISR")
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
     electResult = client.electPreferredLeaders(asList(partition1), shortTimeout)
     assertEquals(Set(partition1).asJava, electResult.partitions.get)
-    var e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
+    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
     assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
     assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
