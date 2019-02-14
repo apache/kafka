@@ -18,17 +18,24 @@
 package kafka.server.validator
 
 import kafka.network.RequestChannel
+import kafka.utils.Logging
+import org.apache.kafka.common.protocol.Errors
 
-final class ChainValidator[T, V](validators: List[Validator[T, V]]) extends Validator[T, V] {
-  def validate(request: RequestChannel.Request, input: T, validation: V): V = {
-    validators.foldLeft(validation) { (state, validator) =>
-      validator.validate(request, input, state)
+final class MaxBytesFetchPartitionValidator extends FetchPartitionValidator with Logging {
+  override def validate(request: RequestChannel.Request, partition: ValidElem): Option[ErrorElem] = {
+    val (topic, data) = partition
+    if (data.maxBytes < 0) {
+      // Log why we are returning INVALID_REQUEST; documentation ask the user to read the broker logs
+      warn(s"Invalid fetch from client `${request.header.clientId}` maximum bytes is negative for ${topic}: ${data.maxBytes}")
+      Some(topic-> errorResponse(Errors.INVALID_REQUEST))
+    } else {
+      None
     }
   }
 }
 
-final object ChainValidator {
-  def apply[T, V](validators: List[Validator[T, V]]): ChainValidator[T, V]= {
-    new ChainValidator(validators)
+final object MaxBytesFetchPartitionValidator {
+  def apply(): MaxBytesFetchPartitionValidator = {
+    new MaxBytesFetchPartitionValidator()
   }
 }

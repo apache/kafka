@@ -275,7 +275,7 @@ trait FetchContext extends Logging {
   /**
     * Get all of the partitions in the fetch request.
     */
-  def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)]
+  def partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData]
 
   /**
     * Get the response size to be used for quota computation. Since we are returning an empty response in case of
@@ -306,8 +306,8 @@ final class SessionErrorContext(val error: Errors,
                                 val reqMetadata: JFetchMetadata) extends FetchContext {
   override def getFetchOffset(part: TopicPartition): Option[Long] = None
 
-  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
-    Vector.empty
+  override def partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData] = {
+    mutable.Map.empty
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -330,8 +330,8 @@ final class SessionlessFetchContext(val fetchData: util.Map[TopicPartition, Fetc
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
-    fetchData.entrySet.asScala.map(entry => (entry.getKey, entry.getValue))(breakOut)
+  override def partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData] = {
+    fetchData.asScala
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -361,8 +361,8 @@ final class FullFetchContext(private val time: Time,
   override def getFetchOffset(part: TopicPartition): Option[Long] =
     Option(fetchData.get(part)).map(_.fetchOffset)
 
-  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
-    fetchData.entrySet.asScala.map(entry => (entry.getKey, entry.getValue))(breakOut)
+  override def partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData] = {
+    fetchData.asScala
   }
 
   override def getResponseSize(updates: FetchSession.RESP_MAP, versionId: Short): Int = {
@@ -401,12 +401,14 @@ final class IncrementalFetchContext(private val time: Time,
 
   override def getFetchOffset(tp: TopicPartition): Option[Long] = session.getFetchOffset(tp)
 
-  override def partitions: Vector[(TopicPartition, FetchRequest.PartitionData)] = {
+  override def partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData] = {
     // Take the session lock and iterate over all the cached partitions.
     session.synchronized {
-      session.partitionMap.iterator.asScala.toSeq.map(part => {
-        (new TopicPartition(part.topic, part.partition), part.reqData)
-      })(breakOut)
+      val copy = mutable.Map.newBuilder[TopicPartition, FetchRequest.PartitionData]
+      session.partitionMap.iterator.asScala.foreach { part =>
+        copy += (new TopicPartition(part.topic, part.partition) -> part.reqData)
+      }
+      copy.result()
     }
   }
 

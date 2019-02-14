@@ -20,33 +20,35 @@ package kafka.server.validator
 import kafka.network.RequestChannel
 import kafka.security.auth.Authorizer
 import kafka.server.MetadataCache
-import org.apache.kafka.common.requests.FetchRequest
 
 /** Abstract validation processing for requests.
  *
  *  The type T represents the request specific type while V represent the request specific
  *  validation or result.
  */
-trait Validator[T, V] {
+trait RequestValidator[I, O] {
   /** Returns the result of validating a request
    *
    *  @param request request object
    *  @param input parametrized input for the validator
-   *  @param validation parametrized state and validation result
+   *  @param validation parametrized result for the validator
    */
   def validate(request: RequestChannel.Request,
-               input: T,
-               validation: V): V
+               input: I): O
 }
 
-final object Validator {
-  def fetchRequest(metadataCache: MetadataCache,
-                   authorizer: Option[Authorizer]): Validator[FetchRequest, FetchRequestValidation] = {
-    ChainValidator(
+final object RequestValidator {
+  def fetch(metadataCache: MetadataCache,
+            authorizer: Option[Authorizer]): ChainFetchRequestValidator = {
+    ChainFetchRequestValidator(
       List(
         MaxBytesFetchRequestValidator(),
-        AuthorizeFetchRequestValidator(authorizer),
-        MetadataCacheFetchRequestValidator(metadataCache)
+        AuthorizeFetchRequestValidator(authorizer)
+      ),
+      List(
+        MaxBytesFetchPartitionValidator(),
+        AuthorizeFetchPartitionValidator(authorizer),
+        MetadataCacheFetchPartitionValidator(metadataCache)
       )
     )
   }

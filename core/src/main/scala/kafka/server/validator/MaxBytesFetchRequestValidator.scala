@@ -19,39 +19,27 @@ package kafka.server.validator
 
 import kafka.network.RequestChannel
 import kafka.utils.Logging
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchRequest
+import scala.collection.breakOut
+import scala.collection.mutable
 
-final class MaxBytesFetchRequestValidator extends Validator[FetchRequest, FetchRequestValidation] with Logging {
-  import FetchRequestValidation._
-
-  def validate(request: RequestChannel.Request, fetchRequest: FetchRequest, validation: FetchRequestValidation): FetchRequestValidation = {
+final class MaxBytesFetchRequestValidator extends FetchRequestValidator with Logging {
+  override def validate(request: RequestChannel.Request,
+                        input: (FetchRequest, mutable.Map[TopicPartition, FetchRequest.PartitionData])): Vector[ErrorElem] = {
+    val (fetchRequest, partitions) = input
     if (fetchRequest.maxBytes() < 0) {
       // Invalidate the fetch request and all of the fetch partitions
       // Log why we are returning INVALID_REQUEST; documentation ask the user to read the broker logs
       warn(s"Invalid fetch from client `${request.header.clientId}` maximum bytes is negative: ${fetchRequest.maxBytes()}")
-      val erroneous = validation.interesting.map { case (topicPartition, _) =>
-        topicPartition -> errorResponse[Records](Errors.INVALID_REQUEST)
-      }
 
-      FetchRequestValidation(erroneous ++ validation.erroneous, Vector.empty)
+      partitions.map { case (topic, _) =>
+        topic -> errorResponse[Records](Errors.INVALID_REQUEST)
+      }(breakOut)
     } else {
-      val erroneous = Vector.newBuilder[ErrorElem]
-      erroneous ++= validation.erroneous
-      val interesting = Vector.newBuilder[ValidElem]
-
-      validation.interesting.map { case (topicPartition, partitionData) =>
-        if (partitionData.maxBytes < 0) {
-          // Log why we are returning INVALID_REQUEST; documentation ask the user to read the broker logs
-          warn(s"Invalid fetch from client `${request.header.clientId}` maximum bytes is negative for ${topicPartition}: ${fetchRequest.maxBytes()}")
-          erroneous += (topicPartition -> errorResponse(Errors.INVALID_REQUEST))
-        } else {
-          interesting += (topicPartition -> partitionData)
-        }
-      }
-
-      FetchRequestValidation(erroneous.result(), interesting.result())
+      Vector.empty
     }
   }
 }

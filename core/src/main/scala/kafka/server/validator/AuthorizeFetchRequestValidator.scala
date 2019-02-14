@@ -21,51 +21,31 @@ import kafka.network.RequestChannel
 import kafka.security.auth.Authorizer
 import kafka.security.auth.ClusterAction
 import kafka.security.auth.Operation
-import kafka.security.auth.Read
 import kafka.security.auth.Resource
-import kafka.security.auth.Topic
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.requests.FetchRequest
-import org.apache.kafka.common.resource.PatternType.LITERAL
+import scala.collection.breakOut
+import scala.collection.mutable
 
-final class AuthorizeFetchRequestValidator(authorizer: Option[Authorizer]) extends Validator[FetchRequest, FetchRequestValidation] {
-  import FetchRequestValidation._
-
-  private[this] def authorize(session: RequestChannel.Session,
-                              operation: Operation,
-                              resource: Resource): Boolean = {
-    authorizer.forall(_.authorize(session, operation, resource))
-  }
+final class AuthorizeFetchRequestValidator(authorizer: Option[Authorizer]) extends FetchRequestValidator {
+  import AuthorizeFetchRequestValidator.authorize
 
   override def validate(request: RequestChannel.Request,
-                        fetchRequest: FetchRequest,
-                        validation: FetchRequestValidation): FetchRequestValidation = {
+                        input: (FetchRequest, mutable.Map[TopicPartition, FetchRequest.PartitionData])): Vector[ErrorElem] = {
+    val (fetchRequest, partitions) = input
     if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
-      if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
-        validation
+      if (authorize(authorizer, request.session, ClusterAction, Resource.ClusterResource)) {
+        Vector.empty
       } else {
-        val erroneous = validation.interesting.map { case (part, _) =>
-          (part -> errorResponse[Records](Errors.TOPIC_AUTHORIZATION_FAILED))
-        }
-
-        FetchRequestValidation(erroneous ++ validation.erroneous, Vector.empty)
+        partitions.map { case (topic, _) =>
+          topic -> errorResponse[Records](Errors.TOPIC_AUTHORIZATION_FAILED)
+        }(breakOut)
       }
     } else {
-      // Regular Kafka consumers need READ permission on each partition they are fetching.
-      val erroneous = Vector.newBuilder[ErrorElem]
-      erroneous ++= validation.erroneous
-      val interesting = Vector.newBuilder[ValidElem]
-
-      validation.interesting.foreach { case (topicPartition, data) =>
-        if (!authorize(request.session, Read, Resource(Topic, topicPartition.topic, LITERAL)))
-          erroneous += (topicPartition -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED))
-        else
-          interesting += (topicPartition -> data)
-      }
-
-      FetchRequestValidation(erroneous.result(), interesting.result())
+      Vector.empty
     }
   }
 }
@@ -73,5 +53,12 @@ final class AuthorizeFetchRequestValidator(authorizer: Option[Authorizer]) exten
 final object AuthorizeFetchRequestValidator {
   def apply(authorizer: Option[Authorizer]): AuthorizeFetchRequestValidator = {
     new AuthorizeFetchRequestValidator(authorizer)
+  }
+
+  def authorize(authorizer: Option[Authorizer],
+                session: RequestChannel.Session,
+                operation: Operation,
+                resource: Resource): Boolean = {
+    authorizer.forall(_.authorize(session, operation, resource))
   }
 }

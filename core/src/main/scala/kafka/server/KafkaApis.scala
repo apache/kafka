@@ -37,7 +37,8 @@ import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.validator.FetchRequestValidation
-import kafka.server.validator.Validator
+import kafka.server.validator.RequestValidator
+import kafka.server.validator.errorResponse
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -92,7 +93,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
-  val fetchRequestValidator = Validator.fetchRequest(metadataCache, authorizer)
+  val fetchRequestValidator = RequestValidator.fetch(metadataCache, authorizer)
 
   def close() {
     info("Shutdown complete.")
@@ -525,8 +526,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val FetchRequestValidation(erroneous, interesting) = fetchRequestValidator.validate(
       request,
-      fetchRequest,
-      FetchRequestValidation(Vector.empty, fetchContext.partitions)
+      (fetchRequest, fetchContext.partitions)
     )
 
     def maybeConvertFetchedData(tp: TopicPartition,
@@ -535,7 +535,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
-        FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
         // Down-conversion of the fetched records is needed when the stored magic version is
         // greater than that supported by the client (as indicated by the fetch request version). If the
@@ -560,7 +560,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // For fetch requests from clients, check if down-conversion is disabled for the particular partition
             if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
               trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-              FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_VERSION)
+              errorResponse(Errors.UNSUPPORTED_VERSION)
             } else {
               try {
                 trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
@@ -574,7 +574,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
-                  FetchRequestValidation.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,

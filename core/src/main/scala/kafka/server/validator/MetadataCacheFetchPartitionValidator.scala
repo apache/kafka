@@ -17,8 +17,24 @@
 
 package kafka.server.validator
 
+import kafka.network.RequestChannel
+import kafka.server.MetadataCache
+import org.apache.kafka.common.protocol.Errors
 
-final case class FetchRequestValidation(
-  erroneous: Vector[ErrorElem],
-  interesting: Vector[ValidElem]
-)
+final class MetadataCacheFetchPartitionValidator(metadataCache: MetadataCache) extends FetchPartitionValidator {
+  override def validate(request: RequestChannel.Request,
+                        partition: ValidElem): Option[ErrorElem] = {
+    val (topic, data) = partition
+    if (!metadataCache.contains(topic)) {
+      Some(topic-> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+    } else {
+      None
+    }
+  }
+}
+
+final object MetadataCacheFetchPartitionValidator {
+  def apply(metadata: MetadataCache): MetadataCacheFetchPartitionValidator = {
+    new MetadataCacheFetchPartitionValidator(metadata)
+  }
+}
