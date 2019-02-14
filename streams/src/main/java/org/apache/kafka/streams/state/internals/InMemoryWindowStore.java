@@ -155,8 +155,6 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     @Override
     public V fetch(final K key, final long windowStartTimestamp) {
         removeExpiredSegments();
-        if (windowStartTimestamp <= this.context.streamTime() - this.retentionPeriod)
-            return null;
 
         final NavigableMap<WrappedK<K>, V> kvMap = this.segmentMap.get(windowStartTimestamp);
         if (kvMap == null) {
@@ -282,11 +280,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
 
     private void removeExpiredSegments() {
         final long minLiveTime = this.context.streamTime() - this.retentionPeriod;
-        final NavigableMap<Long, NavigableMap<WrappedK<K>, V>> expiredSegments = this.segmentMap.headMap(minLiveTime, true);
-        for (Iterator<Entry<Long, NavigableMap<WrappedK<K>, V>>> it = expiredSegments.entrySet().iterator(); it.hasNext(); ) {
-            it.next();
-            it.remove();
-        }
+        this.segmentMap.headMap(minLiveTime, true).clear();
     }
 
     private KeyValue<Windowed<K>, V> getWindowedKeyValue(final K key, final long startTimestamp, final V value) {
