@@ -426,7 +426,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                 final Number expected = keyToExpectation.apply(key);
                 final Number actual = entry.getValue().getLast().value();
                 if (!expected.equals(actual)) {
-                    resultStream.printf("%s fail: key=%s actual=%s expected=%s%n\t inputEvents=%s%n\toutputEvents=%s%n",
+                    resultStream.printf("%s fail: key=%s actual=%s expected=%s%n\t inputEvents=%n%s%n\toutputEvents=%n%s%n",
                                         topic,
                                         key,
                                         actual,
