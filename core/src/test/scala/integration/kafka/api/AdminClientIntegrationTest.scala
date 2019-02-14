@@ -1349,48 +1349,26 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
     electResult = client.electPreferredLeaders(asList(partition1), shortTimeout)
     assertEquals(Set(partition1).asJava, electResult.partitions.get)
-    try {
-      electResult.partitionResult(partition1).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
+    var e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
     assertEquals(2, currentLeader(partition1))
 
     // preferred leader unavailable with null argument
     electResult = client.electPreferredLeaders(null, shortTimeout)
-    try {
-      electResult.partitions.get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-    }
-    try {
-      electResult.partitionResult(partition1).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
-    try {
-      electResult.partitionResult(partition2).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
+    e = intercept[ExecutionException](electResult.partitions.get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+
+    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
+
+    e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
 
     assertEquals(2, currentLeader(partition1))
     assertEquals(2, currentLeader(partition2))
