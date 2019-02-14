@@ -656,6 +656,13 @@ public class StreamsResetter {
 
 
     private boolean isInternalTopic(final String topicName) {
+        // if topic is specified either in --input-topics or --intermediate-topics
+        // and also matches the "internal" topic criteria, then tool will
+        // first process it as "input" or "intermediate" topic (i.e. reset to earliest / latest)
+        // and then delete it because it is "internal", which is wierd and misleading
+        // if topic is specified either in --input-topics or --intermediate-topics
+        // most likely it is not intended for deletion
+        // more in: https://issues.apache.org/jira/browse/KAFKA-7930
         return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
             && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
