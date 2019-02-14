@@ -276,7 +276,6 @@ public class MockClient implements KafkaClient {
         maybeAwaitWakeup();
         checkTimeoutOfPendingRequests(now);
 
-        List<ClientResponse> copy = new ArrayList<>(this.responses);
         // We skip metadata updates if all nodes are currently blacked out
         if (metadataUpdater.isUpdateNeeded() && leastLoadedNode(now) != null) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
@@ -287,9 +286,11 @@ public class MockClient implements KafkaClient {
             }
         }
 
+        List<ClientResponse> copy = new ArrayList<>();
         ClientResponse response;
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
+            copy.add(response);
         }
 
         return copy;
