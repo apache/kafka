@@ -35,6 +35,10 @@ import java.util.Map;
  * To use in a test, create an instance and prepare its {@link #kafkaClient() MockClient} with the expected responses
  * for the {@link AdminClient}. Then, use the {@link #adminClient() AdminClient} in the test, which will then use the MockClient
  * and receive the responses you provided.
+ *
+ * Since {@link #kafkaClient() MockClient} is not thread-safe,
+ * users should be wary of calling its methods after the {@link #adminClient() AdminClient} is instantiated.
+ *
  * <p>
  * When finished, be sure to {@link #close() close} the environment object.
  */
