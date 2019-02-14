@@ -138,6 +138,7 @@ public class RocksDBWindowStoreTest {
         }
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldOnlyIterateOpenSegments() {
         windowStore = createWindowStore(context, false);
@@ -676,6 +677,7 @@ public class RocksDBWindowStoreTest {
         assertNull(entriesByKey.get(6));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testPutSameKeyTimestamp() {
         windowStore = createWindowStore(context, true);
@@ -731,6 +733,7 @@ public class RocksDBWindowStoreTest {
         assertEquals(Utils.mkSet("zero@0", "zero@0", "zero+@0", "zero++@0"), entriesByKey.get(0));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRolling() {
         windowStore = createWindowStore(context, false);
@@ -1008,6 +1011,7 @@ public class RocksDBWindowStoreTest {
 
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testRestore() throws Exception {
         final long startTime = segmentInterval * 2;
@@ -1163,6 +1167,7 @@ public class RocksDBWindowStoreTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testSegmentMaintenance() {
         windowStore = createWindowStore(context, true);
@@ -1337,12 +1342,14 @@ public class RocksDBWindowStoreTest {
         )));
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         windowStore = createWindowStore(context, false);
         windowStore.put(null, "anyValue");
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         windowStore = createWindowStore(context, false);
@@ -1415,6 +1422,7 @@ public class RocksDBWindowStoreTest {
         assertThat(toList(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))), equalTo(expectedKey3));
     }
 
+    @SuppressWarnings("deprecation")
     private void putFirstBatch(final WindowStore<Integer, String> store,
                                @SuppressWarnings("SameParameterValue") final long startTime,
                                final InternalMockProcessorContext context) {
@@ -1430,6 +1438,7 @@ public class RocksDBWindowStoreTest {
         store.put(5, "five");
     }
 
+    @SuppressWarnings("deprecation")
     private void putSecondBatch(final WindowStore<Integer, String> store,
                                 @SuppressWarnings("SameParameterValue") final long startTime,
                                 final InternalMockProcessorContext context) {

@@ -46,7 +46,6 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws NullPointerException if the given key is {@code null}
      * @deprecated since 2.2 Use {@link #put(K, V, long)} instead
      */
-    @SuppressWarnings("deprecation")
     @Deprecated
     void put(K key, V value);
 

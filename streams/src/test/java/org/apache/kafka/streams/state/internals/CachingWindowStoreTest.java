@@ -104,6 +104,7 @@ public class CachingWindowStoreTest {
         cachingStore.close();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotReturnDuplicatesInRanges() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -196,7 +197,7 @@ public class CachingWindowStoreTest {
             driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         }
     }
-
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldPutFetchFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -231,6 +232,7 @@ public class CachingWindowStoreTest {
         return Bytes.wrap(key.getBytes());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldPutFetchRangeFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -250,6 +252,7 @@ public class CachingWindowStoreTest {
         assertEquals(2, cache.size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldGetAllFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -272,6 +275,7 @@ public class CachingWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldFetchAllWithinTimestampRange() {
         final String[] array = {"a", "b", "c", "d", "e", "f", "g", "h"};
@@ -329,6 +333,7 @@ public class CachingWindowStoreTest {
         assertEquals(added - 1, cache.size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForwardDirtyItemsWhenFlushCalled() {
         final Windowed<String> windowedKey =
@@ -339,6 +344,7 @@ public class CachingWindowStoreTest {
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForwardOldValuesWhenEnabled() {
         cachingStore.setFlushListener(cacheListener, true);
@@ -367,6 +373,7 @@ public class CachingWindowStoreTest {
         cacheListener.forwarded.clear();
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
@@ -454,6 +461,7 @@ public class CachingWindowStoreTest {
         assertFalse(fetchRange.hasNext());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldClearNamespaceCacheOnClose() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -474,6 +482,7 @@ public class CachingWindowStoreTest {
         cachingStore.fetch(bytesKey("a"), bytesKey("b"), ofEpochMilli(0), ofEpochMilli(10));
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = InvalidStateStoreException.class)
     public void shouldThrowIfTryingToWriteToClosedCachingStore() {
         cachingStore.close();
@@ -534,11 +543,13 @@ public class CachingWindowStoreTest {
         );
     }
 
+    @SuppressWarnings("deprecation")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         cachingStore.put(null, bytesValue("anyValue"));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutNullValue() {
         cachingStore.put(bytesKey("a"), null);
@@ -565,6 +576,7 @@ public class CachingWindowStoreTest {
             bytesValue(value));
     }
 
+    @SuppressWarnings("deprecation")
     private int addItemsToCache() {
         int cachedSize = 0;
         int i = 0;

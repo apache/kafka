@@ -462,7 +462,7 @@ public class SimpleBenchmark {
         final KafkaStreams streams = createKafkaStreamsWithExceptionHandler(builder, props);
         runGenericBenchmark(streams, "Streams Stateful Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
-
+    @SuppressWarnings("deprecation")
     private void processStreamWithWindowStore(final String topic) {
         final CountDownLatch latch = new CountDownLatch(1);
 

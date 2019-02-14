@@ -140,7 +140,7 @@ public class ProcessorContextImplTest {
             assertEquals(VAL, store.approximateNumEntries());
         });
     }
-
+    @SuppressWarnings("deprecation")
     @Test
     public void globalWindowStoreShouldBeReadOnly() {
         doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
@@ -200,7 +200,7 @@ public class ProcessorContextImplTest {
             assertEquals(VAL, store.approximateNumEntries());
         });
     }
-
+    @SuppressWarnings("deprecation")
     @Test
     public void localWindowStoreShouldNotAllowInitOrClose() {
         doTest("LocalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
@@ -285,7 +285,7 @@ public class ProcessorContextImplTest {
 
         return keyValueStoreMock;
     }
-
+    @SuppressWarnings("deprecation")
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 

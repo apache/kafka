@@ -108,6 +108,7 @@ public class MeteredWindowStoreTest {
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "restore-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
