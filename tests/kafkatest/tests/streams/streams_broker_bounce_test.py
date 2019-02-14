@@ -91,7 +91,6 @@ class StreamsBrokerBounceTest(Test):
     def __init__(self, test_context):
         super(StreamsBrokerBounceTest, self).__init__(test_context)
         self.replication = 3
-        self.num_kafka_nodes = self.replication
         self.partitions = 3
         self.topics = {
             'echo' : { 'partitions': self.partitions, 'replication-factor': self.replication,
@@ -134,19 +133,11 @@ class StreamsBrokerBounceTest(Test):
         for num in range(0, num_failures - 1):
             signal_node(self, self.kafka.nodes[num], sig)
 
-    def get_topics_count(self):
-        count = 0
-        for node in self.kafka.nodes:
-            topic_list = self.kafka.list_topics("placeholder", node)
-            # need to iterate over topic_list as list_topics returns a python generator so values fetched lazily
-            for topic in topic_list:
-                count += 1
-        return count
-
     def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:
             match_count = 0
-            # need to iterate over topic_list as list_topics returns a python generator so values fetched lazily
+            # need to iterate over topic_list_generator as kafka.list_topics()
+            # returns a python generator so values are fetched lazily
             # so we can't just compare directly we must iterate over what's returned
             topic_list_generator = self.kafka.list_topics("placeholder", node)
             for topic in topic_list_generator:
