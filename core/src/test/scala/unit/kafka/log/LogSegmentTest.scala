@@ -166,14 +166,14 @@ class LogSegmentTest {
     seg.close()
 
     val reopened = createSegment(0, time = time)
-    assertEquals(0, seg.timeIndex.sizeInBytes)
-    assertEquals(0, seg.offsetIndex.sizeInBytes)
+    assertEquals(0, seg.timeIndex.get.sizeInBytes)
+    assertEquals(0, seg.offsetIndex.get.sizeInBytes)
 
     time.sleep(500)
     reopened.truncateTo(57)
     assertEquals(0, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(reopened.timeIndex.isFull)
-    assertFalse(reopened.offsetIndex.isFull)
+    assertFalse(reopened.timeIndex.get.isFull)
+    assertFalse(reopened.offsetIndex.get.isFull)
 
     var rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
@@ -204,10 +204,10 @@ class LogSegmentTest {
     assertEquals(offset, seg.readNextOffset)
 
     val expectedNumEntries = numMessages / 2 - 1
-    assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
+    assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.get.entries)
 
     seg.truncateTo(41)
-    assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
+    assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.get.entries)
     assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
     assertEquals(41, seg.readNextOffset)
   }
@@ -228,8 +228,8 @@ class LogSegmentTest {
 
     seg.truncateTo(0)
     assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(seg.timeIndex.isFull)
-    assertFalse(seg.offsetIndex.isFull)
+    assertFalse(seg.timeIndex.get.isFull)
+    assertFalse(seg.offsetIndex.get.isFull)
     assertNull("Segment should be empty.", seg.read(0, None, 1024))
 
     seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))

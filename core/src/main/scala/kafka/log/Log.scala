@@ -464,18 +464,27 @@ class Log(@volatile var dir: File,
         // if it's a log file, load the corresponding log segment
         val baseOffset = offsetFromFile(file)
         val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
+        val offsetIndexExists = Log.offsetIndexFile(dir, baseOffset).exists()
+        val timeIndexExists = Log.timeIndexFile(dir, baseOffset).exists()
         val segment = LogSegment.open(dir = dir,
           baseOffset = baseOffset,
           config,
           time = time,
           fileAlreadyExists = true)
 
-        try segment.sanityCheck(timeIndexFileNewlyCreated)
-        catch {
-          case _: NoSuchFileException =>
-            error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
+        try {
+          // Resize the time index file to 0 if it is newly created.
+          if (timeIndexFileNewlyCreated)
+            segment.timeIndex.get.resize(0)
+          // Rebuild the index if the index file does not exist
+          if (!offsetIndexExists || !timeIndexExists) {
+            error(s"Could not find index file (offset index exists=$offsetIndexExists, time index exists=$timeIndexExists) corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
             recoverSegment(segment)
+          } else if (baseOffset >= recoveryPoint)
+          // Only sanity check segments above the recovery point
+            segment.sanityCheck()
+        } catch {
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")
@@ -1577,8 +1586,8 @@ class Log(@volatile var dir: File,
 
     if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
-        s"offset_index_size = ${segment.offsetIndex.get.entries}/${segment.offsetIndex.maxEntries}, " +
-        s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
+        s"offset_index_size = ${segment.offsetIndex.get.entries}/${segment.offsetIndex.get.maxEntries}, " +
+        s"time_index_size = ${segment.timeIndex.get.entries}/${segment.timeIndex.get.maxEntries}, " +
         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
       /*
@@ -1623,7 +1632,7 @@ class Log(@volatile var dir: File,
             // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
             warn(s"Trying to roll a new log segment with start offset $newOffset " +
                  s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
-                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
+                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.get.entries}," +
                  s" size of offset index: ${activeSegment.offsetIndex.get.entries}.")
             deleteSegment(activeSegment)
           } else {

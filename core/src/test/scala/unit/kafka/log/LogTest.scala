@@ -179,12 +179,12 @@ class LogTest {
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
 
     // manually resize offset index to force roll of an empty active segment on next append
-    log.activeSegment.offsetIndex.resize(0)
+    log.activeSegment.offsetIndex.get.resize(0)
     val records3 = TestUtils.records(
       List(new SimpleRecord(mockTime.milliseconds + 12, "k3".getBytes, "v3".getBytes)),
       baseOffset = 2L, partitionLeaderEpoch = 0)
     log.appendAsFollower(records3)
-    assertTrue(log.activeSegment.offsetIndex.maxEntries > 1)
+    assertTrue(log.activeSegment.offsetIndex.get.maxEntries > 1)
     assertEquals(2, readLog(log, 2, 100, Some(3)).records.batches.iterator.next().lastOffset)
     assertEquals("Expect two segments.", 2, log.numberOfSegments)
   }
@@ -1618,26 +1618,26 @@ class LogTest {
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(messageSize),
         timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
     assertEquals("After appending %d messages to an empty log, the log end offset should be %d".format(numMessages, numMessages), numMessages, log.logEndOffset)
-    val lastIndexOffset = log.activeSegment.offsetIndex.lastOffset
-    val numIndexEntries = log.activeSegment.offsetIndex.entries
+    val lastIndexOffset = log.activeSegment.offsetIndex.get.lastOffset
+    val numIndexEntries = log.activeSegment.offsetIndex.get.entries
     val lastOffset = log.logEndOffset
     // After segment is closed, the last entry in the time index should be (largest timestamp -> last offset).
     val lastTimeIndexOffset = log.logEndOffset - 1
     val lastTimeIndexTimestamp  = log.activeSegment.largestTimestamp
     // Depending on when the last time index entry is inserted, an entry may or may not be inserted into the time index.
-    val numTimeIndexEntries = log.activeSegment.timeIndex.entries + {
-      if (log.activeSegment.timeIndex.lastEntry.offset == log.logEndOffset - 1) 0 else 1
+    val numTimeIndexEntries = log.activeSegment.timeIndex.get.entries + {
+      if (log.activeSegment.timeIndex.get.lastEntry.offset == log.logEndOffset - 1) 0 else 1
     }
     log.close()
 
     def verifyRecoveredLog(log: Log, expectedRecoveryPoint: Long) {
       assertEquals(s"Unexpected recovery point", expectedRecoveryPoint, log.recoveryPoint)
       assertEquals(s"Should have $numMessages messages when log is reopened w/o recovery", numMessages, log.logEndOffset)
-      assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.offsetIndex.lastOffset)
-      assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.offsetIndex.entries)
-      assertEquals("Should have same last time index timestamp", lastTimeIndexTimestamp, log.activeSegment.timeIndex.lastEntry.timestamp)
-      assertEquals("Should have same last time index offset", lastTimeIndexOffset, log.activeSegment.timeIndex.lastEntry.offset)
-      assertEquals("Should have same number of time index entries as before.", numTimeIndexEntries, log.activeSegment.timeIndex.entries)
+      assertEquals("Should have same last index offset as before.", lastIndexOffset, log.activeSegment.offsetIndex.get.lastOffset)
+      assertEquals("Should have same number of index entries as before.", numIndexEntries, log.activeSegment.offsetIndex.get.entries)
+      assertEquals("Should have same last time index timestamp", lastTimeIndexTimestamp, log.activeSegment.timeIndex.get.lastEntry.timestamp)
+      assertEquals("Should have same last time index offset", lastTimeIndexOffset, log.activeSegment.timeIndex.get.lastEntry.offset)
+      assertEquals("Should have same number of time index entries as before.", numTimeIndexEntries, log.activeSegment.timeIndex.get.entries)
     }
 
     log = createLog(logDir, logConfig, recoveryPoint = lastOffset)
@@ -1663,10 +1663,10 @@ class LogTest {
       MemoryRecords.withRecords(100 + i, CompressionType.NONE, 0, new SimpleRecord(mockTime.milliseconds + i, i.toString.getBytes()))
     }
     messages.foreach(log.appendAsFollower)
-    val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.entries }
+    val timeIndexEntries = log.logSegments.foldLeft(0) { (entries, segment) => entries + segment.timeIndex.get.entries }
     assertEquals(s"There should be ${numMessages - 1} time index entries", numMessages - 1, timeIndexEntries)
     assertEquals(s"The last time index entry should have timestamp ${mockTime.milliseconds + numMessages - 1}",
-      mockTime.milliseconds + numMessages - 1, log.activeSegment.timeIndex.lastEntry.timestamp)
+      mockTime.milliseconds + numMessages - 1, log.activeSegment.timeIndex.get.lastEntry.timestamp)
   }
 
   /**
@@ -1691,8 +1691,8 @@ class LogTest {
     // reopen the log
     log = createLog(logDir, logConfig)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
-    assertTrue("The index should have been rebuilt", log.logSegments.head.offsetIndex.entries > 0)
-    assertTrue("The time index should have been rebuilt", log.logSegments.head.timeIndex.entries > 0)
+    assertTrue("The index should have been rebuilt", log.logSegments.head.offsetIndex.get.entries > 0)
+    assertTrue("The time index should have been rebuilt", log.logSegments.head.timeIndex.get.entries > 0)
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
       if (i == 0)
@@ -1763,7 +1763,7 @@ class LogTest {
     // The rebuilt time index should be empty
     log = createLog(logDir, logConfig, recoveryPoint = numMessages + 1)
     for (segment <- log.logSegments.init) {
-      assertEquals("The time index should be empty", 0, segment.timeIndex.entries)
+      assertEquals("The time index should be empty", 0, segment.timeIndex.get.entries)
       assertEquals("The time index file size should be 0", 0, segment.timeIndex.file.length)
     }
   }
@@ -1798,7 +1798,7 @@ class LogTest {
     }
 
     // reopen the log
-    log = createLog(logDir, logConfig, recoveryPoint = 200L)
+    log = createLog(logDir, logConfig)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
@@ -1887,13 +1887,13 @@ class LogTest {
     assertEquals("There should be exactly 2 segment.", 2, log.numberOfSegments)
     val expectedEntries = msgPerSeg - 1
 
-    assertEquals(s"The index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.offsetIndex.maxEntries)
-    assertEquals(s"The time index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.timeIndex.maxEntries)
+    assertEquals(s"The index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.offsetIndex.get.maxEntries)
+    assertEquals(s"The time index of the first segment should have $expectedEntries entries", expectedEntries, log.logSegments.toList.head.timeIndex.get.maxEntries)
 
     log.truncateTo(0)
     assertEquals("There should be exactly 1 segment.", 1, log.numberOfSegments)
-    assertEquals("The index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/8, log.logSegments.toList.head.offsetIndex.maxEntries)
-    assertEquals("The time index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/12, log.logSegments.toList.head.timeIndex.maxEntries)
+    assertEquals("The index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/8, log.logSegments.toList.head.offsetIndex.get.maxEntries)
+    assertEquals("The time index of segment 1 should be resized to maxIndexSize", log.config.maxIndexSize/12, log.logSegments.toList.head.timeIndex.get.maxEntries)
 
     mockTime.sleep(msgPerSeg)
     for (i<- 1 to msgPerSeg)
@@ -1911,9 +1911,16 @@ class LogTest {
     val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
+    // Create index files
+    bogusIndex2.createNewFile()
+    bogusTimeIndex2.createNewFile()
+
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
+
+    log.logSegments.toSeq.head.offsetIndex.get
+    log.logSegments.toSeq.head.timeIndex.get
 
     assertTrue("The first index file should have been replaced with a larger file", bogusIndex1.length > 0)
     assertTrue("The first time index file should have been replaced with a larger file", bogusTimeIndex1.length > 0)
@@ -2363,6 +2370,8 @@ class LogTest {
 
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    Log.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
+    Log.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
     records.foreach(segment.append _)
     segment.close()
 
@@ -3265,7 +3274,7 @@ class LogTest {
 
     // delete all the offset and transaction index files to force recovery
     log.logSegments.foreach { segment =>
-      segment.offsetIndex.deleteIfExists()
+      segment.offsetIndex.get.deleteIfExists()
       segment.txnIndex.deleteIfExists()
     }
 
@@ -3317,7 +3326,7 @@ class LogTest {
     // delete the last offset and transaction index files to force recovery
     val lastSegment = log.logSegments.last
     val recoveryPoint = lastSegment.baseOffset
-    lastSegment.offsetIndex.deleteIfExists()
+    lastSegment.offsetIndex.get.deleteIfExists()
     lastSegment.txnIndex.deleteIfExists()
 
     log.close()
@@ -3371,7 +3380,7 @@ class LogTest {
     // the producer state from the start of the log
     val lastSegment = log.logSegments.last
     val recoveryPoint = lastSegment.baseOffset
-    lastSegment.offsetIndex.deleteIfExists()
+    lastSegment.offsetIndex.get.deleteIfExists()
     lastSegment.txnIndex.deleteIfExists()
 
     log.close()
@@ -3797,6 +3806,8 @@ object LogTest {
         record(baseOffset + 2)))
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
+      Log.offsetIndexFile(logDir, baseOffset).createNewFile()
+      Log.timeIndexFile(logDir, baseOffset).createNewFile()
       baseOffset + Int.MaxValue
     }
 

@@ -73,16 +73,10 @@ class LogSegment private[log] (val log: FileRecords,
     timeIndex.get.resize(size)
   }
 
-  def sanityCheck(timeIndexFileNewlyCreated: Boolean): Unit = {
-    if (offsetIndex.get.file.exists) {
-      offsetIndex.get.sanityCheck()
-      // Resize the time index file to 0 if it is newly created.
-      if (timeIndexFileNewlyCreated)
-        timeIndex.get.resize(0)
-      timeIndex.get.sanityCheck()
-      txnIndex.sanityCheck()
-    }
-    else throw new NoSuchFileException(s"Offset index file ${offsetIndex.get.file.getAbsolutePath} does not exist")
+  def sanityCheck(): Unit = {
+    offsetIndex.get.sanityCheck()
+    timeIndex.get.sanityCheck()
+    txnIndex.sanityCheck()
   }
 
   private var created = time.milliseconds
@@ -95,14 +89,14 @@ class LogSegment private[log] (val log: FileRecords,
 
   /* The maximum timestamp we see so far */
   @volatile private var _maxTimestampSoFar: Long = -1L
-  @volatile private var maxTimestampSoFar: Long = {
+  def maxTimestampSoFar: Long = {
     if (_maxTimestampSoFar < 0) {
       _maxTimestampSoFar = timeIndex.get.lastEntry.timestamp
     }
     _maxTimestampSoFar
   }
   @volatile private var _offsetOfMaxTimestamp: Long = -1L
-  @volatile private var offsetOfMaxTimestamp: Long = {
+  def offsetOfMaxTimestamp: Long = {
     if (_offsetOfMaxTimestamp < 0) {
       _offsetOfMaxTimestamp = timeIndex.get.lastEntry.offset
     }
@@ -487,8 +481,8 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def updateDir(dir: File): Unit = {
     log.setFile(new File(dir, log.file.getName))
-    offsetIndex.get.file = new File(dir, offsetIndex.get.file.getName)
-    timeIndex.get.file = new File(dir, timeIndex.get.file.getName)
+    offsetIndex.file = new File(dir, offsetIndex.file.getName)
+    timeIndex.file = new File(dir, timeIndex.file.getName)
     txnIndex.file = new File(dir, txnIndex.file.getName)
   }
 
@@ -498,8 +492,8 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def changeFileSuffixes(oldSuffix: String, newSuffix: String) {
     log.renameTo(new File(CoreUtils.replaceSuffix(log.file.getPath, oldSuffix, newSuffix)))
-    offsetIndex.renameTo(new File(CoreUtils.replaceSuffix(offsetIndex.file.getPath, oldSuffix, newSuffix)))
-    timeIndex.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
+    offsetIndex.get.renameTo(new File(CoreUtils.replaceSuffix(offsetIndex.file.getPath, oldSuffix, newSuffix)))
+    timeIndex.get.renameTo(new File(CoreUtils.replaceSuffix(timeIndex.file.getPath, oldSuffix, newSuffix)))
     txnIndex.renameTo(new File(CoreUtils.replaceSuffix(txnIndex.file.getPath, oldSuffix, newSuffix)))
   }
 
@@ -509,9 +503,9 @@ class LogSegment private[log] (val log: FileRecords,
    * The time index entry appended will be used to decide when to delete the segment.
    */
   def onBecomeInactiveSegment() {
-    timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
-    offsetIndex.trimToValidSize()
-    timeIndex.trimToValidSize()
+    timeIndex.get.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true)
+    offsetIndex.get.trimToValidSize()
+    timeIndex.get.trimToValidSize()
     log.trim()
   }
 
@@ -560,8 +554,8 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def findOffsetByTimestamp(timestamp: Long, startingOffset: Long = baseOffset): Option[TimestampAndOffset] = {
     // Get the index entry with a timestamp less than or equal to the target timestamp
-    val timestampOffset = timeIndex.lookup(timestamp)
-    val position = offsetIndex.lookup(math.max(timestampOffset.offset, startingOffset)).position
+    val timestampOffset = timeIndex.get.lookup(timestamp)
+    val position = offsetIndex.get.lookup(math.max(timestampOffset.offset, startingOffset)).position
 
     // Search the timestamp
     Option(log.searchForTimestamp(timestamp, position, startingOffset))
@@ -571,9 +565,9 @@ class LogSegment private[log] (val log: FileRecords,
    * Close this log segment
    */
   def close() {
-    CoreUtils.swallow(timeIndex.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true), this)
-    CoreUtils.swallow(offsetIndex.close(), this)
-    CoreUtils.swallow(timeIndex.close(), this)
+    CoreUtils.swallow(timeIndex.get.maybeAppend(maxTimestampSoFar, offsetOfMaxTimestamp, skipFullCheck = true), this)
+    CoreUtils.swallow(offsetIndex.get.close(), this)
+    CoreUtils.swallow(timeIndex.get.close(), this)
     CoreUtils.swallow(log.close(), this)
     CoreUtils.swallow(txnIndex.close(), this)
   }
@@ -582,8 +576,8 @@ class LogSegment private[log] (val log: FileRecords,
     * Close file handlers used by the log segment but don't write to disk. This is used when the disk may have failed
     */
   def closeHandlers() {
-    CoreUtils.swallow(offsetIndex.closeHandler(), this)
-    CoreUtils.swallow(timeIndex.closeHandler(), this)
+    CoreUtils.swallow(offsetIndex.get.closeHandler(), this)
+    CoreUtils.swallow(timeIndex.get.closeHandler(), this)
     CoreUtils.swallow(log.closeHandlers(), this)
     CoreUtils.swallow(txnIndex.close(), this)
   }
@@ -606,8 +600,8 @@ class LogSegment private[log] (val log: FileRecords,
 
     CoreUtils.tryAll(Seq(
       () => delete(log.deleteIfExists _, "log", log.file, logIfMissing = true),
-      () => delete(offsetIndex.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
-      () => delete(timeIndex.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
+      () => delete(offsetIndex.get.deleteIfExists _, "offset index", offsetIndex.file, logIfMissing = true),
+      () => delete(timeIndex.get.deleteIfExists _, "time index", timeIndex.file, logIfMissing = true),
       () => delete(txnIndex.deleteIfExists _, "transaction index", txnIndex.file, logIfMissing = false)
     ))
   }
@@ -641,8 +635,8 @@ object LogSegment {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
       FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
-      new OffsetIndex(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
-      new TimeIndex(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new OffsetIndexGetter(Log.offsetIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
+      new TimeIndexGetter(Log.timeIndexFile(dir, baseOffset, fileSuffix), baseOffset = baseOffset, maxIndexSize = maxIndexSize),
       new TransactionIndex(baseOffset, Log.transactionIndexFile(dir, baseOffset, fileSuffix)),
       baseOffset,
       indexIntervalBytes = config.indexInterval,

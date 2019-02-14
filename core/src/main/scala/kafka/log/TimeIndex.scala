@@ -25,24 +25,6 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
 
-class TimeIndexGetter(@volatile var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  private var timeIndex: Option[TimeIndex] = None
-
-  def file_=(f: File) {
-    _file = f
-    if (timeIndex.isDefined)
-      timeIndex.get.file = f
-  }
-
-  def fileName: String = _file.getName
-
-  def get: TimeIndex = {
-    if (timeIndex.isEmpty)
-      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
-    timeIndex.get
-  }
-}
-
 /**
  * An index that maps from the timestamp to the logical offsets of the messages in a segment. This index might be
  * sparse, i.e. it may not hold an entry for all the messages in the segment.
@@ -239,4 +221,38 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
 object TimeIndex extends Logging {
   override val loggerName: String = classOf[TimeIndex].getName
+}
+
+
+
+/**
+  * A thin wrapper on top of the raw TimeIndex object to avoid initialization on construction. This defers the TimeIndex
+  * initialization to the time it gets accessed so the cost of the heavy memory mapped operation gets amortized over time.
+  *
+  * Combining with skipping sanity check for safely flushed segments, the startup time of a broker can be reduced, especially
+  * for the the broker with a lot of log segments
+  *
+  */
+class TimeIndexGetter(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
+  private var timeIndex: Option[TimeIndex] = None
+
+  def file: File = {
+    if (timeIndex.isDefined)
+      timeIndex.get.file
+    else
+      _file
+  }
+
+  def file_=(f: File) {
+    if (timeIndex.isDefined)
+      timeIndex.get.file = f
+    else
+      _file = f
+  }
+
+  def get: TimeIndex = {
+    if (timeIndex.isEmpty)
+      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
+    timeIndex.get
+  }
 }
