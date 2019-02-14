@@ -656,7 +656,8 @@ public class StreamsResetter {
 
 
     private boolean isInternalTopic(final String topicName) {
-        return topicName.startsWith(options.valueOf(applicationIdOption) + "-")
+        return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
+            && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
 
