@@ -807,10 +807,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.isValid()) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            log.info("Sending LeaveGroup request to coordinator {}", coordinator);
+            log.info("Member {} sending LeaveGroup request to coordinator {}", generation.memberId, coordinator);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(new LeaveGroupRequestData()
                     .setGroupId(groupId).setMemberId(generation.memberId));
             client.send(coordinator, request)
@@ -1121,8 +1121,12 @@ public abstract class AbstractCoordinator implements Closeable {
             this.protocol = protocol;
         }
 
-        public boolean isValid() {
-            return this != NO_GENERATION;
+        /**
+         * @return true if this generation has a valid member id. A generation might not be {@link #NO_GENERATION}, but
+         * might be pending a join group request, in which case memberId will be an empty string.
+         */
+        public boolean hasMemberId() {
+            return !memberId.isEmpty();
         }
 
         @Override
@@ -1138,6 +1142,15 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public int hashCode() {
             return Objects.hash(generationId, memberId, protocol);
+        }
+
+        @Override
+        public String toString() {
+            return "Generation{" +
+                    "generationId=" + generationId +
+                    ", memberId='" + memberId + '\'' +
+                    ", protocol='" + protocol + '\'' +
+                    '}';
         }
     }
 
