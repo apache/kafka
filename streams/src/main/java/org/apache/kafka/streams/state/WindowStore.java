@@ -44,7 +44,9 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @param value The value to update, it can be null;
      *              if the serialized bytes are also null it is interpreted as deletes
      * @throws NullPointerException if the given key is {@code null}
+     * @deprecated since 2.2 Use {@link #put(K, V, long)} instead
      */
+    @Deprecated
     void put(K key, V value);
 
     /**
