@@ -224,8 +224,6 @@ public class MockClient implements KafkaClient {
     public List<ClientResponse> poll(long timeoutMs, long now) {
         maybeAwaitWakeup();
 
-        List<ClientResponse> copy = new ArrayList<>(this.responses);
-
         if (metadata != null && metadata.updateRequested()) {
             MetadataUpdate metadataUpdate = metadataUpdates.poll();
             if (cluster != null)
@@ -244,9 +242,11 @@ public class MockClient implements KafkaClient {
             }
         }
 
+        List<ClientResponse> copy = new ArrayList<>();
         ClientResponse response;
         while ((response = this.responses.poll()) != null) {
             response.onComplete();
+            copy.add(response);
         }
 
         return copy;
