@@ -25,6 +25,24 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
 
+class TimeIndexGetter(@volatile var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
+  private var timeIndex: Option[TimeIndex] = None
+
+  def file_=(f: File) {
+    _file = f
+    if (timeIndex.isDefined)
+      timeIndex.get.file = f
+  }
+
+  def fileName: String = _file.getName
+
+  def get: TimeIndex = {
+    if (timeIndex.isEmpty)
+      timeIndex = Some(new TimeIndex(_file, baseOffset, maxIndexSize, writable))
+    timeIndex.get
+  }
+}
+
 /**
  * An index that maps from the timestamp to the logical offsets of the messages in a segment. This index might be
  * sparse, i.e. it may not hold an entry for all the messages in the segment.

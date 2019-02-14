@@ -344,19 +344,19 @@ class LogManagerTest {
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), logConfig)
     val activeSegment = log.activeSegment
     val logName = activeSegment.log.file.getName
-    val indexName = activeSegment.offsetIndex.file.getName
-    val timeIndexName = activeSegment.timeIndex.file.getName
+    val indexName = activeSegment.offsetIndex.get.file.getName
+    val timeIndexName = activeSegment.timeIndex.get.file.getName
     val txnIndexName = activeSegment.txnIndex.file.getName
     val indexFilesOnDiskBeforeDelete = activeSegment.log.file.getParentFile.listFiles.filter(_.getName.endsWith("index"))
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.offsetIndex.file, removedSegment.timeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.offsetIndex.get.file, removedSegment.timeIndex..getfile,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndex.file)
-    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndex.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndex.get.file)
+    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndex.get.file)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
     // Try to detect the case where a new index type was added and we forgot to update the pointer

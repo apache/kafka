@@ -784,18 +784,18 @@ private[log] class Cleaner(val id: Int,
     while(segs.nonEmpty) {
       var group = List(segs.head)
       var logSize = segs.head.size.toLong
-      var indexSize = segs.head.offsetIndex.sizeInBytes.toLong
-      var timeIndexSize = segs.head.timeIndex.sizeInBytes.toLong
+      var indexSize = segs.head.offsetIndex.get.sizeInBytes.toLong
+      var timeIndexSize = segs.head.timeIndex.get.sizeInBytes.toLong
       segs = segs.tail
       while(segs.nonEmpty &&
             logSize + segs.head.size <= maxSize &&
-            indexSize + segs.head.offsetIndex.sizeInBytes <= maxIndexSize &&
-            timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
+            indexSize + segs.head.offsetIndex.get.sizeInBytes <= maxIndexSize &&
+            timeIndexSize + segs.head.timeIndex.get.sizeInBytes <= maxIndexSize &&
             lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.last.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
-        indexSize += segs.head.offsetIndex.sizeInBytes
-        timeIndexSize += segs.head.timeIndex.sizeInBytes
+        indexSize += segs.head.offsetIndex.get.sizeInBytes
+        timeIndexSize += segs.head.timeIndex.get.sizeInBytes
         segs = segs.tail
       }
       grouped ::= group.reverse
@@ -875,7 +875,7 @@ private[log] class Cleaner(val id: Int,
                                        maxLogMessageSize: Int,
                                        transactionMetadata: CleanedTransactionMetadata,
                                        stats: CleanerStats): Boolean = {
-    var position = segment.offsetIndex.lookup(startOffset).position
+    var position = segment.offsetIndex.get.lookup(startOffset).position
     val maxDesiredMapSize = (map.slots * this.dupBufferLoadFactor).toInt
     while (position < segment.log.sizeInBytes) {
       checkDone(topicPartition)

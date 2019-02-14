@@ -24,6 +24,19 @@ import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 
+
+class OffsetIndexGetter(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
+  private var offsetIndex: Option[OffsetIndex] = None
+
+  def fileName: String = _file.getName
+
+  def get: OffsetIndex = {
+    if (offsetIndex.isEmpty)
+      offsetIndex = Some(new OffsetIndex(_file, baseOffset, maxIndexSize, writable))
+    offsetIndex.get
+  }
+}
+
 /**
  * An index that maps offsets to physical file locations for a particular log segment. This index may be sparse:
  * that is it may not hold an entry for all messages in the log.
