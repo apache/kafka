@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.lang.{Long => JLong}
-import java.nio.file.{Files, NoSuchFileException}
+import java.nio.file.Files
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
 import java.util.Optional
@@ -475,7 +475,7 @@ class Log(@volatile var dir: File,
         try {
           // Resize the time index file to 0 if it is newly created.
           if (timeIndexFileNewlyCreated)
-            segment.timeIndex.get.resize(0)
+            segment.timeIndex.resize(0)
           // Rebuild the index if the index file does not exist
           if (!offsetIndexExists || !timeIndexExists) {
             error(s"Could not find index file (offset index exists=$offsetIndexExists, time index exists=$timeIndexExists) corresponding to log file ${segment.log.file.getAbsolutePath}, " +
@@ -1586,8 +1586,8 @@ class Log(@volatile var dir: File,
 
     if (segment.shouldRoll(RollParams(config, appendInfo, messagesSize, now))) {
       debug(s"Rolling new log segment (log_size = ${segment.size}/${config.segmentSize}}, " +
-        s"offset_index_size = ${segment.offsetIndex.get.entries}/${segment.offsetIndex.get.maxEntries}, " +
-        s"time_index_size = ${segment.timeIndex.get.entries}/${segment.timeIndex.get.maxEntries}, " +
+        s"offset_index_size = ${segment.offsetIndex.entries}/${segment.offsetIndex.maxEntries}, " +
+        s"time_index_size = ${segment.timeIndex.entries}/${segment.timeIndex.maxEntries}, " +
         s"inactive_time_ms = ${segment.timeWaitedForRoll(now, maxTimestampInMessages)}/${config.segmentMs - segment.rollJitterMs}).")
 
       /*
@@ -1632,8 +1632,8 @@ class Log(@volatile var dir: File,
             // active segment of size zero because of one of the indexes is "full" (due to _maxEntries == 0).
             warn(s"Trying to roll a new log segment with start offset $newOffset " +
                  s"=max(provided offset = $expectedNextOffset, LEO = $logEndOffset) while it already " +
-                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.get.entries}," +
-                 s" size of offset index: ${activeSegment.offsetIndex.get.entries}.")
+                 s"exists and is active with size 0. Size of time index: ${activeSegment.timeIndex.entries}," +
+                 s" size of offset index: ${activeSegment.offsetIndex.entries}.")
             deleteSegment(activeSegment)
           } else {
             throw new KafkaException(s"Trying to roll a new log segment for topic partition $topicPartition with start offset $newOffset" +

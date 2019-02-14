@@ -166,14 +166,14 @@ class LogSegmentTest {
     seg.close()
 
     val reopened = createSegment(0, time = time)
-    assertEquals(0, seg.timeIndex.get.sizeInBytes)
-    assertEquals(0, seg.offsetIndex.get.sizeInBytes)
+    assertEquals(0, seg.timeIndex.sizeInBytes)
+    assertEquals(0, seg.offsetIndex.sizeInBytes)
 
     time.sleep(500)
     reopened.truncateTo(57)
     assertEquals(0, reopened.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(reopened.timeIndex.get.isFull)
-    assertFalse(reopened.offsetIndex.get.isFull)
+    assertFalse(reopened.timeIndex.isFull)
+    assertFalse(reopened.offsetIndex.isFull)
 
     var rollParams = RollParams(maxSegmentMs, maxSegmentBytes = Int.MaxValue, RecordBatch.NO_TIMESTAMP,
       maxOffsetInMessages = 100L, messagesSize = 1024, time.milliseconds())
@@ -204,10 +204,10 @@ class LogSegmentTest {
     assertEquals(offset, seg.readNextOffset)
 
     val expectedNumEntries = numMessages / 2 - 1
-    assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.get.entries)
+    assertEquals(s"Should have $expectedNumEntries time indexes", expectedNumEntries, seg.timeIndex.entries)
 
     seg.truncateTo(41)
-    assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.get.entries)
+    assertEquals(s"Should have 0 time indexes", 0, seg.timeIndex.entries)
     assertEquals(s"Largest timestamp should be 400", 400L, seg.largestTimestamp)
     assertEquals(41, seg.readNextOffset)
   }
@@ -228,8 +228,8 @@ class LogSegmentTest {
 
     seg.truncateTo(0)
     assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
-    assertFalse(seg.timeIndex.get.isFull)
-    assertFalse(seg.offsetIndex.get.isFull)
+    assertFalse(seg.timeIndex.isFull)
+    assertFalse(seg.offsetIndex.isFull)
     assertNull("Segment should be empty.", seg.read(0, None, 1024))
 
     seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
@@ -279,12 +279,12 @@ class LogSegmentTest {
   def testChangeFileSuffixes() {
     val seg = createSegment(40)
     val logFile = seg.log.file
-    val indexFile = seg.offsetIndex.file
+    val indexFile = seg.lazyOffsetIndex.file
     seg.changeFileSuffixes("", ".deleted")
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
-    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.offsetIndex.file.getAbsolutePath)
+    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.lazyOffsetIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)
-    assertTrue(seg.offsetIndex.file.exists)
+    assertTrue(seg.lazyOffsetIndex.file.exists)
   }
 
   /**
@@ -296,7 +296,7 @@ class LogSegmentTest {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
-    val indexFile = seg.offsetIndex.file
+    val indexFile = seg.lazyOffsetIndex.file
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100)
@@ -385,7 +385,7 @@ class LogSegmentTest {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
-    val timeIndexFile = seg.timeIndex.file
+    val timeIndexFile = seg.lazyTimeIndex.file
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100) {

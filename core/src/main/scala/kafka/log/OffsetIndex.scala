@@ -213,7 +213,7 @@ object OffsetIndex extends Logging {
   * for the the broker with a lot of log segments
   *
   */
-class OffsetIndexGetter(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
+class LazyOffsetIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
   private var offsetIndex: Option[OffsetIndex] = None
 
   def file: File = {
