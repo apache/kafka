@@ -692,7 +692,7 @@ public class KafkaStreamsTest {
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
                 Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
                 "global",

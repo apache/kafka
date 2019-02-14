@@ -49,10 +49,10 @@ class TupleForwarder<K, V> {
         if (store instanceof CachedStateStore) {
             return (CachedStateStore) store;
         } else if (store instanceof WrappedStateStore) {
-            StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+            StateStore wrapped = ((WrappedStateStore) store).wrapped();
 
             while (wrapped instanceof WrappedStateStore && !(wrapped instanceof CachedStateStore)) {
-                wrapped = ((WrappedStateStore) wrapped).wrappedStore();
+                wrapped = ((WrappedStateStore) wrapped).wrapped();
             }
 
             if (!(wrapped instanceof CachedStateStore)) {
