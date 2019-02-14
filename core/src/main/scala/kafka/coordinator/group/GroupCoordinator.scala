@@ -920,8 +920,8 @@ class GroupCoordinator(val brokerId: Int,
       if (isPending) {
         debug(s"Pending member $memberId has been removed after session timeout expiration.")
         group.removePendingMember(memberId)
-        if (group.is(CompletingRebalance)) {
-          heartbeatPurgatory.checkAndComplete(GroupKey(group.groupId))
+        if (group.is(PreparingRebalance)) {
+          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
         }
       } else if (!group.has(memberId)) {
         debug(s"Member $memberId has already been removed from the group.")
