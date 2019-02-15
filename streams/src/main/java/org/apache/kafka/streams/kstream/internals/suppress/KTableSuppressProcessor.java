@@ -51,7 +51,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
 
-    private long observedStreamTime = 0L;
+    private long observedStreamTime = -1L;
 
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
                                    final String storeName,
