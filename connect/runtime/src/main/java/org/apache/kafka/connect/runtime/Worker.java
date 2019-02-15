@@ -49,6 +49,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
 
 
 /**
@@ -86,7 +87,7 @@ public class Worker {
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore
     ) {
-        this.executor = Executors.newCachedThreadPool();
+        this.executor = Executors.newCachedThreadPool(new WorkerNamedThreadFactory());
         this.workerId = workerId;
         this.time = time;
         this.plugins = plugins;
@@ -571,6 +572,34 @@ public class Worker {
             }
         } finally {
             Plugins.compareAndSwapLoaders(savedLoader);
+        }
+    }
+
+
+    private static class WorkerNamedThreadFactory implements ThreadFactory {
+        private final ThreadGroup group;
+        private final String prefix;
+
+        WorkerNamedThreadFactory() {
+            SecurityManager s = System.getSecurityManager();
+            this.group = (s != null) ? s.getThreadGroup() : Thread.currentThread().getThreadGroup();
+            this.prefix = "worker-";
+        }
+
+        @Override
+        public Thread newThread(Runnable r) {
+            Thread t;
+            if (r instanceof WorkerTask) {
+                t = new Thread(group, r, prefix + ((WorkerTask) r).id);
+            } else {
+                t = new Thread(group, r);
+            }
+
+            t.setDaemon(false);
+            if (t.getPriority() != Thread.NORM_PRIORITY) {
+                t.setPriority(Thread.NORM_PRIORITY);
+            }
+            return t;
         }
     }
 }
