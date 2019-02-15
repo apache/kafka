@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.lang.{Long => JLong}
-import java.nio.file.Files
+import java.nio.file.{Files, NoSuchFileException}
 import java.text.NumberFormat
 import java.util.Map.{Entry => JEntry}
 import java.util.Optional
@@ -464,27 +464,18 @@ class Log(@volatile var dir: File,
         // if it's a log file, load the corresponding log segment
         val baseOffset = offsetFromFile(file)
         val timeIndexFileNewlyCreated = !Log.timeIndexFile(dir, baseOffset).exists()
-        val offsetIndexExists = Log.offsetIndexFile(dir, baseOffset).exists()
-        val timeIndexExists = Log.timeIndexFile(dir, baseOffset).exists()
         val segment = LogSegment.open(dir = dir,
           baseOffset = baseOffset,
           config,
           time = time,
           fileAlreadyExists = true)
 
-        try {
-          // Resize the time index file to 0 if it is newly created.
-          if (timeIndexFileNewlyCreated)
-            segment.timeIndex.resize(0)
-          // Rebuild the index if the index file does not exist
-          if (!offsetIndexExists || !timeIndexExists) {
-            error(s"Could not find index file (offset index exists=$offsetIndexExists, time index exists=$timeIndexExists) corresponding to log file ${segment.log.file.getAbsolutePath}, " +
+        try segment.sanityCheck(timeIndexFileNewlyCreated)
+        catch {
+          case _: NoSuchFileException =>
+            error(s"Could not find offset index file corresponding to log file ${segment.log.file.getAbsolutePath}, " +
               "recovering segment and rebuilding index files...")
             recoverSegment(segment)
-          } else if (baseOffset >= recoveryPoint)
-          // Only sanity check segments above the recovery point
-            segment.sanityCheck()
-        } catch {
           case e: CorruptIndexException =>
             warn(s"Found a corrupted index file corresponding to log file ${segment.log.file.getAbsolutePath} due " +
               s"to ${e.getMessage}}, recovering segment and rebuilding index files...")

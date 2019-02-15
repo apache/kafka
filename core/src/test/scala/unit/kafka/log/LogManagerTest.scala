@@ -127,7 +127,10 @@ class LogManagerTest {
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
 
-    log.logSegments.foreach(_.sanityCheck())
+    log.logSegments.foreach(s => {
+      s.lazyOffsetIndex.get
+      s.lazyTimeIndex.get
+    })
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
     assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)

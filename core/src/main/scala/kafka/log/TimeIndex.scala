@@ -234,7 +234,7 @@ object TimeIndex extends Logging {
   *
   */
 class LazyTimeIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  private var timeIndex: Option[TimeIndex] = None
+  @volatile private var timeIndex: Option[TimeIndex] = None
 
   def file: File = {
     if (timeIndex.isDefined)

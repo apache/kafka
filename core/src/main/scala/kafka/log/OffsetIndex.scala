@@ -214,7 +214,7 @@ object OffsetIndex extends Logging {
   *
   */
 class LazyOffsetIndex(@volatile private var _file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true) {
-  private var offsetIndex: Option[OffsetIndex] = None
+  @volatile private var offsetIndex: Option[OffsetIndex] = None
 
   def file: File = {
     if (offsetIndex.isDefined)
