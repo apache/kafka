@@ -559,7 +559,8 @@ object TopicCommand extends Logging {
 
     private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
-    private val forceOpt = parser.accepts("force", "Suppress console prompts")
+    // This is not currently used, but we keep it for compatibility
+    parser.accepts("force", "Suppress console prompts")
 
     private val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 

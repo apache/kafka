@@ -21,7 +21,6 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.admin.PreferredReplicaLeaderElectionCommand
 import kafka.common.{AdminCommandFailedException, TopicAndPartition}
 import kafka.network.RequestChannel
 import kafka.security.auth._
@@ -34,8 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.junit.Assert._
 import org.junit.{After, Test}
 
-class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging /*with RackAwareTest*/ {
-
+class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness with Logging {
   var servers: Seq[KafkaServer] = Seq()
 
   @After

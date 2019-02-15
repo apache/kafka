@@ -22,8 +22,8 @@ import java.io.PrintStream
 import org.apache.kafka.clients.consumer.ConsumerRecord
 import org.apache.kafka.common.serialization.Deserializer
 import org.hamcrest.CoreMatchers
+import org.hamcrest.MatcherAssert._
 import org.junit.Test
-import org.junit.Assert.assertThat
 import org.scalatest.mockito.MockitoSugar
 
 class CustomDeserializer extends Deserializer[String] {
@@ -31,7 +31,7 @@ class CustomDeserializer extends Deserializer[String] {
   }
 
   override def deserialize(topic: String, data: Array[Byte]): String = {
-    assertThat("topic must not be null", topic, CoreMatchers.notNullValue())
+    assertThat("topic must not be null", topic, CoreMatchers.notNullValue)
     new String(data)
   }
 

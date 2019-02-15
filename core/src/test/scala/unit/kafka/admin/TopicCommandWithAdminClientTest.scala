@@ -71,7 +71,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
   }
 
   def assertCheckArgsExitCode(expected: Int, options: TopicCommandOptions) {
-    assertExitCode(expected, options.checkArgs)
+    assertExitCode(expected, options.checkArgs _)
   }
 
   def createAndWaitTopic(opts: TopicCommandOptions): Unit = {

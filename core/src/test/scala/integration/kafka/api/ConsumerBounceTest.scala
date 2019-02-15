@@ -418,7 +418,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   /**
     * Creates N consumers with the same group ID and ensures the group rebalances properly at each step
     */
-  private def createConsumersWithGroupId(groupId: String, consumerCount: Int, executor: ExecutorService, topic: String = topic): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
+  private def createConsumersWithGroupId(groupId: String, consumerCount: Int, executor: ExecutorService, topic: String): ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]] = {
     val stableConsumers = ArrayBuffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
     for (_ <- 1.to(consumerCount)) {
       val newConsumer = createConsumerWithGroupId(groupId)
