@@ -59,6 +59,18 @@ case object DelegationToken extends ResourceType {
 
 object ResourceType {
 
+  val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
+    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, Alter, DescribeConfigs, AlterConfigs, All),
+    JResourceType.GROUP -> Set(Read, Describe, Delete, All),
+    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
+    JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
+    JResourceType.DELEGATION_TOKEN -> Set(Describe, All)
+  )
+
+  def possibleAuthorizedOperations(resourceType: JResourceType): Set[Operation] = {
+    ResourceType.ResourceTypeToValidOperations(resourceType).filter(_ != All)
+  }
+
   def fromString(resourceType: String): ResourceType = {
     val rType = values.find(rType => rType.name.equalsIgnoreCase(resourceType))
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))

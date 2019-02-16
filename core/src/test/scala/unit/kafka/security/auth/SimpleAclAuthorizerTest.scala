@@ -218,6 +218,101 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     assertTrue("superuser always has access, no matter what acls.", simpleAclAuthorizer.authorize(session2, Read, resource))
   }
 
+  @Test
+  def testAuthorizedOperations() {
+    val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val user2 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "rob")
+    val user3 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "batman")
+    val host1 = InetAddress.getByName("192.168.1.1")
+    val host2 = InetAddress.getByName("192.168.1.2")
+
+    //user1 has READ access from host1 and host2.
+    val acl1 = new Acl(user1, Allow, host1.getHostAddress, Read)
+    val acl2 = new Acl(user1, Allow, host2.getHostAddress, Read)
+
+    //user1 does not have  READ access from host1.
+    val acl3 = new Acl(user1, Deny, host1.getHostAddress, Read)
+
+    //user1 has Write access from host1 only.
+    val acl4 = new Acl(user1, Allow, host1.getHostAddress, Write)
+
+    //user1 has DESCRIBE access from all hosts.
+    val acl5 = new Acl(user1, Allow, WildCardHost, Describe)
+
+    //user2 has READ access from all hosts.
+    val acl6 = new Acl(user2, Allow, WildCardHost, Read)
+
+    //user3 has WRITE access from all hosts.
+    val acl7 = new Acl(user3, Allow, WildCardHost, Write)
+
+    val acls = Set[Acl](acl1, acl2, acl3, acl4, acl5, acl6, acl7)
+
+    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+
+    val user1host1Session = Session(user1, host1)
+    val user1host2Session = Session(user1, host2)
+
+    assertEquals(Set(Describe, Write), simpleAclAuthorizer.authorizedOperations(user1host1Session, resource))
+    assertEquals(Set(Describe, Read), simpleAclAuthorizer.authorizedOperations(user1host2Session, resource))
+
+    val user2host2Session = Session(user2, host1)
+    val user3host1Session = Session(user3, host1)
+
+    assertEquals(Set(Describe, Read), simpleAclAuthorizer.authorizedOperations(user2host2Session, resource))
+    assertEquals(Set(Describe, Write), simpleAclAuthorizer.authorizedOperations(user3host1Session, resource))
+
+    println(simpleAclAuthorizer.authorizedOperations(user3host1Session, resource))
+  }
+
+  @Test
+  def testAuthorizedOperationsForSuperUser() {
+    val denyAllAcl = new Acl(Acl.WildCardPrincipal, Deny, WildCardHost, All)
+
+    changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
+
+    val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), InetAddress.getByName("192.0.4.4"))
+    assertEquals(ResourceType.possibleAuthorizedOperations(Topic.toJava), simpleAclAuthorizer.authorizedOperations(session, resource))
+  }
+
+  @Test
+  def testAuthorizedOperationsWithAllowAllAccess() {
+    val allowAllAcl = Acl.AllowAllAcl
+
+    changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
+
+    val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), InetAddress.getByName("192.0.4.4"))
+    assertEquals(ResourceType.possibleAuthorizedOperations(Topic.toJava), simpleAclAuthorizer.authorizedOperations(session, resource))
+  }
+
+  @Test
+  def testAuthorizedOperationsWithDenyRule() {
+    val user = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
+    val host = InetAddress.getByName("192.168.2.1")
+    val session = Session(user, host)
+
+    val allowAll = Acl.AllowAllAcl
+    val denyAcl = new Acl(user, Deny, host.getHostAddress, All)
+    val acls = Set[Acl](allowAll, denyAcl)
+
+    changeAclAndVerify(Set.empty[Acl], acls, Set.empty[Acl])
+    assertTrue("authorizedOperations should be empty", simpleAclAuthorizer.authorizedOperations(session, resource).isEmpty)
+  }
+
+  @Test
+  def testAuthorizedOperationsWithNoAclFoundOverride() {
+    val props = TestUtils.createBrokerConfig(1, zkConnect)
+    props.put(SimpleAclAuthorizer.AllowEveryoneIfNoAclIsFoundProp, "true")
+
+    val cfg = KafkaConfig.fromProps(props)
+    val testAuthorizer = new SimpleAclAuthorizer
+    try {
+      testAuthorizer.configure(cfg.originals)
+      assertEquals(ResourceType.possibleAuthorizedOperations(Topic.toJava), testAuthorizer.authorizedOperations(session, resource))
+    } finally {
+      testAuthorizer.close()
+    }
+  }
+
   /**
     CustomPrincipals should be compared with their principal type and name
    */

@@ -45,6 +45,7 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -62,6 +63,9 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
+import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -131,6 +135,7 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -2430,7 +2435,10 @@ public class KafkaAdminClient extends AdminClient {
                     runnable.call(new Call("describeConsumerGroups", deadline, new ConstantNodeIdProvider(nodeId)) {
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
-                            return new DescribeGroupsRequest.Builder(Collections.singletonList(groupId));
+                            return new DescribeGroupsRequest.Builder(
+                                new DescribeGroupsRequestData().
+                                    setGroups(Collections.singletonList(groupId)).
+                                    setIncludeAuthorizedOperations(options.includeAuthorizedOperations()));
                         }
 
                         @Override
@@ -2438,23 +2446,31 @@ public class KafkaAdminClient extends AdminClient {
                             final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
 
                             KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
-                            final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
+                            final DescribedGroup describedGroup = response.data()
+                                .groups()
+                                .stream()
+                                .filter(group -> groupId.equals(group.groupId()))
+                                .findFirst().get();
 
-                            final Errors groupError = groupMetadata.error();
+                            final Errors groupError = Errors.forCode(describedGroup.errorCode());
                             if (groupError != Errors.NONE) {
                                 // TODO: KAFKA-6789, we can retry based on the error code
                                 future.completeExceptionally(groupError.exception());
                             } else {
-                                final String protocolType = groupMetadata.protocolType();
+                                final String protocolType = describedGroup.protocolType();
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
-                                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                                    final List<DescribedGroupMember> members = describedGroup.members();
                                     final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
-
-                                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                    final Set<AclOperation> authorizedOperations = describedGroup
+                                        .authorizedOperations()
+                                        .stream()
+                                        .map(AclOperation::fromCode)
+                                        .collect(Collectors.toSet());
+                                    for (DescribedGroupMember groupMember : members) {
                                         Set<TopicPartition> partitions = Collections.emptySet();
-                                        if (groupMember.memberAssignment().remaining() > 0) {
+                                        if (groupMember.memberAssignment().length > 0) {
                                             final PartitionAssignor.Assignment assignment = ConsumerProtocol.
-                                                deserializeAssignment(groupMember.memberAssignment().duplicate());
+                                                deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                                             partitions = new HashSet<>(assignment.partitions());
                                         }
                                         final MemberDescription memberDescription =
@@ -2465,12 +2481,12 @@ public class KafkaAdminClient extends AdminClient {
                                         memberDescriptions.add(memberDescription);
                                     }
                                     final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId,
-                                                protocolType.isEmpty(),
+                                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(),
                                                 memberDescriptions,
-                                                groupMetadata.protocol(),
-                                                ConsumerGroupState.parse(groupMetadata.state()),
-                                                fcResponse.node());
+                                                describedGroup.protocolData(),
+                                                ConsumerGroupState.parse(describedGroup.groupState()),
+                                                fcResponse.node(),
+                                                authorizedOperations);
                                     future.complete(consumerGroupDescription);
                                 }
                             }

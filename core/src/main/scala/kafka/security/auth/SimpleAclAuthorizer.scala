@@ -109,27 +109,30 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     loadCache()
   }
 
+  private def isEmptyAclAndAuthorized(resource: Resource, acls: Set[Acl]): Boolean = {
+    if (acls.isEmpty) {
+      // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
+      authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
+      shouldAllowEveryoneIfNoAclIsFound
+    } else false
+  }
+
+  private def sessionPrincipal(session: Session): KafkaPrincipal = {
+    // ensure we compare identical classes
+    val sessionPrincipal = session.principal
+    if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
+      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
+    else
+      sessionPrincipal
+  }
+
   override def authorize(session: Session, operation: Operation, resource: Resource): Boolean = {
     if (resource.patternType != PatternType.LITERAL) {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    // ensure we compare identical classes
-    val sessionPrincipal = session.principal
-    val principal = if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
-      new KafkaPrincipal(sessionPrincipal.getPrincipalType, sessionPrincipal.getName)
-    else
-      sessionPrincipal
-
+    val principal = sessionPrincipal(session)
     val host = session.clientAddress.getHostAddress
-
-    def isEmptyAclAndAuthorized(acls: Set[Acl]): Boolean = {
-      if (acls.isEmpty) {
-        // No ACLs found for this resource, permission is determined by value of config allow.everyone.if.no.acl.found
-        authorizerLogger.debug(s"No acl found for resource $resource, authorized = $shouldAllowEveryoneIfNoAclIsFound")
-        shouldAllowEveryoneIfNoAclIsFound
-      } else false
-    }
 
     def denyAclExists(acls: Set[Acl]): Boolean = {
       // Check if there are any Deny ACLs which would forbid this operation.
@@ -137,14 +140,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
 
     def allowAclExists(acls: Set[Acl]): Boolean = {
-      // Check if there are any Allow ACLs which would allow this operation.
-      // Allowing read, write, delete, or alter implies allowing describe.
-      // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
-      val allowOps = operation match {
-        case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
-        case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
-        case _ => Set[Operation](operation)
-      }
+      val allowOps = allowedOps(operation)
       allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
     }
 
@@ -152,7 +148,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       //we allow an operation if no acls are found and user has configured to allow all users
       //when no acls are found or if no deny acls are found and at least one allow acls matches.
       val acls = getMatchingAcls(resource.resourceType, resource.name)
-      isEmptyAclAndAuthorized(acls) || (!denyAclExists(acls) && allowAclExists(acls))
+      isEmptyAclAndAuthorized(resource, acls) || (!denyAclExists(acls) && allowAclExists(acls))
     }
 
     // Evaluate if operation is allowed
@@ -160,6 +156,55 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     logAuditMessage(principal, authorized, operation, resource, host)
     authorized
+  }
+
+  // Check if there are any Allow ACLs which would allow this operation.
+  // Allowing read, write, delete, or alter implies allowing describe.
+  // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
+  private def allowedOps(operation: Operation) = {
+    operation match {
+      case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
+      case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
+      case _ => Set[Operation](operation)
+    }
+  }
+
+  override def authorizedOperations(session: Session, resource: Resource): Set[Operation] = {
+    if (resource.patternType != PatternType.LITERAL) {
+      throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
+    }
+
+    val validOps = ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
+
+    val principal = sessionPrincipal(session)
+    val host = session.clientAddress.getHostAddress
+
+    if (isSuperUser(validOps.head, resource, principal, host)) {
+      validOps
+    } else {
+      val acls = getMatchingAcls(resource.resourceType, resource.name)
+      if (isEmptyAclAndAuthorized(resource, acls)) {
+        validOps
+      } else {
+        var unauthorizedOperation = Set[Operation]()
+        var authorizedOperation = Set[Operation]()
+
+        acls.foreach(acl => {
+          validOps.diff(unauthorizedOperation).foreach(operation => {
+            if (aclMatch(operation, principal, host, Deny, acl))
+              unauthorizedOperation += operation
+          })
+
+          validOps.diff(unauthorizedOperation).foreach(operation => {
+            val allowOps = allowedOps(operation)
+            if (allowOps.exists(operation => aclMatch(operation, principal, host, Allow, acl)))
+              authorizedOperation += operation
+          })
+        })
+
+        authorizedOperation.diff(unauthorizedOperation)
+      }
+    }
   }
 
   def isSuperUser(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String): Boolean = {
@@ -170,15 +215,18 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
   }
 
   private def aclMatch(operation: Operation, resource: Resource, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acls: Set[Acl]): Boolean = {
-    acls.find { acl =>
-      acl.permissionType == permissionType &&
-        (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
-        (operation == acl.operation || acl.operation == All) &&
-        (acl.host == host || acl.host == Acl.WildCardHost)
+    acls.find { acl => aclMatch(operation, principal, host, permissionType, acl)
     }.exists { acl =>
       authorizerLogger.debug(s"operation = $operation on resource = $resource from host = $host is $permissionType based on acl = $acl")
       true
     }
+  }
+
+  private def aclMatch(operation: Operation, principal: KafkaPrincipal, host: String, permissionType: PermissionType, acl: Acl) = {
+    acl.permissionType == permissionType &&
+      (acl.principal == principal || acl.principal == Acl.WildCardPrincipal) &&
+      (operation == acl.operation || acl.operation == All) &&
+      (acl.host == host || acl.host == Acl.WildCardHost)
   }
 
   override def addAcls(acls: Set[Acl], resource: Resource) {

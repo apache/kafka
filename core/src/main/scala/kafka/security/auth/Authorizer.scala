@@ -141,6 +141,17 @@ trait Authorizer extends Configurable {
   def getAcls(): Map[Resource, Set[Acl]]
 
   /**
+    * gets the authorized operations associated with a resource
+    * @param session The session being authenticated.
+    * @param resource Resource for which the client is trying to get authorized operations.
+    * @return collection of authorized operations associated with a resource
+    */
+  def authorizedOperations(session: Session, resource: Resource): Set[Operation] = {
+    val validOps = ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
+    validOps.filter(operation => (operation != All) && authorize(session, operation, resource))
+  }
+
+  /**
    * Closes this instance.
    */
   def close(): Unit
