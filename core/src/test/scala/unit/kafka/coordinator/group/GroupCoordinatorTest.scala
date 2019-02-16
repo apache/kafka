@@ -788,6 +788,12 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertNotEquals(firstGenerationId, secondJoinResult.generationId)
   }
 
+  /**
+    * Test if the following scenario completes a rebalance correctly: A new member starts a JoinGroup request with
+    * an UNKNOWN_MEMBER_ID, attempting to join a stable group. But never initiates the second JoinGroup request with
+    * the provided member ID and times out. The original member in the group joins the group, sends hearbeats and
+    * stays as the sole member in this group.
+    */
   @Test
   def testSecondMemberPartiallyJoinAndTimeout() {
     val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
@@ -814,6 +820,10 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Stable, group.currentState)
 
     EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
+    assertGroupState(groupState = PreparingRebalance)
+
+    EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
@@ -823,14 +833,14 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, firstMemberId, 1)
-    assertEquals(Errors.NONE, heartbeatResult)
+    assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
 
     timer.advanceClock(300)
     // at this point the second member should have been removed from pending list (session timeout),
-    // and the group should be in stable state with only the first member in it.
+    // and the group should be in CompletingRebalance state with only the first member in it.
     assertEquals(1, group.allMembers.size)
     assertEquals(0, group.numPending)
-    assertEquals(Stable, group.currentState)
+    assertEquals(CompletingRebalance, group.currentState)
     assertTrue(group.has(firstMemberId))
   }
 
@@ -863,7 +873,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, secondSyncResult._2)
     assertGroupState(groupState = Stable)
 
-    // start a join from a third member to create Rebalancing state, and
+    // start a join from a third member to create Rebalancing state
     EasyMock.reset(replicaManager)
     joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
 
