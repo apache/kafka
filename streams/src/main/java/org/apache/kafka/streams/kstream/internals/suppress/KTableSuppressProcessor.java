@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -51,7 +52,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
 
-    private long observedStreamTime = -1L;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
                                    final String storeName,

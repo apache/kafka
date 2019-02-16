@@ -72,7 +72,9 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public S getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context, final long streamTime) {
+    public S getOrCreateSegmentIfLive(final long segmentId,
+                                      final InternalProcessorContext context,
+                                      final long streamTime) {
         final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 

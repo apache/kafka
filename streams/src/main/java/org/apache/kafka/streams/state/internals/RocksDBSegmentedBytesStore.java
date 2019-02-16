@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -51,7 +52,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private volatile boolean open;
     private Set<KeyValueSegment> bulkLoadSegments;
     private Sensor expiredRecordSensor;
-    private long observedStreamTime = -1L;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     RocksDBSegmentedBytesStore(final String name,
                                final String metricScope,
