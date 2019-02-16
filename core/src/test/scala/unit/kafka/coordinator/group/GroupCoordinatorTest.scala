@@ -789,6 +789,128 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
+  def testSecondMemberPartiallyJoinAndTimeout() {
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    val firstMemberId = firstJoinResult.memberId
+    val firstGenerationId = firstJoinResult.generationId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE, firstJoinResult.error)
+
+    //Starting sync group leader
+    EasyMock.reset(replicaManager)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, firstSyncResult._2)
+    timer.advanceClock(100)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
+    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+    var group = groupCoordinator.groupManager.getGroup(groupId).get
+    assertEquals(Stable, group.currentState)
+
+    //Starting join group partial
+    EasyMock.reset(replicaManager)
+    val secondJoinResult = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    assertEquals(Errors.MEMBER_ID_REQUIRED, secondJoinResult.error)
+    assertEquals(1, group.numPending)
+    assertEquals(Stable, group.currentState)
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
+    EasyMock.replay(replicaManager)
+
+    assertEquals(1, group.allMembers.size)
+    assertEquals(1, group.numPending)
+    timer.advanceClock(300)
+
+    EasyMock.reset(replicaManager)
+    val heartbeatResult = heartbeat(groupId, firstMemberId, 1)
+    assertEquals(Errors.NONE, heartbeatResult)
+
+    timer.advanceClock(300)
+    // at this point the second member should have been removed from pending list (session timeout),
+    // and the group should be in stable state with only the first member in it.
+    assertEquals(1, group.allMembers.size)
+    assertEquals(0, group.numPending)
+    assertEquals(Stable, group.currentState)
+    assertTrue(group.has(firstMemberId))
+  }
+
+  @Test
+  def testGroupInRebalanceCompletesJoinOnTimeout() {
+    // add the first member
+    val joinResult1 = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    assertGroupState(groupState = CompletingRebalance)
+
+    // now the group is stable, with the one member that joined above
+    EasyMock.reset(replicaManager)
+    val firstSyncResult = syncGroupLeader(groupId, joinResult1.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, firstSyncResult._2)
+    assertGroupState(groupState = Stable)
+
+    // start the join for the second member
+    EasyMock.reset(replicaManager)
+    val secondJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+
+    // rejoin the first member back into the group
+    EasyMock.reset(replicaManager)
+    val firstJoinFuture = sendJoinGroup(groupId, joinResult1.memberId, protocolType, protocols)
+    val firstMemberJoinResult = await(firstJoinFuture, DefaultSessionTimeout+100)
+    val secondMemberJoinResult = await(secondJoinFuture, DefaultSessionTimeout+100)
+    assertGroupState(groupState = CompletingRebalance)
+
+    // stabilize the group
+    EasyMock.reset(replicaManager)
+    val secondSyncResult = syncGroupLeader(groupId, firstMemberJoinResult.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, secondSyncResult._2)
+    assertGroupState(groupState = Stable)
+
+    // start a join from a third member to create Rebalancing state, and
+    EasyMock.reset(replicaManager)
+    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+
+    EasyMock.reset(replicaManager)
+    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+
+    EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, firstMemberJoinResult.memberId, protocolType, protocols)
+    assertGroupState(groupState = PreparingRebalance)
+
+    EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, secondMemberJoinResult.memberId, protocolType, protocols)
+    assertGroupState(groupState = PreparingRebalance)
+
+    // Advancing Clock by > 100 (session timeout for third and fourth member)
+    // and < 500 (for first and second members). This will force the coordinator to attempt join
+    // completion on heartbeat expiration (since we are in PendingRebalance stage).
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
+    EasyMock.replay(replicaManager)
+    timer.advanceClock(120)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(2, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
+    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+  }
+
+  private def assertGroupState(groupId: String = groupId,
+                               groupState: GroupState) = {
+    groupCoordinator.groupManager.getGroup(groupId) match {
+      case None => fail(s"Group $groupId not found in coordinator")
+      case Some(group) => assertEquals(groupState, group.currentState)
+    }
+  }
+
+  private def joinGroupPartial(groupId: String,
+                               memberId: String,
+                               protocolType: String,
+                               protocols: List[(String, Array[Byte])],
+                               sessionTimeout: Int = DefaultSessionTimeout,
+                               rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
+    val requireKnownMemberId = true
+    var responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
+    Await.result(responseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
+  }
+
+  @Test
   def testLeaderFailureInSyncGroup() {
     // to get a group of two members:
     // 1. join and sync with a single member (because we can't immediately join with two members)

@@ -921,6 +921,7 @@ class GroupCoordinator(val brokerId: Int,
         debug(s"Pending member $memberId has been removed after session timeout expiration.")
         group.removePendingMember(memberId)
         if (group.is(PreparingRebalance)) {
+          debug(s"group was in preparing rebalance stage. will attempt to complete join now.")
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
         }
       } else if (!group.has(memberId)) {

@@ -760,6 +760,15 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
+     * @return true if the current generation's member ID is valid, false otherwise
+     */
+    // Visible for testing
+    final synchronized boolean hasValidMemberId() {
+        return generation != null && generation.hasMemberId();
+    }
+
+
+    /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
     protected synchronized void resetGeneration() {
