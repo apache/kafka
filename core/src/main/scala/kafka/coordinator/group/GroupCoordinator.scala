@@ -918,10 +918,8 @@ class GroupCoordinator(val brokerId: Int,
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long) {
     group.inLock {
       if (isPending) {
-        debug(s"Pending member $memberId has been removed after session timeout expiration.")
         group.removePendingMember(memberId)
         if (group.is(PreparingRebalance)) {
-          debug(s"group was in preparing rebalance stage. will attempt to complete join now.")
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
         }
       } else if (!group.has(memberId)) {
