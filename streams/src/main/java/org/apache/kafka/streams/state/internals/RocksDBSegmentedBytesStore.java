@@ -210,9 +210,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             for (final Map.Entry<KeyValueSegment, WriteBatch> entry : writeBatchMap.entrySet()) {
                 final KeyValueSegment segment = entry.getKey();
                 final WriteBatch batch = entry.getValue();
-                if (segment.open) {
-                    segment.write(batch);
-                }
+                segment.write(batch);
             }
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
@@ -221,10 +219,15 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     // Visible for testing
     Map<KeyValueSegment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
-        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        // advance stream time to the max timestamp in the batch
         for (final KeyValue<byte[], byte[]> record : records) {
             final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
             observedStreamTime = Math.max(observedStreamTime, timestamp);
+        }
+
+        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final KeyValue<byte[], byte[]> record : records) {
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
             final long segmentId = segments.segmentId(timestamp);
             final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
@@ -255,7 +258,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     private void toggleForBulkLoading(final boolean prepareForBulkload) {
-        for (final KeyValueSegment segment: segments.allSegments()) {
+        for (final KeyValueSegment segment : segments.allSegments()) {
             segment.toggleDbForBulkLoading(prepareForBulkload);
         }
     }
