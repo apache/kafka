@@ -118,7 +118,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * possible exceptions
      */
     public void readInto(ByteBuffer buffer, int position) throws IOException {
-        if (!channel.isOpen()){
+        if (!channel.isOpen()) {
             channel = openChannel(file, false, true, 0, false);
         }
         Utils.readFully(channel, buffer, position + this.start);
@@ -173,7 +173,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * Commit all written data to the physical disk
      */
     public void flush() throws IOException {
-        if (!channel.isOpen()){
+        if (!channel.isOpen()) {
             channel = openChannel(file, false, true, 0, false);
         }
         channel.force(true);
