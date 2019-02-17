@@ -791,8 +791,8 @@ class GroupCoordinatorTest extends JUnitSuite {
   /**
     * Test if the following scenario completes a rebalance correctly: A new member starts a JoinGroup request with
     * an UNKNOWN_MEMBER_ID, attempting to join a stable group. But never initiates the second JoinGroup request with
-    * the provided member ID and times out. The original member in the group joins the group, sends hearbeats and
-    * stays as the sole member in this group.
+    * the provided member ID and times out. The test checks if original member remains the sole member in this group,
+    * which should remain stable throughout this test.
     */
   @Test
   def testSecondMemberPartiallyJoinAndTimeout() {
@@ -809,10 +809,12 @@ class GroupCoordinatorTest extends JUnitSuite {
     timer.advanceClock(100)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
     assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
-    var group = groupCoordinator.groupManager.getGroup(groupId).get
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+
+    // ensure the group is stable before a new member initiates join request
     assertEquals(Stable, group.currentState)
 
-    //Starting join group partial
+    // new member initiates join group
     EasyMock.reset(replicaManager)
     val secondJoinResult = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     assertEquals(Errors.MEMBER_ID_REQUIRED, secondJoinResult.error)
@@ -820,30 +822,35 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Stable, group.currentState)
 
     EasyMock.reset(replicaManager)
-    sendJoinGroup(groupId, firstMemberId, protocolType, protocols)
-    assertGroupState(groupState = PreparingRebalance)
-
-    EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
+    // advance clock to timeout the pending member
     assertEquals(1, group.allMembers.size)
     assertEquals(1, group.numPending)
     timer.advanceClock(300)
 
+    // original (firstMember) member sends heartbeats to prevent session timeouts.
     EasyMock.reset(replicaManager)
     val heartbeatResult = heartbeat(groupId, firstMemberId, 1)
-    assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
+    assertEquals(Errors.NONE, heartbeatResult)
 
+    // timeout the pending member
     timer.advanceClock(300)
+
     // at this point the second member should have been removed from pending list (session timeout),
-    // and the group should be in CompletingRebalance state with only the first member in it.
+    // and the group should be in Stable state with only the first member in it.
     assertEquals(1, group.allMembers.size)
     assertEquals(0, group.numPending)
-    assertEquals(CompletingRebalance, group.currentState)
+    assertEquals(Stable, group.currentState)
     assertTrue(group.has(firstMemberId))
   }
 
+  /**
+    * Creates a stable group, and transitions it to a PreparingRebalance state by re-join an existing member. A new
+    * member initiates a join group request to this group, and creates a pending member in it. The test checks if
+    * a timeout of the pending member will cause the group to return to a CompletingRebalance state.
+    */
   @Test
   def testGroupInRebalanceCompletesJoinOnTimeout() {
     // add the first member
@@ -873,20 +880,21 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, secondSyncResult._2)
     assertGroupState(groupState = Stable)
 
-    // start a join from a third member to create Rebalancing state
-    EasyMock.reset(replicaManager)
-    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
-
-    EasyMock.reset(replicaManager)
-    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
-
+    // re-join an existing member, to transition the group to PreparingRebalance state.
     EasyMock.reset(replicaManager)
     sendJoinGroup(groupId, firstMemberJoinResult.memberId, protocolType, protocols)
     assertGroupState(groupState = PreparingRebalance)
 
+    // create a pending member in the group
+    EasyMock.reset(replicaManager)
+    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+
+    // re-join the second existing member
     EasyMock.reset(replicaManager)
     sendJoinGroup(groupId, secondMemberJoinResult.memberId, protocolType, protocols)
     assertGroupState(groupState = PreparingRebalance)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
 
     // Advancing Clock by > 100 (session timeout for third and fourth member)
     // and < 500 (for first and second members). This will force the coordinator to attempt join
@@ -904,8 +912,8 @@ class GroupCoordinatorTest extends JUnitSuite {
   private def assertGroupState(groupId: String = groupId,
                                groupState: GroupState) = {
     groupCoordinator.groupManager.getGroup(groupId) match {
-      case None => fail(s"Group $groupId not found in coordinator")
       case Some(group) => assertEquals(groupState, group.currentState)
+      case None => fail(s"Group $groupId not found in coordinator")
     }
   }
 
@@ -916,7 +924,7 @@ class GroupCoordinatorTest extends JUnitSuite {
                                sessionTimeout: Int = DefaultSessionTimeout,
                                rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
     val requireKnownMemberId = true
-    var responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
+    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
     Await.result(responseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
   }
 
