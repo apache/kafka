@@ -126,6 +126,8 @@ public class RecordCollectorImpl implements RecordCollector {
     ) {
         String errorLogMessage = LOG_MESSAGE;
         String errorMessage = EXCEPTION_MESSAGE;
+        // There is no documented API for detecting errors that could be solved by retrying, so we
+        // do the best we can
         if (exception instanceof RetriableException) {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
