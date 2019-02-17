@@ -58,7 +58,8 @@ public class RecordCollectorImpl implements RecordCollector {
         "No more records will be sent and no more offsets will be recorded for this task. " +
         "Enable TRACE logging to view failed record key and value.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (timestamp %d) to topic %s due to %s";
-    private final static String PARAMETER_HINT = "\nYou can increase producer parameter `delivery.timeout.ms` to avoid this error.";
+    private final static String PARAMETER_HINT = "\nYou can increase the producer config `delivery.timeout.ms` to avoid this error.";
+
     private volatile KafkaException sendException;
 
     public RecordCollectorImpl(final String streamTaskId,
