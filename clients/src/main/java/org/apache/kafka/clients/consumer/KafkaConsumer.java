@@ -1527,10 +1527,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             if (offsetAndMetadata.leaderEpoch().isPresent()) {
-                log.debug("Seeking to offset {} for partition {} with epoch {}",
+                log.info("Seeking to offset {} for partition {} with epoch {}",
                         offset, partition, offsetAndMetadata.leaderEpoch().get());
             } else {
-                log.debug("Seeking to offset {} for partition {}", offset, partition);
+                log.info("Seeking to offset {} for partition {}", offset, partition);
             }
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, offset);
@@ -1556,7 +1556,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
-                log.debug("Seeking to beginning of partition {}", tp);
+                log.info("Seeking to beginning of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
             }
         } finally {
@@ -1584,7 +1584,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
-                log.debug("Seeking to end of partition {}", tp);
+                log.info("Seeking to end of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
             }
         } finally {

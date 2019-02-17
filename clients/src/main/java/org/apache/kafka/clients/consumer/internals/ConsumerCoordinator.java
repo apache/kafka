@@ -107,8 +107,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return (requestedGeneration == null ? currentGeneration == null : requestedGeneration.equals(currentGeneration))
-                && requestedPartitions.equals(currentRequest);
+            return Objects.equals(requestedGeneration, currentGeneration) && requestedPartitions.equals(currentRequest);
         }
     }
 
@@ -499,7 +498,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final long offset = entry.getValue().offset();
-            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            log.info("Setting offset for partition {} to the committed offset {}", tp, offset);
             entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
             this.subscriptions.seek(tp, offset);
         }
@@ -909,14 +908,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
                     } else {
-                        future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
+                        future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
+                            tp + ": " + error.message()));
                     }
                     return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
-                    log.debug("Found no committed offset for partition {}", tp);
+                    log.info("Found no committed offset for partition {}", tp);
                 }
             }
 
