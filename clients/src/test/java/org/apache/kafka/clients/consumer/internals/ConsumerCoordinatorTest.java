@@ -752,20 +752,17 @@ public class ConsumerCoordinatorTest {
      * second request.
      */
     @Test
-    public void testConsumerWithValidMemberShouldLeaveGroup() {
+    public void testPendingMemberShouldLeaveGroup() {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         // here we return a DEFAULT_GENERATION_ID, but valid member id and leader id.
-        client.prepareResponse(joinGroupFollowerResponse(-1, "consumer-id", "leader-id", Errors.NONE));
-
-        // return a sync response to complete joinGroupIfNeeded(..)
-        client.prepareResponse(syncGroupResponse(singletonList(t1p), Errors.NONE));
+        client.prepareResponse(joinGroupFollowerResponse(-1, "consumer-id", "leader-id", Errors.MEMBER_ID_REQUIRED));
 
         // execute join group
-        coordinator.joinGroupIfNeeded(time.timer(Long.MAX_VALUE));
+        coordinator.joinGroupIfNeeded(time.timer(0));
 
         final AtomicBoolean received = new AtomicBoolean(false);
         client.prepareResponse(new MockClient.RequestMatcher() {
@@ -775,6 +772,7 @@ public class ConsumerCoordinatorTest {
                 return true;
             }
         }, new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code())));
+
         coordinator.maybeLeaveGroup();
         assertTrue(received.get());
     }

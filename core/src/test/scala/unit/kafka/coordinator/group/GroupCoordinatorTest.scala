@@ -847,12 +847,10 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   /**
-    * Creates a stable group, and transitions it to a PreparingRebalance state by re-join an existing member. A new
-    * member initiates a join group request to this group, and creates a pending member in it. The test checks if
-    * a timeout of the pending member will cause the group to return to a CompletingRebalance state.
+    * Create a group with two members in Stable state. Create a third pending member by completing it's first JoinGroup
+    * request without a member id.
     */
-  @Test
-  def testGroupInRebalanceCompletesJoinOnTimeout() {
+  private def setupGroupWithPendingMember(): JoinGroupResult = {
     // add the first member
     val joinResult1 = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
     assertGroupState(groupState = CompletingRebalance)
@@ -887,7 +885,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     // create a pending member in the group
     EasyMock.reset(replicaManager)
-    joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+    var pendingMember = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
 
     // re-join the second existing member
@@ -895,6 +893,35 @@ class GroupCoordinatorTest extends JUnitSuite {
     sendJoinGroup(groupId, secondMemberJoinResult.memberId, protocolType, protocols)
     assertGroupState(groupState = PreparingRebalance)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+
+    pendingMember
+  }
+
+  /**
+    * Setup a group in with a pending member. The test checks if the a pending member joining completes the rebalancing
+    * operation
+    */
+  @Test
+  def testJoinGroupCompletionWhenPendingMemberJoins() {
+    val pendingMember = setupGroupWithPendingMember()
+
+    // compete join group for the pending member
+    EasyMock.reset(replicaManager)
+    val pendingMemberJoinFuture = sendJoinGroup(groupId, pendingMember.memberId, protocolType, protocols)
+    await(pendingMemberJoinFuture, DefaultSessionTimeout+100)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(3, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
+    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+  }
+
+  /**
+    * Setup a group in with a pending member. The test checks if the timeout of the pending member will
+    * cause the group to return to a CompletingRebalance state.
+    */
+  @Test
+  def testJoinGroupCompletionWhenPendingMemberTimesOut() {
+    setupGroupWithPendingMember()
 
     // Advancing Clock by > 100 (session timeout for third and fourth member)
     // and < 500 (for first and second members). This will force the coordinator to attempt join
