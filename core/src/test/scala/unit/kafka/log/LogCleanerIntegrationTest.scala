@@ -185,4 +185,13 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
       (key, curValue)
     }
   }
+
+  @Test
+  def testDeadThreadCountMetric(): Unit = {
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner.startup()
+    assertEquals(0, cleaner.deadThreadCount)
+    cleaner.cleaners.foreach(_.shutdown())
+    assertEquals(1, cleaner.deadThreadCount)
+  }
 }

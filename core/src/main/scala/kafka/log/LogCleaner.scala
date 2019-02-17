@@ -110,8 +110,9 @@ class LogCleaner(initialConfig: CleanerConfig,
                                         "bytes",
                                         time = time)
 
+  // visible for testing
   /* the threads */
-  private val cleaners = mutable.ArrayBuffer[CleanerThread]()
+  private[log] val cleaners = mutable.ArrayBuffer[CleanerThread]()
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
   newGauge("max-buffer-utilization-percent",
@@ -138,6 +139,14 @@ class LogCleaner(initialConfig: CleanerConfig,
           new Gauge[Int] {
           def value: Int = Math.max(0, (cleaners.map(_.lastPreCleanStats).map(_.maxCompactionDelayMs).max / 1000).toInt)
           })
+
+  newGauge("log-cleaner-dead-thread-count",
+    new Gauge[Int] {
+      def value: Int = deadThreadCount
+    })
+
+  // visible for testing
+  private[log] def deadThreadCount = cleaners.count(_.isShutdownComplete)
 
   /**
    * Start the background cleaning
@@ -268,11 +277,12 @@ class LogCleaner(initialConfig: CleanerConfig,
   // Only for testing
   private[log] def cleanerCount: Int = cleaners.size
 
+  // visible for testing
   /**
    * The cleaner threads do the actual log cleaning. Each thread processes does its cleaning repeatedly by
    * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
    */
-  private class CleanerThread(threadId: Int)
+  private[log] class CleanerThread(threadId: Int)
     extends ShutdownableThread(name = s"kafka-log-cleaner-thread-$threadId", isInterruptible = false) {
 
     protected override def loggerName = classOf[LogCleaner].getName
