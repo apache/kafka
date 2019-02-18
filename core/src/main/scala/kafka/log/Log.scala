@@ -787,13 +787,13 @@ class Log(@volatile var dir: File,
    *
    * @param records The records to append
    * @param isFromClient Whether or not this append is from a producer
-   * @param apiVersion Inter-broker message protocol version
+   * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @throws KafkaStorageException If the append fails due to an I/O error.
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsLeader(records: MemoryRecords, leaderEpoch: Int, isFromClient: Boolean = true,
-                     apiVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
-    append(records, isFromClient, apiVersion, assignOffsets = true, leaderEpoch)
+                     interBrokerProtocolVersion: ApiVersion = ApiVersion.latestVersion): LogAppendInfo = {
+    append(records, isFromClient, interBrokerProtocolVersion, assignOffsets = true, leaderEpoch)
   }
 
   /**
@@ -804,7 +804,7 @@ class Log(@volatile var dir: File,
    * @return Information about the appended messages including the first and last offset.
    */
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
-    append(records, isFromClient = false, apiVersion = ApiVersion.latestVersion, assignOffsets = false, leaderEpoch = -1)
+    append(records, isFromClient = false, interBrokerProtocolVersion = ApiVersion.latestVersion, assignOffsets = false, leaderEpoch = -1)
   }
 
   /**
@@ -815,7 +815,7 @@ class Log(@volatile var dir: File,
    *
    * @param records The log records to append
    * @param isFromClient Whether or not this append is from a producer
-   * @param apiVersion Inter-broker message protocol version
+   * @param interBrokerProtocolVersion Inter-broker message protocol version
    * @param assignOffsets Should the log assign offsets to this message set or blindly apply what it is given
    * @param leaderEpoch The partition's leader epoch which will be applied to messages when offsets are assigned on the leader
    * @throws KafkaStorageException If the append fails due to an I/O error.
@@ -823,7 +823,7 @@ class Log(@volatile var dir: File,
    * @throws UnexpectedAppendOffsetException If the first or last offset in append is less than next offset
    * @return Information about the appended messages including the first and last offset.
    */
-  private def append(records: MemoryRecords, isFromClient: Boolean, apiVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
+  private def append(records: MemoryRecords, isFromClient: Boolean, interBrokerProtocolVersion: ApiVersion, assignOffsets: Boolean, leaderEpoch: Int): LogAppendInfo = {
     maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
       val appendInfo = analyzeAndValidateRecords(records, isFromClient = isFromClient)
 
@@ -855,7 +855,7 @@ class Log(@volatile var dir: File,
               config.messageTimestampDifferenceMaxMs,
               leaderEpoch,
               isFromClient,
-              apiVersion)
+              interBrokerProtocolVersion)
           } catch {
             case e: IOException =>
               throw new KafkaException(s"Error validating messages while appending to log $name", e)

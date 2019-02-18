@@ -58,7 +58,7 @@ private[kafka] object LogValidator extends Logging {
                                                       timestampDiffMaxMs: Long,
                                                       partitionLeaderEpoch: Int,
                                                       isFromClient: Boolean,
-                                                      apiVersion: ApiVersion): ValidationAndOffsetAssignResult = {
+                                                      interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
     if (sourceCodec == NoCompressionCodec && targetCodec == NoCompressionCodec) {
       // check the magic value
       if (!records.hasMatchingMagic(magic))
@@ -70,7 +70,7 @@ private[kafka] object LogValidator extends Logging {
           partitionLeaderEpoch, isFromClient, magic)
     } else {
       validateMessagesAndAssignOffsetsCompressed(records, offsetCounter, time, now, sourceCodec, targetCodec, compactedTopic,
-        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient, apiVersion)
+        magic, timestampType, timestampDiffMaxMs, partitionLeaderEpoch, isFromClient, interBrokerProtocolVersion)
     }
   }
 
@@ -248,7 +248,7 @@ private[kafka] object LogValidator extends Logging {
                                                  timestampDiffMaxMs: Long,
                                                  partitionLeaderEpoch: Int,
                                                  isFromClient: Boolean,
-                                                 apiVersion: ApiVersion): ValidationAndOffsetAssignResult = {
+                                                 interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
 
       // No in place assignment situation 1 and 2
       var inPlaceAssignment = sourceCodec == targetCodec && toMagic > RecordBatch.MAGIC_VALUE_V0
@@ -271,7 +271,7 @@ private[kafka] object LogValidator extends Logging {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
-          if (targetCodec == ZStdCompressionCodec && apiVersion < KAFKA_2_1_IV0)
+          if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
             throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
           validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
 
