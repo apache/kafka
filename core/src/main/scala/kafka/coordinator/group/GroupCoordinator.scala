@@ -370,6 +370,7 @@ class GroupCoordinator(val brokerId: Int,
           // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
           // and if necessary, prompt a JoinGroup completion.
           if (group.isPendingMember(memberId)) {
+            debug(s"Pending member $memberId is leaving group ${group.groupId}.")
             group.removePendingMember(memberId)
             heartbeatPurgatory.cancelForKey(MemberKey(groupId, memberId))
             if (group.is(PreparingRebalance)) {
@@ -927,6 +928,7 @@ class GroupCoordinator(val brokerId: Int,
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long) {
     group.inLock {
       if (isPending) {
+        info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
         group.removePendingMember(memberId)
         if (group.is(PreparingRebalance)) {
           joinPurgatory.checkAndComplete(GroupKey(group.groupId))
