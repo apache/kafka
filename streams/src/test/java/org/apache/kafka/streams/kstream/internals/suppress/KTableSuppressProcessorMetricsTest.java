@@ -155,7 +155,6 @@ public class KTableSuppressProcessorMetricsTest {
         processor.init(context);
 
         final long timestamp = 100L;
-        context.setStreamTime(timestamp);
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "longKey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
@@ -174,7 +173,6 @@ public class KTableSuppressProcessorMetricsTest {
             verifyMetric(metrics, BUFFER_COUNT_MAX_METRIC, is(1.0));
         }
 
-        context.setStreamTime(timestamp + 1);
         context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
         processor.process("key", value);
 

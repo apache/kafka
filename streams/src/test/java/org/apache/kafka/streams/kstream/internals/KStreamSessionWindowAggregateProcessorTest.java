@@ -342,7 +342,11 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         initStore(false);
         processor.init(context);
-        context.setStreamTime(20);
+
+        // dummy record to advance stream time
+        context.setRecordContext(new ProcessorRecordContext(20, -2, -3, "topic", null));
+        processor.process("dummy", "dummy");
+
         context.setRecordContext(new ProcessorRecordContext(0, -2, -3, "topic", null));
         processor.process("A", "1");
         context.setRecordContext(new ProcessorRecordContext(1, -2, -3, "topic", null));
