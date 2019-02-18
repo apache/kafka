@@ -22,7 +22,7 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.Request
+import kafka.api.{ApiVersion, Request}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
@@ -679,7 +679,11 @@ class PartitionTest {
   def testListOffsetIsolationLevels(): Unit = {
     val log = logManager.getOrCreateLog(topicPartition, logConfig)
     val replica = new Replica(brokerId, topicPartition, time, log = Some(log))
+    val brokerProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
+    brokerProps.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
+    val brokerConfig = KafkaConfig.fromProps(brokerProps)
     val replicaManager: ReplicaManager = EasyMock.mock(classOf[ReplicaManager])
+    EasyMock.expect(replicaManager.config).andReturn(brokerConfig)
     val zkClient: KafkaZkClient = EasyMock.mock(classOf[KafkaZkClient])
 
     val partition = new Partition(topicPartition,
@@ -888,6 +892,11 @@ class PartitionTest {
     val replicaIds = List[Integer](brokerId, brokerId + 1).asJava
     val isr = replicaIds
     val logConfig = LogConfig(new Properties)
+
+    val brokerProps = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
+    brokerProps.put(KafkaConfig.InterBrokerProtocolVersionProp, ApiVersion.latestVersion.toString)
+    val brokerConfig = KafkaConfig.fromProps(brokerProps)
+    EasyMock.expect(replicaManager.config).andReturn(brokerConfig).anyTimes()
 
     val topicPartitions = (0 until 5).map { i => new TopicPartition("test-topic", i) }
     val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, logConfig) }
