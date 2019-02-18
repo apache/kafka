@@ -19,10 +19,9 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.KAFKA_2_1_IV0
 import kafka.common.OffsetAndMetadata
 import kafka.log.LogConfig
-import kafka.message.{ProducerCompressionCodec, ZStdCompressionCodec}
+import kafka.message.ProducerCompressionCodec
 import kafka.server._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
@@ -984,8 +983,6 @@ object GroupCoordinator {
             joinPurgatory: DelayedOperationPurgatory[DelayedJoin],
             time: Time): GroupCoordinator = {
     val offsetConfig = this.offsetConfig(config)
-    if (config.interBrokerProtocolVersion < KAFKA_2_1_IV0 && offsetConfig.offsetsTopicCompressionCodec == ZStdCompressionCodec)
-      throw new IllegalArgumentException("'offsets.topic.compression.codec' can't be 'zstd' if 'inter.broker.protocol.version' < 2.1")
     val groupConfig = GroupConfig(groupMinSessionTimeoutMs = config.groupMinSessionTimeoutMs,
       groupMaxSessionTimeoutMs = config.groupMaxSessionTimeoutMs,
       groupMaxSize = config.groupMaxSize,
