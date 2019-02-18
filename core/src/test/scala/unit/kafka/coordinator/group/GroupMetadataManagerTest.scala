@@ -1235,7 +1235,7 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      isFromClient = EasyMock.eq(false), apiVersion = EasyMock.anyObject(), requiredAcks = EasyMock.anyInt()))
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(replicaManager, partition)
 
@@ -1283,7 +1283,7 @@ class GroupMetadataManagerTest {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     mockGetPartition()
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      isFromClient = EasyMock.eq(false), apiVersion = EasyMock.anyObject(), requiredAcks = EasyMock.anyInt()))
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(replicaManager, partition)
 
@@ -1358,7 +1358,7 @@ class GroupMetadataManagerTest {
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture),
-      isFromClient = EasyMock.eq(false), apiVersion = EasyMock.anyObject(), requiredAcks = EasyMock.anyInt()))
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
@@ -1459,7 +1459,7 @@ class GroupMetadataManagerTest {
     // expect the offset tombstone
     EasyMock.reset(partition)
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.anyObject(classOf[MemoryRecords]),
-      isFromClient = EasyMock.eq(false), apiVersion = EasyMock.anyObject(), requiredAcks = EasyMock.anyInt()))
+      isFromClient = EasyMock.eq(false), requiredAcks = EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
