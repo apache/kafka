@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -694,31 +695,31 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
-            Optional<PartitionInfo> currentInfo = metadata.partitionInfoIfCurrent(tp);
+            Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
             if (!currentInfo.isPresent()) {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (currentInfo.get().leader() == null) {
+            } else if (currentInfo.get().partitionInfo().leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-            } else if (client.isUnavailable(currentInfo.get().leader())) {
-                client.maybeThrowAuthFailure(currentInfo.get().leader());
+            } else if (client.isUnavailable(currentInfo.get().partitionInfo().leader())) {
+                client.maybeThrowAuthFailure(currentInfo.get().partitionInfo().leader());
 
                 // The connection has failed and we need to await the blackout period before we can
                 // try again. No need to request a metadata update since the disconnect will have
                 // done so already.
                 log.debug("Leader {} for partition {} is unavailable for fetching offset until reconnect backoff expires",
-                        currentInfo.get().leader(), tp);
+                        currentInfo.get().partitionInfo().leader(), tp);
                 partitionsToRetry.add(tp);
             } else {
-                Node node = currentInfo.get().leader();
+                Node node = currentInfo.get().partitionInfo().leader();
                 Map<TopicPartition, ListOffsetRequest.PartitionData> topicData =
                         timestampsToSearchByNode.computeIfAbsent(node, n -> new HashMap<>());
                 ListOffsetRequest.PartitionData partitionData = new ListOffsetRequest.PartitionData(
-                        entry.getValue(), Optional.empty());
+                        entry.getValue(), Optional.of(currentInfo.get().epoch()));
                 topicData.put(entry.getKey(), partitionData);
             }
         }
@@ -818,13 +819,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);
+            } else if (error == Errors.FENCED_LEADER_EPOCH ||
+                       error == Errors.UNKNOWN_LEADER_EPOCH) {
+                log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                        topicPartition, error);
+                partitionsToRetry.add(topicPartition);
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 unauthorizedTopics.add(topicPartition.topic());
             } else {
-                log.warn("Attempt to fetch offsets for partition {} failed due to: {}", topicPartition, error.message());
+                log.warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.", topicPartition, error.message());
                 partitionsToRetry.add(topicPartition);
             }
         }
@@ -870,7 +876,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
-            Node node = metadata.partitionInfoIfCurrent(partition).map(PartitionInfo::leader).orElse(null);
+            Node node = metadata.partitionInfoIfCurrent(partition)
+                    .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
+                    .map(PartitionInfo::leader)
+                    .orElse(null);
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
@@ -895,8 +904,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
 
                 long position = this.subscriptions.position(partition);
+                Optional<Integer> leaderEpoch = this.metadata.lastSeenLeaderEpoch(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position, FetchRequest.INVALID_LOG_START_OFFSET,
-                    this.fetchSize, Optional.empty()));
+                    this.fetchSize, leaderEpoch));
 
                 log.debug("Added {} fetch request for partition {} at offset {} to node {}", isolationLevel,
                     partition, position, node);
@@ -973,7 +983,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
-                       error == Errors.KAFKA_STORAGE_ERROR) {
+                       error == Errors.KAFKA_STORAGE_ERROR ||
+                       error == Errors.FENCED_LEADER_EPOCH) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
@@ -990,12 +1001,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                log.warn("Not authorized to read from topic {}.", tp.topic());
+                //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
+                log.warn("Not authorized to read from partition {}.", tp);
                 throw new TopicAuthorizationException(Collections.singleton(tp.topic()));
+            } else if (error == Errors.UNKNOWN_LEADER_EPOCH) {
+                log.debug("Received unknown leader epoch error in fetch for partition {}", tp);
             } else if (error == Errors.UNKNOWN_SERVER_ERROR) {
                 log.warn("Unknown error fetching data for topic-partition {}", tp);
             } else {
-                throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching data");
+                throw new IllegalStateException("Unexpected error code " + error.code() + " while fetching from partition " + tp);
             }
         } finally {
             if (partitionRecords == null)

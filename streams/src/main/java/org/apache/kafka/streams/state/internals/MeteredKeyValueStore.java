@@ -45,9 +45,8 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateStore implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, byte[]>> implements KeyValueStore<K, V> {
 
-    private final KeyValueStore<Bytes, byte[]> inner;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
     private StateSerdes<K, V> serdes;
@@ -71,7 +70,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
                          final Serde<K> keySerde,
                          final Serde<V> valueSerde) {
         super(inner);
-        this.inner = inner;
         this.metricScope = metricScope;
         this.time = time != null ? time : Time.SYSTEM;
         this.keySerde = keySerde;
@@ -108,12 +106,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         if (restoreTime.shouldRecord()) {
             measureLatency(
                 () -> {
-                    inner.init(context, root);
+                    super.init(context, root);
                     return null;
                 },
                 restoreTime);
         } else {
-            inner.init(context, root);
+            super.init(context, root);
         }
     }
 
@@ -125,16 +123,16 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
 
     @Override
     public long approximateNumEntries() {
-        return inner.approximateNumEntries();
+        return wrapped().approximateNumEntries();
     }
 
     @Override
     public V get(final K key) {
         try {
             if (getTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.get(keyBytes(key))), getTime);
+                return measureLatency(() -> outerValue(wrapped().get(keyBytes(key))), getTime);
             } else {
-                return outerValue(inner.get(keyBytes(key)));
+                return outerValue(wrapped().get(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -148,11 +146,11 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         try {
             if (putTime.shouldRecord()) {
                 measureLatency(() -> {
-                    inner.put(keyBytes(key), serdes.rawValue(value));
+                    wrapped().put(keyBytes(key), serdes.rawValue(value));
                     return null;
                 }, putTime);
             } else {
-                inner.put(keyBytes(key), serdes.rawValue(value));
+                wrapped().put(keyBytes(key), serdes.rawValue(value));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key, value);
@@ -165,10 +163,10 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
                          final V value) {
         if (putIfAbsentTime.shouldRecord()) {
             return measureLatency(
-                () -> outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value))),
+                () -> outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
                 putIfAbsentTime);
         } else {
-            return outerValue(inner.putIfAbsent(keyBytes(key), serdes.rawValue(value)));
+            return outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value)));
         }
     }
 
@@ -177,12 +175,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         if (putAllTime.shouldRecord()) {
             measureLatency(
                 () -> {
-                    inner.putAll(innerEntries(entries));
+                    wrapped().putAll(innerEntries(entries));
                     return null;
                 },
                 putAllTime);
         } else {
-            inner.putAll(innerEntries(entries));
+            wrapped().putAll(innerEntries(entries));
         }
     }
 
@@ -190,9 +188,9 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public V delete(final K key) {
         try {
             if (deleteTime.shouldRecord()) {
-                return measureLatency(() -> outerValue(inner.delete(keyBytes(key))), deleteTime);
+                return measureLatency(() -> outerValue(wrapped().delete(keyBytes(key))), deleteTime);
             } else {
-                return outerValue(inner.delete(keyBytes(key)));
+                return outerValue(wrapped().delete(keyBytes(key)));
             }
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), key);
@@ -204,13 +202,13 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
     public KeyValueIterator<K, V> range(final K from,
                                         final K to) {
         return new MeteredKeyValueIterator(
-            inner.range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
+            wrapped().range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))),
             rangeTime);
     }
 
     @Override
     public KeyValueIterator<K, V> all() {
-        return new MeteredKeyValueIterator(inner.all(), allTime);
+        return new MeteredKeyValueIterator(wrapped().all(), allTime);
     }
 
     @Override
@@ -218,12 +216,12 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore.AbstractStateS
         if (flushTime.shouldRecord()) {
             measureLatency(
                 () -> {
-                    inner.flush();
+                    super.flush();
                     return null;
                 },
                 flushTime);
         } else {
-            inner.flush();
+            super.flush();
         }
     }
 

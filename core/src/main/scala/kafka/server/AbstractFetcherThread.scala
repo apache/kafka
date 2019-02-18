@@ -86,13 +86,15 @@ abstract class AbstractFetcherThread(name: String,
 
   protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch]
 
-  protected def fetchEpochsFromLeader(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
+  protected def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset]
 
   protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)]
 
   protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
 
   protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long
+
+  protected def isOffsetForLeaderEpochSupported: Boolean
 
   override def shutdown() {
     initiateShutdown()
@@ -141,27 +143,35 @@ abstract class AbstractFetcherThread(name: String,
    * Builds offset for leader epoch requests for partitions that are in the truncating phase based
    * on latest epochs of the future replicas (the one that is fetching)
    */
-  private def buildLeaderEpochRequest(): ResultWithPartitions[Map[TopicPartition, EpochData]] = inLock(partitionMapLock) {
-    val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
+  private def fetchTruncatingPartitions(): (Map[TopicPartition, EpochData], Set[TopicPartition]) = inLock(partitionMapLock) {
     val partitionsWithEpochs = mutable.Map.empty[TopicPartition, EpochData]
+    val partitionsWithoutEpochs = mutable.Set.empty[TopicPartition]
 
     partitionStates.stream().forEach(new Consumer[PartitionStates.PartitionState[PartitionFetchState]] {
       override def accept(state: PartitionStates.PartitionState[PartitionFetchState]): Unit = {
-        val tp = state.topicPartition
         if (state.value.isTruncating) {
+          val tp = state.topicPartition
           latestEpoch(tp) match {
-            case Some(latestEpoch) =>
-              val partitionData = new EpochData(Optional.of(state.value.currentLeaderEpoch), latestEpoch)
-              partitionsWithEpochs += tp -> partitionData
-            case None =>
+            case Some(epoch) if isOffsetForLeaderEpochSupported =>
+              partitionsWithEpochs += tp -> new EpochData(Optional.of(state.value.currentLeaderEpoch), epoch)
+            case _ =>
               partitionsWithoutEpochs += tp
           }
         }
       }
     })
 
-    debug(s"Build leaderEpoch request $partitionsWithEpochs")
-    ResultWithPartitions(partitionsWithEpochs, partitionsWithoutEpochs)
+    (partitionsWithEpochs, partitionsWithoutEpochs)
+  }
+
+  private def maybeTruncate(): Unit = {
+    val (partitionsWithEpochs, partitionsWithoutEpochs) = fetchTruncatingPartitions()
+    if (partitionsWithEpochs.nonEmpty) {
+      truncateToEpochEndOffsets(partitionsWithEpochs)
+    }
+    if (partitionsWithoutEpochs.nonEmpty) {
+      truncateToHighWatermark(partitionsWithoutEpochs)
+    }
   }
 
   /**
@@ -173,33 +183,52 @@ abstract class AbstractFetcherThread(name: String,
     *   truncation complete. Do this within a lock to ensure no leadership changes can
     *   occur during truncation.
     */
-  private def maybeTruncate(): Unit = {
-    val ResultWithPartitions(epochRequests, partitionsWithError) = buildLeaderEpochRequest()
-    handlePartitionsWithErrors(partitionsWithError)
-
-    if (epochRequests.nonEmpty) {
-      val fetchedEpochs = fetchEpochsFromLeader(epochRequests)
-      //Ensure we hold a lock during truncation.
-      inLock(partitionMapLock) {
-        //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
-        val leaderEpochs = fetchedEpochs.filter { case (tp, _) =>
-          val curPartitionState = partitionStates.stateValue(tp)
-          val partitionEpochRequest = epochRequests.get(tp).getOrElse {
-            throw new IllegalStateException(
-              s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
-          }
-          val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
-          curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
+  private def truncateToEpochEndOffsets(latestEpochsForPartitions: Map[TopicPartition, EpochData]): Unit = {
+    val endOffsets = fetchEpochEndOffsets(latestEpochsForPartitions)
+    //Ensure we hold a lock during truncation.
+    inLock(partitionMapLock) {
+      //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
+      val epochEndOffsets = endOffsets.filter { case (tp, _) =>
+        val curPartitionState = partitionStates.stateValue(tp)
+        val partitionEpochRequest = latestEpochsForPartitions.get(tp).getOrElse {
+          throw new IllegalStateException(
+            s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
         }
-
-        val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncate(leaderEpochs)
-        handlePartitionsWithErrors(partitionsWithError)
-        updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
+        val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
+        curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
       }
+
+      val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets)
+      handlePartitionsWithErrors(partitionsWithError)
+      updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
   }
 
-  private def maybeTruncate(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
+  private def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
+    val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
+    val partitionsWithError = mutable.HashSet.empty[TopicPartition]
+
+    for (tp <- partitions) {
+      try {
+        val highWatermark = partitionStates.stateValue(tp).fetchOffset
+        val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
+
+        info(s"Truncating partition $tp to local high watermark $highWatermark")
+        truncate(tp, truncationState)
+
+        fetchOffsets.put(tp, truncationState)
+      } catch {
+        case e: KafkaStorageException =>
+          info(s"Failed to truncate $tp", e)
+          partitionsWithError += tp
+      }
+    }
+
+    handlePartitionsWithErrors(partitionsWithError)
+    updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
+  }
+
+  private def maybeTruncateToEpochEndOffsets(fetchedEpochs: Map[TopicPartition, EpochEndOffset]): ResultWithPartitions[Map[TopicPartition, OffsetTruncationState]] = {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
@@ -207,7 +236,8 @@ abstract class AbstractFetcherThread(name: String,
       try {
         leaderEpochOffset.error match {
           case Errors.NONE =>
-            val offsetTruncationState = truncate(tp, leaderEpochOffset)
+            val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+            truncate(tp, offsetTruncationState)
             fetchOffsets.put(tp, offsetTruncationState)
 
           case Errors.FENCED_LEADER_EPOCH =>
@@ -234,12 +264,6 @@ abstract class AbstractFetcherThread(name: String,
         s"the new LeaderAndIsr state before resuming fetching.")
       partitionStates.remove(tp)
     }
-  }
-
-  private def truncate(topicPartition: TopicPartition, epochEndOffset: EpochEndOffset): OffsetTruncationState = {
-    val offsetTruncationState = getOffsetTruncationState(topicPartition, epochEndOffset)
-    truncate(topicPartition, offsetTruncationState)
-    offsetTruncationState
   }
 
   private def processFetchRequest(fetchStates: Map[TopicPartition, PartitionFetchState],
@@ -525,7 +549,7 @@ abstract class AbstractFetcherThread(name: String,
     if (leaderEndOffset < replicaEndOffset) {
       warn(s"Reset fetch offset for partition $topicPartition from $replicaEndOffset to current " +
         s"leader's latest offset $leaderEndOffset")
-      truncate(topicPartition, new EpochEndOffset(Errors.NONE, UNDEFINED_EPOCH, leaderEndOffset))
+      truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
       leaderEndOffset
     } else {
       /**

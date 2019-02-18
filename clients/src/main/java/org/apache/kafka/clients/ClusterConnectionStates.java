@@ -19,6 +19,8 @@ package org.apache.kafka.clients;
 import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -36,8 +38,10 @@ final class ClusterConnectionStates {
     private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
+    private final Logger log;
 
-    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs) {
+    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, LogContext logContext) {
+        this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoffInitMs = reconnectBackoffMs;
         this.reconnectBackoffMaxMs = reconnectBackoffMaxMs;
         this.reconnectBackoffMaxExp = Math.log(this.reconnectBackoffMaxMs / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
@@ -110,15 +114,20 @@ final class ClusterConnectionStates {
      * @throws UnknownHostException 
      */
     public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
-        if (nodeState.containsKey(id)) {
-            NodeConnectionState connectionState = nodeState.get(id);
+        NodeConnectionState connectionState = nodeState.get(id);
+        if (connectionState != null && connectionState.host().equals(host)) {
             connectionState.lastConnectAttemptMs = now;
             connectionState.state = ConnectionState.CONNECTING;
             connectionState.moveToNextAddress();
-        } else {
-            nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                this.reconnectBackoffInitMs, host, clientDnsLookup));
+            return;
+        } else if (connectionState != null) {
+            log.info("Hostname for node {} changed from {} to {}.", id, connectionState.host(), host);
         }
+
+        // Create a new NodeConnectionState if nodeState does not already contain one
+        // for the specified id or if the hostname associated with the node id changed.
+        nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
+            this.reconnectBackoffInitMs, host, clientDnsLookup));
     }
 
     public InetAddress currentAddress(String id) {
@@ -359,6 +368,10 @@ final class ClusterConnectionStates {
             this.throttleUntilTimeMs = 0;
             this.host = host;
             this.clientDnsLookup = clientDnsLookup;
+        }
+
+        public String host() {
+            return host;
         }
 
         public InetAddress currentAddress() {

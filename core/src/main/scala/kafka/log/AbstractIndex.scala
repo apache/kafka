@@ -39,7 +39,8 @@ import scala.math.ceil
  * @param maxIndexSize The maximum index size in bytes.
  */
 abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Long,
-                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable with Logging {
+                                   val maxIndexSize: Int = -1, val writable: Boolean) extends Closeable {
+  import AbstractIndex._
 
   // Length of the index file
   @volatile
@@ -135,7 +136,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
         idx.position(roundDownToExactMultiple(idx.limit(), entrySize))
       idx
     } finally {
-      CoreUtils.swallow(raf.close(), this)
+      CoreUtils.swallow(raf.close(), AbstractIndex)
     }
   }
 
@@ -190,7 +191,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
           mmap.position(position)
           true
         } finally {
-          CoreUtils.swallow(raf.close(), this)
+          CoreUtils.swallow(raf.close(), AbstractIndex)
         }
       }
     }
@@ -396,7 +397,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
       return (-1, 0)
 
-    return binarySearch(0, firstHotEntry)
+    binarySearch(0, firstHotEntry)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {
@@ -420,6 +421,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       Some(relativeOffset.toInt)
   }
 
+}
+
+object AbstractIndex extends Logging {
+  override val loggerName: String = classOf[AbstractIndex[_, _]].getName
 }
 
 object IndexSearchType extends Enumeration {

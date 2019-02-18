@@ -341,6 +341,7 @@
         <allow pkg="javax.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />
+        <allow pkg="org.apache.http"/>
       </subpackage>
 
       <subpackage name="isolation">

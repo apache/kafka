@@ -20,7 +20,7 @@ package kafka.log
 import java.io.File
 import java.nio.ByteBuffer
 
-import kafka.utils.CoreUtils._
+import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.record.RecordBatch
@@ -51,7 +51,8 @@ import org.apache.kafka.common.record.RecordBatch
  */
 // Avoid shadowing mutable file in AbstractIndex
 class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable: Boolean = true)
-    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) with Logging {
+    extends AbstractIndex[Long, Long](_file, baseOffset, maxIndexSize, writable) {
+  import TimeIndex._
 
   @volatile private var _lastEntry = lastEntryFromIndexFile
 
@@ -73,7 +74,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     inLock(lock) {
       _entries match {
         case 0 => TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
-        case s => parseEntry(mmap, s - 1).asInstanceOf[TimestampOffset]
+        case s => parseEntry(mmap, s - 1)
       }
     }
   }
@@ -87,12 +88,11 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     maybeLock(lock) {
       if(n >= _entries)
         throw new IllegalArgumentException("Attempt to fetch the %dth entry from a time index of size %d.".format(n, _entries))
-      val idx = mmap.duplicate
-      TimestampOffset(timestamp(idx, n), relativeOffset(idx, n))
+      parseEntry(mmap, n)
     }
   }
 
-  override def parseEntry(buffer: ByteBuffer, n: Int): IndexEntry = {
+  override def parseEntry(buffer: ByteBuffer, n: Int): TimestampOffset = {
     TimestampOffset(timestamp(buffer, n), baseOffset + relativeOffset(buffer, n))
   }
 
@@ -150,10 +150,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       val slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
       if (slot == -1)
         TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
-      else {
-        val entry = parseEntry(idx, slot).asInstanceOf[TimestampOffset]
-        TimestampOffset(entry.timestamp, entry.offset)
-      }
+      else
+        parseEntry(idx, slot)
     }
   }
 
@@ -219,4 +217,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       throw new CorruptIndexException(s"Time index file ${file.getAbsolutePath} is corrupt, found $length bytes " +
         s"which is neither positive nor a multiple of $entrySize.")
   }
+}
+
+object TimeIndex extends Logging {
+  override val loggerName: String = classOf[TimeIndex].getName
 }

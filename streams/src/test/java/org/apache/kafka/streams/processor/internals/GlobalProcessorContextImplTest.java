@@ -32,8 +32,8 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
@@ -128,10 +128,5 @@ public class GlobalProcessorContextImplTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotAllowToSchedulePunctuations() {
         globalContext.schedule(null, null, null);
-    }
-
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldNotAllowToGetStreamTime() {
-        globalContext.streamTime();
     }
 }

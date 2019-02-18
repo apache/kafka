@@ -251,7 +251,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -711,12 +711,15 @@ public class NetworkClient implements KafkaClient {
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
                 metadataUpdater.handleAuthenticationFailure(exception);
-                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId, disconnectState.remoteAddress(), exception.getMessage());
+                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId,
+                    disconnectState.remoteAddress(), exception.getMessage());
                 break;
             case AUTHENTICATE:
-                // This warning applies to older brokers which don't provide feedback on authentication failures
-                log.warn("Connection to node {} ({}) terminated during authentication. This may indicate " +
-                        "that authentication failed due to invalid credentials.", nodeId, disconnectState.remoteAddress());
+                log.warn("Connection to node {} ({}) terminated during authentication. This may happen " +
+                    "due to any of the following reasons: (1) Authentication failed due to invalid " +
+                    "credentials with brokers older than 1.0.0, (2) Firewall blocking Kafka TLS " +
+                    "traffic (eg it may only allow HTTPS traffic), (3) Transient network issue.",
+                    nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
                 log.warn("Connection to node {} ({}) could not be established. Broker may not be available.", nodeId, disconnectState.remoteAddress());

@@ -236,7 +236,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor(processorContextImpl));
-        processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
 

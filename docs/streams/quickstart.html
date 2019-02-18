@@ -138,7 +138,7 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-plaintext-input
@@ -150,7 +150,7 @@ Note: we create the output topic with compaction enabled because the output stre
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-wordcount-output \
@@ -161,7 +161,7 @@ Created topic "streams-wordcount-output".
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --zookeeper localhost:2181 --describe
+&gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
     Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0
