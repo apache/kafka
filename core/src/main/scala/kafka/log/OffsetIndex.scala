@@ -69,7 +69,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     inLock(lock) {
       _entries match {
         case 0 => OffsetPosition(baseOffset, 0)
-        case s => parseEntry(mmap, s - 1).asInstanceOf[OffsetPosition]
+        case s => parseEntry(mmap, s - 1)
       }
     }
   }
@@ -92,7 +92,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       if(slot == -1)
         OffsetPosition(baseOffset, 0)
       else
-        parseEntry(idx, slot).asInstanceOf[OffsetPosition]
+        parseEntry(idx, slot)
     }
   }
 
@@ -108,7 +108,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       if (slot == -1)
         None
       else
-        Some(parseEntry(idx, slot).asInstanceOf[OffsetPosition])
+        Some(parseEntry(idx, slot))
     }
   }
 
@@ -116,8 +116,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
 
   private def physical(buffer: ByteBuffer, n: Int): Int = buffer.getInt(n * entrySize + 4)
 
-  override def parseEntry(buffer: ByteBuffer, n: Int): IndexEntry = {
-      OffsetPosition(baseOffset + relativeOffset(buffer, n), physical(buffer, n))
+  override protected def parseEntry(buffer: ByteBuffer, n: Int): OffsetPosition = {
+    OffsetPosition(baseOffset + relativeOffset(buffer, n), physical(buffer, n))
   }
 
   /**
@@ -127,10 +127,9 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
    */
   def entry(n: Int): OffsetPosition = {
     maybeLock(lock) {
-      if(n >= _entries)
-        throw new IllegalArgumentException("Attempt to fetch the %dth entry from an index of size %d.".format(n, _entries))
-      val idx = mmap.duplicate
-      OffsetPosition(relativeOffset(idx, n), physical(idx, n))
+      if (n >= _entries)
+        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from an index of size ${_entries}.")
+      parseEntry(mmap, n)
     }
   }
 

@@ -397,7 +397,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     if(compareIndexEntry(parseEntry(idx, 0), target, searchEntity) > 0)
       return (-1, 0)
 
-    return binarySearch(0, firstHotEntry)
+    binarySearch(0, firstHotEntry)
   }
 
   private def compareIndexEntry(indexEntry: IndexEntry, target: Long, searchEntity: IndexSearchEntity): Int = {

@@ -74,7 +74,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     inLock(lock) {
       _entries match {
         case 0 => TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
-        case s => parseEntry(mmap, s - 1).asInstanceOf[TimestampOffset]
+        case s => parseEntry(mmap, s - 1)
       }
     }
   }
@@ -88,12 +88,11 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
     maybeLock(lock) {
       if(n >= _entries)
         throw new IllegalArgumentException("Attempt to fetch the %dth entry from a time index of size %d.".format(n, _entries))
-      val idx = mmap.duplicate
-      TimestampOffset(timestamp(idx, n), relativeOffset(idx, n))
+      parseEntry(mmap, n)
     }
   }
 
-  override def parseEntry(buffer: ByteBuffer, n: Int): IndexEntry = {
+  override def parseEntry(buffer: ByteBuffer, n: Int): TimestampOffset = {
     TimestampOffset(timestamp(buffer, n), baseOffset + relativeOffset(buffer, n))
   }
 
@@ -151,10 +150,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       val slot = largestLowerBoundSlotFor(idx, targetTimestamp, IndexSearchType.KEY)
       if (slot == -1)
         TimestampOffset(RecordBatch.NO_TIMESTAMP, baseOffset)
-      else {
-        val entry = parseEntry(idx, slot).asInstanceOf[TimestampOffset]
-        TimestampOffset(entry.timestamp, entry.offset)
-      }
+      else
+        parseEntry(idx, slot)
     }
   }
 
