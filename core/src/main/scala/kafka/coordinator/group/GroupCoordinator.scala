@@ -372,7 +372,8 @@ class GroupCoordinator(val brokerId: Int,
           } else if (group.isPendingMember(memberId)) {
             // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
             // and if necessary, prompt a JoinGroup completion.
-            debug(s"Pending member $memberId is leaving group ${group.groupId}.")
+            info(s"Pending member $memberId is leaving group ${group.groupId}.")
+            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
             removePendingMemberAndUpdateGroup(group, memberId)
             responseCallback(Errors.NONE)
           } else if (!group.has(memberId)) {
@@ -380,7 +381,7 @@ class GroupCoordinator(val brokerId: Int,
           } else {
             val member = group.get(memberId)
             removeHeartbeatForLeavingMember(group, member)
-            debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
+            info(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
             removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
             responseCallback(Errors.NONE)
           }
@@ -846,9 +847,6 @@ class GroupCoordinator(val brokerId: Int,
   private def removePendingMemberAndUpdateGroup(group: GroupMetadata, memberId: String) {
     group.removePendingMember(memberId)
 
-    val memberKey = MemberKey(group.groupId, memberId)
-    heartbeatPurgatory.checkAndComplete(memberKey)
-
     if (group.is(PreparingRebalance)) {
       joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
@@ -938,10 +936,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (isPending) {
         info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
-        group.removePendingMember(memberId)
-        if (group.is(PreparingRebalance)) {
-          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
-        }
+        removePendingMemberAndUpdateGroup(group, memberId)
       } else if (!group.has(memberId)) {
         debug(s"Member $memberId has already been removed from the group.")
       } else {
