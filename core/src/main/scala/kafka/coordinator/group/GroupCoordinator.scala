@@ -367,17 +367,15 @@ class GroupCoordinator(val brokerId: Int,
 
       case Some(group) =>
         group.inLock {
-          // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
-          // and if necessary, prompt a JoinGroup completion.
-          if (group.isPendingMember(memberId)) {
+          if (group.is(Dead)) {
+            responseCallback(Errors.UNKNOWN_MEMBER_ID)
+          } else if (group.isPendingMember(memberId)) {
+            // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
+            // and if necessary, prompt a JoinGroup completion.
             debug(s"Pending member $memberId is leaving group ${group.groupId}.")
-            group.removePendingMember(memberId)
-            heartbeatPurgatory.cancelForKey(MemberKey(groupId, memberId))
-            if (group.is(PreparingRebalance)) {
-              joinPurgatory.checkAndComplete(GroupKey(group.groupId))
-            }
+            removePendingMemberAndUpdateGroup(group, memberId)
             responseCallback(Errors.NONE)
-          } else if (group.is(Dead) || !group.has(memberId)) {
+          } else if (!group.has(memberId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
           } else {
             val member = group.get(memberId)
@@ -842,6 +840,17 @@ class GroupCoordinator(val brokerId: Int,
       case Dead | Empty =>
       case Stable | CompletingRebalance => maybePrepareRebalance(group, reason)
       case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+    }
+  }
+
+  private def removePendingMemberAndUpdateGroup(group: GroupMetadata, memberId: String) {
+    group.removePendingMember(memberId)
+
+    val memberKey = MemberKey(group.groupId, memberId)
+    heartbeatPurgatory.checkAndComplete(memberKey)
+
+    if (group.is(PreparingRebalance)) {
+      joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
 
