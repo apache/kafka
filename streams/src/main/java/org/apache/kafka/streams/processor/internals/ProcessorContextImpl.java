@@ -46,7 +46,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
-    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -203,15 +202,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                 final Punctuator callback) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(interval, "interval");
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
-    }
-
-    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
-        this.streamTimeSupplier = streamTimeSupplier;
-    }
-
-    @Override
-    public long streamTime() {
-        return streamTimeSupplier.get();
     }
 
     private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends WrappedStateStore<T> {

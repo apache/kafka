@@ -75,8 +75,6 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
         }
     };
 
-    private long streamTime = RecordQueue.UNKNOWN;
-
     StandbyContextImpl(final TaskId id,
                        final StreamsConfig config,
                        final ProcessorStateManager stateMgr,
@@ -231,14 +229,4 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
     public ProcessorNode currentNode() {
         throw new UnsupportedOperationException("this should not happen: currentNode not supported in standby tasks.");
     }
-
-    void updateStreamTime(final long streamTime) {
-        this.streamTime = Math.max(this.streamTime, streamTime);
-    }
-
-    @Override
-    public long streamTime() {
-        return streamTime;
-    }
-
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -75,6 +76,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
+        private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -103,7 +105,8 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             // first get the matching windows
             final long timestamp = context().timestamp();
-            final long closeTime = internalProcessorContext.streamTime() - windows.gracePeriodMs();
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+            final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             final Map<Long, W> matchedWindows = windows.windowsFor(timestamp);
 

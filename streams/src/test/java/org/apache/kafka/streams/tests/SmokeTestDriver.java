@@ -178,6 +178,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
 
+        // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
+        // all suppressed records.
+        final List<PartitionInfo> partitions = producer.partitionsFor("data");
+        for (final PartitionInfo partition : partitions) {
+            producer.send(new ProducerRecord<>(
+                partition.topic(),
+                partition.partition(),
+                System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
+                stringSerde.serializer().serialize("", "flush"),
+                intSerde.serializer().serialize("", 0)
+            ));
+        }
+
         producer.close();
         return Collections.unmodifiableMap(allData);
     }
@@ -393,6 +406,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         boolean pass;
         try (final PrintStream resultStream = new PrintStream(byteArrayOutputStream)) {
             pass = verifyTAgg(resultStream, inputs, events.get("tagg"));
+            pass &= verifySuppressed(resultStream, "min-suppressed", inputs, events, SmokeTestDriver::getMin);
             pass &= verify(resultStream, "min", inputs, events, SmokeTestDriver::getMin);
             pass &= verify(resultStream, "max", inputs, events, SmokeTestDriver::getMax);
             pass &= verify(resultStream, "dif", inputs, events, key -> getMax(key).intValue() - getMin(key).intValue());
@@ -438,6 +452,34 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
             return true;
         }
+    }
+
+
+    private static boolean verifySuppressed(final PrintStream resultStream,
+                                            @SuppressWarnings("SameParameterValue") final String topic,
+                                            final Map<String, Set<Integer>> inputs,
+                                            final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events,
+                                            final Function<String, Number> getMin) {
+        resultStream.println("verifying suppressed " + topic);
+        final Map<String, LinkedList<ConsumerRecord<String, Number>>> topicEvents = events.getOrDefault(topic, emptyMap());
+        for (final Map.Entry<String, LinkedList<ConsumerRecord<String, Number>>> entry : topicEvents.entrySet()) {
+            if (entry.getValue().size() != 1) {
+                final String unsuppressedTopic = topic.replace("-suppressed", "-raw");
+                final String key = entry.getKey();
+                final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
+                resultStream.printf("fail: key=%s%n\tnon-unique result:%n%s%n\traw results:%n%s%n\tinput data:%n%s%n",
+                                    key,
+                                    indent("\t\t", entry.getValue()),
+                                    indent("\t\t", events.get(unsuppressedTopic).get(key)),
+                                    indent("\t\t", events.get("data").get(unwindowedKey))
+                );
+                return false;
+            }
+        }
+        return verify(resultStream, topic, inputs, events, windowedKey -> {
+            final String unwindowedKey = windowedKey.substring(1, windowedKey.length() - 1).replaceAll("@.*", "");
+            return getMin.apply(unwindowedKey);
+        });
     }
 
     private static String indent(@SuppressWarnings("SameParameterValue") final String prefix,

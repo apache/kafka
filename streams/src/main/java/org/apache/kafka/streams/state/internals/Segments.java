@@ -28,11 +28,11 @@ interface Segments<S extends Segment> {
 
     S getSegmentForTimestamp(final long timestamp);
 
-    S getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context);
+    S getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context, final long streamTime);
 
     S getOrCreateSegment(final long segmentId, final InternalProcessorContext context);
 
-    void openExisting(final InternalProcessorContext context);
+    void openExisting(final InternalProcessorContext context, final long streamTime);
 
     List<S> segments(final long timeFrom, final long timeTo);
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
@@ -81,6 +82,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
+        private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -107,7 +109,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 return;
             }
 
-            final long closeTime = internalProcessorContext.streamTime() - windows.gracePeriodMs();
+            observedStreamTime = Math.max(observedStreamTime, context().timestamp());
+            final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
             final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
