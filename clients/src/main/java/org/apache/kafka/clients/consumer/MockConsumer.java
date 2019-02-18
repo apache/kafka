@@ -58,7 +58,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final Set<TopicPartition> paused;
 
     private Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
-    private KafkaException exception;
+    private KafkaException pollException;
+    private KafkaException offsetsException;
     private AtomicBoolean wakeup;
     private boolean closed;
 
@@ -71,7 +72,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.beginningOffsets = new HashMap<>();
         this.endOffsets = new HashMap<>();
         this.pollTasks = new LinkedList<>();
-        this.exception = null;
+        this.pollException = null;
         this.wakeup = new AtomicBoolean(false);
         this.committed = new HashMap<>();
     }
@@ -170,9 +171,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new WakeupException();
         }
 
-        if (exception != null) {
-            RuntimeException exception = this.exception;
-            this.exception = null;
+        if (pollException != null) {
+            RuntimeException exception = this.pollException;
+            this.pollException = null;
             throw exception;
         }
 
@@ -213,8 +214,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         recs.add(record);
     }
 
-    public synchronized void setException(KafkaException exception) {
-        this.exception = exception;
+    public synchronized void setPollException(KafkaException pollException) {
+        this.pollException = pollException;
     }
 
     @Override
@@ -388,6 +389,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions) {
+        if (offsetsException != null) {
+            RuntimeException exception = this.offsetsException;
+            this.offsetsException = null;
+            throw exception;
+        }
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
             Long beginningOffset = beginningOffsets.get(tp);
@@ -400,6 +406,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized Map<TopicPartition, Long> endOffsets(Collection<TopicPartition> partitions) {
+        if (offsetsException != null) {
+            RuntimeException exception = this.offsetsException;
+            this.offsetsException = null;
+            throw exception;
+        }
         Map<TopicPartition, Long> result = new HashMap<>();
         for (TopicPartition tp : partitions) {
             Long endOffset = getEndOffset(endOffsets.get(tp));
@@ -408,6 +419,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             result.put(tp, endOffset);
         }
         return result;
+    }
+
+    public synchronized void setOffsetsException(KafkaException exception) {
+        this.offsetsException = exception;
     }
 
     @Override
