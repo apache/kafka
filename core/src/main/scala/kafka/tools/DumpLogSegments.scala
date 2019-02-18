@@ -80,12 +80,10 @@ object DumpLogSegments {
 
     timeIndexDumpErrors.printErrors()
 
-    nonConsecutivePairsForLogFilesMap.foreach {
-      case (fileName, listOfNonConsecutivePairs) => {
-        System.err.println("Non-consecutive offsets in :" + fileName)
-        listOfNonConsecutivePairs.foreach(m => {
-          System.err.println("  %d is followed by %d".format(m._1, m._2))
-        })
+    nonConsecutivePairsForLogFilesMap.foreach { case (fileName, listOfNonConsecutivePairs) =>
+      System.err.println(s"Non-consecutive offsets in $fileName")
+      listOfNonConsecutivePairs.foreach { case (first, second) =>
+        System.err.println(s"  $first is followed by $second")
       }
     }
   }
