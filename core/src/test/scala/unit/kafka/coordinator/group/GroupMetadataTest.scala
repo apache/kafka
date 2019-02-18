@@ -17,7 +17,6 @@
 
 package kafka.coordinator.group
 
-import kafka.admin.ConsumerGroupCommand.GroupState
 import kafka.common.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
