@@ -734,8 +734,7 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, apiVersion: ApiVersion = ApiVersion.latestVersion,
-                            requiredAcks: Int = 0): LogAppendInfo = {
+  def appendRecordsToLeader(records: MemoryRecords, isFromClient: Boolean, requiredAcks: Int = 0): LogAppendInfo = {
     val (info, leaderHWIncremented) = inReadLock(leaderIsrUpdateLock) {
       leaderReplicaIfLocal match {
         case Some(leaderReplica) =>
@@ -749,7 +748,8 @@ class Partition(val topicPartition: TopicPartition,
               s"is insufficient to satisfy the min.isr requirement of $minIsr for partition $topicPartition")
           }
 
-          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient, apiVersion)
+          val info = log.appendAsLeader(records, leaderEpoch = this.leaderEpoch, isFromClient,
+            replicaManager.config.interBrokerProtocolVersion)
           // we may need to increment high watermark since ISR could be down to 1
           (info, maybeIncrementLeaderHW(leaderReplica))
 
