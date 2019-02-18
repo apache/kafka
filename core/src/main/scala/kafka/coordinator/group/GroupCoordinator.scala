@@ -367,7 +367,16 @@ class GroupCoordinator(val brokerId: Int,
 
       case Some(group) =>
         group.inLock {
-          if (group.is(Dead) || !group.has(memberId)) {
+          // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
+          // and if necessary, prompt a JoinGroup completion.
+          if (group.isPendingMember(memberId)) {
+            group.removePendingMember(memberId)
+            heartbeatPurgatory.cancelForKey(MemberKey(groupId, memberId))
+            if (group.is(PreparingRebalance)) {
+              joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+            }
+            responseCallback(Errors.NONE)
+          } else if (group.is(Dead) || !group.has(memberId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
           } else {
             val member = group.get(memberId)

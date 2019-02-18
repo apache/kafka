@@ -911,8 +911,8 @@ class GroupCoordinatorTest extends JUnitSuite {
     await(pendingMemberJoinFuture, DefaultSessionTimeout+100)
 
     assertGroupState(groupState = CompletingRebalance)
-    assertEquals(3, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
-    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+    assertEquals(3, group().allMembers.size)
+    assertEquals(0, group().numPending)
   }
 
   /**
@@ -932,12 +932,32 @@ class GroupCoordinatorTest extends JUnitSuite {
     timer.advanceClock(120)
 
     assertGroupState(groupState = CompletingRebalance)
-    assertEquals(2, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
-    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+    assertEquals(2, group().allMembers.size)
+    assertEquals(0, group().numPending)
+  }
+
+  @Test
+  def testPendingMembersLeavesGroup(): Unit = {
+    val pending = setupGroupWithPendingMember()
+
+    EasyMock.reset(replicaManager)
+    val leaveGroupResult = leaveGroup(groupId, pending.memberId)
+    assertEquals(Errors.NONE, leaveGroupResult)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(2, group().allMembers.size)
+    assertEquals(0, group().numPending)
+  }
+
+  private def group(groupId: String = groupId) = {
+    groupCoordinator.groupManager.getGroup(groupId) match {
+      case Some(g) => g
+      case None => null
+    }
   }
 
   private def assertGroupState(groupId: String = groupId,
-                               groupState: GroupState) = {
+                               groupState: GroupState): Unit = {
     groupCoordinator.groupManager.getGroup(groupId) match {
       case Some(group) => assertEquals(groupState, group.currentState)
       case None => fail(s"Group $groupId not found in coordinator")
