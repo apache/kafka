@@ -19,10 +19,10 @@ package kafka.log
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
-import kafka.api.ApiVersion
+import kafka.api.{ApiVersion, KAFKA_2_0_IV1}
 import kafka.common.LongRef
-import kafka.message.{CompressionCodec, DefaultCompressionCodec, GZIPCompressionCodec, NoCompressionCodec, SnappyCompressionCodec}
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedForMessageFormatException}
+import kafka.message._
+import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
@@ -1069,6 +1069,26 @@ class LogValidatorTest {
   @Test(expected = classOf[InvalidRecordException])
   def testCompressedBatchWithoutRecordsNotAllowed(): Unit = {
     testBatchWithoutRecordsNotAllowed(DefaultCompressionCodec, DefaultCompressionCodec)
+  }
+
+  @Test(expected = classOf[UnsupportedCompressionTypeException])
+  def testZStdCompressedWithUnavailableIBPVersion(): Unit = {
+    val now = System.currentTimeMillis()
+    // The timestamps should be overwritten
+    val records = createRecords(magicValue = RecordBatch.MAGIC_VALUE_V2, timestamp = 1234L, codec = CompressionType.NONE)
+    LogValidator.validateMessagesAndAssignOffsets(records,
+      offsetCounter = new LongRef(0),
+      time= time,
+      now = now,
+      sourceCodec = NoCompressionCodec,
+      targetCodec = ZStdCompressionCodec,
+      compactedTopic = false,
+      magic = RecordBatch.MAGIC_VALUE_V2,
+      timestampType = TimestampType.LOG_APPEND_TIME,
+      timestampDiffMaxMs = 1000L,
+      partitionLeaderEpoch = RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      isFromClient = true,
+      interBrokerProtocolVersion = KAFKA_2_0_IV1)
   }
 
   @Test(expected = classOf[InvalidRecordException])
