@@ -373,8 +373,8 @@ class GroupCoordinator(val brokerId: Int,
             // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
             // and if necessary, prompt a JoinGroup completion.
             info(s"Pending member $memberId is leaving group ${group.groupId}.")
-            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
             removePendingMemberAndUpdateGroup(group, memberId)
+            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
             responseCallback(Errors.NONE)
           } else if (!group.has(memberId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
