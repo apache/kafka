@@ -75,6 +75,50 @@ public class JsonConverterTest {
     // Schema metadata
 
     @Test
+    public void fieldOrderIsNOTMaintainedOnMapToConnectStringKeysWhenJsonFieldOrderIsNotSet() {
+        byte[] mapJson = "{\"aValue\":{\"key2\":\"expect me first\",\"key1\":\"expect me second\"}}".getBytes();
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("schemas.enable", Boolean.FALSE);
+        JsonConverter localConverter = new JsonConverter();
+        localConverter.configure(config, false);
+        SchemaAndValue connectData = localConverter.toConnectData(TOPIC, mapJson);
+        byte[] roundTripped = localConverter.fromConnectData(TOPIC, null, connectData.value());
+
+        assertEquals("{\"aValue\":{\"key1\":\"expect me second\",\"key2\":\"expect me first\"}}", new String(roundTripped));
+    }
+
+    @Test
+    public void fieldOrderIsNOTMaintainedOnMapToConnectStringKeysWhenJsonFieldOrderIsNone() {
+        byte[] mapJson = "{\"aValue\":{\"key2\":\"expect me first\",\"key1\":\"expect me second\"}}".getBytes();
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("schemas.enable", Boolean.FALSE);
+        config.put(JsonConverterConfig.JSON_FIELD_ORDER_CONFIG, "none");
+        JsonConverter localConverter = new JsonConverter();
+        localConverter.configure(config, false);
+        SchemaAndValue connectData = localConverter.toConnectData(TOPIC, mapJson);
+        byte[] roundTripped = localConverter.fromConnectData(TOPIC, null, connectData.value());
+
+        assertEquals("{\"aValue\":{\"key1\":\"expect me second\",\"key2\":\"expect me first\"}}", new String(roundTripped));
+    }
+
+    @Test
+    public void fieldOrderISMaintainedOnMapToConnectStringKeysWhenJsonFieldOrderIsRetained() {
+        byte[] mapJson = "{\"aValue\":{\"key2\":\"expect me first\",\"key1\":\"expect me second\"}}".getBytes();
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("schemas.enable", Boolean.FALSE);
+        config.put(JsonConverterConfig.JSON_FIELD_ORDER_CONFIG, "retained");
+        JsonConverter localConverter = new JsonConverter();
+        localConverter.configure(config, false);
+        SchemaAndValue connectData = localConverter.toConnectData(TOPIC, mapJson);
+        byte[] roundTripped = localConverter.fromConnectData(TOPIC, null, connectData.value());
+
+        assertEquals(new String(mapJson), new String(roundTripped));
+    }
+
+    @Test
     public void testConnectSchemaMetadataTranslation() {
         // this validates the non-type fields are translated and handled properly
         assertEquals(new SchemaAndValue(Schema.BOOLEAN_SCHEMA, true), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"boolean\" }, \"payload\": true }".getBytes()));
@@ -822,7 +866,7 @@ public class JsonConverterTest {
         assertTrue(env.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME).isNull());
         assertTrue(env.has(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
-    
+
     private void assertStructSchemaEqual(Schema schema, Struct struct) {
         converter.fromConnectData(TOPIC, schema, struct);
         assertEquals(schema, struct.schema());
