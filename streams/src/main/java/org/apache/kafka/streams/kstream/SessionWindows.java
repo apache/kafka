@@ -92,6 +92,7 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative
      * @deprecated Use {@link #with(Duration)} instead.
      */
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public static SessionWindows with(final long inactivityGapMs) {
         if (inactivityGapMs <= 0) {
@@ -108,7 +109,7 @@ public final class SessionWindows {
      *
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #with(long inactivityGapMs) will fix this
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         return with(ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix));
@@ -163,7 +164,6 @@ public final class SessionWindows {
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public long gracePeriodMs() {
-
         // NOTE: in the future, when we remove maintainMs,
         // we should default the grace period to 24h to maintain the default behavior,
         // or we can default to (24h - gapMs) if you want to be super accurate.

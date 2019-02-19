@@ -611,7 +611,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
@@ -631,7 +631,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {

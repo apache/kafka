@@ -69,6 +69,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException if the start time is negative
      * @deprecated Use {@link #startOn(Instant)} instead
      */
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public UnlimitedWindows startOn(final long startMs) throws IllegalArgumentException {
         if (startMs < 0) {
@@ -84,7 +85,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return a new unlimited window that starts at {@code start}
      * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #startOn(final long startMs) will fix this
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
         return startOn(ApiUtils.validateMillisecondInstant(start, msgPrefix));

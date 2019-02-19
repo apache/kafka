@@ -106,11 +106,13 @@ public class GlobalProcessorContextImplTest {
         globalContext.forward(null, null, To.all());
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildIndex() {
         globalContext.forward(null, null, 0);
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildName() {
         globalContext.forward(null, null, "processorName");

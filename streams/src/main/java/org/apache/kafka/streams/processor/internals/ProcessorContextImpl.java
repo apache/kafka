@@ -122,8 +122,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         forward(key, value, SEND_TO_ALL);
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key,
                                final V value,
                                final int childIndex) {
@@ -133,8 +134,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings({"unchecked", "deprecation"})
+    @SuppressWarnings("unchecked")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key,
                                final V value,
                                final String childName) {
@@ -186,16 +188,16 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     @Override
     @Deprecated
-    public Cancellable schedule(final long interval,
+    public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
-        if (interval < 1) {
+        if (intervalMs < 1) {
             throw new IllegalArgumentException("The minimum supported scheduling interval is 1 millisecond.");
         }
-        return task.schedule(interval, type, callback);
+        return task.schedule(intervalMs, type, callback);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
@@ -309,16 +311,16 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(key, time);
         }
 
-        @Deprecated
         @Override
+        @Deprecated
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
             return wrapped().fetch(key, timeFrom, timeTo);
         }
 
-        @Deprecated
         @Override
+        @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                       final K to,
                                                       final long timeFrom,
@@ -331,8 +333,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().all();
         }
 
-        @Deprecated
         @Override
+        @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
@@ -490,7 +492,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(key, time);
         }
 
-        @Deprecated
+        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
@@ -498,7 +500,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(key, timeFrom, timeTo);
         }
 
-        @Deprecated
+        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                       final K to,
@@ -507,16 +509,16 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             return wrapped().fetch(from, to, timeFrom, timeTo);
         }
 
-        @Override
-        public KeyValueIterator<Windowed<K>, V> all() {
-            return wrapped().all();
-        }
-
-        @Deprecated
+        @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> all() {
+            return wrapped().all();
         }
     }
 

@@ -46,7 +46,7 @@ public abstract class Windows<W extends Window> {
 
     protected Windows() {}
 
-    @SuppressWarnings("deprecation") // remove this constructor when we remove segments.
+    @Deprecated // remove this constructor when we remove segments.
     Windows(final int segments) {
         this.segments = segments;
     }

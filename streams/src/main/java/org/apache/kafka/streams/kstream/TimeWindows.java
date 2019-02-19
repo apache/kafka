@@ -106,6 +106,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the specified window size is zero or negative
      * @deprecated Use {@link #of(Duration)} instead
      */
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public static TimeWindows of(final long sizeMs) throws IllegalArgumentException {
         if (sizeMs <= 0) {
@@ -127,7 +128,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the specified window size is zero or negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #of(final long sizeMs) will fix this
     public static TimeWindows of(final Duration size) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(size, "size");
         return of(ApiUtils.validateMillisecondDuration(size, msgPrefix));
@@ -145,7 +146,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger than the window size
      * @deprecated Use {@link #advanceBy(Duration)} instead
      */
-    @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
+    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public TimeWindows advanceBy(final long advanceMs) {
         if (advanceMs <= 0 || advanceMs > sizeMs) {
@@ -166,7 +167,7 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @return a new window definition with default maintain duration of 1 day
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger than the window size
      */
-    @SuppressWarnings("deprecation") // will be fixed when we remove segments from Windows
+    @SuppressWarnings("deprecation") // removing #advanceBy(final long advanceMs) will fix this
     public TimeWindows advanceBy(final Duration advance) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(advance, "advance");
         return advanceBy(ApiUtils.validateMillisecondDuration(advance, msgPrefix));
