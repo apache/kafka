@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -329,6 +330,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
                         case "min":
                             min.put(key, intSerde.deserializer().deserialize("", record.value()));
                             break;
+                        case "min-suppressed":
+                            minSuppressed.computeIfAbsent(key, k -> new LinkedList<>())
+                                         .add(intSerde.deserializer().deserialize("", record.value()));
+                            break;
                         case "max":
                             max.put(key, intSerde.deserializer().deserialize("", record.value()));
                             break;
@@ -430,7 +435,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
                                                final Map<String, Set<Integer>> allData,
                                                final boolean print) {
         if (map.isEmpty()) {
-            maybePrint(print, "min is empty");
+            maybePrint(print, "min-suppressed is empty");
             return false;
         } else {
             maybePrint(print, "verifying min-suppressed");
