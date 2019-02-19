@@ -1131,8 +1131,8 @@ public abstract class AbstractCoordinator implements Closeable {
         }
 
         /**
-         * @return true if this generation has a valid member id. A generation might not be {@link #NO_GENERATION}, but
-         * might be pending a join group request, in which case memberId will be an empty string.
+         * @return true if this generation has a valid member id, false otherwise. A member might have an id before
+         * it becomes part of a group generation.
          */
         public boolean hasMemberId() {
             return !memberId.isEmpty();
