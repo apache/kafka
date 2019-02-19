@@ -307,7 +307,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             return null;
         }
         Long optionalStartTime = expiringCredential.startTimeMs();
-        long startMs = optionalStartTime != null ? optionalStartTime.longValue() : currentMs();
+        long startMs = optionalStartTime != null ? optionalStartTime.longValue() : relativeToMs;
         log.info("[Principal={}]: Expiring credential valid from {} to {}", expiringCredential.principalName(),
                 new java.util.Date(startMs), new java.util.Date(expireTimeMs));
 
@@ -320,7 +320,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
         long refreshMinPeriodSeconds = expiringCredentialRefreshConfig.loginRefreshMinPeriodSeconds();
         long clientRefreshBufferSeconds = expiringCredentialRefreshConfig.loginRefreshBufferSeconds();
         if (relativeToMs + 1000L * (refreshMinPeriodSeconds + clientRefreshBufferSeconds) > expireTimeMs) {
-            long retvalRefreshMs = startMs + (long) ((expireTimeMs - startMs) * pct);
+            long retvalRefreshMs = relativeToMs + (long) ((expireTimeMs - relativeToMs) * pct);
             log.warn(
                     "[Principal={}]: Expiring credential expires at {}, so buffer times of {} and {} seconds"
                             + " at the front and back, respectively, cannot be accommodated.  We will refresh at {}.",
