@@ -81,10 +81,6 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
    */
   def doWork(): Unit
 
-  override def start(): Unit = {
-    isStarted = true
-    super.start()
-  }
   override def run(): Unit = {
     isStarted = true
     info("Starting")
