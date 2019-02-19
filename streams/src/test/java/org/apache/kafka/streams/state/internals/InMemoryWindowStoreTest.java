@@ -128,7 +128,6 @@ public class InMemoryWindowStoreTest {
 
     private void setCurrentTime(final long currentTime) {
         context.setRecordContext(createRecordContext(currentTime));
-        context.setStreamTime(currentTime);
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
@@ -435,8 +434,13 @@ public class InMemoryWindowStoreTest {
 
         windowStore = createInMemoryWindowStore(context, false);
         setCurrentTime(retentionPeriod);
-        windowStore.put(1, "too late", 0L);
-        windowStore.put(1, "ok");
+
+        // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
+        windowStore.put(1, "initial record");
+
+        // Try inserting a record with timestamp 0 -- should be dropped
+        windowStore.put(1, "late record", 0L);
+        windowStore.put(1, "another on-time record");
 
         LogCaptureAppender.unregister(appender);
 

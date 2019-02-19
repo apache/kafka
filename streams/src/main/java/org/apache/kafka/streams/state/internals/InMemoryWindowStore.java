@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
@@ -42,7 +43,6 @@ import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
-import static org.apache.kafka.common.utils.Utils.max;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKey;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
@@ -59,6 +59,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     private InternalProcessorContext context;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
     private final long windowSize;
@@ -134,8 +135,9 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     public void put(final K key, final V value, final long windowStartTimestamp) {
         removeExpiredSegments();
         maybeUpdateSeqnumForDups();
+        this.observedStreamTime = Math.max(this.observedStreamTime, windowStartTimestamp);
 
-        if (windowStartTimestamp <= this.context.streamTime() - this.retentionPeriod) {
+        if (windowStartTimestamp <= this.observedStreamTime - this.retentionPeriod) {
             expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
         } else {
@@ -179,7 +181,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         final List<KeyValue<Windowed<K>, V>> returnSet = new LinkedList<>();
 
         // add one b/c records expire exactly retentionPeriod ms after created
-        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);
         final WrappedK<K> keyFrom = new WrappedK<>(from, 0);
         final WrappedK<K> keyTo = new WrappedK<>(to, Integer.MAX_VALUE);
 
@@ -199,7 +201,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         final List<KeyValue<Windowed<K>, V>> returnSet = new LinkedList<>();
 
         // add one b/c records expire exactly retentionPeriod ms after created
-        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);
 
         for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
             for (final Map.Entry<WrappedK<K>, V> kvMapEntry : segmentMapEntry.getValue().entrySet()) {
@@ -250,7 +252,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         final List<KeyValue<Long, V>> returnSet = new LinkedList<>();
 
         // add one b/c records expire exactly retentionPeriod ms after created
-        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);
 
         for (final Map.Entry<Long, NavigableMap<WrappedK<K>, V>> segmentMapEntry : this.segmentMap.subMap(minTime, true, timeTo, true).entrySet()) {
             final V value = segmentMapEntry.getValue().get(new WrappedK<>(key, seqnum));
@@ -265,7 +267,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
         final List<KeyValue<Long, V>> returnSet = new LinkedList<>();
 
         // add one b/c records expire exactly retentionPeriod ms after created
-        final long minTime = max(timeFrom, this.context.streamTime() - this.retentionPeriod + 1);
+        final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);
         final WrappedK<K> keyFrom = new WrappedK<>(key, 0);
         final WrappedK<K> keyTo = new WrappedK<>(key, Integer.MAX_VALUE);
 
@@ -278,7 +280,7 @@ public class InMemoryWindowStore<K extends Comparable<K>, V> implements WindowSt
     }
 
     private void removeExpiredSegments() {
-        final long minLiveTime = this.context.streamTime() - this.retentionPeriod;
+        final long minLiveTime = this.observedStreamTime - this.retentionPeriod;
         this.segmentMap.headMap(minLiveTime, true).clear();
     }
 
