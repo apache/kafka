@@ -447,7 +447,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             for (final Map.Entry<String, List<Integer>> entry : map.entrySet()) {
                 final String key = entry.getKey();
                 final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
-                final int expected = getMin(key);
+                final int expected = getMin(unwindowedKey);
                 if (entry.getValue().size() != 1) {
                     maybePrint(print, "fail: key=" + entry.getKey() + " non-unique value: " + entry.getValue());
                     return false;
