@@ -61,7 +61,7 @@ import static org.junit.Assert.assertTrue;
 public class KTableKTableLeftJoinTest {
 
     @Rule
-    final public Timeout globalTimeout = Timeout.seconds(120);
+    final public Timeout globalTimeout = Timeout.seconds(240);
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
