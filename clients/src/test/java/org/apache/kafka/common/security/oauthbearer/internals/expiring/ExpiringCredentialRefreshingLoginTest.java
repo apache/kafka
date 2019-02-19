@@ -84,13 +84,13 @@ public class ExpiringCredentialRefreshingLoginTest {
             this.clientReloginAllowedBeforeLogout = clientReloginAllowedBeforeLogout;
         }
 
-		public long getCreateMs() {
-			return time.milliseconds();
-		}
+        public long getCreateMs() {
+            return time.milliseconds();
+        }
 
-		public long getExpireTimeMs() {
-			return time.milliseconds() + lifetimeMillis;
-		}
+        public long getExpireTimeMs() {
+            return time.milliseconds() + lifetimeMillis;
+        }
 
         /*
          * Invoke at login time
@@ -501,10 +501,10 @@ public class ExpiringCredentialRefreshingLoginTest {
                 testLoginContextFactory, mockTime, 1000 * 60 * lifetimeMinutes, absoluteLastRefreshMs,
                 clientReloginAllowedBeforeLogout) {
 
-			@Override
-			public long getCreateMs() {
-				return super.getCreateMs() - 1000 * 60 * 60; // distant past
-			}        	
+            @Override
+            public long getCreateMs() {
+                return super.getCreateMs() - 1000 * 60 * 60; // distant past
+            }
         };
         testLoginContextFactory.configure(mockLoginContext, testExpiringCredentialRefreshingLogin);
 
