@@ -38,7 +38,9 @@ import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -57,6 +59,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableLeftJoinTest {
+
+    @Rule
+    final public Timeout globalTimeout = Timeout.seconds(120);
 
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
