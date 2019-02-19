@@ -15,10 +15,9 @@
 
 import time
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
-from kafkatest.services.streams import StreamsTestBaseService
+from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
-
-class StreamsBrokerDownResilience(StreamsTestBaseService):
+class StreamsBrokerDownResilience(BaseStreamsTest):
     """
     This test validates that Streams is resilient to a broker
     being down longer than specified timeouts in configs
@@ -44,10 +43,6 @@ class StreamsBrokerDownResilience(StreamsTestBaseService):
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
-        if self.UPGRADE_FROM is not None:
-            properties['upgrade.from'] = self.UPGRADE_FROM
-        if self.UPGRADE_TO == "future_version":
-            properties['test.future.metadata'] = "any_value"
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

@@ -30,10 +30,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 
 import java.io.IOException;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 public class StreamsBrokerDownResilienceTest {
 
@@ -50,7 +47,7 @@ public class StreamsBrokerDownResilienceTest {
             System.exit(1);
         }
 
-        System.out.println("StreamsTest instance started");
+        System.out.println("StreamsTest instance started with arguments: " + Arrays.toString(args));
 
         final String propFileName = args[0];
 
