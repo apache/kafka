@@ -41,8 +41,8 @@ public class JsonConverterConfig extends ConverterConfig {
 
     public static final String JSON_FIELD_ORDER_CONFIG = "json.field.order";
     public static final String JSON_FIELD_ORDER_DEFAULT = "none";
-    private static final String JSON_FIELD_ORDER_DOC = "The order to apply to output fields in json structures. Options are 'none', "
-            + "'retained', or 'alphabetical'. Default 'none'. If 'retained' the order of json fields on the incoming messages is retained through "
+    private static final String JSON_FIELD_ORDER_DOC = "The order to apply to output fields in json structures. Options are 'none' or "
+            + "'retained'. Default 'none'. If 'retained' the order of json fields on the incoming messages is retained through "
             + "output. This may be important for some downstream json parsers.";
     private static final String JSON_FIELD_ORDER_DISPLAY = "JSON Field Order";
 
