@@ -1079,7 +1079,7 @@ public class ConfigDef {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
 
-        public Type getType() {
+        public Type type() {
             return type;
         }
     }

@@ -451,15 +451,17 @@ class AdminManager(val config: KafkaConfig,
     configs.map { case (resource, alterConfigOps) =>
       try {
         //throw InvalidRequestException if any duplicate keys
-        alterConfigOps.groupBy(config => config.configEntry().name()).mapValues(_.size).values.foreach(count =>
-            if (count > 1) throw new InvalidRequestException(s"Duplicate config keys provided for resource $resource"))
+        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry().name())
+          .mapValues(_.size).filter(_._2 > 1).keys.toSet
+        if (duplicateKeys.nonEmpty)
+          throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
 
         val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
 
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
-            prepareConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
@@ -470,7 +472,7 @@ class AdminManager(val config: KafkaConfig,
             else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
-            prepareConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
@@ -492,32 +494,32 @@ class AdminManager(val config: KafkaConfig,
     }.toMap
   }
 
-  private def prepareConfigs(alterConfigOps: List[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+  private def prepareIncrementalConfigs(alterConfigOps: List[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
 
     def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
       val configKey = configKeys(configName)
       if (configKey == null)
         throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
-      configKey.getType == ConfigDef.Type.LIST
+      configKey.`type` == ConfigDef.Type.LIST
     }
 
     alterConfigOps.foreach { alterConfigOp =>
       alterConfigOp.opType() match {
         case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
-        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry() .name())
-        case OpType.APPEND =>  {
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
+        case OpType.APPEND => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
-            throw new InvalidRequestException(s"Config value append is not allowed for config: ${alterConfigOp.configEntry().name()}")
-          val oldValue = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
-          val newValue =  oldValue ::: alterConfigOp.configEntry().value().split(",").toList
-          configProps.setProperty(alterConfigOp.configEntry().name(), newValue.mkString(","))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList =  oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
-        case OpType.SUBSTRACT => {
+        case OpType.SUBTRACT => {
           if (!listType(alterConfigOp.configEntry().name(), configKeys))
-            throw new InvalidRequestException(s"Config value substract is not allowed for config: ${alterConfigOp.configEntry().name()}")
-          val oldValue = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
-          val newValue =  oldValue diff alterConfigOp.configEntry().value().split(",").toList
-          configProps.setProperty(alterConfigOp.configEntry().name(), newValue.mkString(","))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList =  oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
         }
       }
     }

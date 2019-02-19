@@ -21,7 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 
 
 /**
- * Options for {@link AdminClient#alterConfigs(java.util.Map)}.
+ * Options for {@link AdminClient#incrementalAlterConfigs(java.util.Map)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

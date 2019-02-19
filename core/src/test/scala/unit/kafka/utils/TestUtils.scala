@@ -1466,17 +1466,18 @@ object TestUtils extends Logging {
     (out.toString, err.toString)
   }
 
-  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable], errorMessage: Option[String] = None): Unit = {
+  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable],
+                                      expectedErrorMessage: Option[String] = None): Unit = {
     try {
       future.get()
       fail("Expected CompletableFuture.get to return an exception")
     } catch {
       case e: ExecutionException =>
-        val cause = e.getCause()
+        val cause = e.getCause
         assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass().getName, clazz.isInstance(cause))
-        errorMessage.foreach(message => assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(message)))
-
+            cause.getClass.getName, clazz.isInstance(cause))
+        expectedErrorMessage.foreach(message => assertTrue(s"Received error message : ${cause.getMessage}" +
+          s" does not contain expected error message : $message", cause.getMessage.contains(message)))
     }
   }
 

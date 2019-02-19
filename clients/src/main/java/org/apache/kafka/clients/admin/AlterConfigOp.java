@@ -35,9 +35,9 @@ import java.util.stream.Collectors;
 public class AlterConfigOp {
 
     public enum OpType {
-        SET((byte) 0), DELETE((byte) 1), APPEND((byte) 2), SUBSTRACT((byte) 3);
+        SET((byte) 0), DELETE((byte) 1), APPEND((byte) 2), SUBTRACT((byte) 3);
 
-        private static final Map<Byte, OpType> OPTYPES = Collections.unmodifiableMap(
+        private static final Map<Byte, OpType> OP_TYPES = Collections.unmodifiableMap(
                 Arrays.stream(values()).collect(Collectors.toMap(OpType::id, Function.identity()))
         );
 
@@ -52,7 +52,7 @@ public class AlterConfigOp {
         }
 
         public static OpType forId(final byte id) {
-            return OPTYPES.get(id);
+            return OP_TYPES.get(id);
         }
     }
 

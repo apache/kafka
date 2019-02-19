@@ -368,7 +368,9 @@ public abstract class AdminClient implements AutoCloseable {
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
      * @return                The AlterConfigsResult
+     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map)}.
      */
+    @Deprecated
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs) {
         return alterConfigs(configs, new AlterConfigsOptions());
     }
@@ -385,7 +387,9 @@ public abstract class AdminClient implements AutoCloseable {
      *                        be updated currently)
      * @param options         The options to use when describing configs
      * @return                The AlterConfigsResult
+     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, IncrementalAlterConfigsOptions)}.
      */
+    @Deprecated
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
 
     /**
@@ -418,7 +422,7 @@ public abstract class AdminClient implements AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
      *   if the authenticated user didn't have alter access to the Topic.</li>
      *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
-     *   if the request details are invalid.</li>
+     *   if the request details are invalid. e.g., a configuration key was specified more than once for a resource</li>
      * </ul>*
      *
      * This operation is supported by brokers with version 2.3.0 or higher.

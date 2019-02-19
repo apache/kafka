@@ -1891,6 +1891,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    @Deprecated
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
