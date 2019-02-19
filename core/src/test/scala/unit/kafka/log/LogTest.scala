@@ -1797,7 +1797,7 @@ class LogTest {
       bw.close()
     }
 
-    // reopen the log
+    // reopen the log with recovery point=0 so that the segment recovery can be triggered
     log = createLog(logDir, logConfig)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
@@ -1911,7 +1911,8 @@ class LogTest {
     val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
-    // Create index files
+    // The files remain absent until we first access it because we are doing lazy loading for time index and offset index
+    // files but in this test case we need to create these files in order to test we will remove them.
     bogusIndex2.createNewFile()
     bogusTimeIndex2.createNewFile()
 
@@ -1919,6 +1920,7 @@ class LogTest {
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
 
+    // Force the segment to access the index files because we are doing index lazy loading.
     log.logSegments.toSeq.head.offsetIndex
     log.logSegments.toSeq.head.timeIndex
 
@@ -2370,6 +2372,7 @@ class LogTest {
 
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
     Log.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
     Log.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
     records.foreach(segment.append _)
@@ -3806,6 +3809,7 @@ object LogTest {
         record(baseOffset + 2)))
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
+      // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
       Log.offsetIndexFile(logDir, baseOffset).createNewFile()
       Log.timeIndexFile(logDir, baseOffset).createNewFile()
       baseOffset + Int.MaxValue
