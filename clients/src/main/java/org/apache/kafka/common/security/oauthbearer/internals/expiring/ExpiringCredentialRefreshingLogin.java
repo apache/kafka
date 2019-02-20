@@ -81,7 +81,7 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                     loginContextFactory.refresherThreadDone();
                     return;
                 }
-                // safety check for motivated by KAFKA-7945,
+                // safety check motivated by KAFKA-7945,
                 // should generally never happen except due to a bug
                 if (nextRefreshMs.longValue() < nowMs) {
                     log.warn("[Principal={}]: Expiring credential re-login sleep time was calculated to be in the past! Will explicitly adjust. ({})", principalLogText(),
