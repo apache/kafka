@@ -29,8 +29,8 @@ import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
-import org.apache.kafka.streams.state.internals.KeyValueBytesStoreWrapper;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.KeyValueBytesStoreWrapper;
 import org.junit.Test;
 
 import java.util.HashSet;
@@ -71,7 +71,6 @@ public class KTableReduceTest {
         assertEquals(singleton("b"), myStore.get("A"));
         reduceProcessor.process("A", new Change<>(null, singleton("b")));
         assertEquals(emptySet(), myStore.get("A"));
-
     }
 
     private Set<String> differenceNotNullArgs(final Set<String> left, final Set<String> right) {
@@ -123,12 +122,15 @@ public class KTableReduceTest {
 
             @Override
             public void configure(final Map<String, ?> configs, final boolean isKey) {
+                stringSerde.configure(configs, isKey);
+                intSerde.configure(configs, isKey);
             }
 
             @Override
             public byte[] serialize(final String topic, final Set<String> data) {
-                if (data == null)
+                if (data == null) {
                     return null;
+                }
 
                 final List<byte[]> bytesList = new LinkedList<>();
                 int totalBytes = 0;
@@ -158,7 +160,8 @@ public class KTableReduceTest {
 
             @Override
             public void close() {
-                // nothing to do
+                stringSerde.close();
+                intSerde.close();
             }
         }
 
@@ -168,6 +171,8 @@ public class KTableReduceTest {
 
             @Override
             public void configure(final Map<String, ?> configs, final boolean isKey) {
+                stringSerde.configure(configs, isKey);
+                intSerde.configure(configs, isKey);
             }
 
             @Override
@@ -194,7 +199,8 @@ public class KTableReduceTest {
 
             @Override
             public void close() {
-                // nothing to do
+                stringSerde.close();
+                intSerde.close();
             }
 
             private byte[] getNBytes(final byte[] data, int i, final int numBytes) {

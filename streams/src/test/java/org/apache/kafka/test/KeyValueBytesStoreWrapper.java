@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.test;
 
 import java.util.List;
 import org.apache.kafka.common.serialization.Serde;
@@ -29,70 +29,72 @@ import org.apache.kafka.streams.state.StateSerdes;
 /* A generic wrapper around the key-value bytes stores for use in simple tests where only a basic store is required */
 public class KeyValueBytesStoreWrapper<K, V> implements KeyValueStore<K, V> {
 
-    private final KeyValueStore<Bytes, byte[]> store;
+    private final KeyValueStore<Bytes, byte[]> wrapped;
     private final StateSerdes<K, V> serdes;
 
-    public KeyValueBytesStoreWrapper(final KeyValueStore<Bytes, byte[]> store, final Serde<K> keySerde, final Serde<V> valueSerde) {
-        this.store = store;
+    public KeyValueBytesStoreWrapper(final KeyValueStore<Bytes, byte[]> wrapped,
+        final Serde<K> keySerde,
+        final Serde<V> valueSerde) {
+        this.wrapped = wrapped;
         serdes = new StateSerdes<>("serdes-topic-name", keySerde, valueSerde);
     }
 
     public void put(final K key, final V value) {
-        store.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
+        wrapped.put(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value));
     }
 
     public V putIfAbsent(final K key, final V value) {
-        return serdes.valueFrom(store.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value)));
+        return serdes.valueFrom(wrapped.putIfAbsent(Bytes.wrap(serdes.rawKey(key)), serdes.rawValue(value)));
     }
 
     public void putAll(final List<KeyValue<K, V>> entries) {
         for (final KeyValue<K, V> entry : entries) {
-            store.put(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value));
+            wrapped.put(Bytes.wrap(serdes.rawKey(entry.key)), serdes.rawValue(entry.value));
         }
     }
 
     public V delete(final K key) {
-        return serdes.valueFrom(store.delete(Bytes.wrap(serdes.rawKey(key))));
+        return serdes.valueFrom(wrapped.delete(Bytes.wrap(serdes.rawKey(key))));
     }
 
     public V get(final K key) {
-        return serdes.valueFrom(store.get(Bytes.wrap(serdes.rawKey(key))));
+        return serdes.valueFrom(wrapped.get(Bytes.wrap(serdes.rawKey(key))));
     }
 
     public KeyValueIterator<K, V> range(final K from, final K to) {
-        return new BytesIteratorWrapper(store.range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))));
+        return new BytesIteratorWrapper(wrapped.range(Bytes.wrap(serdes.rawKey(from)), Bytes.wrap(serdes.rawKey(to))));
     }
 
     public KeyValueIterator<K, V> all() {
-        return new BytesIteratorWrapper(store.all());
+        return new BytesIteratorWrapper(wrapped.all());
     }
 
     public void init(final ProcessorContext context, final StateStore root) {
-        store.init(context, root);
+        wrapped.init(context, root);
     }
 
     public String name() {
-        return store.name();
+        return wrapped.name();
     }
 
     public void flush() {
-        store.flush();
+        wrapped.flush();
     }
 
     public void close() {
-        store.close();
+        wrapped.close();
     }
 
     public boolean isOpen() {
-        return store.isOpen();
+        return wrapped.isOpen();
     }
 
     public boolean persistent() {
-        return store.persistent();
+        return wrapped.persistent();
     }
 
     public long approximateNumEntries() {
-        return store.approximateNumEntries();
+        return wrapped.approximateNumEntries();
     }
 
     private class BytesIteratorWrapper implements KeyValueIterator<K, V> {
@@ -116,7 +118,7 @@ public class KeyValueBytesStoreWrapper<K, V> implements KeyValueStore<K, V> {
         }
 
         public K peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+            return serdes.keyFrom(underlying.peekNextKey().get());
         }
     }
 }

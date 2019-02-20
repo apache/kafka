@@ -52,7 +52,7 @@ public class FilteredCacheIteratorTest {
     };
 
     @SuppressWarnings("unchecked")
-    private final KeyValueStoreWrapper<Bytes, LRUCacheEntry> store = new KeyValueStoreWrapper<>();
+    private final GenericKeyValueStore<Bytes, LRUCacheEntry> store = new GenericKeyValueStore<>();
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
     private final List<KeyValue<Bytes, LRUCacheEntry>> entries = asList(
@@ -132,10 +132,10 @@ public class FilteredCacheIteratorTest {
         allIterator.remove();
     }
 
-    public static class KeyValueStoreWrapper<K extends Comparable<K>, V> {
+    private static class GenericKeyValueStore<K extends Comparable<K>, V> {
         private final NavigableMap<K, V> map;
 
-        KeyValueStoreWrapper() {
+        GenericKeyValueStore() {
             map = new TreeMap<>();
         }
 
@@ -146,13 +146,13 @@ public class FilteredCacheIteratorTest {
         }
 
         private KeyValueIterator<K, V> all() {
-            return new KeyValueIteratorWrapper<>(map.entrySet().iterator());
+            return new GenericKeyValueIterator<>(map.entrySet().iterator());
         }
 
-        private static class KeyValueIteratorWrapper<K, V> implements KeyValueIterator<K, V> {
+        private static class GenericKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
             private final Iterator<Entry<K, V>> iter;
 
-            private KeyValueIteratorWrapper(final Iterator<Map.Entry<K, V>> iter) {
+            private GenericKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
                 this.iter = iter;
             }
 

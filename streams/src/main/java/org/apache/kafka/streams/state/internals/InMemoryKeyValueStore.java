@@ -112,7 +112,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                     final Bytes to) {
+                                                              final Bytes to) {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));

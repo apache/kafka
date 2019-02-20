@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.KeyValueBytesStoreWrapper;
 import org.junit.Before;
 import org.junit.Test;
 

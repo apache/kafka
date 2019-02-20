@@ -27,8 +27,9 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
+
+import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.test.KeyValueBytesStoreWrapper;
 import org.junit.Test;
 
 import java.io.File;
@@ -245,12 +246,10 @@ public class MockProcessorContextTest {
         };
 
         final MockProcessorContext context = new MockProcessorContext();
-        final StoreBuilder storeBuilder = Stores.keyValueStoreBuilder(
-                Stores.inMemoryKeyValueStore("my-state"),
-                Serdes.String(),
-                Serdes.Long()).withLoggingDisabled();
 
-        final KeyValueStore<String, Long> store = (KeyValueStore<String, Long>) storeBuilder.build();
+        final InMemoryKeyValueStore underlyingStore = new InMemoryKeyValueStore("my-state");
+        final KeyValueStore<String, Long> store = new KeyValueBytesStoreWrapper<>(underlyingStore, Serdes.String(), Serdes.Long());
+
         store.init(context, store);
 
         processor.init(context);
