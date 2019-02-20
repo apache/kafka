@@ -104,7 +104,7 @@ public class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                return new InMemoryKeyValueStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+                return new InMemoryKeyValueStore(name);
             }
 
             @Override

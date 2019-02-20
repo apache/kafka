@@ -16,39 +16,27 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
+import java.util.List;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
 
-public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
+public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private final NavigableMap<K, V> map;
+    private final NavigableMap<Bytes, byte[]> map;
     private volatile boolean open = false;
 
-    private StateSerdes<K, V> serdes;
-
-    public InMemoryKeyValueStore(final String name,
-                                 final Serde<K> keySerde,
-                                 final Serde<V> valueSerde) {
+    public InMemoryKeyValueStore(final String name) {
         this.name = name;
-        this.keySerde = keySerde;
-        this.valueSerde = valueSerde;
 
-        // TODO: when we have serde associated with class types, we can
-        // improve this situation by passing the comparator here.
         this.map = new TreeMap<>();
     }
 
@@ -61,20 +49,15 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        // construct the serde
-        this.serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
 
         if (root != null) {
             // register the store
             context.register(root, (key, value) -> {
                 // this is a delete
                 if (value == null) {
-                    delete(serdes.keyFrom(key));
+                    delete(Bytes.wrap(key));
                 } else {
-                    put(serdes.keyFrom(key), serdes.valueFrom(value));
+                    put(Bytes.wrap(key), value);
                 }
             });
         }
@@ -93,13 +76,12 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V get(final K key) {
+    public synchronized byte[] get(final Bytes key) {
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(final K key,
-                                 final V value) {
+    public synchronized void put(final Bytes key, final byte[] value) {
         if (value == null) {
             this.map.remove(key);
         } else {
@@ -108,9 +90,8 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized V putIfAbsent(final K key,
-                                      final V value) {
-        final V originalValue = get(key);
+    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
+        final byte[] originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
         }
@@ -118,29 +99,29 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     @Override
-    public synchronized void putAll(final List<KeyValue<K, V>> entries) {
-        for (final KeyValue<K, V> entry : entries) {
+    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+        for (final KeyValue<Bytes, byte[]> entry : entries) {
             put(entry.key, entry.value);
         }
     }
 
     @Override
-    public synchronized V delete(final K key) {
+    public synchronized byte[] delete(final Bytes key) {
         return this.map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> range(final K from,
-                                                     final K to) {
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to) {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
-            new InMemoryKeyValueIterator<>(this.map.subMap(from, true, to, true).entrySet().iterator()));
+            new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
-    public synchronized KeyValueIterator<K, V> all() {
-        final TreeMap<K, V> copy = new TreeMap<>(this.map);
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator<>(copy.entrySet().iterator()));
+    public synchronized KeyValueIterator<Bytes, byte[]> all() {
+        final TreeMap<Bytes, byte[]> copy = new TreeMap<>(this.map);
+        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(copy.entrySet().iterator()));
     }
 
     @Override
@@ -159,10 +140,10 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.open = false;
     }
 
-    private static class InMemoryKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
-        private final Iterator<Map.Entry<K, V>> iter;
+    private static class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
+        private final Iterator<Map.Entry<Bytes, byte[]>> iter;
 
-        private InMemoryKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
+        private InMemoryKeyValueIterator(final Iterator<Map.Entry<Bytes, byte[]>> iter) {
             this.iter = iter;
         }
 
@@ -172,8 +153,8 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public KeyValue<K, V> next() {
-            final Map.Entry<K, V> entry = iter.next();
+        public KeyValue<Bytes, byte[]> next() {
+            final Map.Entry<Bytes, byte[]> entry = iter.next();
             return new KeyValue<>(entry.getKey(), entry.getValue());
         }
 
@@ -188,7 +169,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         }
 
         @Override
-        public K peekNextKey() {
+        public Bytes peekNextKey() {
             throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
         }
     }
