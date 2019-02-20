@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -40,13 +42,16 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private final long suppressDurationMillis;
     private final TimeDefinition<K> bufferTimeDefinition;
     private final BufferFullStrategy bufferFullStrategy;
-    private final boolean shouldSuppressTombstones;
+    private final boolean safeToDropTombstones;
     private final String storeName;
+
     private TimeOrderedKeyValueBuffer buffer;
     private InternalProcessorContext internalProcessorContext;
 
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
+
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
                                    final String storeName,
@@ -61,7 +66,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
         bufferTimeDefinition = suppress.timeDefinition();
         bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
-        shouldSuppressTombstones = suppress.shouldSuppressTombstones();
+        safeToDropTombstones = suppress.safeToDropTombstones();
     }
 
     @SuppressWarnings("unchecked")
@@ -75,6 +80,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     @Override
     public void process(final K key, final Change<V> value) {
+        observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
         buffer(key, value);
         enforceConstraints();
     }
@@ -90,7 +96,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     }
 
     private void enforceConstraints() {
-        final long streamTime = internalProcessorContext.streamTime();
+        final long streamTime = observedStreamTime;
         final long expiryTime = streamTime - suppressDurationMillis;
 
         buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
@@ -130,7 +136,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     }
 
     private boolean shouldForward(final Change<V> value) {
-        return !(value.newValue == null && shouldSuppressTombstones);
+        return value.newValue != null || !safeToDropTombstones;
     }
 
     @Override

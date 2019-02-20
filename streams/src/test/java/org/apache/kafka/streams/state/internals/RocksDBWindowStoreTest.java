@@ -159,7 +159,6 @@ public class RocksDBWindowStoreTest {
 
     private void setCurrentTime(final long currentTime) {
         context.setRecordContext(createRecordContext(currentTime));
-        context.setStreamTime(currentTime);
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
@@ -727,8 +726,10 @@ public class RocksDBWindowStoreTest {
         new File(storeDir, segments.segmentName(6L)).mkdir();
         windowStore.close();
 
-        context.setStreamTime(segmentInterval * 6L);
         windowStore = createWindowStore(context, false);
+
+        // put something in the store to advance its stream time and expire the old segments
+        windowStore.put(1, "v", 6L * segmentInterval);
 
         final List<String> expected = Utils.mkList(segments.segmentName(4L), segments.segmentName(5L), segments.segmentName(6L));
         expected.sort(String::compareTo);

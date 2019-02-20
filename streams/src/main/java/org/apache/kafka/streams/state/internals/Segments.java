@@ -71,8 +71,8 @@ class Segments {
         return segments.get(segmentId(timestamp));
     }
 
-    Segment getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
-        final long minLiveTimestamp = context.streamTime() - retentionPeriod;
+    Segment getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context, final long streamTime) {
+        final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 
         final Segment toReturn;
@@ -103,7 +103,7 @@ class Segments {
         }
     }
 
-    void openExisting(final InternalProcessorContext context) {
+    void openExisting(final InternalProcessorContext context, final long streamTime) {
         try {
             final File dir = new File(context.stateDir(), name);
             if (dir.exists()) {
@@ -130,7 +130,7 @@ class Segments {
             // ignore
         }
 
-        final long minLiveSegment = segmentId(context.streamTime() - retentionPeriod);
+        final long minLiveSegment = segmentId(streamTime - retentionPeriod);
         cleanupEarlierThan(minLiveSegment);
     }
 
