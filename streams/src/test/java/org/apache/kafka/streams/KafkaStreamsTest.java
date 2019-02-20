@@ -101,6 +101,7 @@ public class KafkaStreamsTest {
     public void before() {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.put(StreamsConfig.CLIENT_ID_CONFIG, "clientId");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -157,7 +158,6 @@ public class KafkaStreamsTest {
 
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 2,
-            10 * 1000,
             "Streams never started.");
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
@@ -208,7 +208,9 @@ public class KafkaStreamsTest {
 
         globalStreams.close();
 
-        Assert.assertEquals(6, stateListener.numChanges);
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 6,
+            "Streams never closed.");
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
@@ -225,7 +227,6 @@ public class KafkaStreamsTest {
         streams.close();
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
-            10 * 1000,
             "Streams never stopped.");
 
         // Ensure that any created clients are closed
@@ -253,7 +254,6 @@ public class KafkaStreamsTest {
             streams.start();
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                10 * 1000,
                 "Streams never started.");
 
             for (int i = 0; i < NUM_THREADS; i++) {
@@ -261,13 +261,11 @@ public class KafkaStreamsTest {
                 tmpThread.shutdown();
                 TestUtils.waitForCondition(
                     () -> tmpThread.state() == StreamThread.State.DEAD,
-                    10 * 1000,
                     "Thread never stopped.");
                 threads[i].join();
             }
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.ERROR,
-                10 * 1000,
                 "Streams never stopped.");
         } finally {
             streams.close();
@@ -275,7 +273,6 @@ public class KafkaStreamsTest {
 
         TestUtils.waitForCondition(
             () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
-            10 * 1000,
             "Streams never stopped.");
 
         final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
@@ -294,7 +291,6 @@ public class KafkaStreamsTest {
             streams.start();
             TestUtils.waitForCondition(
                 () -> streams.state() == KafkaStreams.State.RUNNING,
-                10 * 1000,
                 "Streams never started.");
             final java.lang.reflect.Field globalThreadField = streams.getClass().getDeclaredField("globalStreamThread");
             globalThreadField.setAccessible(true);
@@ -302,7 +298,6 @@ public class KafkaStreamsTest {
             globalStreamThread.shutdown();
             TestUtils.waitForCondition(
                 () -> globalStreamThread.state() == GlobalStreamThread.State.DEAD,
-                10 * 1000,
                 "Thread never stopped.");
             globalStreamThread.join();
             assertEquals(streams.state(), KafkaStreams.State.ERROR);
@@ -535,6 +530,12 @@ public class KafkaStreamsTest {
                 asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
+            final String threadName = metadata.threadName();
+            assertTrue(threadName.startsWith("clientId-StreamThread-"));
+            assertEquals(threadName + "-consumer", metadata.consumerClientId());
+            assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
+            assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
+            assertEquals("clientId-admin", metadata.adminClientId());
         }
     }
 
@@ -554,7 +555,6 @@ public class KafkaStreamsTest {
         globalStreams.start();
         TestUtils.waitForCondition(
             () -> globalStreams.state() == KafkaStreams.State.RUNNING,
-            10 * 1000,
             "Streams never started.");
 
         try {
@@ -692,7 +692,7 @@ public class KafkaStreamsTest {
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
                 Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
                 "global",
@@ -762,7 +762,6 @@ public class KafkaStreamsTest {
         final File taskDir = new File(appDir, "0_0");
         TestUtils.waitForCondition(
             () -> !oldTaskDir.exists() && taskDir.exists(),
-            30000,
             "cleanup has not successfully run");
         assertTrue(taskDir.exists());
     }

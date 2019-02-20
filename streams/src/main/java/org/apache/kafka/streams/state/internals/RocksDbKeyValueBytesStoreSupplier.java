@@ -23,9 +23,12 @@ import org.apache.kafka.streams.state.KeyValueStore;
 public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupplier {
 
     private final String name;
+    private final boolean returnTimestampedStore;
 
-    public RocksDbKeyValueBytesStoreSupplier(final String name) {
+    public RocksDbKeyValueBytesStoreSupplier(final String name,
+                                             final boolean returnTimestampedStore) {
         this.name = name;
+        this.returnTimestampedStore = returnTimestampedStore;
     }
 
     @Override
@@ -35,7 +38,7 @@ public class RocksDbKeyValueBytesStoreSupplier implements KeyValueBytesStoreSupp
 
     @Override
     public KeyValueStore<Bytes, byte[]> get() {
-        return new RocksDBStore(name);
+        return returnTimestampedStore ? new RocksDBTimestampedStore(name) : new RocksDBStore(name);
     }
 
     @Override

@@ -37,7 +37,7 @@ import java.util.stream.Collectors;
  * An internal mutable cache of nodes, topics, and partitions in the Kafka cluster. This keeps an up-to-date Cluster
  * instance which is optimized for read access.
  */
-class MetadataCache {
+public class MetadataCache {
     private final String clusterId;
     private final List<Node> nodes;
     private final Set<String> unauthorizedTopics;
@@ -88,22 +88,13 @@ class MetadataCache {
     /**
      * Return the cached PartitionInfo iff it was for the given epoch
      */
-    Optional<PartitionInfo> getPartitionInfoHavingEpoch(TopicPartition topicPartition, int epoch) {
+    Optional<PartitionInfoAndEpoch> getPartitionInfoHavingEpoch(TopicPartition topicPartition, int epoch) {
         PartitionInfoAndEpoch infoAndEpoch = metadataByPartition.get(topicPartition);
-        if (infoAndEpoch == null) {
-            return Optional.empty();
-        } else {
-            if (infoAndEpoch.epoch() == epoch) {
-                return Optional.of(infoAndEpoch.partitionInfo());
-            } else {
-                return Optional.empty();
-            }
-        }
+        return Optional.ofNullable(infoAndEpoch).filter(infoEpoch -> infoEpoch.epoch() == epoch);
     }
 
-    Optional<PartitionInfo> getPartitionInfo(TopicPartition topicPartition) {
-        return Optional.ofNullable(metadataByPartition.get(topicPartition))
-                .map(PartitionInfoAndEpoch::partitionInfo);
+    Optional<PartitionInfoAndEpoch> getPartitionInfo(TopicPartition topicPartition) {
+        return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
     synchronized void retainTopics(Collection<String> topics) {
@@ -150,7 +141,7 @@ class MetadataCache {
                 '}';
     }
 
-    static class PartitionInfoAndEpoch {
+    public static class PartitionInfoAndEpoch {
         private final PartitionInfo partitionInfo;
         private final int epoch;
 

@@ -40,6 +40,7 @@ import org.junit.{After, Assert, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 import scala.collection.mutable
+import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
 
@@ -58,6 +59,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   val ClientHost = "localhost"
   val GroupMinSessionTimeout = 10
   val GroupMaxSessionTimeout = 10 * 60 * 1000
+  val GroupMaxSize = 3
   val DefaultRebalanceTimeout = 500
   val DefaultSessionTimeout = 500
   val GroupInitialRebalanceDelay = 50
@@ -82,6 +84,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val props = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     props.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, GroupMinSessionTimeout.toString)
     props.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeout.toString)
+    props.setProperty(KafkaConfig.GroupMaxSizeProp, GroupMaxSize.toString)
     props.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, GroupInitialRebalanceDelay.toString)
     // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
     val ret = mutable.Map[String, Map[Int, Seq[Int]]]()
@@ -188,6 +191,28 @@ class GroupCoordinatorTest extends JUnitSuite {
     val joinGroupResult = joinGroup(otherGroupId, memberId, protocolType, protocols)
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NOT_COORDINATOR, joinGroupError)
+  }
+
+  @Test
+  def testJoinGroupShouldReceiveErrorIfGroupOverMaxSize() {
+    var futures = ArrayBuffer[Future[JoinGroupResult]]()
+    val rebalanceTimeout = GroupInitialRebalanceDelay * 2
+
+    for (i <- 1.to(GroupMaxSize)) {
+      futures += sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+      if (i != 1)
+        timer.advanceClock(GroupInitialRebalanceDelay)
+      EasyMock.reset(replicaManager)
+    }
+    // advance clock beyond rebalanceTimeout
+    timer.advanceClock(GroupInitialRebalanceDelay + 1)
+    for (future <- futures) {
+      assertEquals(Errors.NONE, await(future, 1).error)
+    }
+
+    // Should receive an error since the group is full
+    val errorFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, rebalanceTimeout)
+    assertEquals(Errors.GROUP_MAX_SIZE_REACHED, await(errorFuture, 1).error)
   }
 
   @Test
@@ -761,6 +786,193 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     assertEquals(Errors.NONE, secondJoinResult.error)
     assertNotEquals(firstGenerationId, secondJoinResult.generationId)
+  }
+
+  /**
+    * Test if the following scenario completes a rebalance correctly: A new member starts a JoinGroup request with
+    * an UNKNOWN_MEMBER_ID, attempting to join a stable group. But never initiates the second JoinGroup request with
+    * the provided member ID and times out. The test checks if original member remains the sole member in this group,
+    * which should remain stable throughout this test.
+    */
+  @Test
+  def testSecondMemberPartiallyJoinAndTimeout() {
+    val firstJoinResult = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    val firstMemberId = firstJoinResult.memberId
+    val firstGenerationId = firstJoinResult.generationId
+    assertEquals(firstMemberId, firstJoinResult.leaderId)
+    assertEquals(Errors.NONE, firstJoinResult.error)
+
+    //Starting sync group leader
+    EasyMock.reset(replicaManager)
+    val firstSyncResult = syncGroupLeader(groupId, firstGenerationId, firstMemberId, Map(firstMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, firstSyncResult._2)
+    timer.advanceClock(100)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.allMembers.size)
+    assertEquals(0, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+
+    // ensure the group is stable before a new member initiates join request
+    assertEquals(Stable, group.currentState)
+
+    // new member initiates join group
+    EasyMock.reset(replicaManager)
+    val secondJoinResult = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    assertEquals(Errors.MEMBER_ID_REQUIRED, secondJoinResult.error)
+    assertEquals(1, group.numPending)
+    assertEquals(Stable, group.currentState)
+
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
+    EasyMock.replay(replicaManager)
+
+    // advance clock to timeout the pending member
+    assertEquals(1, group.allMembers.size)
+    assertEquals(1, group.numPending)
+    timer.advanceClock(300)
+
+    // original (firstMember) member sends heartbeats to prevent session timeouts.
+    EasyMock.reset(replicaManager)
+    val heartbeatResult = heartbeat(groupId, firstMemberId, 1)
+    assertEquals(Errors.NONE, heartbeatResult)
+
+    // timeout the pending member
+    timer.advanceClock(300)
+
+    // at this point the second member should have been removed from pending list (session timeout),
+    // and the group should be in Stable state with only the first member in it.
+    assertEquals(1, group.allMembers.size)
+    assertEquals(0, group.numPending)
+    assertEquals(Stable, group.currentState)
+    assertTrue(group.has(firstMemberId))
+  }
+
+  /**
+    * Create a group with two members in Stable state. Create a third pending member by completing it's first JoinGroup
+    * request without a member id.
+    */
+  private def setupGroupWithPendingMember(): JoinGroupResult = {
+    // add the first member
+    val joinResult1 = joinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+    assertGroupState(groupState = CompletingRebalance)
+
+    // now the group is stable, with the one member that joined above
+    EasyMock.reset(replicaManager)
+    val firstSyncResult = syncGroupLeader(groupId, joinResult1.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, firstSyncResult._2)
+    assertGroupState(groupState = Stable)
+
+    // start the join for the second member
+    EasyMock.reset(replicaManager)
+    val secondJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
+
+    // rejoin the first member back into the group
+    EasyMock.reset(replicaManager)
+    val firstJoinFuture = sendJoinGroup(groupId, joinResult1.memberId, protocolType, protocols)
+    val firstMemberJoinResult = await(firstJoinFuture, DefaultSessionTimeout+100)
+    val secondMemberJoinResult = await(secondJoinFuture, DefaultSessionTimeout+100)
+    assertGroupState(groupState = CompletingRebalance)
+
+    // stabilize the group
+    EasyMock.reset(replicaManager)
+    val secondSyncResult = syncGroupLeader(groupId, firstMemberJoinResult.generationId, joinResult1.memberId, Map(joinResult1.memberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, secondSyncResult._2)
+    assertGroupState(groupState = Stable)
+
+    // re-join an existing member, to transition the group to PreparingRebalance state.
+    EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, firstMemberJoinResult.memberId, protocolType, protocols)
+    assertGroupState(groupState = PreparingRebalance)
+
+    // create a pending member in the group
+    EasyMock.reset(replicaManager)
+    var pendingMember = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+
+    // re-join the second existing member
+    EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, secondMemberJoinResult.memberId, protocolType, protocols)
+    assertGroupState(groupState = PreparingRebalance)
+    assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
+
+    pendingMember
+  }
+
+  /**
+    * Setup a group in with a pending member. The test checks if the a pending member joining completes the rebalancing
+    * operation
+    */
+  @Test
+  def testJoinGroupCompletionWhenPendingMemberJoins() {
+    val pendingMember = setupGroupWithPendingMember()
+
+    // compete join group for the pending member
+    EasyMock.reset(replicaManager)
+    val pendingMemberJoinFuture = sendJoinGroup(groupId, pendingMember.memberId, protocolType, protocols)
+    await(pendingMemberJoinFuture, DefaultSessionTimeout+100)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(3, group().allMembers.size)
+    assertEquals(0, group().numPending)
+  }
+
+  /**
+    * Setup a group in with a pending member. The test checks if the timeout of the pending member will
+    * cause the group to return to a CompletingRebalance state.
+    */
+  @Test
+  def testJoinGroupCompletionWhenPendingMemberTimesOut() {
+    setupGroupWithPendingMember()
+
+    // Advancing Clock by > 100 (session timeout for third and fourth member)
+    // and < 500 (for first and second members). This will force the coordinator to attempt join
+    // completion on heartbeat expiration (since we are in PendingRebalance stage).
+    EasyMock.reset(replicaManager)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
+    EasyMock.replay(replicaManager)
+    timer.advanceClock(120)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(2, group().allMembers.size)
+    assertEquals(0, group().numPending)
+  }
+
+  @Test
+  def testPendingMembersLeavesGroup(): Unit = {
+    val pending = setupGroupWithPendingMember()
+
+    EasyMock.reset(replicaManager)
+    val leaveGroupResult = leaveGroup(groupId, pending.memberId)
+    assertEquals(Errors.NONE, leaveGroupResult)
+
+    assertGroupState(groupState = CompletingRebalance)
+    assertEquals(2, group().allMembers.size)
+    assertEquals(0, group().numPending)
+  }
+
+  private def group(groupId: String = groupId) = {
+    groupCoordinator.groupManager.getGroup(groupId) match {
+      case Some(g) => g
+      case None => null
+    }
+  }
+
+  private def assertGroupState(groupId: String = groupId,
+                               groupState: GroupState): Unit = {
+    groupCoordinator.groupManager.getGroup(groupId) match {
+      case Some(group) => assertEquals(groupState, group.currentState)
+      case None => fail(s"Group $groupId not found in coordinator")
+    }
+  }
+
+  private def joinGroupPartial(groupId: String,
+                               memberId: String,
+                               protocolType: String,
+                               protocols: List[(String, Array[Byte])],
+                               sessionTimeout: Int = DefaultSessionTimeout,
+                               rebalanceTimeout: Int = DefaultRebalanceTimeout): JoinGroupResult = {
+    val requireKnownMemberId = true
+    val responseFuture = sendJoinGroup(groupId, memberId, protocolType, protocols, sessionTimeout, rebalanceTimeout, requireKnownMemberId)
+    Await.result(responseFuture, Duration(rebalanceTimeout + 100, TimeUnit.MILLISECONDS))
   }
 
   @Test

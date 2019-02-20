@@ -32,11 +32,12 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.valuesToList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -272,20 +273,5 @@ public class RocksDBSessionStoreTest {
         sessionStore.put(null, 1L);
     }
     
-    static <K, V> List<KeyValue<Windowed<K>, V>> toList(final KeyValueIterator<Windowed<K>, V> iterator) {
-        final List<KeyValue<Windowed<K>, V>> results = new ArrayList<>();
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
-    }
-
-    static <K, V> List<V> valuesToList(final KeyValueIterator<Windowed<K>, V> iterator) {
-        final List<V> results = new ArrayList<>();
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
 
 }

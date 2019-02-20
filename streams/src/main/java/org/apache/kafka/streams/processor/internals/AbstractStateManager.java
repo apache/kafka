@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -31,6 +32,10 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
 
 abstract class AbstractStateManager implements StateManager {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
@@ -48,6 +53,10 @@ abstract class AbstractStateManager implements StateManager {
         this.baseDir = baseDir;
         this.eosEnabled = eosEnabled;
         this.checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));
+    }
+
+    static RecordConverter converterForStore(final StateStore store) {
+        return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
     }
 
     public void reinitializeStateStoresForPartitions(final Logger log,

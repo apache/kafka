@@ -69,21 +69,21 @@ public class KeyValueStoreBuilderTest {
     public void shouldHaveChangeLoggingStoreByDefault() {
         final KeyValueStore<String, String> store = builder.build();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
-        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, instanceOf(ChangeLoggingKeyValueBytesStore.class));
     }
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
         final KeyValueStore<String, String> store = builder.withLoggingDisabled().build();
-        final StateStore next = ((WrappedStateStore) store).wrappedStore();
+        final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
         final KeyValueStore<String, String> store = builder.withCachingEnabled().build();
-        final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
     }
@@ -93,10 +93,10 @@ public class KeyValueStoreBuilderTest {
         final KeyValueStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
-        final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         assertThat(wrapped, instanceOf(ChangeLoggingKeyValueBytesStore.class));
-        assertThat(((WrappedStateStore) wrapped).wrappedStore(), CoreMatchers.equalTo(inner));
+        assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
@@ -105,12 +105,12 @@ public class KeyValueStoreBuilderTest {
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
                 .build();
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrappedStore();
-        final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrappedStore();
+        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
         assertThat(changeLogging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
-        assertThat(changeLogging.wrappedStore(), CoreMatchers.equalTo(inner));
+        assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @SuppressWarnings("all")

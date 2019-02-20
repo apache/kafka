@@ -49,9 +49,7 @@ public class MergedSortedCacheWrappedSessionStoreIteratorTest {
     private final SessionWindow cacheWindow = new SessionWindow(10, 20);
     private final Iterator<KeyValue<Bytes, LRUCacheEntry>> cacheKvs = Collections.singleton(
         KeyValue.pair(
-            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(Bytes.wrap(
-                    SessionKeySchema.toBinary(new Windowed<>(cacheKey, cacheWindow))
-            )),
+            SINGLE_SEGMENT_CACHE_FUNCTION.cacheKey(SessionKeySchema.toBinary(new Windowed<>(cacheKey, cacheWindow))),
             new LRUCacheEntry(cacheKey.get())
         )).iterator();
 

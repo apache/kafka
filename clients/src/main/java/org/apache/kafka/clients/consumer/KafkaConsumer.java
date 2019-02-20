@@ -201,12 +201,12 @@ import java.util.regex.Pattern;
  * <p>
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.put(&quot;group.id&quot;, &quot;test&quot;);
- *     props.put(&quot;enable.auto.commit&quot;, &quot;true&quot;);
- *     props.put(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
- *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;true&quot;);
+ *     props.setProperty(&quot;auto.commit.interval.ms&quot;, &quot;1000&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     while (true) {
@@ -239,17 +239,17 @@ import java.util.regex.Pattern;
  * <p>
  * <pre>
  *     Properties props = new Properties();
- *     props.put(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.put(&quot;group.id&quot;, &quot;test&quot;);
- *     props.put(&quot;enable.auto.commit&quot;, &quot;false&quot;);
- *     props.put(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.put(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
+ *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
+ *     props.setProperty(&quot;enable.auto.commit&quot;, &quot;false&quot;);
+ *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     KafkaConsumer&lt;String, String&gt; consumer = new KafkaConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;, &quot;bar&quot;));
  *     final int minBatchSize = 200;
  *     List&lt;ConsumerRecord&lt;String, String&gt;&gt; buffer = new ArrayList&lt;&gt;();
  *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100);
+ *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
  *         for (ConsumerRecord&lt;String, String&gt; record : records) {
  *             buffer.add(record);
  *         }
@@ -469,6 +469,10 @@ import java.util.regex.Pattern;
  * public class KafkaConsumerRunner implements Runnable {
  *     private final AtomicBoolean closed = new AtomicBoolean(false);
  *     private final KafkaConsumer consumer;
+ *
+ *     public KafkaConsumerRunner(KafkaConsumer consumer) {
+ *       this.consumer = consumer;
+ *     }
  *
  *     public void run() {
  *         try {
@@ -1455,12 +1459,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
-        acquireAndEnsureOpen();
-        try {
-            commitAsync(subscriptions.allConsumed(), callback);
-        } finally {
-            release();
-        }
+        commitAsync(subscriptions.allConsumed(), callback);
     }
 
     /**
@@ -1528,10 +1527,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             if (offsetAndMetadata.leaderEpoch().isPresent()) {
-                log.debug("Seeking to offset {} for partition {} with epoch {}",
+                log.info("Seeking to offset {} for partition {} with epoch {}",
                         offset, partition, offsetAndMetadata.leaderEpoch().get());
             } else {
-                log.debug("Seeking to offset {} for partition {}", offset, partition);
+                log.info("Seeking to offset {} for partition {}", offset, partition);
             }
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, offset);
@@ -1557,7 +1556,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
-                log.debug("Seeking to beginning of partition {}", tp);
+                log.info("Seeking to beginning of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
             }
         } finally {
@@ -1585,7 +1584,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
             for (TopicPartition tp : parts) {
-                log.debug("Seeking to end of partition {}", tp);
+                log.info("Seeking to end of partition {}", tp);
                 subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
             }
         } finally {

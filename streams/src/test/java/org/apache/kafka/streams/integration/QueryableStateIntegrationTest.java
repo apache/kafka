@@ -519,7 +519,7 @@ public class QueryableStateIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
-        waitUntilAtLeastNumRecordProcessed(outputTopic, 2);
+        waitUntilAtLeastNumRecordProcessed(outputTopic, 1);
 
         final ReadOnlyKeyValueStore<String, Long>
             myFilterStore = kafkaStreams.store("queryFilter", QueryableStoreTypes.keyValueStore());

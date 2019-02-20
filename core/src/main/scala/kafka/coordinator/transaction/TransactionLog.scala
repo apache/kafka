@@ -29,13 +29,13 @@ import org.apache.kafka.common.record.CompressionType
 
 import scala.collection.mutable
 
-/*
+/**
  * Messages stored for the transaction topic represent the producer id and transactional status of the corresponding
  * transactional id, which have versions for both the key and value fields. Key and value
  * versions are used to evolve the message formats:
  *
  * key version 0:               [transactionalId]
- *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic [partition], timestamp]
+ *    -> value version 0:       [producer_id, producer_epoch, expire_timestamp, status, [topic, [partition] ], timestamp]
  */
 object TransactionLog {
 
