@@ -20,11 +20,11 @@ package kafka.server
 import java.util
 import java.util.{Collections, Properties}
 
-import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1}
+import kafka.api.{ApiVersion, ApiVersionValidator, KAFKA_0_10_0_IV1, KAFKA_2_1_IV0}
 import kafka.cluster.EndPoint
 import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
-import kafka.message.{BrokerCompressionCodec, CompressionCodec}
+import kafka.message.{BrokerCompressionCodec, CompressionCodec, ZStdCompressionCodec}
 import kafka.utils.CoreUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1485,6 +1485,11 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(interBrokerProtocolVersion.recordVersion.value >= recordVersion.value,
       s"log.message.format.version $logMessageFormatVersionString can only be used when inter.broker.protocol.version " +
       s"is set to version ${ApiVersion.minSupportedFor(recordVersion).shortVersion} or higher")
+
+    if (offsetsTopicCompressionCodec == ZStdCompressionCodec)
+      require(interBrokerProtocolVersion.recordVersion.value >= KAFKA_2_1_IV0.recordVersion.value,
+        "offsets.topic.compression.codec zstd can only be used when inter.broker.protocol.version " +
+        s"is set to version ${KAFKA_2_1_IV0.shortVersion} or higher")
 
     val interBrokerUsesSasl = interBrokerSecurityProtocol == SecurityProtocol.SASL_PLAINTEXT || interBrokerSecurityProtocol == SecurityProtocol.SASL_SSL
     require(!interBrokerUsesSasl || saslInterBrokerHandshakeRequestEnable || saslMechanismInterBrokerProtocol == SaslConfigs.GSSAPI_MECHANISM,

@@ -23,10 +23,10 @@ import java.util.Properties
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.CreateTopicsRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableReplicaAssignment, CreatableReplicaAssignmentSet, CreatableTopic, CreatableTopicSet, CreateableTopicConfig, CreateableTopicConfigSet}
+import org.apache.kafka.common.message.CreateTopicsRequestData._
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiError, CreateTopicsRequest, CreateTopicsResponse, MetadataRequest, MetadataResponse}
+import org.apache.kafka.common.requests._
 import org.junit.Assert.{assertEquals, assertFalse, assertNotNull, assertTrue}
 
 import scala.collection.JavaConverters._
