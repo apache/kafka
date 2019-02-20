@@ -760,6 +760,15 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
+     * @return true if the current generation's member ID is valid, false otherwise
+     */
+    // Visible for testing
+    final synchronized boolean hasValidMemberId() {
+        return generation != null && generation.hasMemberId();
+    }
+
+
+    /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
     protected synchronized void resetGeneration() {
@@ -807,10 +816,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.isValid()) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            log.info("Sending LeaveGroup request to coordinator {}", coordinator);
+            log.info("Member {} sending LeaveGroup request to coordinator {}", generation.memberId, coordinator);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(new LeaveGroupRequestData()
                     .setGroupId(groupId).setMemberId(generation.memberId));
             client.send(coordinator, request)
@@ -1121,8 +1130,12 @@ public abstract class AbstractCoordinator implements Closeable {
             this.protocol = protocol;
         }
 
-        public boolean isValid() {
-            return generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID;
+        /**
+         * @return true if this generation has a valid member id, false otherwise. A member might have an id before
+         * it becomes part of a group generation.
+         */
+        public boolean hasMemberId() {
+            return !memberId.isEmpty();
         }
 
         @Override
@@ -1138,6 +1151,15 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public int hashCode() {
             return Objects.hash(generationId, memberId, protocol);
+        }
+
+        @Override
+        public String toString() {
+            return "Generation{" +
+                    "generationId=" + generationId +
+                    ", memberId='" + memberId + '\'' +
+                    ", protocol='" + protocol + '\'' +
+                    '}';
         }
     }
 
