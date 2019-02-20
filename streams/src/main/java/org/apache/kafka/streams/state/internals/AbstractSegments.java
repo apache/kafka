@@ -72,8 +72,10 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public S getOrCreateSegmentIfLive(final long segmentId, final InternalProcessorContext context) {
-        final long minLiveTimestamp = context.streamTime() - retentionPeriod;
+    public S getOrCreateSegmentIfLive(final long segmentId,
+                                      final InternalProcessorContext context,
+                                      final long streamTime) {
+        final long minLiveTimestamp = streamTime - retentionPeriod;
         final long minLiveSegment = segmentId(minLiveTimestamp);
 
         final S toReturn;
@@ -89,7 +91,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
     }
 
     @Override
-    public void openExisting(final InternalProcessorContext context) {
+    public void openExisting(final InternalProcessorContext context, final long streamTime) {
         try {
             final File dir = new File(context.stateDir(), name);
             if (dir.exists()) {
@@ -117,7 +119,7 @@ abstract class AbstractSegments<S extends Segment> implements Segments<S> {
             // ignore
         }
 
-        final long minLiveSegment = segmentId(context.streamTime() - retentionPeriod);
+        final long minLiveSegment = segmentId(streamTime - retentionPeriod);
         cleanupEarlierThan(minLiveSegment);
     }
 

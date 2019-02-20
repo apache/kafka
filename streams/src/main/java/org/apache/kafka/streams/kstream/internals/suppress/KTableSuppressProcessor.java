@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -51,6 +52,8 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private Serde<K> keySerde;
     private FullChangeSerde<V> valueSerde;
 
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
+
     public KTableSuppressProcessor(final SuppressedInternal<K> suppress,
                                    final String storeName,
                                    final Serde<K> keySerde,
@@ -80,6 +83,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
 
     @Override
     public void process(final K key, final Change<V> value) {
+        observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
         buffer(key, value);
         enforceConstraints();
     }
@@ -95,7 +99,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     }
 
     private void enforceConstraints() {
-        final long streamTime = internalProcessorContext.streamTime();
+        final long streamTime = observedStreamTime;
         final long expiryTime = streamTime - suppressDurationMillis;
 
         buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
