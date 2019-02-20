@@ -32,7 +32,8 @@
   // Starting in version 6, on quota violation, brokers send out responses before throttling.
   //
   // Version 7 adds the leader epoch to the partition metadata.
-  "validVersions": "0-7",
+  // Starting in version 8, brokers can send authorized operations for topic and cluster.
+  "validVersions": "0-8",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -75,7 +76,11 @@
           "about": "The set of nodes that are in sync with the leader for this partition." },
         { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true,
           "about": "The set of offline replicas of this partition." }
-      ]}
-    ]}
+      ]},
+      { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "8+",
+        "about": "32-bit bitfield to represent authorized operations for this topic." }
+    ]},
+    { "name": "ClusterAuthorizedOperations", "type": "int32", "versions": "8+",
+      "about": "32-bit bitfield to represent authorized operations for this cluster." }
   ]
 }

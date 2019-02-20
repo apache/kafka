@@ -38,7 +38,7 @@ public class ConsumerGroupDescription {
     private final String partitionAssignor;
     private final ConsumerGroupState state;
     private final Node coordinator;
-    private Set<AclOperation> authorizedOperations;
+    private final Set<AclOperation> authorizedOperations;
 
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,

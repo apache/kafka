@@ -286,7 +286,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     public Map<String, List<PartitionInfo>> getTopicMetadata(MetadataRequest.Builder request, Timer timer) {
         // Save the round trip if no topics are requested.
-        if (!request.isAllTopics() && request.topics().isEmpty())
+        if (!request.isAllTopics() && request.emptyTopicList())
             return Collections.emptyMap();
 
         do {

@@ -77,7 +77,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
-                return new MetadataResponse(struct);
+                return new MetadataResponse(struct, version);
             case OFFSET_COMMIT:
                 return new OffsetCommitResponse(struct);
             case OFFSET_FETCH:
