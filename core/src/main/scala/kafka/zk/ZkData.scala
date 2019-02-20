@@ -373,6 +373,10 @@ object DeleteTopicsTopicZNode {
   def path(topic: String) = s"${DeleteTopicsZNode.path}/$topic"
 }
 
+object ReassignCancelZNode {
+  def path = s"${AdminZNode.path}/cancel_reassignment_in_progress"
+}
+
 object ReassignPartitionsZNode {
 
   /**
@@ -383,7 +387,8 @@ object ReassignPartitionsZNode {
     */
   case class ReplicaAssignment(@BeanProperty @JsonProperty("topic") topic: String,
                                @BeanProperty @JsonProperty("partition") partition: Int,
-                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int])
+                               @BeanProperty @JsonProperty("replicas") replicas: java.util.List[Int],
+                               @BeanProperty @JsonProperty("original_replicas") original_replicas: java.util.List[Int])
 
   /**
     * An assignment consists of a `version` and a list of `partitions`, which represent the
@@ -394,19 +399,19 @@ object ReassignPartitionsZNode {
 
   def path = s"${AdminZNode.path}/reassign_partitions"
 
-  def encode(reassignmentMap: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
+  def encode(reassignmentMap: collection.Map[TopicPartition, Map[String, Seq[Int]]]): Array[Byte] = {
     val reassignment = PartitionAssignment(1,
-      reassignmentMap.toSeq.map { case (tp, replicas) =>
-        ReplicaAssignment(tp.topic, tp.partition, replicas.asJava)
+      reassignmentMap.toSeq.map { case (tp, reassignData) =>
+        ReplicaAssignment(tp.topic, tp.partition, reassignData("replicas").asJava, reassignData("original_replicas").asJava)
       }.asJava
     )
     Json.encodeAsBytes(reassignment)
   }
 
-  def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Seq[Int]]] =
+  def decode(bytes: Array[Byte]): Either[JsonProcessingException, collection.Map[TopicPartition, Map[String, Seq[Int]]]] =
     Json.parseBytesAs[PartitionAssignment](bytes).right.map { partitionAssignment =>
       partitionAssignment.partitions.asScala.map { replicaAssignment =>
-        new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> replicaAssignment.replicas.asScala
+        new TopicPartition(replicaAssignment.topic, replicaAssignment.partition) -> Map("replicas" -> replicaAssignment.replicas.asScala, "original_replicas" -> replicaAssignment.original_replicas.asScala)
       }(breakOut)
     }
 }

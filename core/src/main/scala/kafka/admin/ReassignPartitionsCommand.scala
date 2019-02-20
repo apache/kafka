@@ -25,7 +25,7 @@ import kafka.log.LogConfig._
 import kafka.server.{ConfigType, DynamicConfig}
 import kafka.utils._
 import kafka.utils.json.JsonValue
-import kafka.zk.{AdminZkClient, KafkaZkClient}
+import kafka.zk.{AdminZkClient, KafkaZkClient, ReassignCancelZNode}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
 import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
@@ -63,6 +63,8 @@ object ReassignPartitionsCommand extends Logging {
         generateAssignment(zkClient, opts)
       else if (opts.options.has(opts.executeOpt))
         executeAssignment(zkClient, adminClientOpt, opts)
+      else if (opts.options.has(opts.cancelOpt))
+        cancelAssignment(zkClient, adminClientOpt, opts)
     } catch {
       case e: Throwable =>
         println("Partitions reassignment failed due to " + e.getMessage)
@@ -121,6 +123,40 @@ object ReassignPartitionsCommand extends Logging {
     removeThrottle(zkClient, reassignedPartitionsStatus, replicasReassignmentStatus, adminZkClient)
   }
 
+  private[admin] def removeBrokerLevelThrottle(zkClient: KafkaZkClient,
+                                               adminZkClient: AdminZkClient): Boolean = {
+    var changed = false
+    //Remove the throttle limit from all brokers in the cluster
+    //(as we no longer know which specific brokers were involved in the move)
+    for (brokerId <- zkClient.getAllBrokersInCluster.map(_.id)) {
+      val configs = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
+      // bitwise OR as we don't want to short-circuit
+      if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
+        | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
+        | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null){
+        adminZkClient.changeBrokerConfig(Seq(brokerId), configs)
+        changed = true
+      }
+    }
+    changed
+  }
+
+  private[admin] def removeTopicLevelThrottle(zkClient: KafkaZkClient,
+                                              topics: Seq[String],
+                                              adminZkClient: AdminZkClient): Boolean = {
+    var changed = false
+    for (topic <- topics) {
+      val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+      // bitwise OR as we don't want to short-circuit
+      if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
+        | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null) {
+        adminZkClient.changeTopicConfig(topic, configs)
+        changed = true
+      }
+    }
+    changed
+  }
+
   private[admin] def removeThrottle(zkClient: KafkaZkClient,
                                     reassignedPartitionsStatus: Map[TopicPartition, ReassignmentStatus],
                                     replicasReassignmentStatus: Map[TopicPartitionReplica, ReassignmentStatus],
@@ -133,31 +169,31 @@ object ReassignPartitionsCommand extends Logging {
 
       //Remove the throttle limit from all brokers in the cluster
       //(as we no longer know which specific brokers were involved in the move)
-      for (brokerId <- zkClient.getAllBrokersInCluster.map(_.id)) {
-        val configs = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
-        // bitwise OR as we don't want to short-circuit
-        if (configs.remove(DynamicConfig.Broker.LeaderReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.FollowerReplicationThrottledRateProp) != null
-          | configs.remove(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp) != null){
-          adminZkClient.changeBrokerConfig(Seq(brokerId), configs)
-          changed = true
-        }
-      }
+      changed = removeBrokerLevelThrottle(zkClient, adminZkClient)
 
       //Remove the list of throttled replicas from all topics with partitions being moved
       val topics = (reassignedPartitionsStatus.keySet.map(tp => tp.topic) ++ replicasReassignmentStatus.keySet.map(replica => replica.topic)).toSeq.distinct
-      for (topic <- topics) {
-        val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
-        // bitwise OR as we don't want to short-circuit
-        if (configs.remove(LogConfig.LeaderReplicationThrottledReplicasProp) != null
-          | configs.remove(LogConfig.FollowerReplicationThrottledReplicasProp) != null) {
-          adminZkClient.changeTopicConfig(topic, configs)
-          changed = true
-        }
-      }
+      changed = removeTopicLevelThrottle(zkClient, topics, adminZkClient)
       if (changed)
         println("Throttle was removed.")
     }
+  }
+
+  private[admin] def removeReassignCancelThrottle(zkClient: KafkaZkClient,
+                                                  pendingReassignments: Map[TopicPartition, Map[String, Seq[Int]]],
+                                                  adminZkClient: AdminZkClient): Unit = {
+    var changed = false
+
+    //Remove the throttle limit from all brokers in the cluster
+    //(as we no longer know which specific brokers were involved in the move)
+    changed = removeBrokerLevelThrottle(zkClient, adminZkClient)
+
+    //Remove the list of throttled replicas from all topics with partitions pending being reassigned
+    val topics = (pendingReassignments.keySet.map(tp => tp.topic)).toSeq.distinct
+    changed = removeTopicLevelThrottle(zkClient, topics, adminZkClient)
+
+    if (changed)
+      println("The cancelled pending reassignments throttle was removed.")
   }
 
   def generateAssignment(zkClient: KafkaZkClient, opts: ReassignPartitionsCommandOptions) {
@@ -196,6 +232,35 @@ object ReassignPartitionsCommand extends Logging {
     (partitionsToBeReassigned, currentAssignment)
   }
 
+  def cancelAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
+    val timeoutMs = opts.options.valueOf(opts.timeoutOpt)
+    val adminZkClient = new AdminZkClient(zkClient)
+    val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, adminClientOpt, Map.empty, Map.empty, adminZkClient)
+
+    // if ReassignCancelZNode.path exists, skip executing cancel again.
+    if (zkClient.reassignCancelInPlace) {
+      println("Cancel Reassignment is currently in place. Please check %s".format(ReassignCancelZNode.path))
+    } else {
+      val pendingReassignments = zkClient.getPartitionReassignment
+      println("Rolling back the current pending reassignments %s".format(pendingReassignments))
+      if (reassignPartitionsCommand.reassignCancel(timeoutMs)) {
+        println("Successfully submitted cancellation of reassignments.")
+      }
+      val startTimeMs = System.currentTimeMillis()
+      var remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
+      while (remainingTimeMs > 0 && zkClient.reassignCancelInPlace) {
+        Thread.sleep(100)
+        remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
+      }
+      if (!zkClient.reassignCancelInPlace) {
+        //Cancel Reassignments completed.
+        //The pending reassignments throttle can be removed after they are cancelled.
+        removeReassignCancelThrottle(zkClient, pendingReassignments, adminZkClient)
+      }
+      println("Please run --verify to have the previous reassignments (not just the cancelled reassignments in progress) throttle removed.")
+    }
+  }
+
   def executeAssignment(zkClient: KafkaZkClient, adminClientOpt: Option[JAdminClient], opts: ReassignPartitionsCommandOptions) {
     val reassignmentJsonFile =  opts.options.valueOf(opts.reassignmentJsonFileOpt)
     val reassignmentJsonString = Utils.readFileAsString(reassignmentJsonFile)
@@ -214,6 +279,9 @@ object ReassignPartitionsCommand extends Logging {
     if (zkClient.reassignPartitionsInProgress()) {
       println("There is an existing assignment running.")
       reassignPartitionsCommand.maybeLimit(throttle)
+    } else if (zkClient.reassignCancelInPlace) {
+      // if ReassignCancelZNode.path exists, skip executing new reassignments.
+      println("Cancel Reassignment is currently in place. Please check %s".format(ReassignCancelZNode.path))
     } else {
       printCurrentAssignment(zkClient, partitionAssignment.map(_._1.topic))
       if (throttle.interBrokerLimit >= 0 || throttle.replicaAlterLogDirsLimit >= 0)
@@ -418,9 +486,9 @@ object ReassignPartitionsCommand extends Logging {
     CommandLineUtils.printHelpAndExitIfNeeded(opts, helpText)
 
     // Should have exactly one action
-    val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
+    val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt, opts.cancelOpt).count(opts.options.has _)
     if(actions != 1)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute or --verify")
+      CommandLineUtils.printUsageAndDie(opts.parser, "Command must include exactly one action: --generate, --execute, --verify or --cancel")
 
     CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, opts.zkConnectOpt)
 
@@ -461,6 +529,7 @@ object ReassignPartitionsCommand extends Logging {
     val generateOpt = parser.accepts("generate", "Generate a candidate partition reassignment configuration." +
                       " Note that this only generates a candidate assignment, it does not execute it.")
     val executeOpt = parser.accepts("execute", "Kick off the reassignment as specified by the --reassignment-json-file option.")
+    val cancelOpt = parser.accepts("cancel", "Prevent any new assignments. For reassignments current in progress, stop the reassignments and rollback the topic/partition replicas assignments to their original replicas.")
     val verifyOpt = parser.accepts("verify", "Verify if the reassignment completed as specified by the --reassignment-json-file option. If there is a throttle engaged for the replicas specified, and the rebalance has completed, the throttle will be removed")
     val reassignmentJsonFileOpt = parser.accepts("reassignment-json-file", "The JSON file with the partition reassignment configuration" +
                       "The format to use is - \n" +
@@ -632,7 +701,7 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
           alterReplicaLogDirsIgnoreReplicaNotAvailable(proposedReplicaAssignment, adminClientOpt.get, timeoutMs)
 
         // Create reassignment znode so that controller will send LeaderAndIsrRequest to create replica in the broker
-        zkClient.createPartitionReassignment(validPartitions.map({case (key, value) => (new TopicPartition(key.topic, key.partition), value)}).toMap)
+        zkClient.createPartitionReassignment(validPartitions.map({case (key, value) => (new TopicPartition(key.topic, key.partition), scala.Predef.Map("replicas" -> value, "original_replicas" -> zkClient.getReplicasForPartition(key)))}).toMap)
 
         // Send AlterReplicaLogDirsRequest again to make sure broker will start to move replica to the specified log directory.
         // It may take some time for controller to create replica in the broker. Retry if the replica has not been created.
@@ -672,6 +741,26 @@ class ReassignPartitionsCommand(zkClient: KafkaZkClient,
           "[%s,%d] since topic %s doesn't exist".format(topic, topicPartition.partition(), topic))
           false
       }
+    }
+  }
+
+  def reassignCancel(timeoutMs: Long = 10000L): Boolean = {
+    try {
+      val startTimeMs = System.currentTimeMillis()
+
+      // Create reassignment cancel znode
+      zkClient.createReassignCancel()
+
+     var remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
+      while (remainingTimeMs > 0 &&   ! zkClient.reassignCancelInPlace) {
+        Thread.sleep(100)
+        remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
+      }
+      zkClient.reassignCancelInPlace
+    } catch {
+      case _: NodeExistsException =>
+        throw new AdminCommandFailedException("Partition reassignment cancellation currently in " +
+          "place at %s. Aborting operation".format(ReassignCancelZNode.path))
     }
   }
 }

@@ -58,6 +58,7 @@ object ZkUtils {
   val ClusterIdPath = s"$ClusterPath/id"
   val BrokerIdsPath = s"$BrokersPath/ids"
   val BrokerTopicsPath = s"$BrokersPath/topics"
+  val ReassignCancelPath = s"$AdminPath/reassign_cancel"
   val ReassignPartitionsPath = s"$AdminPath/reassign_partitions"
   val DeleteTopicsPath = s"$AdminPath/delete_topics"
   val PreferredReplicaLeaderElectionPath = s"$AdminPath/preferred_replica_election"
@@ -137,7 +138,7 @@ object ZkUtils {
   def getDeleteTopicPath(topic: String): String =
     DeleteTopicsPath + "/" + topic
 
-  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Seq[Int]] = {
+  def parsePartitionReassignmentData(jsonData: String): Map[TopicAndPartition, Map[String, Seq[Int]]] = {
     val utf8Bytes = jsonData.getBytes(StandardCharsets.UTF_8)
     val assignments = ReassignPartitionsZNode.decode(utf8Bytes) match {
       case Left(e) => throw e
@@ -704,8 +705,8 @@ class ZkUtils(val zkClient: ZkClient,
     jsonPartitionMapOpt match {
       case Some(jsonPartitionMap) =>
         val reassignedPartitions = parsePartitionReassignmentData(jsonPartitionMap)
-        reassignedPartitions.map { case (tp, newReplicas) =>
-          tp -> new ReassignedPartitionsContext(newReplicas, null)
+        reassignedPartitions.map { case (tp, replica_type) =>
+          tp -> new ReassignedPartitionsContext(replica_type("replicas"), replica_type("original_replicas"), null)
         }
       case None => Map.empty[TopicAndPartition, ReassignedPartitionsContext]
     }
