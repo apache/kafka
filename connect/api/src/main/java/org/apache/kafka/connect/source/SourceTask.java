@@ -115,6 +115,7 @@ public abstract class SourceTask implements Task {
      * </p>
      *
      * @param record {@link SourceRecord} that was successfully sent via the producer
+     * @param metadata {@link RecordMetadata} record metadata returned from the broker
      * @throws InterruptedException
      */
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
