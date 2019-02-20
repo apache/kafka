@@ -143,6 +143,11 @@ class GroupCoordinator(val brokerId: Int,
             } else {
               doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             }
+
+            // attempt to complete JoinGroup
+            if (group.is(PreparingRebalance)) {
+              joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+            }
           }
       }
     }
@@ -258,13 +263,10 @@ class GroupCoordinator(val brokerId: Int,
 
           case Empty | Dead =>
             // Group reaches unexpected state. Let the joining member reset their generation and rejoin.
-            warn(s"Attempt to add rejoining member ${memberId} of group ${group.groupId} in " +
+            warn(s"Attempt to add rejoining member $memberId of group ${group.groupId} in " +
               s"unexpected group state ${group.currentState}")
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
         }
-
-        if (group.is(PreparingRebalance))
-          joinPurgatory.checkAndComplete(GroupKey(group.groupId))
       }
     }
   }
@@ -365,12 +367,21 @@ class GroupCoordinator(val brokerId: Int,
 
       case Some(group) =>
         group.inLock {
-          if (group.is(Dead) || !group.has(memberId)) {
+          if (group.is(Dead)) {
+            responseCallback(Errors.UNKNOWN_MEMBER_ID)
+          } else if (group.isPendingMember(memberId)) {
+            // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
+            // and if necessary, prompt a JoinGroup completion.
+            info(s"Pending member $memberId is leaving group ${group.groupId}.")
+            removePendingMemberAndUpdateGroup(group, memberId)
+            heartbeatPurgatory.checkAndComplete(MemberKey(group.groupId, memberId))
+            responseCallback(Errors.NONE)
+          } else if (!group.has(memberId)) {
             responseCallback(Errors.UNKNOWN_MEMBER_ID)
           } else {
             val member = group.get(memberId)
             removeHeartbeatForLeavingMember(group, member)
-            debug(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
+            info(s"Member ${member.memberId} in group ${group.groupId} has left, removing it from the group")
             removeMemberAndUpdateGroup(group, member, s"removing member $memberId on LeaveGroup")
             responseCallback(Errors.NONE)
           }
@@ -775,8 +786,8 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    maybePrepareRebalance(group, s"Adding new member $memberId")
     group.removePendingMember(memberId)
+    maybePrepareRebalance(group, s"Adding new member $memberId")
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
@@ -830,6 +841,14 @@ class GroupCoordinator(val brokerId: Int,
       case Dead | Empty =>
       case Stable | CompletingRebalance => maybePrepareRebalance(group, reason)
       case PreparingRebalance => joinPurgatory.checkAndComplete(GroupKey(group.groupId))
+    }
+  }
+
+  private def removePendingMemberAndUpdateGroup(group: GroupMetadata, memberId: String) {
+    group.removePendingMember(memberId)
+
+    if (group.is(PreparingRebalance)) {
+      joinPurgatory.checkAndComplete(GroupKey(group.groupId))
     }
   }
 
@@ -898,8 +917,12 @@ class GroupCoordinator(val brokerId: Int,
 
   def tryCompleteHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long, forceComplete: () => Boolean) = {
     group.inLock {
-      if (isPending)
-        group.has(memberId)
+      if (isPending) {
+        // complete the heartbeat if the member has joined the group
+        if (group.has(memberId)) {
+          forceComplete()
+        } else false
+      }
       else {
         val member = group.get(memberId)
         if (member.shouldKeepAlive(heartbeatDeadline) || member.isLeaving) {
@@ -912,8 +935,8 @@ class GroupCoordinator(val brokerId: Int,
   def onExpireHeartbeat(group: GroupMetadata, memberId: String, isPending: Boolean, heartbeatDeadline: Long) {
     group.inLock {
       if (isPending) {
-        debug(s"Pending member $memberId has been removed after session timeout expiration.")
-        group.removePendingMember(memberId)
+        info(s"Pending member $memberId in group ${group.groupId} has been removed after session timeout expiration.")
+        removePendingMemberAndUpdateGroup(group, memberId)
       } else if (!group.has(memberId)) {
         debug(s"Member $memberId has already been removed from the group.")
       } else {
