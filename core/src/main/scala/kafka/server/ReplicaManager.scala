@@ -124,6 +124,7 @@ object ReplicaManager {
   val OfflinePartition: Partition = new Partition(new TopicPartition("", -1),
     isOffline = true,
     replicaLagTimeMaxMs = 0L,
+    interBrokerProtocolVersion = ApiVersion.latestVersion,
     localBrokerId = -1,
     time = null,
     replicaManager = null,

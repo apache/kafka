@@ -22,7 +22,7 @@ import java.util.{Optional, Properties}
 import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.api.Request
+import kafka.api.{ApiVersion, Request}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
 import kafka.server._
@@ -411,6 +411,7 @@ class PartitionTest {
     val partition = new Partition(topicPartition,
       isOffline = false,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
       replicaManager,
@@ -506,6 +507,7 @@ class PartitionTest {
     val partition = new Partition(topicPartition,
       isOffline = false,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+      interBrokerProtocolVersion = ApiVersion.latestVersion,
       localBrokerId = brokerId,
       time,
       replicaManager,
@@ -714,6 +716,7 @@ class PartitionTest {
       val partition = new Partition(tp,
         isOffline = false,
         replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
+        interBrokerProtocolVersion = ApiVersion.latestVersion,
         localBrokerId = brokerId,
         time,
         replicaManager,
