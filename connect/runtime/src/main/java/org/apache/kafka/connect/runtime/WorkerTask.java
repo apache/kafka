@@ -51,7 +51,7 @@ import java.util.concurrent.TimeUnit;
  */
 abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
-    private static final String THREAD_NAME_PREFIX = "worker-task-";
+    private static final String THREAD_NAME_PREFIX = "task-thread-";
 
     protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
@@ -218,7 +218,7 @@ abstract class WorkerTask implements Runnable {
         ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
         String savedName = Thread.currentThread().getName();
         try {
-            Thread.currentThread().setName(THREAD_NAME_PREFIX + id.toString());
+            Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
             doRun();
             onShutdown();
         } catch (Throwable t) {
