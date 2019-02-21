@@ -997,7 +997,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else
       metadataRequest.topics.asScala.toSet
 
-    val (authorizedTopics, unauthorizedForDescribeTopics) =
+    var (authorizedTopics, unauthorizedForDescribeTopics) =
       topics.partition(topic => authorize(request.session, Describe, Resource(Topic, topic, LITERAL)))
 
     var unauthorizedForCreateTopics = Set[String]()
