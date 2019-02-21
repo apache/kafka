@@ -146,9 +146,13 @@ public class MetadataRequest extends AbstractRequest {
         super(ApiKeys.METADATA, version);
         Object[] topicArray = struct.getArray(TOPICS_KEY_NAME);
         if (topicArray != null) {
-            topics = new ArrayList<>();
-            for (Object topicObj: topicArray) {
-                topics.add((String) topicObj);
+            if (topicArray.length == 0 && version == 0) {
+                topics = null;
+            } else {
+                topics = new ArrayList<>();
+                for (Object topicObj: topicArray) {
+                    topics.add((String) topicObj);
+                }
             }
         } else {
             topics = null;
