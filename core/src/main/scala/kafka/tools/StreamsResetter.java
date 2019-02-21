@@ -656,7 +656,12 @@ public class StreamsResetter {
 
 
     private boolean isInternalTopic(final String topicName) {
-        return topicName.startsWith(options.valueOf(applicationIdOption) + "-")
+        // Specified input/intermediate topics might be named like internal topics (by chance).
+        // Even is this is not expected in general, we need to exclude those topics here
+        // and don't consider them as internal topics even if they follow the same naming schema.
+        // Cf. https://issues.apache.org/jira/browse/KAFKA-7930
+        return !isInputTopic(topicName) && !isIntermediateTopic(topicName)
+            && topicName.startsWith(options.valueOf(applicationIdOption) + "-")
             && (topicName.endsWith("-changelog") || topicName.endsWith("-repartition"));
     }
 
