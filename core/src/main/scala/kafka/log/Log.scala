@@ -183,6 +183,8 @@ class Log(@volatile var dir: File,
 
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
+  def supportsLeaderEpoch = recordVersion.value >= RecordVersion.V2.value
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
@@ -301,7 +303,13 @@ class Log(@volatile var dir: File,
   private def initializeLeaderEpochCache(): LeaderEpochFileCache = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
-    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
+    val file = LeaderEpochFile.newFile(dir)
+    if (!supportsLeaderEpoch && file.exists()) {
+      warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
+      Files.deleteIfExists(file.toPath)
+    }
+
+    val checkpointFile = new LeaderEpochCheckpointFile(file, logDirFailureChannel)
     new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
   }
 

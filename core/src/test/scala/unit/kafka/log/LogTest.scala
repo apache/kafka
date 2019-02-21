@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.EpochEndOffset.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.IsolationLevel
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -2597,6 +2598,36 @@ class LogTest {
 
   def topicPartitionName(topic: String, partition: String): String =
     topic + "-" + partition
+
+  /**
+    * Due to KAFKA-7968, we want to make sure that we do not
+    * make use of old leader epoch cache files when the message format does not support it
+    */
+  @Test
+  def testOldMessageFormatDeletesEpochCacheIfUnsupported(): Unit = {
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
+    val epochCacheSupportingConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
+
+    // append some records to create segments and assign some epochs to create epoch files
+    val log = createLog(logDir, epochCacheSupportingConfig)
+    for (_ <- 0 until 100)
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    log.leaderEpochCache.assign(0, 40)
+    log.leaderEpochCache.assign(1, 90)
+    assertEquals((1, 100), log.leaderEpochCache.endOffsetFor(1))
+
+    // instantiate the log with an old format that does not support the leader epoch
+    val epochCacheNonSupportingConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000,
+      retentionMs = 999, messageFormatVersion = "0.10.2")
+    val log2 = createLog(logDir, epochCacheNonSupportingConfig)
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      log2.leaderEpochCache.endOffsetFor(1))
+
+    // ensure the cache files are deleted
+    val log3 = createLog(logDir, epochCacheSupportingConfig)
+    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
+      log3.leaderEpochCache.endOffsetFor(1))
+  }
 
   @Test
   def testDeleteOldSegments() {
