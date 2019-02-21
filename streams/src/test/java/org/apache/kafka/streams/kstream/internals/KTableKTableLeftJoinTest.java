@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.MockProcessor;
@@ -315,16 +316,37 @@ public class KTableKTableLeftJoinTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
         final KTable<Long, String> aggTable = builder
-            .table(agg, consumed)
+            .table(agg, consumed, Materialized.as(Stores.inMemoryKeyValueStore("agg-base-store")))
             .groupBy(KeyValue::new, Grouped.with(Serdes.Long(), Serdes.String()))
-            .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_ADDER, Materialized.as("agg-store"));
+            .reduce(
+                MockReducer.STRING_ADDER,
+                MockReducer.STRING_ADDER,
+                Materialized.as(Stores.inMemoryKeyValueStore("agg-store")));
 
-        final KTable<Long, String> one = builder.table(tableOne, consumed);
-        final KTable<Long, String> two = builder.table(tableTwo, consumed);
-        final KTable<Long, String> three = builder.table(tableThree, consumed);
-        final KTable<Long, String> four = builder.table(tableFour, consumed);
-        final KTable<Long, String> five = builder.table(tableFive, consumed);
-        final KTable<Long, String> six = builder.table(tableSix, consumed);
+        final KTable<Long, String> one = builder.table(
+            tableOne,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableOne-base-store")));
+        final KTable<Long, String> two = builder.table(
+            tableTwo,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableTwo-base-store")));
+        final KTable<Long, String> three = builder.table(
+            tableThree,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableThree-base-store")));
+        final KTable<Long, String> four = builder.table(
+            tableFour,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableFour-base-store")));
+        final KTable<Long, String> five = builder.table(
+            tableFive,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableFive-base-store")));
+        final KTable<Long, String> six = builder.table(
+            tableSix,
+            consumed,
+            Materialized.as(Stores.inMemoryKeyValueStore("tableSix-base-store")));
 
         final ValueMapper<String, String> mapper = value -> value.toUpperCase(Locale.ROOT);
 
