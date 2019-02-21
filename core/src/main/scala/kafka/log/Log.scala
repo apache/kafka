@@ -303,14 +303,14 @@ class Log(@volatile var dir: File,
   private def initializeLeaderEpochCache(): LeaderEpochFileCache = {
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
-    val file = LeaderEpochFile.newFile(dir)
-    if (!supportsLeaderEpoch && file.exists()) {
-      warn(s"Deleting non-empty leader epoch cache due to incompatible message format $recordVersion")
-      Files.deleteIfExists(file.toPath)
-    }
+    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
+    val cache = new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
 
-    val checkpointFile = new LeaderEpochCheckpointFile(file, logDirFailureChannel)
-    new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+    if (!supportsLeaderEpoch && cache.epochEntries.nonEmpty) {
+      warn(s"Clearing non-empty leader epoch cache due to incompatible message format $recordVersion")
+      cache.clearAndFlush()
+    }
+    cache
   }
 
   /**
