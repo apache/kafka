@@ -136,6 +136,7 @@ abstract class AbstractFetcherThread(name: String,
   // deal with partitions with errors, potentially due to leadership changes
   private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
     if (partitions.nonEmpty)
+      debug(s"Handling errors for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
   }
 
@@ -366,7 +367,6 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     if (partitionsWithError.nonEmpty) {
-      debug(s"Handling errors for partitions $partitionsWithError")
       handlePartitionsWithErrors(partitionsWithError)
     }
   }
