@@ -28,7 +28,7 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.ProducerFencedException
+import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 
@@ -560,12 +560,25 @@ class TransactionsTest extends KafkaServerTestHarness {
   def testConsecutivelyRunInitTransactions(): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
+    producer.initTransactions()
+    producer.initTransactions()
+    fail("Should have raised a KafkaException")
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testCommitTransactionTimeout(): Unit = {
+    val producer = createTransactionalProducer("transactionalProducer", maxBlockMs = 1000)
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foobar".getBytes))
+
+    for (i <- 0 until servers.size)
+      killBroker(i) // pretend all brokers not available
+
     try {
-      producer.initTransactions()
-      producer.initTransactions()
-      fail("Should have raised a KafkaException")
+      producer.commitTransaction()
     } finally {
-      producer.close()
+      producer.close(0, TimeUnit.MILLISECONDS)
     }
   }
 
@@ -615,9 +628,11 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   private def createTransactionalProducer(transactionalId: String,
-                                          transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                          transactionTimeoutMs: Long = 60000,
+                                          maxBlockMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
-      transactionTimeoutMs = transactionTimeoutMs)
+      transactionTimeoutMs = transactionTimeoutMs,
+      maxBlockMs = maxBlockMs)
     transactionalProducers += producer
     producer
   }
