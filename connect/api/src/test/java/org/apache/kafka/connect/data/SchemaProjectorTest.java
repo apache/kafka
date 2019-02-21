@@ -469,20 +469,32 @@ public class SchemaProjectorTest {
             // expected
         }
 
+        // Test Enum - By Flipp
         Map<String, String> sourceEnumParamters = new HashMap<String, String>();
         sourceEnumParamters.put("io.confluent.connect.avro.Enum", "FooEnum");
         sourceEnumParamters.put("io.confluent.connect.avro.Enum.FooSymbol", "FooSymbol");
-        Schema sourceWithEnumParameters = SchemaBuilder.string().parameters(sourceEnumParamters);
+        Schema sourceWithEnumParameters = SchemaBuilder.string().parameters(sourceEnumParamters).build();
 
         Map<String, String> targetEnumParamters = new HashMap<String, String>();
         targetEnumParamters.put("io.confluent.connect.avro.Enum", "FooEnum");
         targetEnumParamters.put("io.confluent.connect.avro.Enum.FooSymbol", "FooSymbol");
         targetEnumParamters.put("io.confluent.connect.avro.Enum.BarSymbol", "BarSymbol");
-        Schema targetWithEnumParameters = SchemaBuilder.string().parameters(targetEnumParamters);
+        Schema targetWithEnumParameters = SchemaBuilder.string().parameters(targetEnumParamters).build();
 
         Object projected = SchemaProjector.project(sourceWithEnumParameters, "FooSymbol", targetWithEnumParameters);
-
         assertEquals("FooSymbol", projected);
+
+        // Test Record Doc - By Flipp
+        Map<String, String> sourceRecordDocParamters = new HashMap<String, String>();
+        sourceRecordDocParamters.put("connect.record.doc", "This is first version");
+        Schema sourceWithRecordDocParamters = SchemaBuilder.string().parameters(sourceRecordDocParamters).build();
+
+        Map<String, String> targetRecordDocParamters = new HashMap<String, String>();
+        targetRecordDocParamters.put("connect.record.doc", "This is second version");
+        Schema targetWithRecordDocParameters = SchemaBuilder.string().parameters(targetRecordDocParamters).build();
+
+        Object projectedObj = SchemaProjector.project(sourceWithRecordDocParamters, "ProjectedObj", targetWithRecordDocParameters);
+        assertEquals("ProjectedObj", projectedObj);
     }
 
     @Test
