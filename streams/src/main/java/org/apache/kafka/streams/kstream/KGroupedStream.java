@@ -146,8 +146,9 @@ public interface KGroupedStream<K, V> {
      *
      * @param reducer   a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
-     * latest (rolling) aggregate for each key. Incase {@link KTable} returns null the following message will be
-     * processed as if it was the first message.
+     * latest (rolling) aggregate for each key. If the reduce function returns {@code null}, it is then interpreted as
+     * deletion for the key, and future messages of the same key coming from upstream operators
+     * will be handled as newly initialized value.
      */
     KTable<K, V> reduce(final Reducer<V> reducer);
 
@@ -209,8 +210,9 @@ public interface KGroupedStream<K, V> {
      * @param reducer       a {@link Reducer} that computes a new aggregate result. Cannot be {@code null}.
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
-     * latest (rolling) aggregate for each key. Incase {@link KTable} returns null the following message will be
-     * processed as if it was the first message.
+     * latest (rolling) aggregate for each key. If the reduce function returns {@code null}, it is then interpreted as
+     * deletion for the key, and future messages of the same key coming from upstream operators
+     * will be handled as newly initialized value.
      */
     KTable<K, V> reduce(final Reducer<V> reducer,
                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
@@ -253,8 +255,9 @@ public interface KGroupedStream<K, V> {
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
-     * latest (rolling) aggregate for each key. Incase {@link KTable} returns null the following message will be
-     * processed as if it was the first message.
+     * latest (rolling) aggregate for each key. If the aggregate function returns {@code null}, it is then interpreted as
+     * deletion for the key, and future messages of the same key coming from upstream operators
+     * will be handled as newly initialized value.
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator);
@@ -311,8 +314,9 @@ public interface KGroupedStream<K, V> {
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
      * @param <VR>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
-     * latest (rolling) aggregate for each key. Incase {@link KTable} returns null the following message will be
-     * processed as if it was the first message.
+     * latest (rolling) aggregate for each key. If the aggregate function returns {@code null}, it is then interpreted as
+     * deletion for the key, and future messages of the same key coming from upstream operators
+     * will be handled as newly initialized value.
      */
     <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
                                  final Aggregator<? super K, ? super V, VR> aggregator,
