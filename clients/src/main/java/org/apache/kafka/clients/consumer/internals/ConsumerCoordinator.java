@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -285,7 +286,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Setting newly assigned partitions {}", assignedPartitions);
+        log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
         try {
             listener.onPartitionsAssigned(assignedPartitions);
         } catch (WakeupException | InterruptException e) {
