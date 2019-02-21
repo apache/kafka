@@ -216,17 +216,17 @@ public class SubscriptionStateTest {
         state.position(tp0, 0);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void cantAssignPartitionForUnsubscribedTopics() {
         state.subscribe(singleton(topic), rebalanceListener);
-        state.assignFromSubscribed(Collections.singletonList(t1p0));
+        assertFalse(state.assignFromSubscribed(Collections.singletonList(t1p0)));
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void cantAssignPartitionForUnmatchedPattern() {
         state.subscribe(Pattern.compile(".*t"), rebalanceListener);
         state.subscribeFromPattern(new HashSet<>(Collections.singletonList(topic)));
-        state.assignFromSubscribed(Collections.singletonList(t1p0));
+        assertFalse(state.assignFromSubscribed(Collections.singletonList(t1p0)));
     }
 
     @Test(expected = IllegalStateException.class)

@@ -246,7 +246,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
-        subscriptions.assignFromSubscribed(assignment.partitions());
+        if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
+            requestRejoin();
+            return;
+        }
 
         // check if the assignment contains some topics that were not in the original
         // subscription, if yes we will obey what leader has decided and add these topics

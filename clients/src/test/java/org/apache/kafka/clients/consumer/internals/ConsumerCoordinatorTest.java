@@ -421,7 +421,6 @@ public class ConsumerCoordinatorTest {
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
         // ensure metadata is up-to-date for leader
-        // TODO: should this be topic1 + topic2?
         metadata.setTopics(Arrays.asList(topic1, topic2));
         client.updateMetadata(metadataResponse);
 
