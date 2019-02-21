@@ -14,32 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.errors;
 
-import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.StreamPartitioner;
+/**
+ * For example the processor name is too long, contains invalid characters etc.
+ */
+public class InvalidProcessorException extends TopologyException {
 
-public class ProducedInternal<K, V> extends Produced<K, V> {
+    private final static long serialVersionUID = 1L;
 
-    public ProducedInternal(final Produced<K, V> produced) {
-        super(produced);
+    public InvalidProcessorException(final String message) {
+        super(message);
     }
 
-    public Serde<K> keySerde() {
-        return keySerde;
+    public InvalidProcessorException(final String message, final Throwable throwable) {
+        super(message, throwable);
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    public InvalidProcessorException(final Throwable throwable) {
+        super(throwable);
     }
-
-    public StreamPartitioner<? super K, ? super V> streamPartitioner() {
-        return partitioner;
-    }
-
-    public String name() {
-        return processorName;
-    }
-
 }
