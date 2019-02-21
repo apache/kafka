@@ -23,7 +23,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
 
-public interface Suppressed<K> {
+public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     /**
      * Marker interface for a buffer configuration that is "strict" in the sense that it will strictly
