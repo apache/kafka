@@ -30,7 +30,11 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
 
 public class StreamsBrokerDownResilienceTest {
 
@@ -43,7 +47,7 @@ public class StreamsBrokerDownResilienceTest {
 
     public static void main(final String[] args) throws IOException {
         if (args.length < 1) {
-            System.err.println("StreamsBrokerDownResilienceTest is expecting one parameter: propFile; but currently sees " + args.length + " parameter(s)");
+            System.err.println("StreamsBrokerDownResilienceTest requires one argument (properties-file) but none provided.");
             System.exit(1);
         }
 
