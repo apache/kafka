@@ -1,3 +1,13 @@
+### How to Deploy a Customized Kafka Jar as Part of the Sink S3 Connector at Flipp? ###
+1. Make custom change to the sub-project `/kafka/connect/api`
+2. Make sure you have gradel 4.8.1 installed on your local (newer versions of gradle might not work with kafka 1.1)
+3. cd to the project root folder (e.g. `/kafka`)
+4. Run `./gradlew installAll`
+5. You can now find your new jar here `/kafka/connect/api/build/libs/connect-api-1.1.1.jar`
+6. Copy/paste your new jar and make a PR to https://github.com/wishabi/kafka-connect-sink-s3 repo. Here is an example: https://github.com/wishabi/kafka-connect-sink-s3/pull/2
+7. Merge to staging and verify that all S3 connector works on staging
+8. Repeat step 6 and 7 on production
+
 Apache Kafka
 =================
 See our [web site](http://kafka.apache.org) for details on the project.
