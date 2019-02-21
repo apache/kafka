@@ -554,7 +554,69 @@ public final class Utils {
     }
 
     /**
-     * Read a properties file from the given path
+     * Read a properties file from the given path and return a multi-valued map containing all values for each key.
+     * @see #stripDuplicateProps(Map)
+     * @param filename The path of the file to read
+     */
+    public static Map<Object, List<Object>> loadPropsMap(String filename) throws IOException {
+        Map<Object, List<Object>> propertiesMap = new HashMap<>();
+
+        Properties duplicateCheckingProps = new Properties() {
+            @Override
+            public synchronized Object put(Object key, Object value) {
+                propertiesMap.merge(key, Collections.singletonList(value), Utils::concatLists);
+                return super.put(key, value);
+            }
+        };
+
+        if (filename != null) {
+            try (InputStream propStream = Files.newInputStream(Paths.get(filename))) {
+                duplicateCheckingProps.load(propStream);
+            }
+        } else {
+            log.warn("Did not load any properties since the property file is not specified");
+        }
+        return propertiesMap;
+    }
+
+    /**
+     * Convert a multi-valued map into flattened Properties. Log a warning if duplicates values are found.
+     * @see #loadPropsMap(String)
+     * @param multiMap
+     * @return
+     */
+    public static Properties stripDuplicateProps(Map<Object, List<Object>> multiMap) {
+        StringBuilder msg = new StringBuilder("Duplicate config entries detected:");
+        boolean foundDuplicates = false;
+
+        Map<Object, Object> flattened = multiMap.entrySet().stream().collect(
+                Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().get(entry.getValue().size() - 1)));
+
+        for (Map.Entry<Object, Object> entry : flattened.entrySet()) {
+            List<Object> values = multiMap.get(entry.getKey());
+            for (int i = 0; i < values.size() - 1; i++) {
+                foundDuplicates = true;
+                msg.append("\n\tOverwriting ")
+                        .append(entry.getKey())
+                        .append(" = ")
+                        .append(values.get(i))
+                        .append(" with ")
+                        .append(flattened.get(entry.getValue()));
+            }
+        }
+
+        if (foundDuplicates) {
+            msg.append("\n");
+            log.warn(msg.toString());
+        }
+
+        Properties properties = new Properties();
+        properties.putAll(flattened);
+        return properties;
+    }
+
+    /**
+     * Read a properties file from the given path. Log an error if duplicates are found.
      * @param filename The path of the file to read
      */
     public static Properties loadProps(String filename) throws IOException {
@@ -998,6 +1060,10 @@ public final class Utils {
 
     public static <T> List<T> concatListsUnmodifiable(List<T> left, List<T> right) {
         return concatLists(left, right, Collections::unmodifiableList);
+    }
+
+    public static <T> List<T> concatLists(List<T> left, List<T> right) {
+        return concatLists(left, right, Function.identity());
     }
 
     public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
