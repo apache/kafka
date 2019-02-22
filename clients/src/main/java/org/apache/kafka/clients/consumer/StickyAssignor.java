@@ -39,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -220,7 +221,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
             for (String topic: entry.getValue().topics()) {
-                for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
+                for (int i = 0; i < Optional.ofNullable(partitionsPerTopic.get(topic)).orElse(0); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
                     partition2AllPotentialConsumers.get(topicPartition).add(consumer);
@@ -705,6 +706,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      */
     private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
         Iterator<List<T>> it = col.iterator();
+        if (!it.hasNext())
+            return true;
         List<T> cur = it.next();
         while (it.hasNext()) {
             List<T> next = it.next();

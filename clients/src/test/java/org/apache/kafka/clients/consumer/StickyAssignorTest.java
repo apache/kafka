@@ -606,6 +606,22 @@ public class StickyAssignorTest {
         }
     }
 
+    @Test
+    public void testAssignmentUpdatedForDeletedTopic() {
+        String consumerId = "consumer";
+
+        Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        partitionsPerTopic.put("topic01", 1);
+        partitionsPerTopic.put("topic03", 100);
+        Map<String, Subscription> subscriptions =
+                Collections.singletonMap(consumerId, new Subscription(Arrays.asList("topic01", "topic02", "topic03")));
+
+        Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
+        assertEquals(assignment.values().stream().mapToInt(topicPartitions -> topicPartitions.size()).sum(), 1 + 100);
+        assertEquals(Collections.singleton(consumerId), assignment.keySet());
+        assertTrue(isFullyBalanced(assignment));
+    }
+
     private String getTopicName(int i, int maxNum) {
         return getCanonicalName("t", i, maxNum);
     }
