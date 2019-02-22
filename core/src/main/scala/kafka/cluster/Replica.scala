@@ -60,10 +60,10 @@ class Replica(val brokerId: Int,
 
   def epochs: Option[LeaderEpochFileCache] = {
     log.flatMap { log =>
-      if (log.recordVersion.value < RecordFormat.V2.value)
-        None
-      else
+      if (log.supportsLeaderEpoch)
         Some(log.leaderEpochCache)
+      else
+        None
     }
   }
 

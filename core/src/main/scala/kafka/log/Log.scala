@@ -162,6 +162,8 @@ class Log(@volatile var dir: File,
 
   def recordVersion: RecordFormat = config.messageFormatVersion.messageFormatVersion
 
+  def supportsLeaderEpoch = recordVersion.value >= RecordFormat.V2.value
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
@@ -177,7 +179,15 @@ class Log(@volatile var dir: File,
       warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
         s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
         s"This may result in frequent log rolling.")
+    val oldConfig = this.config
     this.config = newConfig
+    if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {
+      val oldRecordVersion = oldConfig.messageFormatVersion.messageFormatVersion
+      val newRecordVersion = newConfig.messageFormatVersion.messageFormatVersion
+      if (newRecordVersion.precedes(oldRecordVersion))
+        warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+      _leaderEpochCache = initializeLeaderEpochCache()
+    }
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
@@ -277,7 +287,13 @@ class Log(@volatile var dir: File,
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
-    new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+    val cache = new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+
+    if (!supportsLeaderEpoch && cache.nonEmpty) {
+      warn(s"Clearing non-empty leader epoch cache due to incompatible message format $recordVersion")
+      cache.clearAndFlush()
+    }
+    cache
   }
 
   private def removeTempFilesAndCollectSwapFiles(): Set[File] = {
@@ -448,7 +464,7 @@ class Log(@volatile var dir: File,
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
-            recoverSegment(segment, Some(_leaderEpochCache))
+            recoverSegment(segment, if (supportsLeaderEpoch) Some(_leaderEpochCache) else None)
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset

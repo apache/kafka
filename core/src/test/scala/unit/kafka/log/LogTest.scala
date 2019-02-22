@@ -29,6 +29,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 import kafka.utils._
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
@@ -2254,6 +2255,56 @@ class LogTest {
 
   def topicPartitionName(topic: String, partition: String): String =
     topic + "-" + partition
+
+  /**
+    * Due to KAFKA-7968, we want to make sure that we do not
+    * make use of old leader epoch cache files when the message format does not support it
+    */
+  @Test
+  def testOldMessageFormatDeletesEpochCacheIfUnsupported(): Unit = {
+    def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds - 1000)
+    val epochCacheSupportingConfig = createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, retentionMs = 999)
+
+    // append some records to create segments and assign some epochs to create epoch files
+    val log = createLog(logDir, epochCacheSupportingConfig)
+    for (_ <- 0 until 100)
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+    log.leaderEpochCache.assign(0, 40)
+    log.leaderEpochCache.assign(1, 90)
+    assertEquals(100, log.leaderEpochCache.endOffsetFor(1))
+
+    // instantiate the log with an old format that does not support the leader epoch
+    val epochCacheNonSupportingConfig = createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000,
+      retentionMs = 999, messageFormatVersion = "0.10.2")
+    val log2 = createLog(logDir, epochCacheNonSupportingConfig)
+    assertLeaderEpochCacheEmpty(log2)
+  }
+
+  @Test
+  def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
+    val logConfig = createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(1, log.leaderEpochCache.endOffsetFor(5))
+
+    val downgradedLogConfig = createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.version)
+    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), downgradedLogConfig)
+    assertLeaderEpochCacheEmpty(log)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordFormat.V1.value), leaderEpoch = 5)
+    assertLeaderEpochCacheEmpty(log)
+  }
+
+  private def assertLeaderEpochCacheEmpty(log: Log): Unit = {
+    assertFalse(log.leaderEpochCache.nonEmpty)
+
+    // check that the file is empty as well
+    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(log.dir))
+    val cache = new LeaderEpochFileCache(log.topicPartition, log.logEndOffset _, checkpointFile)
+    assertFalse(cache.nonEmpty)
+  }
 
   @Test
   def testDeleteOldSegments() {

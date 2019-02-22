@@ -25,6 +25,15 @@ public enum RecordFormat {
         this.value = (byte) value;
     }
 
+    /**
+     * Check whether this version precedes another version.
+     *
+     * @return true only if the magic value is less than the other's
+     */
+    public boolean precedes(RecordFormat other) {
+        return this.value < other.value;
+    }
+
     public static RecordFormat lookup(byte version) {
         switch (version) {
             case 0: return V0;
