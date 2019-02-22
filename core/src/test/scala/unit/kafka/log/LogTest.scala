@@ -25,6 +25,7 @@ import java.util.{Optional, Properties}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
+import kafka.server.checkpoints.LeaderEpochCheckpointFile
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
@@ -324,7 +325,7 @@ class LogTest {
         topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
 
         override def addSegment(segment: LogSegment): LogSegment = {
-          val wrapper = new LogSegment(segment.log, segment.offsetIndex, segment.timeIndex, segment.txnIndex, segment.baseOffset,
+          val wrapper = new LogSegment(segment.log, segment.lazyOffsetIndex, segment.lazyTimeIndex, segment.txnIndex, segment.baseOffset,
             segment.indexIntervalBytes, segment.rollJitterMs, mockTime) {
 
             override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
@@ -1679,8 +1680,8 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
-    val indexFiles = log.logSegments.map(_.offsetIndex.file)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val indexFiles = log.logSegments.map(_.lazyOffsetIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // delete all the index files
@@ -1735,7 +1736,7 @@ class LogTest {
 
     // The cache can be updated directly after a leader change.
     // The new latest offset should reflect the updated epoch.
-    log.leaderEpochCache.assign(2, 2L)
+    log.maybeAssignEpochStartOffset(2, 2L)
 
     assertEquals(Some(new TimestampAndOffset(ListOffsetResponse.UNKNOWN_TIMESTAMP, 2L, Optional.of(2))),
       log.fetchOffsetByTimestamp(ListOffsetRequest.LATEST_TIMESTAMP))
@@ -1753,7 +1754,7 @@ class LogTest {
     for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
         timestamp = mockTime.milliseconds + i * 10, magicValue = RecordBatch.MAGIC_VALUE_V1), leaderEpoch = 0)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // Delete the time index.
@@ -1763,7 +1764,7 @@ class LogTest {
     log = createLog(logDir, logConfig, recoveryPoint = numMessages + 1)
     for (segment <- log.logSegments.init) {
       assertEquals("The time index should be empty", 0, segment.timeIndex.entries)
-      assertEquals("The time index file size should be 0", 0, segment.timeIndex.file.length)
+      assertEquals("The time index file size should be 0", 0, segment.lazyTimeIndex.file.length)
     }
   }
 
@@ -1778,8 +1779,8 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
-    val indexFiles = log.logSegments.map(_.offsetIndex.file)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val indexFiles = log.logSegments.map(_.lazyOffsetIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // corrupt all the index files
@@ -1796,8 +1797,8 @@ class LogTest {
       bw.close()
     }
 
-    // reopen the log
-    log = createLog(logDir, logConfig, recoveryPoint = 200L)
+    // reopen the log with recovery point=0 so that the segment recovery can be triggered
+    log = createLog(logDir, logConfig)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
@@ -1910,9 +1911,18 @@ class LogTest {
     val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
+    // The files remain absent until we first access it because we are doing lazy loading for time index and offset index
+    // files but in this test case we need to create these files in order to test we will remove them.
+    bogusIndex2.createNewFile()
+    bogusTimeIndex2.createNewFile()
+
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
+
+    // Force the segment to access the index files because we are doing index lazy loading.
+    log.logSegments.toSeq.head.offsetIndex
+    log.logSegments.toSeq.head.timeIndex
 
     assertTrue("The first index file should have been replaced with a larger file", bogusIndex1.length > 0)
     assertTrue("The first time index file should have been replaced with a larger file", bogusTimeIndex1.length > 0)
@@ -1963,20 +1973,20 @@ class LogTest {
 
     // files should be renamed
     val segments = log.logSegments.toArray
-    val oldFiles = segments.map(_.log.file) ++ segments.map(_.offsetIndex.file)
+    val oldFiles = segments.map(_.log.file) ++ segments.map(_.lazyOffsetIndex.file)
 
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals("Only one segment should remain.", 1, log.numberOfSegments)
     assertTrue("All log and index files should end in .deleted", segments.forall(_.log.file.getName.endsWith(Log.DeletedFileSuffix)) &&
-                                                                 segments.forall(_.offsetIndex.file.getName.endsWith(Log.DeletedFileSuffix)))
+                                                                 segments.forall(_.lazyOffsetIndex.file.getName.endsWith(Log.DeletedFileSuffix)))
     assertTrue("The .deleted files should still be there.", segments.forall(_.log.file.exists) &&
-                                                            segments.forall(_.offsetIndex.file.exists))
+                                                            segments.forall(_.lazyOffsetIndex.file.exists))
     assertTrue("The original file should be gone.", oldFiles.forall(!_.exists))
 
     // when enough time passes the files should be deleted
-    val deletedFiles = segments.map(_.log.file) ++ segments.map(_.offsetIndex.file)
+    val deletedFiles = segments.map(_.log.file) ++ segments.map(_.lazyOffsetIndex.file)
     mockTime.sleep(asyncDeleteMs + 1)
     assertTrue("Files should all be gone.", deletedFiles.forall(!_.exists))
   }
@@ -2103,7 +2113,7 @@ class LogTest {
       log.close()
 
       // corrupt index and log by appending random bytes
-      TestUtils.appendNonsenseToFile(log.activeSegment.offsetIndex.file, TestUtils.random.nextInt(1024) + 1)
+      TestUtils.appendNonsenseToFile(log.activeSegment.lazyOffsetIndex.file, TestUtils.random.nextInt(1024) + 1)
       TestUtils.appendNonsenseToFile(log.activeSegment.log.file, TestUtils.random.nextInt(1024) + 1)
 
       // attempt recovery
@@ -2156,6 +2166,80 @@ class LogTest {
       offsetIndex.close()
     }
     Utils.delete(logDir)
+  }
+
+  @Test
+  def testWriteLeaderEpochCheckpointAfterDirectoryRename(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(Some(5), log.latestEpoch)
+
+    // Ensure that after a directory rename, the epoch cache is written to the right location
+    val tp = Log.parseTopicPartitionName(log.dir)
+    log.renameDir(Log.logDeleteDirName(tp))
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 10)
+    assertEquals(Some(10), log.latestEpoch)
+    assertTrue(LeaderEpochCheckpointFile.newFile(log.dir).exists())
+    assertFalse(LeaderEpochCheckpointFile.newFile(this.logDir).exists())
+  }
+
+  @Test
+  def testLeaderEpochCacheClearedAfterStaticMessageFormatDowngrade(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(Some(5), log.latestEpoch)
+    log.close()
+
+    // reopen the log with an older message format version and check the cache
+    val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val reopened = createLog(logDir, downgradedLogConfig)
+    assertLeaderEpochCacheEmpty(reopened)
+
+    reopened.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
+    assertLeaderEpochCacheEmpty(reopened)
+  }
+
+  @Test
+  def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(Some(5), log.latestEpoch)
+
+    val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), downgradedLogConfig)
+    assertLeaderEpochCacheEmpty(log)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
+    assertLeaderEpochCacheEmpty(log)
+  }
+
+  @Test
+  def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
+    assertLeaderEpochCacheEmpty(log)
+
+    val upgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_11_0_IV0.shortVersion)
+    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), upgradedLogConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals(Some(5), log.latestEpoch)
+  }
+
+  private def assertLeaderEpochCacheEmpty(log: Log): Unit = {
+    assertEquals(None, log.leaderEpochCache)
+    assertEquals(None, log.latestEpoch)
+    assertFalse(LeaderEpochCheckpointFile.newFile(log.dir).exists())
   }
 
   @Test
@@ -2288,6 +2372,9 @@ class LogTest {
 
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+    Log.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
+    Log.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
     records.foreach(segment.append _)
     segment.close()
 
@@ -2649,8 +2736,8 @@ class LogTest {
     for (_ <- 0 until 100)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    log.leaderEpochCache.assign(0, 40)
-    log.leaderEpochCache.assign(1, 90)
+    log.maybeAssignEpochStartOffset(0, 40)
+    log.maybeAssignEpochStartOffset(1, 90)
 
     // segments are not eligible for deletion if no high watermark has been set
     val numSegments = log.numberOfSegments
@@ -2736,7 +2823,7 @@ class LogTest {
   }
 
   def epochCache(log: Log): LeaderEpochFileCache = {
-    log.leaderEpochCache.asInstanceOf[LeaderEpochFileCache]
+    log.leaderEpochCache.get
   }
 
   @Test
@@ -2866,7 +2953,7 @@ class LogTest {
     //Given this partition is on leader epoch 72
     val epoch = 72
     val log = createLog(logDir, LogConfig())
-    log.leaderEpochCache.assign(epoch, records.size)
+    log.maybeAssignEpochStartOffset(epoch, records.size)
 
     //When appending messages as a leader (i.e. assignOffsets = true)
     for (record <- records)
@@ -2903,7 +2990,7 @@ class LogTest {
     for (i <- records.indices)
       log.appendAsFollower(recordsForEpoch(i))
 
-    assertEquals(42, log.leaderEpochCache.latestEpoch)
+    assertEquals(Some(42), log.latestEpoch)
   }
 
   @Test
@@ -2957,7 +3044,7 @@ class LogTest {
   }
 
   @Test
-  def shouldTruncateLeaderEpochFileWhenTruncatingLog() {
+  def shouldTruncateLeaderEpochCheckpointFileWhenTruncatingLog() {
     def createRecords(startOffset: Long, epoch: Int): MemoryRecords = {
       TestUtils.records(Seq(new SimpleRecord("value".getBytes)),
         baseOffset = startOffset, partitionLeaderEpoch = epoch)
@@ -3722,6 +3809,9 @@ object LogTest {
         record(baseOffset + 2)))
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
+      // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+      Log.offsetIndexFile(logDir, baseOffset).createNewFile()
+      Log.timeIndexFile(logDir, baseOffset).createNewFile()
       baseOffset + Int.MaxValue
     }
 

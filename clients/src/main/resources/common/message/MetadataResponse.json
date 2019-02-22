@@ -1,0 +1,81 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 3,
+  "type": "response",
+  "name": "MetadataResponse",
+  // Version 1 adds fields for the rack of each broker, the controller id, and
+  // whether or not the topic is internal.
+  //
+  // Version 2 adds the cluster ID field.
+  //
+  // Version 3 adds the throttle time.
+  //
+  // Version 4 is the same as version 3.
+  //
+  // Version 5 adds a per-partition offline_replicas field. This field specifies
+  // the list of replicas that are offline.
+  //
+  // Starting in version 6, on quota violation, brokers send out responses before throttling.
+  //
+  // Version 7 adds the leader epoch to the partition metadata.
+  "validVersions": "0-7",
+  "fields": [
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "Brokers", "type": "[]MetadataResponseBroker", "versions": "0+",
+      "about": "Each broker in the response.", "fields": [
+      { "name": "NodeId", "type": "int32", "versions": "0+", "mapKey": true,
+        "about": "The broker ID." },
+      { "name": "Host", "type": "string", "versions": "0+",
+        "about": "The broker hostname." },
+      { "name": "Port", "type": "int32", "versions": "0+",
+        "about": "The broker port." },
+      { "name": "Rack", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
+        "about": "The rack of the broker, or null if it has not been assigned to a rack." }
+    ]},
+    { "name": "ClusterId", "type": "string", "nullableVersions": "2+", "versions": "2+", "ignorable": true,
+      "about": "The cluster ID that responding broker belongs to." },
+    { "name": "ControllerId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
+      "about": "The ID of the controller broker." },
+    { "name": "Topics", "type": "[]MetadataResponseTopic", "versions": "0+",
+      "about": "Each topic in the response.", "fields": [
+      { "name": "ErrorCode", "type": "int16", "versions": "0+",
+        "about": "The topic error, or 0 if there was no error." },
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        "about": "The topic name." },
+      { "name": "IsInternal", "type": "bool", "versions": "1+", "default": "false", "ignorable": true,
+        "about": "True if the topic is internal." },
+      { "name": "Partitions", "type": "[]MetadataResponsePartition", "versions": "0+",
+        "about": "Each partition in the topic.", "fields": [
+        { "name": "ErrorCode", "type": "int16", "versions": "0+",
+          "about": "The partition error, or 0 if there was no error." },
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "LeaderId", "type": "int32", "versions": "0+",
+          "about": "The ID of the leader broker." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": true,
+          "about": "The leader epoch of this partition." },
+        { "name": "ReplicaNodes", "type": "[]int32", "versions": "0+",
+          "about": "The set of all nodes that host this partition." },
+        { "name": "IsrNodes", "type": "[]int32", "versions": "0+",
+          "about": "The set of nodes that are in sync with the leader for this partition." },
+        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+", "ignorable": true,
+          "about": "The set of offline replicas of this partition." }
+      ]}
+    ]}
+  ]
+}

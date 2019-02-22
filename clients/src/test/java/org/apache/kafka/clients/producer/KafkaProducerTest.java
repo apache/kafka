@@ -50,6 +50,7 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -344,7 +345,7 @@ public class KafkaProducerTest {
         verify(metadata, times(4)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(7)).fetch();
 
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -388,7 +389,7 @@ public class KafkaProducerTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         } finally {
-            producer.close(0, TimeUnit.MILLISECONDS);
+            producer.close(Duration.ofMillis(0));
         }
     }
 
@@ -420,7 +421,7 @@ public class KafkaProducerTest {
         verify(metadata, times(2)).awaitUpdate(anyInt(), anyLong());
         verify(metadata, times(3)).fetch();
 
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -464,7 +465,7 @@ public class KafkaProducerTest {
         } catch (ExecutionException e) {
             assertTrue(e.getCause() instanceof TimeoutException);
         } finally {
-            producer.close(0, TimeUnit.MILLISECONDS);
+            producer.close(Duration.ofMillis(0));
         }
     }
 
@@ -561,7 +562,7 @@ public class KafkaProducerTest {
         verify(valueSerializer).serialize(topic, record.headers(), value);
         verify(keySerializer).serialize(topic, record.headers(), key);
 
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -611,7 +612,7 @@ public class KafkaProducerTest {
         verify(interceptors).onSend(record);
         verify(interceptors).onSendError(eq(record), notNull(), notNull());
 
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -672,7 +673,7 @@ public class KafkaProducerTest {
         try {
             producer.beginTransaction();
         } finally {
-            producer.close(0, TimeUnit.MILLISECONDS);
+            producer.close(Duration.ofMillis(0));
         }
     }
 
@@ -711,7 +712,7 @@ public class KafkaProducerTest {
                 metadata.fetch().invalidTopics());
         TestUtils.assertFutureError(future, InvalidTopicException.class);
 
-        producer.close(0, TimeUnit.MILLISECONDS);
+        producer.close(Duration.ofMillis(0));
     }
 
     @Test
@@ -750,7 +751,7 @@ public class KafkaProducerTest {
 
             // Wait until metadata update for the topic has been requested
             TestUtils.waitForCondition(() -> metadata.containsTopic(topicName), "Timeout when waiting for topic to be added to metadata");
-            producer.close(0, TimeUnit.MILLISECONDS);
+            producer.close(Duration.ofMillis(0));
             TestUtils.waitForCondition(() -> sendException.get() != null, "No producer exception within timeout");
             assertEquals(KafkaException.class, sendException.get().getClass());
         } finally {

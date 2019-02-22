@@ -17,12 +17,9 @@
 
 package kafka.api
 
-import org.apache.commons.collections.CollectionUtils
 import org.apache.kafka.common.record.RecordVersion
 import org.junit.Test
 import org.junit.Assert._
-
-import scala.collection.JavaConverters
 
 class ApiVersionTest {
 
@@ -120,6 +117,13 @@ class ApiVersionTest {
     assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
     assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
     assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
+  }
+
+  @Test
+  def testApiVersionValidator(): Unit = {
+    val str = ApiVersionValidator.toString
+    val apiVersions = str.slice(1, str.length).split(",")
+    assertEquals(ApiVersion.allVersions.size, apiVersions.length)
   }
 
 }

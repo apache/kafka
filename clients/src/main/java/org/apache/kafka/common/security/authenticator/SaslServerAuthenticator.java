@@ -465,10 +465,11 @@ public class SaslServerAuthenticator implements Authenticator {
                     // Handle retriable Kerberos exceptions as I/O exceptions rather than authentication exceptions
                     throw e;
                 } else {
+                    // DO NOT include error message from the `SaslException` in the client response since it may
+                    // contain sensitive data like the existence of the user.
                     String errorMessage = "Authentication failed during "
                             + reauthInfo.authenticationOrReauthenticationText()
-                            + " due to invalid credentials with SASL mechanism " + saslMechanism + ": "
-                            + e.getMessage();
+                            + " due to invalid credentials with SASL mechanism " + saslMechanism;
                     sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
                             errorMessage));
                     throw new SaslAuthenticationException(errorMessage, e);

@@ -56,8 +56,10 @@ final Serde&lt;Long&gt; longSerde = Serdes.Long();
 // Construct a `KStream` from the input topic "streams-plaintext-input", where message values
 // represent lines of text (for the sake of this example, we ignore whatever may be stored
 // in the message keys).
-KStream&lt;String, String&gt; textLines = builder.stream("streams-plaintext-input",
-    Consumed.with(stringSerde, stringSerde);
+KStream&lt;String, String&gt; textLines = builder.stream(
+      "streams-plaintext-input",
+      Consumed.with(stringSerde, stringSerde)
+    );
 
 KTable&lt;String, Long&gt; wordCounts = textLines
     // Split each text line, by whitespace, into words.
@@ -67,7 +69,7 @@ KTable&lt;String, Long&gt; wordCounts = textLines
     .groupBy((key, value) -> value)
 
     // Count the occurrences of each word (message key).
-    .count()
+    .count();
 
 // Store the running counts as a changelog stream to the output topic.
 wordCounts.toStream().to("streams-wordcount-output", Produced.with(Serdes.String(), Serdes.Long()));
@@ -138,7 +140,7 @@ Next, we create the input topic named <b>streams-plaintext-input</b> and the out
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-plaintext-input
@@ -150,7 +152,7 @@ Note: we create the output topic with compaction enabled because the output stre
 
 <pre class="brush: bash;">
 &gt; bin/kafka-topics.sh --create \
-    --zookeeper localhost:2181 \
+    --bootstrap-server localhost:9092 \
     --replication-factor 1 \
     --partitions 1 \
     --topic streams-wordcount-output \
@@ -161,7 +163,7 @@ Created topic "streams-wordcount-output".
 The created topic can be described with the same <b>kafka-topics</b> tool:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-topics.sh --zookeeper localhost:2181 --describe
+&gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --describe
 
 Topic:streams-plaintext-input	PartitionCount:1	ReplicationFactor:1	Configs:
     Topic: streams-plaintext-input	Partition: 0	Leader: 0	Replicas: 0	Isr: 0

@@ -37,7 +37,6 @@ import java.util.Map;
 public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
-    private final StandbyContextImpl standbyContext;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -60,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
-        processorContext = standbyContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
     }
 
     @Override
@@ -120,7 +119,7 @@ public class StandbyTask extends AbstractTask {
 
     private void flushAndCheckpointState() {
         stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        stateMgr.checkpoint(Collections.emptyMap());
     }
 
     /**
@@ -177,9 +176,6 @@ public class StandbyTask extends AbstractTask {
             if (record.offset() < limit) {
                 restoreRecords.add(record);
                 lastOffset = record.offset();
-                // ideally, we'd use the stream time at the time of the change logging, but we'll settle for
-                // record timestamp for now.
-                standbyContext.updateStreamTime(record.timestamp());
             } else {
                 remainingRecords.add(record);
             }

@@ -64,7 +64,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate)
      */
-    KStream<K, V> filter(Predicate<? super K, ? super V> predicate);
+    KStream<K, V> filter(final Predicate<? super K, ? super V> predicate);
 
     /**
      * Create a new {@code KStream} that consists all records of this stream which do <em>not</em> satisfy the given
@@ -76,7 +76,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains only those records that do <em>not</em> satisfy the given predicate
      * @see #filter(Predicate)
      */
-    KStream<K, V> filterNot(Predicate<? super K, ? super V> predicate);
+    KStream<K, V> filterNot(final Predicate<? super K, ? super V> predicate);
 
     /**
      * Set a new key (with possibly new type) for each input record.
@@ -95,7 +95,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * Setting a new key might result in an internal data redistribution if a key based operator (like an aggregation or
      * join) is applied to the result {@code KStream}.
      *
@@ -109,7 +108,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
      */
-    <KR> KStream<KR, V> selectKey(KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
+    <KR> KStream<KR, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper);
 
     /**
      * Transform each record of the input stream into a new record in the output stream (both key and value type can be
@@ -128,7 +127,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * The provided {@link KeyValueMapper} must return a {@link KeyValue} type and must not return {@code null}.
      * <p>
      * Mapping records might result in an internal data redistribution if a key based operator (like an aggregation or
@@ -148,7 +146,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
-    <KR, VR> KStream<KR, VR> map(KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
+    <KR, VR> KStream<KR, VR> map(final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends KR, ? extends VR>> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -166,7 +164,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * Setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
      * is applied to the result {@code KStream}. (cf. {@link #map(KeyValueMapper)})
@@ -183,7 +180,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
-    <VR> KStream<K, VR> mapValues(ValueMapper<? super V, ? extends VR> mapper);
+    <VR> KStream<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -201,7 +198,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * So, setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
@@ -246,7 +242,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
      * <p>
@@ -264,6 +259,7 @@ public interface KStream<K, V> {
      * @see #flatMapValues(ValueMapper)
      * @see #flatMapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -288,7 +284,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * The provided {@link ValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
      * <p>
@@ -305,6 +300,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -334,7 +330,6 @@ public interface KStream<K, V> {
      *     }
      * });
      * }</pre>
-     * <p>
      * The provided {@link ValueMapperWithKey} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
      * <p>
@@ -352,6 +347,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      */
@@ -492,14 +488,14 @@ public interface KStream<K, V> {
             final Produced<K, V> produced);
 
     /**
-     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * Transform each record of the input stream into zero or one record in the output stream (both key and value type
      * can be altered arbitrarily).
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
-     * computes zero or more output records.
-     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions can be performed.
+     * returns zero or one output record.
+     * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}, the processing progress
+     * can be observed and additional periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -513,10 +509,9 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
      * }</pre>
-     * <p>
-     * Within the {@link Transformer}, the state is obtained via the
-     * {@link  ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be registered.
+     * Within the {@link Transformer}, the state is obtained via the {@link  ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
      * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
      * <pre>{@code
@@ -530,41 +525,126 @@ public interface KStream<K, V> {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
      *                 // punctuate each 1000ms; can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             KeyValue transform(K key, V value) {
      *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
      *             }
      *
      *             void close() {
      *                 // can access this.state
-     *                 // can emit as many new KeyValue pairs as required via this.context#forward()
      *             }
      *         }
      *     }
      * }
      * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * <p>
+     * Note that it is possible to emit multiple records for each input record by using
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(K, V)}.
+     * However, a mismatch between the types of the emitted records and the type of the stream would only be detected
+     * at runtime.
+     * To ensure type-safety at compile-time, it is recommended to use
+     * {@link #flatTransform(TransformerSupplier, String...)} if multiple records need to be emitted for each input
+     * record.
      *
-     * @param transformerSupplier a instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
      * @param <K1>                the key type of the new stream
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
-     * @see #flatMap(KeyValueMapper)
+     * @see #map(KeyValueMapper)
+     * @see #flatTransform(TransformerSupplier, String...)
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
      */
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
+
+    /**
+     * Transform each record of the input stream into zero or more records in the output stream (both key and value type
+     * can be altered arbitrarily).
+     * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
+     * returns zero or more output records.
+     * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)} for stateless record
+     * transformation).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
+     * <p>
+     * In order to assign a state, the state must be created and registered beforehand:
+     * <pre>{@code
+     * // create store
+     * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
+     *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                 Serdes.String(),
+     *                 Serdes.String());
+     * // register store
+     * builder.addStateStore(keyValueStoreBuilder);
+     *
+     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
+     * }</pre>
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
+     * <pre>{@code
+     * new TransformerSupplier() {
+     *     Transformer get() {
+     *         return new Transformer() {
+     *             private ProcessorContext context;
+     *             private StateStore state;
+     *
+     *             void init(ProcessorContext context) {
+     *                 this.context = context;
+     *                 this.state = context.getStateStore("myTransformState");
+     *                 // punctuate each 1000ms; can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *             }
+     *
+     *             Iterable<KeyValue> transform(K key, V value) {
+     *                 // can access this.state
+     *                 List<KeyValue> result = new ArrayList<>();
+     *                 for (int i = 0; i < n; i++) {
+     *                     result.add(new KeyValue(key, value));
+     *                 }
+     *                 return result; // emits a list of key-value pairs via return
+     *             }
+     *
+     *             void close() {
+     *                 // can access this.state
+     *             }
+     *         }
+     *     }
+     * }
+     * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * <p>
+     * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
+     * or join) is applied to the result {@code KStream}.
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     *
+     * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
+     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param <K1>                the key type of the new stream
+     * @param <V1>                the value type of the new stream
+     * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
+     * @see #flatMap(KeyValueMapper)
+     * @see #transform(TransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerSupplier, String...)
+     * @see #transformValues(ValueTransformerWithKeySupplier, String...)
+     * @see #process(ProcessorSupplier, String...)
+     */
+    <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
+                                           final String... stateStoreNames);
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
@@ -587,7 +667,6 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * <p>
      * Within the {@link ValueTransformer}, the state is obtained via the
      * {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
@@ -618,6 +697,8 @@ public interface KStream<K, V> {
      *     }
      * }
      * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
      * <p>
      * Setting a new value preserves data co-location with respect to the key.
      * Thus, <em>no</em> internal data redistribution is required if a key based operator (like an aggregation or join)
@@ -656,7 +737,6 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * <p>
      * Within the {@link ValueTransformerWithKey}, the state is obtained via the
      * {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
@@ -687,6 +767,8 @@ public interface KStream<K, V> {
      *     }
      * }
      * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
      * <p>
      * Note that the key is read-only and should not be modified, as this can lead to corrupt partitioning.
      * So, setting a new value preserves data co-location with respect to the key.
@@ -725,7 +807,6 @@ public interface KStream<K, V> {
      *
      * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
      * }</pre>
-     * <p>
      * Within the {@link Processor}, the state is obtained via the
      * {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
@@ -752,6 +833,8 @@ public interface KStream<K, V> {
      *     }
      * }
      * }</pre>
+     * Even if any upstream operation was key-changing, no auto-repartition is triggered.
+     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
      *
      * @param processorSupplier a instance of {@link ProcessorSupplier} that generates a {@link Processor}
      * @param stateStoreNames   the names of the state store used by the processor
@@ -778,7 +861,6 @@ public interface KStream<K, V> {
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
@@ -808,7 +890,6 @@ public interface KStream<K, V> {
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
@@ -838,10 +919,8 @@ public interface KStream<K, V> {
      * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, &lt;name&gt; is
      * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name,
      * and "-repartition" is a fixed suffix.
-     *
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * For this case, all data of this stream will be redistributed through the repartitioning topic by writing all
      * records to it, and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned
@@ -869,7 +948,6 @@ public interface KStream<K, V> {
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
@@ -898,7 +976,6 @@ public interface KStream<K, V> {
      * an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
@@ -930,7 +1007,6 @@ public interface KStream<K, V> {
      * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * All data of this stream will be redistributed through the repartitioning topic by writing all records to it,
      * and rereading all records from it, such that the resulting {@link KGroupedStream} is partitioned on the new key.
@@ -945,8 +1021,6 @@ public interface KStream<K, V> {
      */
     <KR> KGroupedStream<KR, V> groupBy(final KeyValueMapper<? super K, ? super V, KR> selector,
                                        final Grouped<KR, V> grouped);
-
-
 
     /**
      * Join records of this stream with another {@code KStream}'s records using windowed inner equi join with default
@@ -995,7 +1069,6 @@ public interface KStream<K, V> {
      * user-specified in {@link  StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     *
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1085,7 +1158,7 @@ public interface KStream<K, V> {
      * in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "storeName" is an
      * internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -1167,7 +1240,7 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -1248,7 +1321,7 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -1332,7 +1405,7 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -1414,7 +1487,7 @@ public interface KStream<K, V> {
      * The changelog topic will be named "${applicationId}-storeName-changelog", where "applicationId" is user-specified
      * in {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
      * "storeName" is an internally generated name, and "-changelog" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      *
      * @param otherStream the {@code KStream} to be joined with this stream
@@ -1490,9 +1563,8 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1566,9 +1638,8 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1648,9 +1719,8 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1727,9 +1797,8 @@ public interface KStream<K, V> {
      * user-specified in {@link StreamsConfig} via parameter
      * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
      * "-repartition" is a fixed suffix.
-     *
+     * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
-     *
      * <p>
      * Repartitioning can happen only for this {@code KStream} but not for the provided {@link KTable}.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all

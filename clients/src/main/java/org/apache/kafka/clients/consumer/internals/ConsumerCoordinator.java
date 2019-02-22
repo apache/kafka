@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -107,8 +108,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         private boolean sameRequest(final Set<TopicPartition> currentRequest, final Generation currentGeneration) {
-            return (requestedGeneration == null ? currentGeneration == null : requestedGeneration.equals(currentGeneration))
-                && requestedPartitions.equals(currentRequest);
+            return Objects.equals(requestedGeneration, currentGeneration) && requestedPartitions.equals(currentRequest);
         }
     }
 
@@ -286,7 +286,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Setting newly assigned partitions {}", assignedPartitions);
+        log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
         try {
             listener.onPartitionsAssigned(assignedPartitions);
         } catch (WakeupException | InterruptException e) {
@@ -499,7 +499,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final long offset = entry.getValue().offset();
-            log.debug("Setting offset for partition {} to the committed offset {}", tp, offset);
+            log.info("Setting offset for partition {} to the committed offset {}", tp, offset);
+            entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
             this.subscriptions.seek(tp, offset);
         }
         return true;
@@ -621,7 +622,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onSuccess(Void value) {
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
-
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
             }
 
@@ -631,7 +631,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                 if (e instanceof RetriableException)
                     commitException = new RetriableCommitFailedException(e);
-
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
             }
         });
@@ -910,14 +909,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
                     } else {
-                        future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
+                        future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
+                            tp + ": " + error.message()));
                     }
                     return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
                 } else {
-                    log.debug("Found no committed offset for partition {}", tp);
+                    log.info("Found no committed offset for partition {}", tp);
                 }
             }
 
