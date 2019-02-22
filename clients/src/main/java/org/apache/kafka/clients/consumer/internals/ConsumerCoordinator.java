@@ -63,6 +63,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -170,7 +171,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public List<ProtocolMetadata> metadata() {
+    protected List<ProtocolMetadata> metadata() {
         this.joinedSubscription = subscriptions.subscription();
         List<ProtocolMetadata> metadataList = new ArrayList<>();
         for (PartitionAssignor assignor : assignors) {
@@ -247,6 +248,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
+            // was sent assignments that didn't match the original subscription
+            Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition -> 
+                !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
+            if (invalidAssignments.size() > 0) {
+                throw new IllegalStateException("Coordinator leader sent assignment that don't correspond to subscription request: " + invalidAssignments.toString());
+            }
+
             requestRejoin();
             return;
         }
