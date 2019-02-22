@@ -44,7 +44,8 @@ public interface Task {
 
     void resume();
 
-    void closeSuspended(boolean clean, final boolean isZombie,
+    void closeSuspended(final boolean clean,
+                        final boolean isZombie,
                         final RuntimeException e);
 
     void close(final boolean clean,

@@ -688,7 +688,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     @Override
-    public void close(final boolean clean,
+    public void close(boolean clean,
                       final boolean isZombie) {
         log.debug("Closing");
 
@@ -696,6 +696,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             suspend(clean, isZombie);
         } catch (final RuntimeException e) {
+            clean = false;
             firstException = e;
             log.error("Could not close task due to the following error:", e);
         }
