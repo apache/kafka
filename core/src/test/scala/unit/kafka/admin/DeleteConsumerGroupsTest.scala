@@ -70,7 +70,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group)
+      service.collectGroupMembers(false)._2.get.size == 1
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
@@ -88,10 +88,12 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.listGroups().contains(group)
+      service.collectGroupMembers(false)._2.get.size == 1
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val result = service.deleteGroups()
+    println(result)
+    assertNotNull("Group was deleted successfully, but it shouldn't have been", result.get(group).get)
     assertTrue(s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group",
       result.size == 1 && result.keySet.contains(group) && result.get(group).get.getCause.isInstanceOf[GroupNotEmptyException])
   }
@@ -197,30 +199,6 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
       result.size == 2 &&
         result.keySet.contains(group) && result.get(group).get == null &&
         result.keySet.contains(missingGroup) && result.get(missingGroup).get.getMessage.contains(Errors.GROUP_ID_NOT_FOUND.message))
-  }
-
-  @Test
-  def testDeleteCmdWithShortInitialization() {
-    // run one consumer in the group
-    addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val output = TestUtils.grabConsoleOutput(service.deleteGroups())
-    assertTrue(s"The consumer group deletion did not work as expected",
-      output.contains(s"Group '$group' could not be deleted due to"))
-  }
-
-  @Test
-  def testDeleteWithShortInitialization() {
-    // run one consumer in the group
-    addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--delete", "--group", group)
-    val service = getConsumerGroupService(cgcArgs)
-
-    val result = service.deleteGroups()
-    assertTrue(s"The consumer group deletion did not work as expected",
-      result.size == 1 && result.keySet.contains(group))
   }
 
   @Test(expected = classOf[OptionException])
