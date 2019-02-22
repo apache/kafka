@@ -299,9 +299,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             recordCollector.init(producer);
 
             try {
-                stateMgr.checkpoint.delete();
-                stateMgr.checkpoint = null;
-            } catch (IOException e) {
+                if (stateMgr.checkpoint != null) {
+                    stateMgr.checkpoint.delete();
+                    stateMgr.checkpoint = null;
+                }
+            } catch (final IOException e) {
                 log.error("Failed to delete checkpoint file due to exception {}", e.getMessage());
             }
         }
@@ -449,9 +451,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         flushState();
 
-        if (!eosEnabled) {
-            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
-        }
+        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -575,13 +575,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
-                    // In #commit(), we don't write a checkpoint file when EOS is turned on.
-                    // To avoid a race condition between writing and reading a checkpoint file,
-                    // iff a task is migrated from one thread to another within the same instance,
-                    // we need to always checkpoint offsets in #suspend() if EOS is enabled
-                    // (instead of StateManager#closeSuspended()).
-                    // Cf. https://issues.apache.org/jira/browse/KAFKA-7672
-                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
                     try {
                         recordCollector.close();
                     } catch (final ProducerFencedException e) {
@@ -655,7 +648,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
     @Override
-    public void closeSuspended(boolean clean, final boolean isZombie,
+    public void closeSuspended(final boolean clean, final boolean isZombie,
                                RuntimeException firstException) {
         try {
             closeStateManager();
@@ -695,7 +688,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      *                               or if the task producer got fenced (EOS)
      */
     @Override
-    public void close(boolean clean,
+    public void close(final boolean clean,
                       final boolean isZombie) {
         log.debug("Closing");
 

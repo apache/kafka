@@ -367,7 +367,7 @@ public class StandbyTaskTest {
         );
 
         task.suspend();
-        task.closeStateManager(true);
+        task.closeStateManager();
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
@@ -593,7 +593,7 @@ public class StandbyTaskTest {
             }
 
             @Override
-            void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+            void closeStateManager() throws ProcessorStateException {
                 closedStateManager.set(true);
             }
         };
