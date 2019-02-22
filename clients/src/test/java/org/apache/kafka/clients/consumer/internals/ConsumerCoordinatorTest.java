@@ -415,6 +415,62 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testInvalidCoordinatorAssignment() {
+        final String consumerId = "invalid_assignment";
+
+        subscriptions.subscribe(singleton(topic1), rebalanceListener);
+
+        // ensure metadata is up-to-date for leader
+        // TODO: should this be topic1 + topic2?
+        metadata.setTopics(Arrays.asList(topic1, topic2));
+        client.updateMetadata(metadataResponse);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // Test coordinator returning unsubscribed partitions
+        partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
+
+        // First incorrect assignment for subscription
+        client.prepareResponse(
+                joinGroupLeaderResponse(
+                    1, consumerId, singletonMap(consumerId, singletonList(topic2)), Errors.NONE));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.memberId().equals(consumerId) &&
+                        sync.generationId() == 1 &&
+                        sync.groupAssignment().containsKey(consumerId);
+            }
+        }, syncGroupResponse(Arrays.asList(t2p), Errors.NONE));
+
+        // Second correct assignment for subscription
+        client.prepareResponse(
+                joinGroupLeaderResponse(
+                    1, consumerId, singletonMap(consumerId, singletonList(topic1)), Errors.NONE));
+        client.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                SyncGroupRequest sync = (SyncGroupRequest) body;
+                return sync.memberId().equals(consumerId) &&
+                        sync.generationId() == 1 &&
+                        sync.groupAssignment().containsKey(consumerId);
+            }
+        }, syncGroupResponse(singletonList(t1p), Errors.NONE));
+
+        coordinator.poll(time.timer(Long.MAX_VALUE));
+
+        assertFalse(coordinator.rejoinNeededOrPending());
+        assertEquals(singleton(t1p), subscriptions.assignedPartitions());
+        assertEquals(singleton(topic1), subscriptions.groupSubscription());
+        assertEquals(2, rebalanceListener.revokedCount);
+        assertEquals(Collections.emptySet(), rebalanceListener.revoked);
+        assertEquals(1, rebalanceListener.assignedCount);
+        assertEquals(singleton(t1p), rebalanceListener.assigned);
+    }
+
+    @Test
     public void testPatternJoinGroupLeader() {
         final String consumerId = "leader";
 
