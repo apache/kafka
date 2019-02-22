@@ -410,7 +410,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
       if (subscriptionChanged)
         throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
-      if (partitionAssignment.nonEmpty)
+      if (partitionsToAssign.nonEmpty)
         throw new IllegalStateException("Cannot call subscribe when configured to use manual partition assignment")
 
       topicsSubscription = newTopicsToSubscribe
