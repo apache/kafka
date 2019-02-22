@@ -47,6 +47,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -697,7 +698,7 @@ public class NetworkClient implements KafkaClient {
      * @param responses The list of responses to update
      * @param nodeId Id of the node to be disconnected
      * @param now The current time
-     * @param disconnectState The state of the disconnected channel           
+     * @param disconnectState The state of the disconnected channel
      */
     private void processDisconnection(List<ClientResponse> responses,
                                       String nodeId,
@@ -921,12 +922,16 @@ public class NetworkClient implements KafkaClient {
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
+        } catch (UnknownHostException e) {
+            log.warn("Error resolving node {}", node, e);
+            /* do not invoke connectionStates.disconnected(): entry was not marked connecting, nothing to disconnect */
+            metadataUpdater.requestUpdate();
         } catch (IOException e) {
+            log.warn("Error connecting to node {}", node, e);
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.warn("Error connecting to node {}", node, e);
         }
     }
 
