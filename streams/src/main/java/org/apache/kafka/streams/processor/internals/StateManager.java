@@ -40,7 +40,7 @@ interface StateManager extends Checkpointable {
     void reinitializeStateStoresForPartitions(final Collection<TopicPartition> partitions,
                                               final InternalProcessorContext processorContext);
 
-    void close() throws IOException;
+    void close(final boolean clean) throws IOException;
 
     StateStore getGlobalStore(final String name);
 

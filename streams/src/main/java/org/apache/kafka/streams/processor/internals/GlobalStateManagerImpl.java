@@ -318,7 +318,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
 
     @Override
-    public void close() throws IOException {
+    public void close(final boolean clean) throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;

@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -298,13 +299,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             producer.initTransactions();
             recordCollector.init(producer);
 
-            try {
-                if (stateMgr.checkpoint != null) {
+            if (stateMgr.checkpoint != null) {
+                try {
                     stateMgr.checkpoint.delete();
                     stateMgr.checkpoint = null;
+                } catch (final IOException e) {
+                    throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
                 }
-            } catch (final IOException e) {
-                log.error("Failed to delete checkpoint file due to exception {}", e.getMessage());
             }
         }
     }
@@ -652,7 +653,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                                final boolean isZombie,
                                RuntimeException firstException) {
         try {
-            closeStateManager();
+            closeStateManager(clean);
         } catch (final RuntimeException e) {
             if (firstException == null) {
                 firstException = e;
