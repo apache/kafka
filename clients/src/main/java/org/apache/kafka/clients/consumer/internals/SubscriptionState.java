@@ -192,16 +192,15 @@ public class SubscriptionState {
             if (this.subscribedPattern != null) {
                 boolean match = this.subscribedPattern.matcher(topicPartition.topic()).matches();
                 if (!match) {
-                    log.info("Assigned partition " + topicPartition +
-                            " for non-subscribed topic regex pattern; subscription pattern is " +
+                    log.info("Assigned partition {} for non-subscribed topic regex pattern; subscription pattern is {}",
+                            topicPartition,
                             this.subscribedPattern);
                 }
                 return match;
             } else {
                 boolean match = this.subscription.contains(topicPartition.topic());
                 if (!match) {
-                    log.info("Assigned partition " + topicPartition +
-                            " for non-subscribed topic; subscription is " + this.subscription);
+                    log.info("Assigned partition {} for non-subscribed topic; subscription is {}", topicPartition, this.subscription);
                 }
                 return match;
             }
