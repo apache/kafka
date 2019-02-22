@@ -85,7 +85,7 @@ public final class WorkerManager {
     /**
      * An ExecutorService used to clean up TaskWorkers.
      */
-    private final ScheduledExecutorService workerCleanupExecutor;
+    private final ExecutorService workerCleanupExecutor;
 
     /**
      * An ExecutorService to help with shutting down.
@@ -161,7 +161,7 @@ public final class WorkerManager {
         this.workers = new HashMap<>();
         this.stateChangeExecutor = Executors.newSingleThreadScheduledExecutor(
                 ThreadUtils.createThreadFactory("WorkerManagerStateThread", false));
-        this.workerCleanupExecutor = Executors.newScheduledThreadPool(1,
+        this.workerCleanupExecutor = Executors.newCachedThreadPool(
             ThreadUtils.createThreadFactory("WorkerCleanupThread%d", false));
         this.shutdownExecutor = Executors.newScheduledThreadPool(0,
             ThreadUtils.createThreadFactory("WorkerManagerShutdownThread%d", false));
