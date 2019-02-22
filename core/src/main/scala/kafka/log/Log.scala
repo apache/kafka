@@ -315,7 +315,7 @@ class Log(@volatile var dir: File,
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
     val cache = new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
 
-    if (!supportsLeaderEpoch && cache.latestEpoch == UNDEFINED_EPOCH) {
+    if (!supportsLeaderEpoch && cache.nonEmpty) {
       warn(s"Clearing non-empty leader epoch cache due to incompatible message format $recordVersion")
       cache.clearAndFlush()
     }

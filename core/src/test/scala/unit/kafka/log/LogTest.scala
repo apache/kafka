@@ -2642,11 +2642,12 @@ class LogTest {
   }
 
   private def assertLeaderEpochCacheEmpty(log: Log): Unit = {
-    assertEquals(UNDEFINED_EPOCH, log.leaderEpochCache.latestEpoch)
+    assertFalse(log.leaderEpochCache.nonEmpty)
+
     // check that the file is empty as well
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(log.dir))
     val cache = new LeaderEpochFileCache(log.topicPartition, log.logEndOffset _, checkpointFile)
-    assertTrue(cache.epochEntries.isEmpty)
+    assertFalse(cache.nonEmpty)
   }
 
   @Test
