@@ -369,7 +369,7 @@ public class TopologyTest {
 
     @Test
     public void shouldDescribeEmptyTopology() {
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -397,7 +397,7 @@ public class TopologyTest {
             new InternalTopologyBuilder.Subtopology(0,
                 Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -408,7 +408,7 @@ public class TopologyTest {
             new InternalTopologyBuilder.Subtopology(0,
                 Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -419,7 +419,7 @@ public class TopologyTest {
             new InternalTopologyBuilder.Subtopology(0,
                 Collections.singleton(expectedSourceNode)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -439,7 +439,7 @@ public class TopologyTest {
             new InternalTopologyBuilder.Subtopology(2,
                 Collections.singleton(expectedSourceNode3)));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -452,7 +452,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -467,7 +467,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
 
@@ -483,7 +483,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -498,7 +498,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode2);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -513,7 +513,7 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -542,7 +542,7 @@ public class TopologyTest {
         allNodes3.add(expectedProcessorNode3);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -571,7 +571,7 @@ public class TopologyTest {
         allNodes3.add(expectedSinkNode3);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(2, allNodes3));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -602,7 +602,7 @@ public class TopologyTest {
         allNodes.add(expectedSinkNode);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
@@ -632,20 +632,20 @@ public class TopologyTest {
         allNodes.add(expectedProcessorNode3);
         expectedDescription.addSubtopology(new InternalTopologyBuilder.Subtopology(0, allNodes));
 
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
     public void shouldDescribeGlobalStoreTopology() {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore", "source", "globalTopic", "processor", 0);
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
     public void shouldDescribeMultipleGlobalStoreTopology() {
         addGlobalStoreToTopologyAndExpectedDescription("globalStore1", "source1", "globalTopic1", "processor1", 0);
         addGlobalStoreToTopologyAndExpectedDescription("globalStore2", "source2", "globalTopic2", "processor2", 1);
-        assertThat(topology.describe(), equalTo(expectedDescription));
+        assertThat(topology.describe().toString(), equalTo(expectedDescription.toString()));
     }
 
     @Test
