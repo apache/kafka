@@ -84,8 +84,7 @@ abstract class AssignedTasks<T extends Task> {
     }
 
     boolean allTasksRunning() {
-        return created.isEmpty()
-                && suspended.isEmpty();
+        return created.isEmpty() && suspended.isEmpty();
     }
 
     Collection<T> running() {
@@ -106,7 +105,7 @@ abstract class AssignedTasks<T extends Task> {
         return firstException.get();
     }
 
-    RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
+    private RuntimeException closeNonRunningTasks(final Collection<T> tasks) {
         RuntimeException exception = null;
         for (final T task : tasks) {
             try {
@@ -167,7 +166,7 @@ abstract class AssignedTasks<T extends Task> {
     boolean maybeResumeSuspendedTask(final TaskId taskId, final Set<TopicPartition> partitions) {
         if (suspended.containsKey(taskId)) {
             final T task = suspended.get(taskId);
-            log.trace("found suspended {} {}", taskTypeName, taskId);
+            log.trace("Found suspended {} {}", taskTypeName, taskId);
             if (task.partitions().equals(partitions)) {
                 suspended.remove(taskId);
                 task.resume();
@@ -185,10 +184,10 @@ abstract class AssignedTasks<T extends Task> {
                     }
                     throw e;
                 }
-                log.trace("resuming suspended {} {}", taskTypeName, task.id());
+                log.trace("Resuming suspended {} {}", taskTypeName, task.id());
                 return true;
             } else {
-                log.warn("couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
+                log.warn("Couldn't resume task {} assigned partitions {}, task partitions {}", taskId, partitions, task.partitions());
             }
         }
         return false;
@@ -198,7 +197,7 @@ abstract class AssignedTasks<T extends Task> {
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
     void transitionToRunning(final T task) {
-        log.debug("transitioning {} {} to running", taskTypeName, task.id());
+        log.debug("Transitioning {} {} to running", taskTypeName, task.id());
         running.put(task.id(), task);
         task.initializeTopology();
         for (final TopicPartition topicPartition : task.partitions()) {

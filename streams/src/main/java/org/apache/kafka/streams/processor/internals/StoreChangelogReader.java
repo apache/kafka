@@ -277,6 +277,7 @@ public class StoreChangelogReader implements ChangelogReader {
         needsRestoring.clear();
         endOffsets.clear();
         needsInitializing.clear();
+        completedRestorers.clear();
     }
 
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
