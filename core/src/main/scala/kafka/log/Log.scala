@@ -37,6 +37,7 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogO
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -314,7 +315,7 @@ class Log(@volatile var dir: File,
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
     val cache = new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
 
-    if (!supportsLeaderEpoch && cache.epochEntries.nonEmpty) {
+    if (!supportsLeaderEpoch && cache.latestEpoch == UNDEFINED_EPOCH) {
       warn(s"Clearing non-empty leader epoch cache due to incompatible message format $recordVersion")
       cache.clearAndFlush()
     }

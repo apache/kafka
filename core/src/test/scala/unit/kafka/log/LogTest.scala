@@ -2621,7 +2621,7 @@ class LogTest {
     val epochCacheNonSupportingConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000,
       retentionMs = 999, messageFormatVersion = "0.10.2")
     val log2 = createLog(logDir, epochCacheNonSupportingConfig)
-    assertLeaderEpochCacheEmpty(log2, 1)
+    assertLeaderEpochCacheEmpty(log2)
   }
 
   @Test
@@ -2634,17 +2634,16 @@ class LogTest {
     val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
       maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
     log.updateConfig(Set(LogConfig.MessageFormatVersionProp), downgradedLogConfig)
-    assertLeaderEpochCacheEmpty(log, 5)
+    assertLeaderEpochCacheEmpty(log)
 
     log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
       magicValue = RecordVersion.V1.value), leaderEpoch = 5)
-    assertLeaderEpochCacheEmpty(log, 5)
+    assertLeaderEpochCacheEmpty(log)
   }
 
-  private def assertLeaderEpochCacheEmpty(log: Log, epoch: Int): Unit = {
-    val (leaderEpoch, offset) = log.leaderEpochCache.endOffsetFor(epoch)
-    assertEquals(UNDEFINED_EPOCH, leaderEpoch)
-    assertEquals(UNDEFINED_EPOCH_OFFSET, offset)
+  private def assertLeaderEpochCacheEmpty(log: Log): Unit = {
+    assertEquals(UNDEFINED_EPOCH, log.leaderEpochCache.latestEpoch)
+    // check that the file is empty as well
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(log.dir))
     val cache = new LeaderEpochFileCache(log.topicPartition, log.logEndOffset _, checkpointFile)
     assertTrue(cache.epochEntries.isEmpty)
