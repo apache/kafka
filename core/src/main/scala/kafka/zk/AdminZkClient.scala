@@ -128,7 +128,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
     val partitionSize = partitionReplicaAssignment.size
     val sequenceSum = partitionSize * (partitionSize - 1) / 2
     if (partitionReplicaAssignment.size != partitionReplicaAssignment.toSet.size ||
-        partitionReplicaAssignment.keys.filter(_ >= 0).reduce(_+_) != sequenceSum)
+        partitionReplicaAssignment.keys.filter(_ >= 0).sum != sequenceSum)
         throw new InvalidReplicaAssignmentException("partitions should be a consecutive 0-based integer sequence")
 
     LogConfig.validate(config)
