@@ -37,6 +37,7 @@ import kafka.server.{BrokerTopicStats, FetchDataInfo, LogDirFailureChannel, LogO
 import kafka.utils._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.requests.EpochEndOffset.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{IsolationLevel, ListOffsetRequest}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -183,6 +184,8 @@ class Log(@volatile var dir: File,
 
   def recordVersion: RecordVersion = config.messageFormatVersion.recordVersion
 
+  def supportsLeaderEpoch = recordVersion.value >= RecordVersion.V2.value
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
@@ -198,7 +201,15 @@ class Log(@volatile var dir: File,
       warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
         s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
         s"This may result in frequent log rolling.")
+    val oldConfig = this.config
     this.config = newConfig
+    if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {
+      val oldRecordVersion = oldConfig.messageFormatVersion.recordVersion
+      val newRecordVersion = newConfig.messageFormatVersion.recordVersion
+      if (newRecordVersion.precedes(oldRecordVersion))
+        warn(s"Record format version has been downgraded from $oldRecordVersion to $newRecordVersion.")
+      _leaderEpochCache = initializeLeaderEpochCache()
+    }
   }
 
   private def checkIfMemoryMappedBufferClosed(): Unit = {
@@ -302,7 +313,13 @@ class Log(@volatile var dir: File,
     // create the log directory if it doesn't exist
     Files.createDirectories(dir.toPath)
     val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(dir), logDirFailureChannel)
-    new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+    val cache = new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
+
+    if (!supportsLeaderEpoch && cache.nonEmpty) {
+      warn(s"Clearing non-empty leader epoch cache due to incompatible message format $recordVersion")
+      cache.clearAndFlush()
+    }
+    cache
   }
 
   /**
@@ -541,7 +558,7 @@ class Log(@volatile var dir: File,
         info(s"Recovering unflushed segment ${segment.baseOffset}")
         val truncatedBytes =
           try {
-            recoverSegment(segment, Some(_leaderEpochCache))
+            recoverSegment(segment, if (supportsLeaderEpoch) Some(_leaderEpochCache) else None)
           } catch {
             case _: InvalidOffsetException =>
               val startOffset = segment.baseOffset
