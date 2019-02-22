@@ -23,8 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,7 +58,8 @@ import java.util.stream.Collectors;
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
             "Subscription to topics, partitions and pattern are mutually exclusive";
-    private static final Logger log = LoggerFactory.getLogger(SubscriptionState.class);
+
+    private final Logger log;
 
     private enum SubscriptionType {
         NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
@@ -88,7 +89,8 @@ public class SubscriptionState {
     /* User-provided listener to be invoked when assignment changes */
     private ConsumerRebalanceListener rebalanceListener;
 
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
+    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
+        this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
@@ -205,9 +207,9 @@ public class SubscriptionState {
             }
         };
 
-        boolean assignmentMatchedSubscrition = assignments.stream().allMatch(predicate);
+        boolean assignmentMatchedSubscription = assignments.stream().allMatch(predicate);
 
-        if (assignmentMatchedSubscrition) {
+        if (assignmentMatchedSubscription) {
             Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(
                     assignments);
             fireOnAssignment(assignedPartitionStates.keySet());
@@ -215,7 +217,7 @@ public class SubscriptionState {
             this.assignment.set(assignedPartitionStates);
         }
 
-        return assignmentMatchedSubscrition;
+        return assignmentMatchedSubscription;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {

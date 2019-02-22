@@ -132,11 +132,12 @@ public class ConsumerCoordinatorTest {
 
     @Before
     public void setup() {
-        this.subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
+        LogContext logContext = new LogContext();
+        this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
         this.metadata = new Metadata(0, Long.MAX_VALUE, true);
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
-        this.consumerClient = new ConsumerNetworkClient(new LogContext(), client, metadata, time, 100,
+        this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100,
                 requestTimeoutMs, Integer.MAX_VALUE);
         this.metrics = new Metrics(time);
         this.rebalanceListener = new MockRebalanceListener();
