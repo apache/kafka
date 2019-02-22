@@ -79,6 +79,7 @@ public class Metadata implements Closeable {
      * @param refreshBackoffMs         The minimum amount of time that must expire between metadata refreshes to avoid busy
      *                                 polling
      * @param metadataExpireMs         The maximum amount of time that metadata can be retained without refresh
+     * @param logContext               Log context corresponding to the containing client
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
     public Metadata(long refreshBackoffMs,
@@ -240,6 +241,8 @@ public class Metadata implements Closeable {
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *
+     * @param requestVersion The request version corresponding to the update response, as provided by
+     *     {@link #newMetadataRequestAndVersion()}.
      * @param response metadata response received from the broker
      * @param now current time in milliseconds
      */
@@ -261,20 +264,8 @@ public class Metadata implements Closeable {
 
         this.cache = handleMetadataResponse(response, topic -> retainTopic(topic.topic(), topic.isInternal(), now));
 
-        metadataException = null;
-
-        // if we encounter any unauthorized topics, raise an exception to the user
         Cluster cluster = cache.cluster();
-        if (!cluster.unauthorizedTopics().isEmpty()) {
-            log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
-            metadataException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
-        }
-
-        // if we encounter any invalid topics, raise an exception to the user
-        if (!cluster.invalidTopics().isEmpty()) {
-            log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
-            metadataException = new InvalidTopicException(cluster.invalidTopics());
-        }
+        maybeSetMetadataError(cluster);
 
         this.lastSeenLeaderEpochs.keySet().removeIf(tp -> !retainTopic(tp.topic(), false, now));
 
@@ -285,6 +276,27 @@ public class Metadata implements Closeable {
         clusterResourceListeners.onUpdate(cache.cluster().clusterResource());
 
         log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+    }
+
+    private void maybeSetMetadataError(Cluster cluster) {
+        // if we encounter any invalid topics, cache the exception to later throw to the user
+        metadataException = null;
+        checkInvalidTopics(cluster);
+        checkUnauthorizedTopics(cluster);
+    }
+
+    private void checkInvalidTopics(Cluster cluster) {
+        if (!cluster.invalidTopics().isEmpty()) {
+            log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
+            metadataException = new InvalidTopicException(cluster.invalidTopics());
+        }
+    }
+
+    private void checkUnauthorizedTopics(Cluster cluster) {
+        if (!cluster.unauthorizedTopics().isEmpty()) {
+            log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
+            metadataException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+        }
     }
 
     /**
@@ -374,7 +386,7 @@ public class Metadata implements Closeable {
     /**
      * @return The current metadata updateVersion
      */
-    public synchronized int version() {
+    public synchronized int updateVersion() {
         return this.updateVersion;
     }
 
@@ -386,9 +398,7 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * "Close" this metadata instance to indicate that metadata updates are no longer possible. This is typically used
-     * when the thread responsible for performing metadata updates is exiting and needs a way to relay this information
-     * to any other thread(s) that could potentially wait on metadata update to come through.
+     * Close this metadata instance to indicate that metadata updates are no longer possible.
      */
     @Override
     public synchronized void close() {
@@ -415,11 +425,11 @@ public class Metadata implements Closeable {
         return new MetadataRequestAndVersion(newMetadataRequestBuilder(), requestVersion);
     }
 
-    protected synchronized MetadataRequest.Builder newMetadataRequestBuilder() {
+    protected MetadataRequest.Builder newMetadataRequestBuilder() {
         return MetadataRequest.Builder.allTopics();
     }
 
-    protected synchronized boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+    protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
     }
 

@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.ConfigDef.ValidString._
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
+import org.apache.kafka.common.internals.ClusterResourceListeners
 import org.apache.kafka.common.message.{DescribeGroupsRequestData, DescribeGroupsResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector

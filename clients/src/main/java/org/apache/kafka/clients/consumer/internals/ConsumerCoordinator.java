@@ -143,7 +143,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               leaveGroupOnClose);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.version());
+        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
@@ -275,15 +275,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    void checkSubscriptionMetadata() {
-        int version = metadata.version();
+    void maybeUpdateSubscriptionMetadata() {
+        int version = metadata.updateVersion();
         if (version > metadataSnapshot.version) {
             Cluster cluster = metadata.fetch();
 
             if (subscriptions.hasPatternSubscription())
                 updatePatternSubscription(cluster);
 
-            // check if there are any changes to the metadata which should trigger a rebalance
+            // Update the current snapshot, which will be used to check for subscription
+            // changes that would require a rebalance (e.g. new partitions).
             metadataSnapshot = new MetadataSnapshot(subscriptions, cluster, version);
         }
     }
@@ -299,7 +300,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer) {
-        checkSubscriptionMetadata();
+        maybeUpdateSubscriptionMetadata();
 
         invokeCompletedOffsetCommitCallbacks();
 
@@ -331,7 +332,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         return false;
                     }
 
-                    checkSubscriptionMetadata();
+                    maybeUpdateSubscriptionMetadata();
                 }
 
                 if (!ensureActiveGroup(timer)) {
@@ -375,9 +376,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // update metadata (if needed) and keep track of the metadata used for assignment so that
         // we can check after rebalance completion whether anything has changed
-        if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE))) throw new TimeoutException();
+        if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE)))
+            throw new TimeoutException();
 
-        checkSubscriptionMetadata();
+        maybeUpdateSubscriptionMetadata();
     }
 
     @Override

@@ -121,6 +121,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -1033,13 +1034,10 @@ public class FetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         for (int i = 0; i < 2; i++) {
-            try {
-                fetcher.fetchedRecords();
-                fail("Should have thrown OffsetOutOfRangeException");
-            } catch (OffsetOutOfRangeException e) {
-                assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
-                assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
-            }
+            OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
+                    fetcher.fetchedRecords());
+            assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
+            assertEquals(0L, e.offsetOutOfRangePartitions().get(tp0).longValue());
         }
     }
 
@@ -1064,29 +1062,27 @@ public class FetcherTest {
             0, INVALID_SESSION_ID));
         consumerClient.poll(time.timer(0));
 
-        List<ConsumerRecord<byte[], byte[]>> fetchedRecords = new ArrayList<>();
-
-        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchedRecords();
-        for (List<ConsumerRecord<byte[], byte[]>> records : recordsByPartition.values())
-            fetchedRecords.addAll(records);
+        List<ConsumerRecord<byte[], byte[]>> allFetchedRecords = new ArrayList<>();
+        fetchRecordsInto(allFetchedRecords);
 
         assertEquals(1, subscriptions.position(tp0).longValue());
         assertEquals(4, subscriptions.position(tp1).longValue());
-        assertEquals(3, fetchedRecords.size());
+        assertEquals(3, allFetchedRecords.size());
 
-        try {
-            recordsByPartition = fetchedRecords();
-            for (List<ConsumerRecord<byte[], byte[]>> records: recordsByPartition.values())
-                fetchedRecords.addAll(records);
-            fail("Expected OffsetOutOfRangeException to be thrown");
-        } catch (OffsetOutOfRangeException e) {
-            assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
-            assertEquals(1L, e.offsetOutOfRangePartitions().get(tp0).longValue());
-        }
+        OffsetOutOfRangeException e = assertThrows(OffsetOutOfRangeException.class, () ->
+                fetchRecordsInto(allFetchedRecords));
+
+        assertEquals(singleton(tp0), e.offsetOutOfRangePartitions().keySet());
+        assertEquals(1L, e.offsetOutOfRangePartitions().get(tp0).longValue());
 
         assertEquals(1, subscriptions.position(tp0).longValue());
         assertEquals(4, subscriptions.position(tp1).longValue());
-        assertEquals(3, fetchedRecords.size());
+        assertEquals(3, allFetchedRecords.size());
+    }
+
+    private void fetchRecordsInto(List<ConsumerRecord<byte[], byte[]>> allFetchedRecords) {
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+        fetchedRecords.values().forEach(allFetchedRecords::addAll);
     }
 
     @Test
@@ -1314,12 +1310,9 @@ public class FetcherTest {
         assignFromUser(singleton(tp0));
         subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
 
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                ListOffsetRequest request = (ListOffsetRequest) body;
-                return request.isolationLevel() == isolationLevel;
-            }
+        client.prepareResponse(body -> {
+            ListOffsetRequest request = (ListOffsetRequest) body;
+            return request.isolationLevel() == isolationLevel;
         }, listOffsetResponse(Errors.NONE, 1L, 5L));
         fetcher.resetOffsetsIfNeeded();
         consumerClient.pollNoWakeup();
@@ -3244,10 +3237,6 @@ public class FetcherTest {
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {
-        List<Long> res = new ArrayList<>(records.size());
-        for (ConsumerRecord<?, ?> record : records)
-            res.add(record.offset());
-        return res;
+        return records.stream().map(ConsumerRecord::offset).collect(Collectors.toList());
     }
-
 }

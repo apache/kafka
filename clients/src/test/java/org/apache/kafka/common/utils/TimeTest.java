@@ -24,6 +24,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public abstract class TimeTest {
 
@@ -55,7 +56,7 @@ public abstract class TimeTest {
     public void testWaitObjectConditionSatisfied() throws InterruptedException {
         Object obj = new Object();
         Time time = createTime();
-        long timeoutMs = 100;
+        long timeoutMs = 1000000000;
         long deadlineMs = time.milliseconds() + timeoutMs;
         AtomicBoolean condition = new AtomicBoolean(false);
         AtomicReference<Exception> caughtException = new AtomicReference<>();
@@ -76,6 +77,7 @@ public abstract class TimeTest {
 
         t.join();
 
+        assertTrue(time.milliseconds() < deadlineMs);
         assertNull(caughtException.get());
     }
 }

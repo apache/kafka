@@ -87,6 +87,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
@@ -465,15 +466,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                                            Timer timer) {
         metadata.addTransientTopics(topicsForPartitions(partitions));
         try {
-            Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-            for (TopicPartition tp : partitions)
-                timestampsToSearch.put(tp, timestamp);
-            Map<TopicPartition, Long> offsets = new HashMap<>();
+            Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+
             ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
-            for (Map.Entry<TopicPartition, OffsetData> entry : result.fetchedOffsets.entrySet()) {
-                offsets.put(entry.getKey(), entry.getValue().offset);
-            }
-            return offsets;
+
+            return result.fetchedOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
         } finally {
             metadata.clearTransientTopics();
         }

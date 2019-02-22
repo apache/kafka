@@ -937,14 +937,12 @@ public class NetworkClient implements KafkaClient {
         /* the current cluster metadata */
         private final Metadata metadata;
 
-        /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
-        private boolean metadataFetchInProgress;
-
-        private int inProgressRequestVersion;
+        // Defined if there is a request in progress, null otherwise
+        private Integer inProgressRequestVersion;
 
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
-            this.metadataFetchInProgress = false;
+            this.inProgressRequestVersion = null;
         }
 
         @Override
@@ -954,14 +952,18 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean isUpdateDue(long now) {
-            return !this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0;
+            return !hasFetchInProgress() && this.metadata.timeToNextUpdate(now) == 0;
+        }
+
+        private boolean hasFetchInProgress() {
+            return inProgressRequestVersion != null;
         }
 
         @Override
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? defaultRequestTimeoutMs : 0;
+            long waitForMetadataFetch = hasFetchInProgress() ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
 
@@ -994,20 +996,18 @@ public class NetworkClient implements KafkaClient {
                     log.warn("Bootstrap broker {} disconnected", node);
             }
 
-            metadataFetchInProgress = false;
+            inProgressRequestVersion = null;
         }
 
         @Override
         public void handleAuthenticationFailure(AuthenticationException exception) {
-            metadataFetchInProgress = false;
             if (metadata.updateRequested())
                 metadata.failedUpdate(time.milliseconds(), exception);
+            inProgressRequestVersion = null;
         }
 
         @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-            this.metadataFetchInProgress = false;
-
             // If any partition has leader with missing listeners, log a few for diagnosing broker configuration
             // issues. This could be a transient issue if listeners were added dynamically to brokers.
             List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
@@ -1034,6 +1034,8 @@ public class NetworkClient implements KafkaClient {
             } else {
                 this.metadata.update(inProgressRequestVersion, response, now);
             }
+
+            inProgressRequestVersion = null;
         }
 
         @Override
@@ -1065,7 +1067,6 @@ public class NetworkClient implements KafkaClient {
             String nodeConnectionId = node.idString();
 
             if (canSendRequest(nodeConnectionId, now)) {
-                this.metadataFetchInProgress = true;
                 Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion();
                 this.inProgressRequestVersion = requestAndVersion.requestVersion;
                 MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;

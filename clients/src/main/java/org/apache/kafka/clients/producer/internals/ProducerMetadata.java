@@ -97,7 +97,7 @@ public class ProducerMetadata extends Metadata {
         long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
         time.waitObject(this, none -> {
             maybeThrowException();
-            return version() > lastVersion || isClosed();
+            return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);
 
         if (isClosed())
@@ -117,6 +117,9 @@ public class ProducerMetadata extends Metadata {
             notifyAll();
     }
 
+    /**
+     * Close this instance and notify any awaiting threads.
+     */
     @Override
     public synchronized void close() {
         super.close();

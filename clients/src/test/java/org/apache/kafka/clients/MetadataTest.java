@@ -41,6 +41,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
 public class MetadataTest {
@@ -411,13 +412,12 @@ public class MetadataTest {
         MetadataResponse invalidTopicResponse = TestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap(invalidTopic, Errors.INVALID_TOPIC_EXCEPTION), Collections.emptyMap());
         metadata.update(invalidTopicResponse, time.milliseconds());
-        try {
-            metadata.maybeThrowException();
-        } catch (InvalidTopicException e) {
-            assertEquals(Collections.singleton(invalidTopic), e.invalidTopics());
-            // We clear the exception once it has been raised to the user
-            assertNull(metadata.getAndClearMetadataException());
-        }
+
+        InvalidTopicException e = assertThrows(InvalidTopicException.class, () -> metadata.maybeThrowException());
+
+        assertEquals(Collections.singleton(invalidTopic), e.invalidTopics());
+        // We clear the exception once it has been raised to the user
+        assertNull(metadata.getAndClearMetadataException());
 
         // Reset the invalid topic error
         metadata.update(invalidTopicResponse, time.milliseconds());
@@ -435,13 +435,11 @@ public class MetadataTest {
         MetadataResponse unauthorizedTopicResponse = TestUtils.metadataUpdateWith("clusterId", 1,
                 Collections.singletonMap(invalidTopic, Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
-        try {
-            metadata.maybeThrowException();
-        } catch (TopicAuthorizationException e) {
-            assertEquals(Collections.singleton(invalidTopic), e.unauthorizedTopics());
-            // We clear the exception once it has been raised to the user
-            assertNull(metadata.getAndClearMetadataException());
-        }
+
+        TopicAuthorizationException e = assertThrows(TopicAuthorizationException.class, () -> metadata.maybeThrowException());
+        assertEquals(Collections.singleton(invalidTopic), e.unauthorizedTopics());
+        // We clear the exception once it has been raised to the user
+        assertNull(metadata.getAndClearMetadataException());
 
         // Reset the unauthorized topic error
         metadata.update(unauthorizedTopicResponse, time.milliseconds());
@@ -450,7 +448,5 @@ public class MetadataTest {
         metadata.update(emptyMetadataResponse(), time.milliseconds());
         assertNull(metadata.getAndClearMetadataException());
     }
-
-
 
 }
