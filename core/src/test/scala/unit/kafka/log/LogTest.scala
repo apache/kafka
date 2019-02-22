@@ -25,6 +25,7 @@ import java.util.Properties
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.common.{OffsetsOutOfOrderException, UnexpectedAppendOffsetException}
 import kafka.log.Log.DeleteDirSuffix
+import kafka.server.checkpoints.{LeaderEpochCheckpointFile, LeaderEpochFile}
 import kafka.server.epoch.{EpochEntry, LeaderEpochFileCache}
 import kafka.server.{BrokerTopicStats, FetchDataInfo, KafkaConfig, LogDirFailureChannel}
 import kafka.utils._
@@ -2620,13 +2621,33 @@ class LogTest {
     val epochCacheNonSupportingConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000,
       retentionMs = 999, messageFormatVersion = "0.10.2")
     val log2 = createLog(logDir, epochCacheNonSupportingConfig)
-    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
-      log2.leaderEpochCache.endOffsetFor(1))
+    assertLeaderEpochCacheEmpty(log2, 1)
+  }
 
-    // ensure the cache files are deleted
-    val log3 = createLog(logDir, epochCacheSupportingConfig)
-    assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
-      log3.leaderEpochCache.endOffsetFor(1))
+  @Test
+  def testLeaderEpochCacheClearedAfterDynamicMessageFormatDowngrade(): Unit = {
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1, maxMessageBytes = 64 * 1024)
+    val log = createLog(logDir, logConfig)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("foo".getBytes()))), leaderEpoch = 5)
+    assertEquals((5, 1), log.leaderEpochCache.endOffsetFor(5))
+
+    val downgradedLogConfig = LogTest.createLogConfig(segmentBytes = 1000, indexIntervalBytes = 1,
+      maxMessageBytes = 64 * 1024, messageFormatVersion = kafka.api.KAFKA_0_10_2_IV0.shortVersion)
+    log.updateConfig(Set(LogConfig.MessageFormatVersionProp), downgradedLogConfig)
+    assertLeaderEpochCacheEmpty(log, 5)
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("bar".getBytes())),
+      magicValue = RecordVersion.V1.value), leaderEpoch = 5)
+    assertLeaderEpochCacheEmpty(log, 5)
+  }
+
+  private def assertLeaderEpochCacheEmpty(log: Log, epoch: Int): Unit = {
+    val (leaderEpoch, offset) = log.leaderEpochCache.endOffsetFor(epoch)
+    assertEquals(UNDEFINED_EPOCH, leaderEpoch)
+    assertEquals(UNDEFINED_EPOCH_OFFSET, offset)
+    val checkpointFile = new LeaderEpochCheckpointFile(LeaderEpochFile.newFile(log.dir))
+    val cache = new LeaderEpochFileCache(log.topicPartition, log.logEndOffset _, checkpointFile)
+    assertTrue(cache.epochEntries.isEmpty)
   }
 
   @Test
