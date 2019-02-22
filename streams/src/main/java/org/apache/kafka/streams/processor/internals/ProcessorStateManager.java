@@ -254,7 +254,7 @@ public class ProcessorStateManager extends AbstractStateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
+    public void close() throws ProcessorStateException {
         ProcessorStateException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet

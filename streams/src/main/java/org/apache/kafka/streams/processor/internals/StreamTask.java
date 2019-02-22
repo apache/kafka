@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -296,6 +297,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             producer = producerSupplier.get();
             producer.initTransactions();
             recordCollector.init(producer);
+
+            try {
+                stateMgr.checkpoint.delete();
+                stateMgr.checkpoint = null;
+            } catch (IOException e) {
+                log.error("Failed to delete checkpoint file due to exception {}", e.getMessage());
+            }
         }
     }
 
@@ -647,11 +655,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
     @Override
-    public void closeSuspended(final boolean clean,
-                               final boolean isZombie,
+    public void closeSuspended(boolean clean, final boolean isZombie,
                                RuntimeException firstException) {
         try {
-            closeStateManager(clean);
+            closeStateManager();
         } catch (final RuntimeException e) {
             if (firstException == null) {
                 firstException = e;
@@ -696,7 +703,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         try {
             suspend(clean, isZombie);
         } catch (final RuntimeException e) {
-            clean = false;
             firstException = e;
             log.error("Could not close task due to the following error:", e);
         }

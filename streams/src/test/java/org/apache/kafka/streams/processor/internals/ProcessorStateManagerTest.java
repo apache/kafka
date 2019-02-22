@@ -130,7 +130,7 @@ public class ProcessorStateManagerTest {
             assertThat(batchingRestoreCallback.getRestoredRecords().size(), is(1));
             assertTrue(batchingRestoreCallback.getRestoredRecords().contains(expectedKeyValue));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -153,7 +153,7 @@ public class ProcessorStateManagerTest {
             assertTrue(persistentStore.keys.contains(intKey));
             assertEquals(9, persistentStore.values.get(0).length);
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -176,7 +176,7 @@ public class ProcessorStateManagerTest {
             assertTrue(persistentStore.keys.contains(intKey));
             assertEquals(17, persistentStore.values.get(0).length);
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -204,7 +204,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(persistentStoreTopicName, 2)));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -231,7 +231,7 @@ public class ProcessorStateManagerTest {
             stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             assertTrue(changelogReader.wasRegistered(new TopicPartition(nonPersistentStoreTopicName, 2)));
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -292,7 +292,7 @@ public class ProcessorStateManagerTest {
             assertEquals(-1L, (long) changeLogOffsets.get(partition3));
 
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -315,7 +315,7 @@ public class ProcessorStateManagerTest {
             assertEquals(mockKeyValueStore, stateMgr.getStore(nonPersistentStoreName));
 
         } finally {
-            stateMgr.close(Collections.emptyMap());
+            stateMgr.close();
         }
     }
 
@@ -353,7 +353,7 @@ public class ProcessorStateManagerTest {
             // close the state manager with the ack'ed offsets
             stateMgr.flush();
             stateMgr.checkpoint(ackedOffsets);
-            stateMgr.close(ackedOffsets);
+            stateMgr.close();
         }
         // make sure all stores are closed, and the checkpoint file is written.
         assertTrue(persistentStore.flushed);
@@ -399,7 +399,7 @@ public class ProcessorStateManagerTest {
             false,
             logContext);
         stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
-        stateMgr.close(null);
+        stateMgr.close();
         final Map<TopicPartition, Long> read = checkpoint.read();
         assertThat(read, equalTo(offsets));
     }
@@ -584,7 +584,7 @@ public class ProcessorStateManagerTest {
         stateManager.register(stateStore, stateStore.stateRestoreCallback);
 
         try {
-            stateManager.close(Collections.emptyMap());
+            stateManager.close();
             fail("Should throw ProcessorStateException if store close throws exception");
         } catch (final ProcessorStateException e) {
             // pass
@@ -697,7 +697,7 @@ public class ProcessorStateManagerTest {
         stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
 
         try {
-            stateManager.close(Collections.emptyMap());
+            stateManager.close();
         } catch (final ProcessorStateException expected) { /* ignode */ }
         Assert.assertTrue(closedStore.get());
     }
@@ -722,7 +722,7 @@ public class ProcessorStateManagerTest {
             assertFalse(checkpointFile.exists());
         } finally {
             if (stateManager != null) {
-                stateManager.close(null);
+                stateManager.close();
             }
         }
     }

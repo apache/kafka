@@ -127,8 +127,6 @@ public class StandbyTask extends AbstractTask {
      * - {@link #commit()}
      * - close state
      * <pre>
-     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
-     *              (ie, commit, flush, and write checkpoint file)
      * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
@@ -138,14 +136,10 @@ public class StandbyTask extends AbstractTask {
             return;
         }
         log.debug("Closing");
-        boolean committedSuccessfully = false;
         try {
-            if (clean) {
-                commit();
-                committedSuccessfully = true;
-            }
+            commit();
         } finally {
-            closeStateManager(committedSuccessfully);
+            closeStateManager();
         }
 
         taskClosed = true;
