@@ -261,18 +261,6 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldResetChangeLogReaderOnCreateTasks() {
-        mockSingleActiveTask();
-        changeLogReader.reset();
-        EasyMock.expectLastCall();
-        replay();
-
-        taskManager.setAssignmentMetadata(taskId0Assignment, Collections.<TaskId, Set<TopicPartition>>emptyMap());
-        taskManager.createTasks(taskId0Partitions);
-        verify(changeLogReader);
-    }
-
-    @Test
     public void shouldAddNonResumedActiveTasks() {
         mockSingleActiveTask();
         EasyMock.expect(active.maybeResumeSuspendedTask(taskId0, taskId0Partitions)).andReturn(false);
