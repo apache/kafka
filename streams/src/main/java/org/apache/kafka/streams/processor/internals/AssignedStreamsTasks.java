@@ -67,11 +67,11 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     RuntimeException closeAllRestoringTasks() {
         RuntimeException exception = null;
 
-        log.trace("Close restoring stream task {}", restoring.keySet());
+        log.trace("Closing all restoring stream tasks {}", restoring.keySet());
         final Iterator<StreamTask> restoringTaskIterator = restoring.values().iterator();
         while (restoringTaskIterator.hasNext()) {
             final StreamTask task = restoringTaskIterator.next();
-            log.debug("Closing restoring and not re-assigned task {}", task.id());
+            log.debug("Closing restoring task {}", task.id());
             try {
                 task.closeStateManager(true);
             } catch (final RuntimeException e) {
