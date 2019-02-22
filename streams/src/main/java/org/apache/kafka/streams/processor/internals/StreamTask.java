@@ -648,7 +648,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     // helper to avoid calling suspend() twice if a suspended task is not reassigned and closed
     @Override
-    public void closeSuspended(final boolean clean, final boolean isZombie,
+    public void closeSuspended(final boolean clean,
+                               final boolean isZombie,
                                RuntimeException firstException) {
         try {
             closeStateManager();
