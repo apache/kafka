@@ -685,6 +685,22 @@ public class StreamsBuilderTest {
         assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", "print-processor");
     }
 
+    @Test
+    public void shouldUseSpecifiedNameForReduceOperation() {
+        builder.stream(STREAM_TOPIC).groupByKey().reduce((v1, v2) -> v1, Named.as(STREAM_OPERATION_NAME));
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForAggregateOperation() {
+        builder.stream(STREAM_TOPIC).groupByKey().aggregate(() -> null, (k, v, agg) -> v, Named.as(STREAM_OPERATION_NAME));
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
+    }
+
     private void assertSpecifiedNameForOperation(final ProcessorTopology topology, final String...expected) {
         final List<ProcessorNode> processors = topology.processors();
         Assert.assertEquals("Invalid number of expected processors", expected.length, processors.size());
