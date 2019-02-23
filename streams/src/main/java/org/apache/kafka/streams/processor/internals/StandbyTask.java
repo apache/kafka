@@ -136,7 +136,6 @@ public class StandbyTask extends AbstractTask {
             return;
         }
         log.debug("Closing");
-        boolean committed = false;
         try {
             if (clean) {
                 commit();
