@@ -17,14 +17,11 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import java.util.Iterator;
-import java.util.Map;
-import java.util.Map.Entry;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -52,7 +49,7 @@ public class FilteredCacheIteratorTest {
     };
 
     @SuppressWarnings("unchecked")
-    private final GenericKeyValueStore<Bytes, LRUCacheEntry> store = new GenericKeyValueStore<>();
+    private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
     private final List<KeyValue<Bytes, LRUCacheEntry>> entries = asList(
@@ -130,58 +127,6 @@ public class FilteredCacheIteratorTest {
     @Test(expected = UnsupportedOperationException.class)
     public void shouldThrowUnsupportedOperationExeceptionOnRemove() {
         allIterator.remove();
-    }
-
-    private static class GenericKeyValueStore<K extends Comparable<K>, V> {
-        private final NavigableMap<K, V> map;
-
-        GenericKeyValueStore() {
-            map = new TreeMap<>();
-        }
-
-        private void putAll(final List<KeyValue<K, V>> entries) {
-            for (final KeyValue<K, V> entry : entries) {
-                map.put(entry.key, entry.value);
-            }
-        }
-
-        private KeyValueIterator<K, V> all() {
-            return new GenericKeyValueIterator<>(map.entrySet().iterator());
-        }
-
-        private static class GenericKeyValueIterator<K, V> implements KeyValueIterator<K, V> {
-            private final Iterator<Entry<K, V>> iter;
-
-            private GenericKeyValueIterator(final Iterator<Map.Entry<K, V>> iter) {
-                this.iter = iter;
-            }
-
-            @Override
-            public boolean hasNext() {
-                return iter.hasNext();
-            }
-
-            @Override
-            public KeyValue<K, V> next() {
-                final Map.Entry<K, V> entry = iter.next();
-                return new KeyValue<>(entry.getKey(), entry.getValue());
-            }
-
-            @Override
-            public void remove() {
-                iter.remove();
-            }
-
-            @Override
-            public void close() {
-                // do nothing
-            }
-
-            @Override
-            public K peekNextKey() {
-                throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
-            }
-        }
     }
 
 }

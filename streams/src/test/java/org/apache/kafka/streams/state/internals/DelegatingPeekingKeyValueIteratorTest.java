@@ -16,11 +16,9 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.test.KeyValueBytesStoreWrapper;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -36,8 +34,7 @@ public class DelegatingPeekingKeyValueIteratorTest {
 
     @Before
     public void setUp() {
-        final KeyValueStore<Bytes, byte[]> underlyingStore = new InMemoryKeyValueStore(name);
-        store = new KeyValueBytesStoreWrapper<>(underlyingStore, Serdes.String(), Serdes.String());
+        store = new GenericInMemoryKeyValueStore<>(name);
     }
 
     @Test
