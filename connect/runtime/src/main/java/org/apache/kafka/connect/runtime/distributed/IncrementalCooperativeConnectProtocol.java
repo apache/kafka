@@ -26,6 +26,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -146,7 +147,7 @@ public class IncrementalCooperativeConnectProtocol {
     }
 
     public static ByteBuffer serializeAssignment(ExtendedAssignment assignment) {
-        if (assignment == null) {
+        if (assignment == null || ExtendedAssignment.EMPTY.equals(assignment)) {
             return null;
         }
         Struct struct = assignment.toStruct();
@@ -169,7 +170,7 @@ public class IncrementalCooperativeConnectProtocol {
         return ExtendedAssignment.fromStruct(struct);
     }
 
-    private static List<Struct> taskAssignments(Map<String, List<Integer>> assignments) {
+    private static Collection<Struct> taskAssignments(Map<String, Collection<Integer>> assignments) {
         return assignments == null
                ? null
                : assignments.entrySet().stream()
@@ -181,10 +182,10 @@ public class IncrementalCooperativeConnectProtocol {
                        }).collect(Collectors.toList());
     }
 
-    private static List<String> extractConnectors(Struct struct, String key) {
+    private static Collection<String> extractConnectors(Struct struct, String key) {
         Object[] connectors = struct.getArray(key);
         if (connectors == null) {
-            return null;
+            return Collections.emptyList();
         }
         List<String> connectorIds = new ArrayList<>();
         for (Object structObj : struct.getArray(key)) {
@@ -200,10 +201,10 @@ public class IncrementalCooperativeConnectProtocol {
         return connectorIds;
     }
 
-    private static List<ConnectorTaskId> extractTasks(Struct struct, String key) {
+    private static Collection<ConnectorTaskId> extractTasks(Struct struct, String key) {
         Object[] tasks = struct.getArray(key);
         if (tasks == null) {
-            return null;
+            return Collections.emptyList();
         }
         List<ConnectorTaskId> tasksIds = new ArrayList<>();
         for (Object structObj : struct.getArray(key)) {
@@ -224,7 +225,7 @@ public class IncrementalCooperativeConnectProtocol {
 
         public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {
             super(url, offset);
-            this.assignment = assignment;
+            this.assignment = assignment != null ? assignment : ExtendedAssignment.EMPTY;
         }
 
         public ExtendedAssignment assignment() {
@@ -242,8 +243,8 @@ public class IncrementalCooperativeConnectProtocol {
     }
 
     public static class ExtendedAssignment extends ConnectProtocol.Assignment {
-        private final List<String> revokedConnectorIds;
-        private final List<ConnectorTaskId> revokedTaskIds;
+        private final Collection<String> revokedConnectorIds;
+        private final Collection<ConnectorTaskId> revokedTaskIds;
 
         private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
                 ConnectProtocol.Assignment.NO_ERROR, null, null, -1, Collections.emptyList(),
@@ -255,8 +256,8 @@ public class IncrementalCooperativeConnectProtocol {
          * @param revokedTaskIds list of task IDs that the worker should instantiate and run
          */
         public ExtendedAssignment(short error, String leader, String leaderUrl, long configOffset,
-                                  List<String> connectorIds, List<ConnectorTaskId> taskIds,
-                                  List<String> revokedConnectorIds, List<ConnectorTaskId> revokedTaskIds) {
+                                  Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
+                                  Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds) {
             super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
             this.revokedConnectorIds = revokedConnectorIds;
             this.revokedTaskIds = revokedTaskIds;
@@ -264,8 +265,8 @@ public class IncrementalCooperativeConnectProtocol {
 
         public ExtendedAssignment(
                 ConnectProtocol.Assignment assignmentV0,
-                List<String> revokedConnectorIds,
-                List<ConnectorTaskId> revokedTaskIds
+                Collection<String> revokedConnectorIds,
+                Collection<ConnectorTaskId> revokedTaskIds
         ) {
             super(assignmentV0.error(), assignmentV0.leader(), assignmentV0.leaderUrl(),
                   assignmentV0.offset(), assignmentV0.connectors(), assignmentV0.tasks());
@@ -273,11 +274,11 @@ public class IncrementalCooperativeConnectProtocol {
             this.revokedTaskIds = revokedTaskIds;
         }
 
-        public List<String> revokedConnectors() {
+        public Collection<String> revokedConnectors() {
             return revokedConnectorIds;
         }
 
-        public List<ConnectorTaskId> revokedTasks() {
+        public Collection<ConnectorTaskId> revokedTasks() {
             return revokedTaskIds;
         }
 
@@ -299,20 +300,19 @@ public class IncrementalCooperativeConnectProtocol {
                     '}';
         }
 
-        private Map<String, List<Integer>> revokedAsMap() {
+        private Map<String, Collection<Integer>> revokedAsMap() {
             if (revokedConnectorIds == null && revokedTaskIds == null) {
                 return null;
             }
             // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
-            Map<String, List<Integer>> taskMap = new LinkedHashMap<>();
+            Map<String, Collection<Integer>> taskMap = new LinkedHashMap<>();
             Optional.ofNullable(revokedConnectorIds)
                     .orElseGet(Collections::emptyList)
                     .stream()
                     .distinct()
                     .forEachOrdered(connectorId -> {
-                        List<Integer> connectorTasks = taskMap.get(connectorId);
-                        taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
-                        taskMap.put(connectorId, connectorTasks);
+                        Collection<Integer> connectorTasks =
+                                taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
                         connectorTasks.add(CONNECTOR_TASK);
                     });
 
@@ -321,17 +321,16 @@ public class IncrementalCooperativeConnectProtocol {
                     .stream()
                     .forEachOrdered(taskId -> {
                         String connectorId = taskId.connector();
-                        List<Integer> connectorTasks = taskMap.get(connectorId);
-                        taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
-                        taskMap.put(connectorId, connectorTasks);
+                        Collection<Integer> connectorTasks =
+                                taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
                         connectorTasks.add(taskId.task());
                     });
             return taskMap;
         }
 
         public Struct toStruct() {
-            List<Struct> assigned = taskAssignments(asMap());
-            List<Struct> revoked = taskAssignments(revokedAsMap());
+            Collection<Struct> assigned = taskAssignments(asMap());
+            Collection<Struct> revoked = taskAssignments(revokedAsMap());
             return new Struct(ASSIGNMENT_V1)
                     .set(ERROR_KEY_NAME, error())
                     .set(LEADER_KEY_NAME, leader())

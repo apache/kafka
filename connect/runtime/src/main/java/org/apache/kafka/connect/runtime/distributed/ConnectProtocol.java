@@ -26,6 +26,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -122,10 +123,10 @@ public class ConnectProtocol {
         struct.set(LEADER_URL_KEY_NAME, assignment.leaderUrl());
         struct.set(CONFIG_OFFSET_KEY_NAME, assignment.offset());
         List<Struct> taskAssignments = new ArrayList<>();
-        for (Map.Entry<String, List<Integer>> connectorEntry : assignment.asMap().entrySet()) {
+        for (Map.Entry<String, Collection<Integer>> connectorEntry : assignment.asMap().entrySet()) {
             Struct taskAssignment = new Struct(CONNECTOR_ASSIGNMENT_V0);
             taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
-            List<Integer> tasks = connectorEntry.getValue();
+            Collection<Integer> tasks = connectorEntry.getValue();
             taskAssignment.set(TASKS_KEY_NAME, tasks.toArray());
             taskAssignments.add(taskAssignment);
         }
@@ -199,8 +200,8 @@ public class ConnectProtocol {
         private final String leader;
         private final String leaderUrl;
         private final long offset;
-        private final List<String> connectorIds;
-        private final List<ConnectorTaskId> taskIds;
+        private final Collection<String> connectorIds;
+        private final Collection<ConnectorTaskId> taskIds;
 
         /**
          * Create an assignment indicating responsibility for the given connector instances and task Ids.
@@ -208,7 +209,7 @@ public class ConnectProtocol {
          * @param taskIds list of task IDs that the worker should instantiate and run
          */
         public Assignment(short error, String leader, String leaderUrl, long configOffset,
-                          List<String> connectorIds, List<ConnectorTaskId> taskIds) {
+                          Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds) {
             this.error = error;
             this.leader = leader;
             this.leaderUrl = leaderUrl;
@@ -237,11 +238,11 @@ public class ConnectProtocol {
             return offset;
         }
 
-        public List<String> connectors() {
+        public Collection<String> connectors() {
             return connectorIds;
         }
 
-        public List<ConnectorTaskId> tasks() {
+        public Collection<ConnectorTaskId> tasks() {
             return taskIds;
         }
 
@@ -257,11 +258,11 @@ public class ConnectProtocol {
                     '}';
         }
 
-        protected Map<String, List<Integer>> asMap() {
+        protected Map<String, Collection<Integer>> asMap() {
             // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
-            Map<String, List<Integer>> taskMap = new LinkedHashMap<>();
+            Map<String, Collection<Integer>> taskMap = new LinkedHashMap<>();
             for (String connectorId : new HashSet<>(connectorIds)) {
-                List<Integer> connectorTasks = taskMap.get(connectorId);
+                Collection<Integer> connectorTasks = taskMap.get(connectorId);
                 if (connectorTasks == null) {
                     connectorTasks = new ArrayList<>();
                     taskMap.put(connectorId, connectorTasks);
@@ -270,7 +271,7 @@ public class ConnectProtocol {
             }
             for (ConnectorTaskId taskId : taskIds) {
                 String connectorId = taskId.connector();
-                List<Integer> connectorTasks = taskMap.get(connectorId);
+                Collection<Integer> connectorTasks = taskMap.get(connectorId);
                 if (connectorTasks == null) {
                     connectorTasks = new ArrayList<>();
                     taskMap.put(connectorId, connectorTasks);
