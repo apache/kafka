@@ -215,7 +215,8 @@ class ReplicaAlterLogDirsThread(name: String,
     val nextPartitionOpt = nextReadyPartition(partitionMap)
     nextPartitionOpt.foreach { case (tp, fetchState) =>
       inProgressPartition = Some(tp)
-      info(s"Beginning or resuming log dir move of partition $tp beginning from offset ${fetchState.fetchOffset}")
+      info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
+        s"Including this partition, there are ${partitionMap.size} remaining partitions to copy by this thread.")
     }
     nextPartitionOpt
   }
