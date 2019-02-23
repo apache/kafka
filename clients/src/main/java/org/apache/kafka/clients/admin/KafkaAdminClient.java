@@ -132,6 +132,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -2461,11 +2462,12 @@ public class KafkaAdminClient extends AdminClient {
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                     final List<DescribedGroupMember> members = describedGroup.members();
                                     final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
-                                    final Set<AclOperation> authorizedOperations = describedGroup
-                                        .authorizedOperations()
-                                        .stream()
-                                        .map(AclOperation::fromCode)
-                                        .collect(Collectors.toSet());
+                                    final Set<AclOperation> authorizedOperations =
+                                        Utils.from32BitField(describedGroup.authorizedOperations())
+                                            .stream()
+                                            .map(AclOperation::fromCode)
+                                            .filter(operation -> operation != AclOperation.UNKNOWN)
+                                            .collect(Collectors.toSet());
                                     for (DescribedGroupMember groupMember : members) {
                                         Set<TopicPartition> partitions = Collections.emptySet();
                                         if (groupMember.memberAssignment().length > 0) {

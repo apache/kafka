@@ -1080,7 +1080,7 @@ public class KafkaAdminClientTest {
                         DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
                         DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
                     ),
-                    Collections.emptyList()));
+                    Collections.emptySet()));
 
             data.groups().add(DescribeGroupsResponse.groupMetada(
                     "group-connect-0",
@@ -1092,7 +1092,7 @@ public class KafkaAdminClientTest {
                         DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
                         DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
                     ),
-                    Collections.emptyList()));
+                    Collections.emptySet()));
 
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 

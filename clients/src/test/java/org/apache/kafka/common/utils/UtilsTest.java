@@ -30,12 +30,14 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Random;
+import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
@@ -110,8 +112,8 @@ public class UtilsTest {
     @Test
     public void testJoin() {
         assertEquals("", Utils.join(Collections.emptyList(), ","));
-        assertEquals("1", Utils.join(Arrays.asList("1"), ","));
-        assertEquals("1,2,3", Utils.join(Arrays.asList(1, 2, 3), ","));
+        assertEquals("1", Utils.join(asList("1"), ","));
+        assertEquals("1,2,3", Utils.join(asList(1, 2, 3), ","));
     }
 
     @Test
@@ -465,5 +467,23 @@ public class UtilsTest {
         // Test that deleting a non-existent directory hierarchy works.
         Utils.delete(tempDir);
         assertFalse(Files.exists(tempDir.toPath()));
+    }
+
+    @Test
+    public void testConvertTo32BitField() {
+        Set<Byte> bytes = new HashSet<>(asList(new Byte[]{0, 1, 5, 10, 31}));
+        int bitField = Utils.to32BitField(bytes);
+        assertEquals(bytes, Utils.from32BitField(bitField));
+
+        bytes = new HashSet<>();
+        bitField = Utils.to32BitField(bytes);
+        assertEquals(bytes, Utils.from32BitField(bitField));
+
+        bytes = new HashSet<>(asList(new Byte[]{0, 11, 32}));
+        try {
+            Utils.to32BitField(bytes);
+            fail("Expected exception not thrown");
+        } catch (IllegalArgumentException e) {
+        }
     }
 }

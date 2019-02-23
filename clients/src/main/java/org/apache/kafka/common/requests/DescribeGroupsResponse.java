@@ -22,12 +22,14 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 public class DescribeGroupsResponse extends AbstractResponse {
 
@@ -71,7 +73,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
         final String protocolType,
         final String protocol,
         final List<DescribedGroupMember> members,
-        final List<Byte> authorizedOperations) {
+        final Set<Byte> authorizedOperations) {
         DescribedGroup groupMetada = new DescribedGroup();
         groupMetada.setGroupId(groupId)
             .setErrorCode(error.code())
@@ -79,7 +81,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
             .setProtocolType(protocolType)
             .setProtocolData(protocol)
             .setMembers(members)
-            .setAuthorizedOperations(authorizedOperations);
+            .setAuthorizedOperations(Utils.to32BitField(authorizedOperations));
         return  groupMetada;
     }
 
@@ -112,7 +114,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     public static DescribedGroup forError(String groupId, Errors error) {
         return groupMetada(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
-                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptyList());
+                DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptySet());
     }
 
     public static DescribeGroupsResponse fromError(Errors error, List<String> groupIds) {

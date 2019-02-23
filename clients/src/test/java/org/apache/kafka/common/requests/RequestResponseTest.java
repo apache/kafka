@@ -781,7 +781,7 @@ public class RequestResponseTest {
         DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
                 clientId, clientHost, new byte[0], new byte[0]);
         DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetada("test-group", Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptyList());
+                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
         describeGroupsResponseData.groups().add(metadata);
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }

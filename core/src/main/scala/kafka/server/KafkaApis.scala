@@ -1225,7 +1225,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (error == Errors.NONE && describeRequest.data().includeAuthorizedOperations()) {
             describedGroup.setAuthorizedOperations(authorizedOperations(request.session, resource))
           } else {
-            describedGroup.setAuthorizedOperations(Collections.emptyList())
+            describedGroup.setAuthorizedOperations(0)
           }
         }
 
@@ -1237,13 +1237,13 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
 
-  private def authorizedOperations(session: RequestChannel.Session, resource: Resource): util.List[lang.Byte] = {
+  private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
     val authorizedOps = authorizer match {
       case None => ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
       case Some(auth) => auth.authorizedOperations(session, resource)
     }
 
-    authorizedOps.map(operation => operation.toJava.code().asInstanceOf[lang.Byte]).toList.asJava
+    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[lang.Byte]).asJava)
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
