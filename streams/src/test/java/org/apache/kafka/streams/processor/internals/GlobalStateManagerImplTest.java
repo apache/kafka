@@ -376,17 +376,6 @@ public class GlobalStateManagerImplTest {
         assertFalse(store2.isOpen());
     }
 
-    @Test
-    public void shouldWriteCheckpointsOnClose() throws IOException {
-        stateManager.initialize();
-        initializeConsumer(1, 0, t1);
-        stateManager.register(store1, stateRestoreCallback);
-        final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 25L);
-        stateManager.close(true);
-        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
-        assertEquals(expected, result);
-    }
-
     @Test(expected = ProcessorStateException.class)
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() throws IOException {
         stateManager.initialize();
@@ -539,6 +528,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
         stateManager.register(store1, stateRestoreCallback);
+        stateManager.checkpoint(Collections.emptyMap());
         stateManager.close(true);
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.checkpointed();

@@ -277,6 +277,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             stores.clear();
         }
 
+        /*
         if (!clean && this.eosEnabled && checkpoint != null) {
             // delete the checkpoint file if this is an unclean close
             try {
@@ -286,6 +287,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                 throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
             }
         }
+        */
 
         if (firstException != null) {
             throw firstException;

@@ -452,7 +452,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         flushState();
 
-        stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+        if (!eosEnabled) {
+            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+        }
 
         final Map<TopicPartition, OffsetAndMetadata> consumedOffsetsAndMetadata = new HashMap<>(consumedOffsets.size());
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
@@ -576,6 +578,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
+
+                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+
                     try {
                         recordCollector.close();
                     } catch (final ProducerFencedException e) {
