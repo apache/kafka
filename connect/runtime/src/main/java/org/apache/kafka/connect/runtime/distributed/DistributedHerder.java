@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.errors.WakeupException;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
@@ -54,7 +56,6 @@ import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.SinkUtils;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -76,7 +77,10 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
+
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
 
 /**
  * <p>
@@ -108,7 +112,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * </p>
  */
 public class DistributedHerder extends AbstractHerder implements Runnable {
-    private static final Logger log = LoggerFactory.getLogger(DistributedHerder.class);
+    private static final AtomicInteger CONNECT_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
+    private final Logger log;
 
     private static final long FORWARD_REQUEST_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
     private static final long START_AND_STOP_SHUTDOWN_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(1);
@@ -134,6 +139,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
+    private ConnectProtocol.Assignment runningAssignment = ExtendedAssignment.empty();
     private ConnectProtocol.Assignment assignment;
     private boolean canReadConfigs;
     private ClusterConfigState configState;
@@ -182,12 +188,19 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.workerSyncTimeoutMs = config.getInt(DistributedConfig.WORKER_SYNC_TIMEOUT_MS_CONFIG);
         this.workerTasksShutdownTimeoutMs = config.getLong(DistributedConfig.TASK_SHUTDOWN_GRACEFUL_TIMEOUT_MS_CONFIG);
         this.workerUnsyncBackoffMs = config.getInt(DistributedConfig.WORKER_UNSYNC_BACKOFF_MS_CONFIG);
-        this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time);
+
+        String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+        String clientId = clientIdConfig.length() <= 0 ? "connect-" + CONNECT_CLIENT_ID_SEQUENCE.getAndIncrement() : clientIdConfig;
+        LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
+        log = logContext.logger(DistributedHerder.class);
+
+        this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time, clientId, logContext);
+
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>(1),
                 new ThreadFactory() {
                     @Override
                     public Thread newThread(Runnable herder) {
-                        return new Thread(herder, "DistributedHerder");
+                        return new Thread(herder, "DistributedHerder-" + clientId);
                     }
                 });
         this.forwardRequestExecutor = Executors.newSingleThreadExecutor();
@@ -845,16 +858,28 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startWork() {
         // Start assigned connectors and tasks
         log.info("Starting connectors and tasks using config offset {}", assignment.offset());
+        log.info("Already current running: connectors: {} tasks: {}", worker.connectorNames(), worker.taskIds());
+
         List<Callable<Void>> callables = new ArrayList<>();
-        for (String connectorName : assignment.connectors()) {
+        for (String connectorName : assignmentDifference(assignment.connectors(), runningAssignment.connectors())) {
             callables.add(getConnectorStartingCallable(connectorName));
         }
 
-        for (ConnectorTaskId taskId : assignment.tasks()) {
+        for (ConnectorTaskId taskId : assignmentDifference(assignment.tasks(), runningAssignment.tasks())) {
             callables.add(getTaskStartingCallable(taskId));
         }
         startAndStop(callables);
+        runningAssignment = assignment;
         log.info("Finished starting connectors and tasks");
+    }
+
+    private static <T> Collection<T> assignmentDifference(Collection<T> update, Collection<T> running) {
+        if (running == null || running.isEmpty()) {
+            return update;
+        }
+        HashSet<T> diff = new HashSet<>(update);
+        diff.removeAll(running);
+        return diff;
     }
 
     private boolean startTask(ConnectorTaskId taskId) {
