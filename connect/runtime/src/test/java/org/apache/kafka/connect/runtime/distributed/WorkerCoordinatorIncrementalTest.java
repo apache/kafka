@@ -42,7 +42,6 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.powermock.api.easymock.PowerMock;
-import org.powermock.reflect.Whitebox;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -52,16 +51,15 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOP;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
-
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOP;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 
 @RunWith(value = Parameterized.class)
 public class WorkerCoordinatorIncrementalTest {
@@ -389,22 +387,23 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.singletonList(connectorId1), Collections.emptyList(), Errors.NONE));
         coordinator.ensureActiveGroup();
 
-        assertEquals(1, rebalanceListener.revokedCount);
+        // tasks are not revoked
+        assertEquals(0, rebalanceListener.revokedCount);
         assertEquals(Collections.emptyList(), rebalanceListener.revokedConnectors);
-        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.revokedTasks);
+        assertEquals(Collections.emptyList(), rebalanceListener.revokedTasks);
         assertEquals(2, rebalanceListener.assignedCount);
         assertFalse(rebalanceListener.assignment.failed());
         assertEquals(1L, rebalanceListener.assignment.offset());
         assertEquals(Collections.singletonList(connectorId1), rebalanceListener.assignment.connectors());
-        assertEquals(Collections.emptyList(), rebalanceListener.assignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x0), rebalanceListener.assignment.tasks());
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testLeaderPerformAssignment1() throws Exception {
-        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
-        // output. So we test it directly here.
+        // Since all the protocol responses are mocked, the other tests validate performAssignment
+        // runs, but don't validate its output. So we test it directly here.
 
         EasyMock.expect(configStorage.snapshot()).andReturn(configState1);
 
@@ -417,7 +416,7 @@ public class WorkerCoordinatorIncrementalTest {
         // Mark everyone as in sync with configState1
         configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
         configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState1 has 1 connector, 1 task
         Assignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -425,22 +424,23 @@ public class WorkerCoordinatorIncrementalTest {
         assertEquals("leader", leaderAssignment.leader());
         assertEquals(1, leaderAssignment.offset());
         assertEquals(Collections.singletonList(connectorId1), leaderAssignment.connectors());
-        assertEquals(Collections.emptyList(), leaderAssignment.tasks());
+        assertEquals(Collections.singletonList(taskId1x0), leaderAssignment.tasks());
 
+        // assignment is empty on rejoin
         Assignment memberAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("member"));
         assertEquals(false, memberAssignment.failed());
         assertEquals("leader", memberAssignment.leader());
         assertEquals(1, memberAssignment.offset());
         assertEquals(Collections.emptyList(), memberAssignment.connectors());
-        assertEquals(Collections.singletonList(taskId1x0), memberAssignment.tasks());
+        assertEquals(Collections.emptyList(), memberAssignment.tasks());
 
         PowerMock.verifyAll();
     }
 
     @Test
     public void testLeaderPerformAssignment2() throws Exception {
-        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
-        // output. So we test it directly here.
+        // Since all the protocol responses are mocked, the other tests validate performAssignment
+        // runs, but don't validate its output. So we test it directly here.
 
         EasyMock.expect(configStorage.snapshot()).andReturn(configState2);
 
@@ -453,7 +453,7 @@ public class WorkerCoordinatorIncrementalTest {
         // Mark everyone as in sync with configState1
         configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
         configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         Assignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -475,8 +475,8 @@ public class WorkerCoordinatorIncrementalTest {
 
     @Test
     public void testLeaderPerformAssignmentSingleTaskConnectors() throws Exception {
-        // Since all the protocol responses are mocked, the other tests validate doSync runs, but don't validate its
-        // output. So we test it directly here.
+        // Since all the protocol responses are mocked, the other tests validate performAssignment
+        // runs, but don't validate its output. So we test it directly here.
 
         EasyMock.expect(configStorage.snapshot()).andReturn(configStateSingleTaskConnectors);
 
@@ -489,7 +489,7 @@ public class WorkerCoordinatorIncrementalTest {
         // Mark everyone as in sync with configState1
         configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
         configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = Whitebox.invokeMethod(coordinator, "performAssignment", "leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -545,15 +545,15 @@ public class WorkerCoordinatorIncrementalTest {
         public ExtendedAssignment assignment = null;
 
         public String revokedLeader;
-        public Collection<String> revokedConnectors;
-        public Collection<ConnectorTaskId> revokedTasks;
+        public Collection<String> revokedConnectors = Collections.emptyList();
+        public Collection<ConnectorTaskId> revokedTasks = Collections.emptyList();
 
         public int revokedCount = 0;
         public int assignedCount = 0;
 
         @Override
-        public void onAssigned(Assignment assignment, int generation) {
-            this.assignment = (ExtendedAssignment) assignment;
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
+            this.assignment = assignment;
             assignedCount++;
         }
 

@@ -139,8 +139,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
-    private ConnectProtocol.Assignment runningAssignment = ExtendedAssignment.empty();
-    private ConnectProtocol.Assignment assignment;
+    private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
+    private ExtendedAssignment assignment;
     private boolean canReadConfigs;
     private ClusterConfigState configState;
 
@@ -157,6 +157,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile int generation;
 
     private final DistributedConfig config;
+    ConnectProtocolCompatibility protocolCompatibility;
 
     public DistributedHerder(DistributedConfig config,
                              Time time,
@@ -212,6 +213,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
+
+        protocolCompatibility = ConnectProtocolCompatibility.compatibility(
+                config.getString(DistributedConfig.CONNECT_PROTOCOL_COMPATIBILITY));
     }
 
     @Override
@@ -818,6 +822,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // guarantees we'll attempt to rejoin before executing this method again.
         herderMetrics.rebalanceSucceeded(time.milliseconds());
         rebalanceResolved = true;
+
+        if (!assignment.revokedConnectors().isEmpty() || !assignment.revokedTasks().isEmpty()) {
+            assignment.revokedConnectors().clear();
+            assignment.revokedTasks().clear();
+            member.requestRejoin();
+            return false;
+        }
         return true;
     }
 
@@ -858,7 +869,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startWork() {
         // Start assigned connectors and tasks
         log.info("Starting connectors and tasks using config offset {}", assignment.offset());
-        log.info("Already current running: connectors: {} tasks: {}", worker.connectorNames(), worker.taskIds());
 
         List<Callable<Void>> callables = new ArrayList<>();
         for (String connectorName : assignmentDifference(assignment.connectors(), runningAssignment.connectors())) {
@@ -869,7 +879,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             callables.add(getTaskStartingCallable(taskId));
         }
         startAndStop(callables);
-        runningAssignment = assignment;
+        runningAssignment = protocolCompatibility == ConnectProtocolCompatibility.COOP
+                            ? assignment
+                            : ExtendedAssignment.empty();
+
         log.info("Finished starting connectors and tasks");
     }
 
@@ -1229,7 +1242,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Rebalances are triggered internally from the group member, so these are always executed in the work thread.
     public class RebalanceListener implements WorkerRebalanceListener {
         @Override
-        public void onAssigned(ConnectProtocol.Assignment assignment, int generation) {
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
             // This callback just logs the info and saves it. The actual response is handled in the main loop, which
             // ensures the group member's logic for rebalancing can complete, potentially long-running steps to
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other

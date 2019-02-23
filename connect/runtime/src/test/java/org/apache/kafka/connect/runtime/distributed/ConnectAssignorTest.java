@@ -34,16 +34,14 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Wor
 import static org.junit.Assert.assertEquals;
 
 public class ConnectAssignorTest {
-    private static final String LEADER_URL = "leaderUrl:8083";
-
     private Logger log;
-    private ConnectAssignor assignor;
+    private IncrementalCooperativeAssignor assignor;
 
     @Before
     public void setup() {
         LogContext loggerFactory = new LogContext();
         log = loggerFactory.logger(ConnectAssignor.class);
-        assignor = new ConnectAssignor(loggerFactory);
+        assignor = new IncrementalCooperativeAssignor(loggerFactory);
     }
 
     @After
@@ -65,7 +63,7 @@ public class ConnectAssignorTest {
         expectedAssignment.get(2).connectors().addAll(Arrays.asList("connector8"));
 
         List<String> newConnectors = newConnectors(6, 11);
-        ConnectAssignor.assignConnectors(existingAssignment, newConnectors, log);
+        assignor.assignConnectors(existingAssignment, newConnectors);
         assertEquals(expectedAssignment, existingAssignment);
     }
 
@@ -89,9 +87,9 @@ public class ConnectAssignorTest {
         expectedAssignment.get(2).tasks().addAll(Arrays.asList(new ConnectorTaskId("task", 8)));
 
         List<String> newConnectors = newConnectors(6, 11);
-        ConnectAssignor.assignConnectors(existingAssignment, newConnectors, log);
+        assignor.assignConnectors(existingAssignment, newConnectors);
         List<ConnectorTaskId> newTasks = newTasks(6, 11);
-        ConnectAssignor.assignTasks(existingAssignment, newTasks, log);
+        assignor.assignTasks(existingAssignment, newTasks);
         assertEquals(expectedAssignment, existingAssignment);
     }
 
@@ -108,8 +106,8 @@ public class ConnectAssignorTest {
 
         List<String> newConnectors = newConnectors(9, 24);
         List<ConnectorTaskId> newTasks = newTasks(9, 24);
-        ConnectAssignor.assignConnectors(existingAssignment, newConnectors, log);
-        ConnectAssignor.assignTasks(existingAssignment, newTasks, log);
+        assignor.assignConnectors(existingAssignment, newConnectors);
+        assignor.assignTasks(existingAssignment, newTasks);
         for (WorkerLoad worker : existingAssignment) {
             assertEquals(6, worker.connectorsSize());
             assertEquals(6, worker.tasksSize());

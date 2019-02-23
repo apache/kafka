@@ -75,6 +75,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
 import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -1460,8 +1461,9 @@ public class DistributedHerderTest {
             public Object answer() throws Throwable {
                 if (revokedConnectors != null)
                     rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
-                ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
-                        error, "leader", "leaderUrl", offset, assignedConnectors, assignedTasks);
+                ExtendedAssignment assignment = new ExtendedAssignment(
+                        error, "leader", "leaderUrl", offset, assignedConnectors, assignedTasks,
+                        Collections.emptyList(), Collections.emptyList());
                 rebalanceListener.onAssigned(assignment, 3);
                 time.sleep(100L);
                 return null;
