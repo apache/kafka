@@ -14,6 +14,8 @@
 # limitations under the License.
 
 import time
+import streams_property
+from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
