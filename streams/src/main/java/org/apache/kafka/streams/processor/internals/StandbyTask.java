@@ -140,10 +140,9 @@ public class StandbyTask extends AbstractTask {
         try {
             if (clean) {
                 commit();
-                committed = true;
             }
         } finally {
-            closeStateManager(clean && committed);
+            closeStateManager(true);
         }
 
         taskClosed = true;
