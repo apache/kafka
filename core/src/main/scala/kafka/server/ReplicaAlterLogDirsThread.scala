@@ -199,8 +199,8 @@ class ReplicaAlterLogDirsThread(name: String,
 
   private def selectPartitionToFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
     // Only move one partition at a time to increase its catch-up rate and thus reduce the time spent on
-    // moving any given replica. Replicas are selected in ascending order (lexicographically for topics) from the
-    // partition that are ready to fetch. Once selected, we will continue fetching the same partition until it
+    // moving any given replica. Replicas are selected in ascending order (lexicographically by topic) from the
+    // partitions that are ready to fetch. Once selected, we will continue fetching the same partition until it
     // becomes unavailable.
 
     inProgressPartition.foreach { tp =>
