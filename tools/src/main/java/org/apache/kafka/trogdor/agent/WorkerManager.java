@@ -290,13 +290,13 @@ public final class WorkerManager {
                 Math.max(0, spec.endMs() - time.milliseconds()));
         }
 
-        void transitionToStopping() {
+        Future<Void> transitionToStopping() {
             state = State.STOPPING;
             if (timeoutFuture != null) {
                 timeoutFuture.cancel(false);
                 timeoutFuture = null;
             }
-            workerCleanupExecutor.submit(new HaltWorker(this));
+            return workerCleanupExecutor.submit(new HaltWorker(this));
         }
 
         void transitionToDone() {
