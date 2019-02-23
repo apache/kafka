@@ -1801,8 +1801,8 @@ public class KafkaConsumerTest {
         Metrics metrics = new Metrics();
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
-        SubscriptionState subscriptions = new SubscriptionState(resetStrategy);
         LogContext loggerFactory = new LogContext();
+        SubscriptionState subscriptions = new SubscriptionState(loggerFactory, resetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 

@@ -148,8 +148,10 @@ public class FetcherTest {
     private Metrics metrics = new Metrics(time);
     private FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry("consumer" + groupId);
 
-    private SubscriptionState subscriptions = new SubscriptionState(OffsetResetStrategy.EARLIEST);
-    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(OffsetResetStrategy.NONE);
+    private SubscriptionState subscriptions = new SubscriptionState(
+            new LogContext(), OffsetResetStrategy.EARLIEST);
+    private SubscriptionState subscriptionsNoAutoReset = new SubscriptionState(
+            new LogContext(), OffsetResetStrategy.NONE);
     private static final double EPSILON = 0.0001;
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
             client, metadata, time, 100, 1000, Integer.MAX_VALUE);
