@@ -252,7 +252,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition -> 
                 !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
             if (invalidAssignments.size() > 0) {
-                throw new IllegalStateException("Coordinator leader sent assignment that don't correspond to subscription request: " + invalidAssignments.toString());
+                throw new IllegalStateException("Coordinator leader sent assignment that don't correspond to subscription request: " + invalidAssignments);
             }
 
             requestRejoin();

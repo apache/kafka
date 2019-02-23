@@ -93,6 +93,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -477,7 +478,7 @@ public class ConsumerCoordinatorTest {
         assertEquals(singleton(t1p), rebalanceListener.assigned);
     }
 
-    @Test(expected = IllegalStateException.class)
+    @Test
     public void testInvalidCoordinatorAssignment() {
         final String consumerId = "invalid_assignment";
 
@@ -504,7 +505,7 @@ public class ConsumerCoordinatorTest {
                         sync.groupAssignment().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t2p), Errors.NONE));
-        coordinator.poll(time.timer(Long.MAX_VALUE));
+        assertThrows(IllegalStateException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
     }
 
     @Test
