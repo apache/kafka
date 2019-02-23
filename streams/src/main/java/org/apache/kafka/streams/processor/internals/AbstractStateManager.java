@@ -41,7 +41,7 @@ abstract class AbstractStateManager implements StateManager {
     static final String CHECKPOINT_FILE_NAME = ".checkpoint";
 
     final File baseDir;
-    private final boolean eosEnabled;
+    final boolean eosEnabled;
     OffsetCheckpoint checkpoint;
 
     final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();

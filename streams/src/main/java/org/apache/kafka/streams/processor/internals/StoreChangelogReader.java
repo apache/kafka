@@ -195,6 +195,8 @@ public class StoreChangelogReader implements ChangelogReader {
         for (final TopicPartition partition : initialized) {
             final StateRestorer restorer = stateRestorers.get(partition);
             if (restorer.checkpoint() != StateRestorer.NO_CHECKPOINT) {
+                log.trace("Found checkpoint {} from changelog {} for store {}.", restorer.checkpoint(), partition, restorer.storeName());
+
                 restoreConsumer.seek(partition, restorer.checkpoint());
                 logRestoreOffsets(partition,
                         restorer.checkpoint(),
@@ -202,6 +204,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 restorer.setStartingOffset(restoreConsumer.position(partition));
                 restorer.restoreStarted();
             } else {
+                log.trace("Did not find checkpoint from changelog {} for store {}, rewinding to beginning.", partition, restorer.storeName());
+
                 restoreConsumer.seekToBeginning(Collections.singletonList(partition));
                 needsPositionUpdate.add(restorer);
             }
