@@ -47,6 +47,8 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -374,18 +376,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         } catch (final KafkaException e) {
-            throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
+            final String stackTrace = getStacktraceString(e);
+            throw new StreamsException(format("Exception caught in process. taskId=%s, " +
+                    "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
                 id(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),
-                record.offset()
+                record.offset(),
+                stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
 
         return true;
+    }
+
+    private String getStacktraceString(final KafkaException e) {
+        String stacktrace = null;
+        try (final StringWriter stringWriter = new StringWriter();
+             final PrintWriter printWriter = new PrintWriter(stringWriter)) {
+            e.printStackTrace(printWriter);
+            stacktrace = stringWriter.toString();
+        } catch (final IOException ioe) {
+            log.error("Encountered error extracting stacktrace from this exception", ioe);
+        }
+        return stacktrace;
     }
 
     /**
