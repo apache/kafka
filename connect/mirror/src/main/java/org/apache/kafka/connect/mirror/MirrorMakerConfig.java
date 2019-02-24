@@ -63,6 +63,9 @@ public class MirrorMakerConfig extends AbstractConfig {
     Map<String, String> workerConfig(SourceAndTarget sourceAndTarget) {
         Map<String, Object> props = new HashMap<>();
 
+        // default to a meaningful producer client ID
+        props.put("producer.client.id", sourceAndTarget.source());
+
         // fill in consumer, producer, admin configs
         props.putAll(sharedClientConfigs());
 
