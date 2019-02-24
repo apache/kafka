@@ -55,13 +55,13 @@ public class AppInfoParser {
         return COMMIT_ID;
     }
 
-    public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics) {
+    public static synchronized void registerAppInfo(String prefix, String id, Metrics metrics, long nowMs) {
         try {
             ObjectName name = new ObjectName(prefix + ":type=app-info,id=" + Sanitizer.jmxSanitize(id));
-            AppInfo mBean = new AppInfo();
+            AppInfo mBean = new AppInfo(nowMs);
             ManagementFactory.getPlatformMBeanServer().registerMBean(mBean, name);
 
-            registerMetrics(metrics); // prefix will be added later by JmxReporter
+            registerMetrics(metrics, mBean); // prefix will be added later by JmxReporter
         } catch (JMException e) {
             log.warn("Error registering AppInfo mbean", e);
         }
@@ -84,10 +84,11 @@ public class AppInfoParser {
         return metrics.metricName(name, "app-info", "Metric indicating " + name);
     }
 
-    private static void registerMetrics(Metrics metrics) {
+    private static void registerMetrics(Metrics metrics, AppInfo appInfo) {
         if (metrics != null) {
-            metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(VERSION));
-            metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(COMMIT_ID));
+            metrics.addMetric(metricName(metrics, "version"), new ImmutableValue<>(appInfo.getVersion()));
+            metrics.addMetric(metricName(metrics, "commit-id"), new ImmutableValue<>(appInfo.getCommitId()));
+            metrics.addMetric(metricName(metrics, "start-time-ms"), new ImmutableValue<>(appInfo.getStartTimeMs()));
         }
     }
 
@@ -95,19 +96,25 @@ public class AppInfoParser {
         if (metrics != null) {
             metrics.removeMetric(metricName(metrics, "version"));
             metrics.removeMetric(metricName(metrics, "commit-id"));
+            metrics.removeMetric(metricName(metrics, "start-time-ms"));
         }
     }
 
     public interface AppInfoMBean {
         String getVersion();
         String getCommitId();
+        Long getStartTimeMs();
     }
 
     public static class AppInfo implements AppInfoMBean {
 
-        public AppInfo() {
+        private final Long startTimeMs;
+
+        public AppInfo(long startTimeMs) {
+            this.startTimeMs = startTimeMs;
             log.info("Kafka version: {}", AppInfoParser.getVersion());
             log.info("Kafka commitId: {}", AppInfoParser.getCommitId());
+            log.info("Kafka startTimeMs: {}", startTimeMs);
         }
 
         @Override
@@ -118,6 +125,11 @@ public class AppInfoParser {
         @Override
         public String getCommitId() {
             return AppInfoParser.getCommitId();
+        }
+
+        @Override
+        public Long getStartTimeMs() {
+            return startTimeMs;
         }
 
     }
