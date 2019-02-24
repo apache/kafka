@@ -70,7 +70,9 @@ public interface PartitionAssignor {
      * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
      * @param generation The consumer group generation associated with this partition assignment (optional)
      */
-    void onAssignment(Assignment assignment, Optional<Integer> generation);
+    default void onAssignment(Assignment assignment, Optional<Integer> generation) {
+        onAssignment(assignment);
+    }
 
 
     /**
