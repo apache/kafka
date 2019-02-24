@@ -84,13 +84,17 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
     }
   }
 
+  def nonEmpty: Boolean = inReadLock(lock) {
+    epochs.nonEmpty
+  }
+
   /**
-   * Returns the current Leader Epoch. This is the latest epoch
+   * Returns the current Leader Epoch if one exists. This is the latest epoch
    * which has messages assigned to it.
    */
-  def latestEpoch: Int = {
+  def latestEpoch: Option[Int] = {
     inReadLock(lock) {
-      if (epochs.isEmpty) UNDEFINED_EPOCH else epochs.last.epoch
+      epochs.lastOption.map(_.epoch)
     }
   }
 
@@ -125,7 +129,7 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
           // This may happen if a bootstrapping follower sends a request with undefined epoch or
           // a follower is on the older message format where leader epochs are not recorded
           (UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
-        } else if (requestedEpoch == latestEpoch) {
+        } else if (latestEpoch.contains(requestedEpoch)) {
           // For the leader, the latest epoch is always the current leader epoch that is still being written to.
           // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
           // might if it is verifying its committed offset following a group rebalance. In this case, we return

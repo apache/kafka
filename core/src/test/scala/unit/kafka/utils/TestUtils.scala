@@ -1284,7 +1284,8 @@ object TestUtils extends Logging {
   def createTransactionalProducer(transactionalId: String,
                                   servers: Seq[KafkaServer],
                                   batchSize: Int = 16384,
-                                  transactionTimeoutMs: Long = 60000) = {
+                                  transactionTimeoutMs: Long = 60000,
+                                  maxBlockMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1292,6 +1293,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
+    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 

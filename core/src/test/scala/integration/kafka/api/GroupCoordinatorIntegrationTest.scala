@@ -38,14 +38,13 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   }
 
   @Test
-  def testGroupCoordinatorPropagatesOfffsetsTopicCompressionCodec() {
+  def testGroupCoordinatorPropagatesOffsetsTopicCompressionCodec() {
     val consumer = TestUtils.createConsumer(TestUtils.getBrokerListStrFromServers(servers))
     val offsetMap = Map(
       new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0) -> new OffsetAndMetadata(10, "")
     ).asJava
     consumer.commitSync(offsetMap)
     val logManager = servers.head.getLogManager
-
     def getGroupMetadataLogOpt: Option[Log] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
 

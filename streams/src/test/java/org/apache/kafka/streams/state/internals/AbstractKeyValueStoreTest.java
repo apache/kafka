@@ -39,9 +39,11 @@ import java.util.List;
 import java.util.Map;
 
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.fail;
 
 public abstract class AbstractKeyValueStoreTest {
@@ -150,6 +152,8 @@ public abstract class AbstractKeyValueStoreTest {
         assertNull(store.get(3));
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
+        // Flush now so that for caching store, we will not skip the deletion following an put
+        store.flush();
         store.delete(5);
         assertEquals(4, driver.sizeOf(store));
 
@@ -159,13 +163,13 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
         assertEquals("four", driver.flushedEntryStored(4));
-        assertEquals(null, driver.flushedEntryStored(5));
+        assertNull(driver.flushedEntryStored(5));
 
-        assertEquals(false, driver.flushedEntryRemoved(0));
-        assertEquals(false, driver.flushedEntryRemoved(1));
-        assertEquals(false, driver.flushedEntryRemoved(2));
-        assertEquals(false, driver.flushedEntryRemoved(4));
-        assertEquals(true, driver.flushedEntryRemoved(5));
+        assertFalse(driver.flushedEntryRemoved(0));
+        assertFalse(driver.flushedEntryRemoved(1));
+        assertFalse(driver.flushedEntryRemoved(2));
+        assertFalse(driver.flushedEntryRemoved(4));
+        assertTrue(driver.flushedEntryRemoved(5));
 
         final HashMap<Integer, String> expectedContents = new HashMap<>();
         expectedContents.put(2, "two");
@@ -196,6 +200,7 @@ public abstract class AbstractKeyValueStoreTest {
         assertNull(store.get(3));
         assertEquals("four", store.get(4));
         assertEquals("five", store.get(5));
+        store.flush();
         store.delete(5);
 
         // Flush the store and verify all current entries were properly flushed ...
@@ -204,13 +209,13 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("one", driver.flushedEntryStored(1));
         assertEquals("two", driver.flushedEntryStored(2));
         assertEquals("four", driver.flushedEntryStored(4));
-        assertEquals(null, driver.flushedEntryStored(5));
+        assertNull(null, driver.flushedEntryStored(5));
 
-        assertEquals(false, driver.flushedEntryRemoved(0));
-        assertEquals(false, driver.flushedEntryRemoved(1));
-        assertEquals(false, driver.flushedEntryRemoved(2));
-        assertEquals(false, driver.flushedEntryRemoved(4));
-        assertEquals(true, driver.flushedEntryRemoved(5));
+        assertFalse(driver.flushedEntryRemoved(0));
+        assertFalse(driver.flushedEntryRemoved(1));
+        assertFalse(driver.flushedEntryRemoved(2));
+        assertFalse(driver.flushedEntryRemoved(4));
+        assertTrue(driver.flushedEntryRemoved(5));
     }
 
     @Test
@@ -278,10 +283,10 @@ public abstract class AbstractKeyValueStoreTest {
         assertEquals("two", driver.flushedEntryStored(2));
         assertEquals("four", driver.flushedEntryStored(4));
 
-        assertEquals(false, driver.flushedEntryRemoved(0));
-        assertEquals(false, driver.flushedEntryRemoved(1));
-        assertEquals(false, driver.flushedEntryRemoved(2));
-        assertEquals(false, driver.flushedEntryRemoved(4));
+        assertFalse(driver.flushedEntryRemoved(0));
+        assertFalse(driver.flushedEntryRemoved(1));
+        assertFalse(driver.flushedEntryRemoved(2));
+        assertFalse(driver.flushedEntryRemoved(4));
     }
 
     @Test(expected = NullPointerException.class)

@@ -1295,7 +1295,16 @@ public class DistributedHerderTest {
         EasyMock.expect(member.memberId()).andStubReturn("leader");
         EasyMock.expect(worker.getPlugins()).andReturn(plugins).anyTimes();
         expectRebalance(1, Collections.<String>emptyList(), Collections.<ConnectorTaskId>emptyList());
-        expectPostRebalanceCatchup(SNAPSHOT);
+
+        WorkerConfigTransformer configTransformer = EasyMock.mock(WorkerConfigTransformer.class);
+        EasyMock.expect(configTransformer.transform(EasyMock.eq(CONN1), EasyMock.anyObject()))
+            .andThrow(new AssertionError("Config transformation should not occur when requesting connector or task info"));
+        EasyMock.replay(configTransformer);
+        ClusterConfigState snapshotWithTransform = new ClusterConfigState(1, Collections.singletonMap(CONN1, 3),
+            Collections.singletonMap(CONN1, CONN1_CONFIG), Collections.singletonMap(CONN1, TargetState.STARTED),
+            TASK_CONFIGS_MAP, Collections.<String>emptySet(), configTransformer);
+
+        expectPostRebalanceCatchup(snapshotWithTransform);
 
 
         member.wakeup();

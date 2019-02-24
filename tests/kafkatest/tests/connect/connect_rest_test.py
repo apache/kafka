@@ -14,7 +14,7 @@
 # limitations under the License.
 
 from kafkatest.tests.kafka_test import KafkaTest
-from kafkatest.services.connect import ConnectDistributedService, ConnectRestError
+from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
 from ducktape.utils.util import wait_until
 from ducktape.mark.resource import cluster
 from ducktape.cluster.remoteaccount import RemoteCommandError
@@ -43,7 +43,9 @@ class ConnectRestApiTest(KafkaTest):
     INPUT_FILE2 = "/mnt/connect.input2"
     OUTPUT_FILE = "/mnt/connect.output"
 
-    TOPIC = "test"
+    TOPIC = "${file:%s:topic.external}" % ConnectServiceBase.EXTERNAL_CONFIGS_FILE
+    TOPIC_TEST = "test"
+
     DEFAULT_BATCH_SIZE = "2000"
     OFFSETS_TOPIC = "connect-offsets"
     OFFSETS_REPLICATION_FACTOR = "1"
@@ -78,6 +80,7 @@ class ConnectRestApiTest(KafkaTest):
         self.schemas = True
 
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
+        self.cc.set_external_configs(lambda node: self.render("connect-file-external.properties", node=node))
 
         self.cc.start()
 
