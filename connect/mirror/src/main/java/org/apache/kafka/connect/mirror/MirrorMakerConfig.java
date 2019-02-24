@@ -166,6 +166,7 @@ public class MirrorMakerConfig extends AbstractConfig {
                 clientConfig.put("producer." + k, v);
                 clientConfig.put("consumer." + k, v);
                 clientConfig.put("admin." + k, v);
+                clientConfig.put(k, v);
             }
         }
         return clientConfig;
