@@ -80,6 +80,7 @@ public class SaslHandshakeRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         SaslHandshakeResponseData response = new SaslHandshakeResponseData();
+        response.setErrorCode(ApiError.fromThrowable(e).error().code());
         return new SaslHandshakeResponse(response);
     }
 

@@ -709,7 +709,7 @@ public class SaslAuthenticatorTest {
         // Send SaslHandshakeRequest and validate that connection is closed by server.
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", (short) 0);
+        SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", ApiKeys.SASL_HANDSHAKE.latestVersion());
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
         
         selector.send(request.toSend(node1, header));

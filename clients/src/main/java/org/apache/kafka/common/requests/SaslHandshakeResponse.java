@@ -38,15 +38,15 @@ public class SaslHandshakeResponse extends AbstractResponse {
         this.data = data;
     }
 
-    public SaslHandshakeResponse(Struct struct) {
-        short latestVersion = (short) (SaslHandshakeResponseData.SCHEMAS.length - 1);
-        this.data = new SaslHandshakeResponseData(struct, latestVersion);
-    }
-
     public SaslHandshakeResponse(Struct struct, short version) {
         this.data = new SaslHandshakeResponseData(struct, version);
     }
 
+    /*
+    * Possible error codes:
+    *   UNSUPPORTED_SASL_MECHANISM(33): Client mechanism not enabled in server
+    *   ILLEGAL_SASL_STATE(34) : Invalid request during SASL handshake
+    */
     public Errors error() {
         return Errors.forCode(data.errorCode());
     }

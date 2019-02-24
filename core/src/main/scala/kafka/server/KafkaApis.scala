@@ -1369,9 +1369,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    val responseData = new SaslHandshakeResponseData()
-      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code())
-      .setMechanisms(Collections.emptyList())
+    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code())
     sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
   }
 
