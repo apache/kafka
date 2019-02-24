@@ -47,7 +47,6 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
-import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -911,21 +910,19 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Initiate a connection to the given node
+     * @param node the node to connect to
+     * @param now current time in epoch milliseconds
      */
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
         try {
-            this.connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
-            InetAddress address = this.connectionStates.currentAddress(nodeConnectionId);
+            connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
+            InetAddress address = connectionStates.currentAddress(nodeConnectionId);
             log.debug("Initiating connection to node {} using address {}", node, address);
             selector.connect(nodeConnectionId,
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
-        } catch (UnknownHostException e) {
-            log.warn("Error resolving node {}", node, e);
-            /* do not invoke connectionStates.disconnected(): entry was not marked connecting, nothing to disconnect */
-            metadataUpdater.requestUpdate();
         } catch (IOException e) {
             log.warn("Error connecting to node {}", node, e);
             /* attempt failed, we'll try again after the backoff */
