@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -89,7 +90,6 @@ public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
     static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
-    private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
     /**
      * The internal state transitions for initial authentication of a channel on the
@@ -448,17 +448,25 @@ public class SaslServerAuthenticator implements Authenticator {
             SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) requestAndSize.request;
 
             try {
-                byte[] responseToken = saslServer.evaluateResponse(Utils.readBytes(saslAuthenticateRequest.saslAuthBytes()));
+                byte[] responseToken = saslServer.evaluateResponse(
+                        Utils.copyArray(saslAuthenticateRequest.data().authBytes()));
                 if (reauthInfo.reauthenticating() && saslServer.isComplete())
                     reauthInfo.ensurePrincipalUnchanged(principal());
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
-                ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
+                byte[] responseBytes = responseToken == null ? new byte[0] : responseToken;
                 long sessionLifetimeMs = !saslServer.isComplete() ? 0L
                         : reauthInfo.calcCompletionTimesAndReturnSessionLifetimeMs();
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf, sessionLifetimeMs));
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(
+                        new SaslAuthenticateResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setAuthBytes(responseBytes)
+                        .setSessionLifetimeMs(sessionLifetimeMs)));
             } catch (SaslAuthenticationException e) {
                 buildResponseOnAuthenticateFailure(requestContext,
-                        new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
+                        new SaslAuthenticateResponse(
+                                new SaslAuthenticateResponseData()
+                                .setErrorCode(Errors.SASL_AUTHENTICATION_FAILED.code())
+                                .setErrorMessage(e.getMessage())));
                 throw e;
             } catch (SaslException e) {
                 KerberosError kerberosError = KerberosError.fromException(e);
@@ -471,8 +479,10 @@ public class SaslServerAuthenticator implements Authenticator {
                     String errorMessage = "Authentication failed during "
                             + reauthInfo.authenticationOrReauthenticationText()
                             + " due to invalid credentials with SASL mechanism " + saslMechanism;
-                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
-                            errorMessage));
+                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(
+                            new SaslAuthenticateResponseData()
+                            .setErrorCode(Errors.SASL_AUTHENTICATION_FAILED.code())
+                            .setErrorMessage(errorMessage)));
                     throw new SaslAuthenticationException(errorMessage, e);
                 }
             }

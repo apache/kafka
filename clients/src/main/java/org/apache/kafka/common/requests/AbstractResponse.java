@@ -143,7 +143,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsResponse(struct);
             case SASL_AUTHENTICATE:
-                return new SaslAuthenticateResponse(struct);
+                return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
             case CREATE_DELEGATION_TOKEN:

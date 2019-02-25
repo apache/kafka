@@ -275,6 +275,15 @@ public final class Utils {
     }
 
     /**
+     * Returns a copy of src byte array
+     * @param src The byte array to copy
+     * @return The copy
+     */
+    public static byte[] copyArray(byte[] src) {
+        return Arrays.copyOf(src, src.length);
+    }
+
+    /**
      * Check that the parameter t is not null
      *
      * @param t The object to check
