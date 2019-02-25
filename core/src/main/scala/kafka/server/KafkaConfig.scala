@@ -1084,7 +1084,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
     require(BrokerCompressionCodec.isValid(compressionType), "compression.type : " + compressionType + " is not valid." +
       " Valid options are " + BrokerCompressionCodec.brokerCompressionOptions.mkString(","))
 
-    require( messageMaxBytes > replicaFetchMaxBytes, "replica.fetch.max.bytes needs to be equal or greater than max.message.bytes, otherwise the replication will fail")
+    require(messageMaxBytes <= replicaFetchMaxBytes, "replica.fetch.max.bytes needs to be equal or greater than max.message.bytes, otherwise the replication will fail")
 
     val advertisedListenerNames = advertisedListeners.map(_.listenerName).toSet
     val listenerNames = listeners.map(_.listenerName).toSet

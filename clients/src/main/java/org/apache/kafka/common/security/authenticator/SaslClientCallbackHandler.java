@@ -59,7 +59,7 @@ public class SaslClientCallbackHandler implements AuthCallbackHandler {
                     nc.setName(nc.getDefaultName());
             } else if (callback instanceof PasswordCallback) {
                 if (!isKerberos && subject != null && !subject.getPrivateCredentials(String.class).isEmpty()) {
-                    char [] password = subject.getPrivateCredentials(String.class).iterator().next().toCharArray();
+                    char[] password = subject.getPrivateCredentials(String.class).iterator().next().toCharArray();
                     ((PasswordCallback) callback).setPassword(password);
                 } else {
                     String errorMessage = "Could not login: the client is being asked for a password, but the Kafka" +
