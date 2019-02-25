@@ -49,6 +49,7 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -199,7 +200,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
-                metrics.skippedRecordsSensor()
+                metrics.skippedRecordsSensor(),
+                Duration.ofMillis(config.getLong(StreamsConfig.CLOSE_WAIT_MS_CONFIG))
             );
         } else {
             this.recordCollector = recordCollector;

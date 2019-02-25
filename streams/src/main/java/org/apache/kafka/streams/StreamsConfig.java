@@ -307,6 +307,11 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String CONNECTIONS_MAX_IDLE_MS_CONFIG = CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG;
 
+    /** {@code close.wait.ms } */
+    @SuppressWarnings("WeakerAccess")
+    public static final String CLOSE_WAIT_MS_CONFIG = "close.wait.ms";
+    private static final String CLOSE_WAIT_MS_DOC = "The amount of time in milliseconds to block waiting for closing the streams producer.";
+
     /**
      * {@code default.deserialization.exception.handler}
      */
@@ -509,6 +514,12 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.MEDIUM,
                     CLIENT_ID_DOC)
+            .define(CLOSE_WAIT_MS_CONFIG,
+                    Type.LONG,
+                    500L,
+                    atLeast(0),
+                    Importance.MEDIUM,
+                    CLOSE_WAIT_MS_DOC)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),

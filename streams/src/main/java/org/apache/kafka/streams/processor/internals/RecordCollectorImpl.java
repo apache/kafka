@@ -33,8 +33,8 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.SerializationException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownServerException;
-import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
@@ -43,6 +43,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -54,6 +55,7 @@ public class RecordCollectorImpl implements RecordCollector {
     private Producer<byte[], byte[]> producer;
     private final Map<TopicPartition, Long> offsets;
     private final ProductionExceptionHandler productionExceptionHandler;
+    private final Duration closeWaitTime;
 
     private final static String LOG_MESSAGE = "Error sending record to topic {} due to {}; " +
         "No more records will be sent and no more offsets will be recorded for this task. " +
@@ -66,11 +68,20 @@ public class RecordCollectorImpl implements RecordCollector {
                                final LogContext logContext,
                                final ProductionExceptionHandler productionExceptionHandler,
                                final Sensor skippedRecordsSensor) {
+        this(streamTaskId, logContext, productionExceptionHandler, skippedRecordsSensor, Duration.ofMillis(500L));
+    }
+
+    public RecordCollectorImpl(final String streamTaskId,
+                               final LogContext logContext,
+                               final ProductionExceptionHandler productionExceptionHandler,
+                               final Sensor skippedRecordsSensor,
+                               final Duration closeWaitTime) {
         this.offsets = new HashMap<>();
         this.logPrefix = String.format("task [%s] ", streamTaskId);
         this.log = logContext.logger(getClass());
         this.productionExceptionHandler = productionExceptionHandler;
         this.skippedRecordsSensor = skippedRecordsSensor;
+        this.closeWaitTime = closeWaitTime;
     }
 
     @Override
@@ -264,7 +275,7 @@ public class RecordCollectorImpl implements RecordCollector {
     public void close() {
         log.debug("Closing producer");
         if (producer != null) {
-            producer.close();
+            producer.close(closeWaitTime);
             producer = null;
         }
         checkForException();

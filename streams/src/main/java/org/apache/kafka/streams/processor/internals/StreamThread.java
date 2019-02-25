@@ -401,6 +401,7 @@ public class StreamThread extends Thread {
         private final KafkaClientSupplier clientSupplier;
         private final String threadClientId;
         private final Producer<byte[], byte[]> threadProducer;
+        private final Duration closeWaitTime;
 
         TaskCreator(final InternalTopologyBuilder builder,
                     final StreamsConfig config,
@@ -412,7 +413,8 @@ public class StreamThread extends Thread {
                     final KafkaClientSupplier clientSupplier,
                     final Producer<byte[], byte[]> threadProducer,
                     final String threadClientId,
-                    final Logger log) {
+                    final Logger log,
+                    final Duration closeWaitTime) {
             super(
                 builder,
                 config,
@@ -425,6 +427,7 @@ public class StreamThread extends Thread {
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
             this.threadClientId = threadClientId;
+            this.closeWaitTime = closeWaitTime;
         }
 
         @Override
@@ -464,7 +467,7 @@ public class StreamThread extends Thread {
         public void close() {
             if (threadProducer != null) {
                 try {
-                    threadProducer.close();
+                    threadProducer.close(closeWaitTime);
                 } catch (final Throwable e) {
                     log.error("Failed to close producer due to the following error:", e);
                 }
@@ -629,6 +632,8 @@ public class StreamThread extends Thread {
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
 
+        final Duration closeWaitTime = Duration.ofMillis(config.getLong(StreamsConfig.CLOSE_WAIT_MS_CONFIG));
+
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(
             builder,
             config,
@@ -640,7 +645,8 @@ public class StreamThread extends Thread {
             clientSupplier,
             threadProducer,
             threadClientId,
-            log);
+            log,
+            closeWaitTime);
         final AbstractTaskCreator<StandbyTask> standbyTaskCreator = new StandbyTaskCreator(
             builder,
             config,
