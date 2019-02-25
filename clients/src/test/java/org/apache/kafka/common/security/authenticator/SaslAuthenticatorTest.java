@@ -53,6 +53,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -708,8 +709,9 @@ public class SaslAuthenticatorTest {
         // Send SaslHandshakeRequest and validate that connection is closed by server.
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        SaslHandshakeRequest request = new SaslHandshakeRequest("PLAIN");
+        SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", ApiKeys.SASL_HANDSHAKE.latestVersion());
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
+        
         selector.send(request.toSend(node1, header));
         // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
         // So the channel is in READY state.
@@ -1715,7 +1717,7 @@ public class SaslAuthenticatorTest {
                         servicePrincipal, serverHost, saslMechanism, true, transportLayer, time) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
-                        return new SaslHandshakeRequest.Builder(saslMechanism).build((short) 0);
+                        return buildSaslHandshakeRequest(saslMechanism, (short) 0);
                     }
                     @Override
                     protected void saslAuthenticateVersion(ApiVersionsResponse apiVersionsResponse) {
@@ -1927,7 +1929,7 @@ public class SaslAuthenticatorTest {
     }
 
     private SaslHandshakeResponse sendHandshakeRequestReceiveResponse(String node, short version) throws Exception {
-        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest.Builder("PLAIN").build(version);
+        SaslHandshakeRequest handshakeRequest = buildSaslHandshakeRequest("PLAIN", version);
         SaslHandshakeResponse response = (SaslHandshakeResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE, handshakeRequest);
         assertEquals(Errors.NONE, response.error());
         return response;
@@ -1969,6 +1971,11 @@ public class SaslAuthenticatorTest {
                 throw new IllegalStateException("Server callback handler not configured");
             return USERNAME.equals(username) && new String(password).equals(PASSWORD);
         }
+    }
+
+    private SaslHandshakeRequest buildSaslHandshakeRequest(String mechanism, short version) {
+        return new SaslHandshakeRequest.Builder(
+                new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
     }
 
     @SuppressWarnings("unchecked")
@@ -2228,7 +2235,8 @@ public class SaslAuthenticatorTest {
                         "PLAIN", true, transportLayer, time) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
-                        return new SaslHandshakeRequest.Builder("PLAIN").build(version);
+                        return new SaslHandshakeRequest.Builder(
+                                new SaslHandshakeRequestData().setMechanism("PLAIN")).build(version);
                     }
                 };
         }

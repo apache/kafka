@@ -105,7 +105,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LIST_GROUPS:
                 return new ListGroupsResponse(struct);
             case SASL_HANDSHAKE:
-                return new SaslHandshakeResponse(struct);
+                return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:

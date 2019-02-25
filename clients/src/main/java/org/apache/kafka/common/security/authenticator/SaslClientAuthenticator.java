@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.NetworkSend;
 import org.apache.kafka.common.network.ReauthenticationContext;
@@ -328,7 +329,8 @@ public class SaslClientAuthenticator implements Authenticator {
 
     // Visible to override for testing
     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
-        return new SaslHandshakeRequest.Builder(mechanism).build(version);
+        return new SaslHandshakeRequest.Builder(
+                new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
     }
 
     // Visible to override for testing
