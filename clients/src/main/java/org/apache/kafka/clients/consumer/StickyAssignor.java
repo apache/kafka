@@ -39,7 +39,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -220,16 +219,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
-            for (String topic: entry.getValue().topics()) {
-                Integer partitionCount = partitionsPerTopic.get(topic);
-                if (partitionCount != null) {
-                    for (int i = 0; i < partitionCount; ++i) {
-                        TopicPartition topicPartition = new TopicPartition(topic, i);
-                        consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
-                        partition2AllPotentialConsumers.get(topicPartition).add(consumer);
-                    }
+            entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
+                for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
+                    TopicPartition topicPartition = new TopicPartition(topic, i);
+                    consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
+                    partition2AllPotentialConsumers.get(topicPartition).add(consumer);
                 }
-            }
+            });
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
