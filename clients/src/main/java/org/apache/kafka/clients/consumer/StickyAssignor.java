@@ -221,10 +221,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
             for (String topic: entry.getValue().topics()) {
-                for (int i = 0; i < Optional.ofNullable(partitionsPerTopic.get(topic)).orElse(0); ++i) {
-                    TopicPartition topicPartition = new TopicPartition(topic, i);
-                    consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
-                    partition2AllPotentialConsumers.get(topicPartition).add(consumer);
+                Integer partitionCount = partitionsPerTopic.get(topic);
+                if (partitionCount != null) {
+                    for (int i = 0; i < partitionCount; ++i) {
+                        TopicPartition topicPartition = new TopicPartition(topic, i);
+                        consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
+                        partition2AllPotentialConsumers.get(topicPartition).add(consumer);
+                    }
                 }
             }
 
