@@ -866,7 +866,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
       // add one more consumer and validate re-assignment
       addConsumersToGroupAndWaitForGroupAssignment(1, consumerGroup, consumerPollers,
-        List(topic1, topic2), subscriptions)
+        List(topic1, topic2), subscriptions, "roundrobin-group")
     } finally {
       consumerPollers.foreach(_.shutdown())
     }
@@ -905,7 +905,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val prePartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
 
     // add one more consumer and validate re-assignment
-    addConsumersToGroupAndWaitForGroupAssignment(1, consumerGroup, consumerPollers, List(topic), partitions)
+    addConsumersToGroupAndWaitForGroupAssignment(1, consumerGroup, consumerPollers, List(topic), partitions, "sticky-group")
 
     val postPartition2PollerId = reverse(consumerPollers.map(poller => (poller.getId, poller.consumerAssignment())).toMap)
     val keys = prePartition2PollerId.keySet.union(postPartition2PollerId.keySet)
