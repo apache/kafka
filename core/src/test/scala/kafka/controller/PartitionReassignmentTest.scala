@@ -152,7 +152,7 @@ class PartitionReassignmentTest  extends JUnitSuite {
     stepsAreChainedProperly(startingReplicas: Seq[Int], steps, targetReplicas)
     lastStepEndsWithTargetReplicas(steps, targetReplicas)
     addPlusDropResultsInTarget(startingReplicas, steps)
-    leaderIsKeptUntilLastStep(startingLeader, steps)
+//    leaderIsKeptUntilLastStep(startingLeader, steps)
   }
 
   private def testSteps(startingReplicas: Seq[Int], startingLeader: Int, targetReplicas:Seq[Int], liveBrokerIds: Set[Int] = null, minIsrSize: Int = 1)(implicit numberOfSteps: Int = -1) = {

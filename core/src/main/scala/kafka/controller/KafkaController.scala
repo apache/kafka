@@ -583,7 +583,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       // 11. Update the /admin/reassign_partitions path in ZK to remove this partition.
       removePartitionsFromReassignedPartitions(Set(topicPartition))
       // 12. After electing leader, the replicas and isr information changes, so resend the update metadata request to every broker
-      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
+//      sendUpdateMetadataRequest(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
       // signal delete topic thread if reassignment for some partitions belonging to topics being deleted just completed
       topicDeletionManager.resumeDeletionForTopics(Set(topicPartition.topic))
     }
@@ -1698,7 +1698,7 @@ object ReassignmentHelper {
   def calculateReassignmentStep(finalTargetReplicas: Seq[Int], currentReplicas: Seq[Int], leader: Int, liveBrokerIds: Set[Int], minIsrSize: Int): ReassignmentStep = {
     val drop: Seq[Int] = calculateExcessReplicas(finalTargetReplicas, currentReplicas, leader)
     val add = calculateReplicasToAdd(finalTargetReplicas, currentReplicas, liveBrokerIds, minIsrSize)
-    val targetReplicasInThisStep = currentReplicas.filterNot(drop.contains) ++ add
+    val targetReplicasInThisStep = if (finalTargetReplicas.headOption.exists(add.contains)) add ++ currentReplicas.filterNot(drop.contains) else currentReplicas.filterNot(drop.contains) ++ add
     val isLastStep = targetReplicasInThisStep.toSet == finalTargetReplicas.toSet
     val targetReplicasInThisStepInOrder = if (isLastStep) finalTargetReplicas else targetReplicasInThisStep
     ReassignmentStep(currentReplicas, drop, add, targetReplicasInThisStepInOrder)
@@ -1708,7 +1708,7 @@ object ReassignmentHelper {
     val numberOfExcessReplicas = currentReplicas.size - finalTargetReplicas.size
     // TODO: what if it's empty
     val notInReassigned = currentReplicas.filterNot(finalTargetReplicas.contains)
-    val notInReassignedPreferredOrder = notInReassigned.sortBy(brokerId => if (brokerId == leader) 1 else 0)
+    val notInReassignedPreferredOrder = notInReassigned.sorted
     println(s"calculated_size: $numberOfExcessReplicas, ordered_set_size: ${notInReassignedPreferredOrder.size}, " +
       s"finalTargetReplicas: $finalTargetReplicas, currentReplicas: $currentReplicas, " +
       s"notInReassignedPreferredOrder: $notInReassignedPreferredOrder, dropped: ${notInReassignedPreferredOrder.take(numberOfExcessReplicas)}")
