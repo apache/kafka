@@ -27,15 +27,10 @@ import org.junit.Test
 import org.scalatest.mockito.MockitoSugar
 
 class CustomDeserializer extends Deserializer[String] {
-  override def configure(configs: java.util.Map[String, _], isKey: Boolean): Unit = {
-  }
 
   override def deserialize(topic: String, data: Array[Byte]): String = {
     assertThat("topic must not be null", topic, CoreMatchers.notNullValue)
     new String(data)
-  }
-
-  override def close(): Unit = {
   }
 }
 

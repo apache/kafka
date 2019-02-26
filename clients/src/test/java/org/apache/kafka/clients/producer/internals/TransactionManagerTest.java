@@ -75,6 +75,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -2281,6 +2282,69 @@ public class TransactionManagerTest {
         assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
     }
 
+    @Test
+    public void testRetryAbortTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.ABORT);
+    }
+
+    @Test
+    public void testRetryCommitTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.COMMIT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.ABORT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryCommitTransactionAfterAbortTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
+    }
+
+    private void verifyCommitOrAbortTranscationRetriable(TransactionResult firstTransactionResult,
+                                                         TransactionResult retryTransactionResult)
+            throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());  // send addPartitions.
+        sender.run(time.milliseconds());  // send produce request.
+
+        TransactionalRequestResult result = firstTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, firstTransactionResult, pid, epoch, true);
+        sender.run(time.milliseconds());
+        assertFalse(result.isCompleted());
+
+        try {
+            result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
+            fail("Should have raised TimeoutException");
+        } catch (TimeoutException e) {
+        }
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());
+        TransactionalRequestResult retryResult = retryTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        assertEquals(retryResult, result); // check if cached result is reused.
+        prepareEndTxnResponse(Errors.NONE, retryTransactionResult, pid, epoch, false);
+        sender.run(time.milliseconds());
+        assertTrue(retryResult.isCompleted());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;
@@ -2380,7 +2444,15 @@ public class TransactionManagerTest {
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+        this.prepareEndTxnResponse(error, result, pid, epoch, false);
+    }
+
+    private void prepareEndTxnResponse(Errors error,
+                                       final TransactionResult result,
+                                       final long pid,
+                                       final short epoch,
+                                       final boolean shouldDisconnect) {
+        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {

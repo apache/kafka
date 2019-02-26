@@ -61,6 +61,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
   def start(): Unit = thread.start()
 
   def close(): Unit = {
+    thread.initiateShutdown()
     clearAndPut(KafkaController.ShutdownEventThread)
     thread.awaitShutdown()
   }
@@ -83,7 +84,7 @@ class ControllerEventManager(controllerId: Int, rateAndTimeMetrics: Map[Controll
 
     override def doWork(): Unit = {
       queue.take() match {
-        case KafkaController.ShutdownEventThread => initiateShutdown()
+        case KafkaController.ShutdownEventThread => // The shutting down of the thread has been initiated at this point. Ignore this event.
         case controllerEvent =>
           _state = controllerEvent.state
 

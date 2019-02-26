@@ -75,7 +75,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
-    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = 500;
+    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120); 
 
     // Kafka Config
     private final KafkaServer[] brokers;
@@ -254,7 +254,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
         try {
             producer.send(msg).get(DEFAULT_PRODUCE_SEND_DURATION_MS, TimeUnit.MILLISECONDS);
         } catch (Exception e) {
-            throw new KafkaException("Could not produce message to topic=" + topic, e);
+            throw new KafkaException("Could not produce message: " + msg, e);
         }
     }
 

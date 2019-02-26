@@ -56,6 +56,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.function.Supplier;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_ID;
@@ -100,6 +101,7 @@ public class TransactionManager {
     private final Set<TopicPartition> pendingPartitionsInTransaction;
     private final Set<TopicPartition> partitionsInTransaction;
     private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits;
+    private TransactionalRequestResult pendingResult;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
     // For instance, this value is lowered by the AddPartitionsToTxnHandler when it receives a CONCURRENT_TRANSACTIONS
@@ -201,14 +203,15 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        ensureTransactional();
-        transitionTo(State.INITIALIZING);
-        setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
-        this.nextSequence.clear();
-        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
-        InitProducerIdHandler handler = new InitProducerIdHandler(builder);
-        enqueueRequest(handler);
-        return handler.result;
+        return handleCachedTransactionRequestResult(() -> {
+            transitionTo(State.INITIALIZING);
+            setProducerIdAndEpoch(ProducerIdAndEpoch.NONE);
+            this.nextSequence.clear();
+            InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(transactionalId, transactionTimeoutMs);
+            InitProducerIdHandler handler = new InitProducerIdHandler(builder);
+            enqueueRequest(handler);
+            return handler.result;
+        }, State.INITIALIZING);
     }
 
     public synchronized void beginTransaction() {
@@ -218,21 +221,23 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
-        ensureTransactional();
-        maybeFailWithError();
-        transitionTo(State.COMMITTING_TRANSACTION);
-        return beginCompletingTransaction(TransactionResult.COMMIT);
+        return handleCachedTransactionRequestResult(() -> {
+            maybeFailWithError();
+            transitionTo(State.COMMITTING_TRANSACTION);
+            return beginCompletingTransaction(TransactionResult.COMMIT);
+        }, State.COMMITTING_TRANSACTION);
     }
 
     public synchronized TransactionalRequestResult beginAbort() {
-        ensureTransactional();
-        if (currentState != State.ABORTABLE_ERROR)
-            maybeFailWithError();
-        transitionTo(State.ABORTING_TRANSACTION);
+        return handleCachedTransactionRequestResult(() -> {
+            if (currentState != State.ABORTABLE_ERROR)
+                maybeFailWithError();
+            transitionTo(State.ABORTING_TRANSACTION);
 
-        // We're aborting the transaction, so there should be no need to add new partitions
-        newPartitionsInTransaction.clear();
-        return beginCompletingTransaction(TransactionResult.ABORT);
+            // We're aborting the transaction, so there should be no need to add new partitions
+            newPartitionsInTransaction.clear();
+            return beginCompletingTransaction(TransactionResult.ABORT);
+        }, State.ABORTING_TRANSACTION);
     }
 
     private TransactionalRequestResult beginCompletingTransaction(TransactionResult transactionResult) {
@@ -849,6 +854,22 @@ public class TransactionManager {
         return new TxnOffsetCommitHandler(result, builder);
     }
 
+    private TransactionalRequestResult handleCachedTransactionRequestResult(
+            Supplier<TransactionalRequestResult> transactionalRequestResultSupplier,
+            State targetState) {
+        ensureTransactional();
+
+        if (pendingResult != null && currentState == targetState) {
+            TransactionalRequestResult result = pendingResult;
+            if (result.isCompleted())
+                pendingResult = null;
+            return result;
+        }
+
+        pendingResult = transactionalRequestResultSupplier.get();
+        return pendingResult;
+    }
+
     abstract class TxnRequestHandler implements RequestCompletionHandler {
         protected final TransactionalRequestResult result;
         private boolean isRetry = false;
@@ -857,8 +878,8 @@ public class TransactionManager {
             this.result = result;
         }
 
-        TxnRequestHandler() {
-            this(new TransactionalRequestResult());
+        TxnRequestHandler(String operation) {
+            this(new TransactionalRequestResult(operation));
         }
 
         void fatalError(RuntimeException e) {
@@ -949,6 +970,7 @@ public class TransactionManager {
         private final InitProducerIdRequest.Builder builder;
 
         private InitProducerIdHandler(InitProducerIdRequest.Builder builder) {
+            super("InitProducerId");
             this.builder = builder;
         }
 
@@ -991,6 +1013,7 @@ public class TransactionManager {
         private long retryBackoffMs;
 
         private AddPartitionsToTxnHandler(AddPartitionsToTxnRequest.Builder builder) {
+            super("AddPartitionsToTxn");
             this.builder = builder;
             this.retryBackoffMs = TransactionManager.this.retryBackoffMs;
         }
@@ -1094,6 +1117,7 @@ public class TransactionManager {
         private final FindCoordinatorRequest.Builder builder;
 
         private FindCoordinatorHandler(FindCoordinatorRequest.Builder builder) {
+            super("FindCoordinator");
             this.builder = builder;
         }
 
@@ -1150,6 +1174,7 @@ public class TransactionManager {
         private final EndTxnRequest.Builder builder;
 
         private EndTxnHandler(EndTxnRequest.Builder builder) {
+            super("EndTxn(" + builder.result() + ")");
             this.builder = builder;
         }
 
@@ -1199,6 +1224,7 @@ public class TransactionManager {
 
         private AddOffsetsToTxnHandler(AddOffsetsToTxnRequest.Builder builder,
                                        Map<TopicPartition, OffsetAndMetadata> offsets) {
+            super("AddOffsetsToTxn");
             this.builder = builder;
             this.offsets = offsets;
         }

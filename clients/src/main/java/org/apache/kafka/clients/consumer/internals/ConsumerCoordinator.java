@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.OffsetFetchResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -63,6 +64,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.stream.Collectors;
 
 /**
  * This class manages the coordination process with the consumer coordinator.
@@ -170,7 +172,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    public List<ProtocolMetadata> metadata() {
+    protected List<ProtocolMetadata> metadata() {
         this.joinedSubscription = subscriptions.subscription();
         List<ProtocolMetadata> metadataList = new ArrayList<>();
         for (PartitionAssignor assignor : assignors) {
@@ -246,7 +248,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
-        subscriptions.assignFromSubscribed(assignment.partitions());
+        if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
+            // was sent assignments that didn't match the original subscription
+            Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition -> 
+                !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
+            if (invalidAssignments.size() > 0) {
+                throw new IllegalStateException("Coordinator leader sent assignment that don't correspond to subscription request: " + invalidAssignments);
+            }
+
+            requestRejoin();
+            return;
+        }
 
         // check if the assignment contains some topics that were not in the original
         // subscription, if yes we will obey what leader has decided and add these topics
@@ -285,7 +297,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Setting newly assigned partitions {}", assignedPartitions);
+        log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
         try {
             listener.onPartitionsAssigned(assignedPartitions);
         } catch (WakeupException | InterruptException e) {
