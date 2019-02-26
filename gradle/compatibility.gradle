@@ -27,12 +27,21 @@ buildscript {
   }
 }
 
-import japicmp.cli.JApiCli
+
+import japicmp.cli.CliParser
+import japicmp.cmp.JarArchiveComparator
+import japicmp.cmp.JarArchiveComparatorOptions
+import japicmp.config.Options
+import japicmp.exception.JApiCmpException
+import japicmp.model.JApiClass
+import japicmp.output.semver.SemverOut
+import japicmp.output.xml.XmlOutput
+import japicmp.output.xml.XmlOutputGenerator
+import japicmp.output.xml.XmlOutputGeneratorOptions
 import japicmp.versioning.Version
 import japicmp.versioning.SemanticVersion
 import org.ajoberstar.grgit.Grgit
 import org.apache.tools.ant.DirectoryScanner
-import org.gradle.api.artifacts.ResolveException
 
 def rootRepo = Grgit.open(dir: rootProject.rootDir)
 def source = project.hasProperty('source') ? project.source : lastRelease
@@ -312,6 +321,32 @@ def getArguments(Project project, List<String> sourceArtifacts, List<String> tar
   return args
 }
 
+def generateHtmlOutput(Options options, List<JApiClass> jApiClasses) {
+  XmlOutputGeneratorOptions xmlOutputGeneratorOptions = new XmlOutputGeneratorOptions()
+  xmlOutputGeneratorOptions.setCreateSchemaFile(true)
+  xmlOutputGeneratorOptions.setSemanticVersioningInformation(new SemverOut(options, jApiClasses).generate())
+  XmlOutputGenerator xmlGenerator = new XmlOutputGenerator(jApiClasses, options, xmlOutputGeneratorOptions)
+  XmlOutput output = null
+  try {
+    XmlOutput xmlOutput = xmlGenerator.generate()
+    XmlOutputGenerator.writeToFiles(options, xmlOutput)
+  } catch (Exception e) {
+    throw new JApiCmpException(JApiCmpException.Reason.IoException, "Could not close output streams: " + e.getMessage(), e)
+  } finally {
+    if (output != null) {
+      output.close()
+    }
+  }
+}
+
+def createReport(String[] args) {
+  CliParser cliParser = new CliParser()
+  Options options = cliParser.parse(args)
+  JarArchiveComparator jarArchiveComparator = new JarArchiveComparator(JarArchiveComparatorOptions.of(options))
+  List<JApiClass> jApiClasses = jarArchiveComparator.compare(options.getOldArchives(), options.getNewArchives())
+  generateHtmlOutput(options, jApiClasses)
+}
+
 /**
  * Implements the API compatibility report generation. As an input it takes the collected artifacts
  * and produces a report as an output.
@@ -345,9 +380,8 @@ task apiCompatibilityReport(dependsOn: collectArtifacts) {
     def args = getArguments(project, sourceArtifacts, targetArtifacts, reportFile)
 
     // Run the check tool
-    JApiCli cli = new JApiCli()
-    cli.run(args)
-    println("API Compatibility report available in ${new File(reportFile).toURI()}")
+    createReport(args)
+    println("API Compatibility report is available in ${new File(reportFile).toURI()}")
 
     // See Hack comment above
     DirectoryScanner.resetDefaultExcludes()
