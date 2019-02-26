@@ -74,9 +74,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
+    public void init(final ProcessorContext context, final StateStore root) {
 
         // register the store
         context.register(root, (key, value) -> {
@@ -104,8 +102,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized void put(final Bytes key,
-                                 final byte[] value) {
+    public synchronized void put(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
         if (value == null) {
             delete(key);
@@ -115,8 +112,7 @@ public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized byte[] putIfAbsent(final Bytes key,
-                                      final byte[] value) {
+    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
         Objects.requireNonNull(key);
         final byte[] originalValue = get(key);
         if (originalValue == null) {

@@ -25,7 +25,7 @@ import java.util.Map;
 import java.util.TreeMap;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
-    
+
     public MemoryNavigableLRUCache(final String name, final int maxCacheSize) {
         super(name, maxCacheSize);
     }
@@ -52,7 +52,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
         private final Map<Bytes, byte[]> entries;
         private Bytes lastKey;
 
-        public CacheIterator(final Iterator<Bytes> keys, final Map<Bytes, byte[]> entries) {
+        private CacheIterator(final Iterator<Bytes> keys, final Map<Bytes, byte[]> entries) {
             this.keys = keys;
             this.entries = entries;
         }

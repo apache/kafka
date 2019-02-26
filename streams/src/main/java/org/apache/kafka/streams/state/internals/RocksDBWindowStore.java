@@ -41,7 +41,6 @@ public class RocksDBWindowStore extends WrappedStateStore<SegmentedBytesStore> i
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         super.init(context, root);
