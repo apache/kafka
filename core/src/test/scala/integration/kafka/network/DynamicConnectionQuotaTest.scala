@@ -38,14 +38,14 @@ import scala.collection.JavaConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
 
-  override def numBrokers = 1
+  override def serverCount = 1
 
   val topic = "test"
 
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkClient, topic, numBrokers, numBrokers, servers)
+    TestUtils.createTopic(zkClient, topic, serverCount, serverCount, servers)
   }
 
   @Test

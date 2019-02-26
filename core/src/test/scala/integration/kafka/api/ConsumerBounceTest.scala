@@ -58,7 +58,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
 
-    FixedPortTestUtils.createBrokerConfigs(numBrokers, zkConnect, enableControlledShutdown = false)
+    FixedPortTestUtils.createBrokerConfigs(serverCount, zkConnect, enableControlledShutdown = false)
       .map(KafkaConfig.fromProps(_, properties))
   }
 
@@ -164,7 +164,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
     val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
+        def run() = createTopic(newtopic, numPartitions = serverCount, replicationFactor = serverCount)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(0)
 
@@ -307,7 +307,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
-    val partitions = createTopicPartitions(topic, numPartitions = partitionCount, replicationFactor = numBrokers)
+    val partitions = createTopicPartitions(topic, numPartitions = partitionCount, replicationFactor = serverCount)
 
     addConsumersToGroupAndWaitForGroupAssignment(consumerCount, mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](),
       consumerPollers, List[String](topic), partitions, group)
@@ -361,7 +361,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
 
-    val partitions = createTopicPartitions(topic, numPartitions = maxGroupSize, replicationFactor = numBrokers)
+    val partitions = createTopicPartitions(topic, numPartitions = maxGroupSize, replicationFactor = serverCount)
 
     // Create N+1 consumers in the same consumer group and assert that the N+1th consumer receives a fatal error when it tries to join the group
     addConsumersToGroupAndWaitForGroupAssignment(maxGroupSize, mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]](),
@@ -389,7 +389,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    createTopic(topic, 10, numBrokers)
+    createTopic(topic, 10, serverCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")

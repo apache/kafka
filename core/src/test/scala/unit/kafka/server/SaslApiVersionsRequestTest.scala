@@ -35,7 +35,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   private val kafkaServerSaslMechanisms = List("PLAIN")
   protected override val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   protected override val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  override def numBrokers = 1
+  override def serverCount = 1
 
   @Before
   override def setUp(): Unit = {

@@ -47,7 +47,7 @@ import scala.collection.mutable.ListBuffer
 
 class RequestQuotaTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def serverCount: Int = 1
 
   private val topic = "topic-1"
   private val numPartitions = 1

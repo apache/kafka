@@ -39,7 +39,7 @@ import scala.collection.mutable
 abstract class BaseConsumerTest extends BaseRequestTest {
 
   val epsilon = 0.1
-  override protected def numBrokers: Int = 3
+  override def serverCount: Int = 3
 
   val topic = "topic"
   val part = 0

@@ -94,7 +94,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
         Some("Topic 'existing-topic' already exists."))))
 
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
-      numPartitions = 10, replicationFactor = numBrokers + 1)), validateOnly = true),
+      numPartitions = 10, replicationFactor = serverCount + 1)), validateOnly = true),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR,
         Some("Replication factor: 4 larger than available brokers: 3."))))
 

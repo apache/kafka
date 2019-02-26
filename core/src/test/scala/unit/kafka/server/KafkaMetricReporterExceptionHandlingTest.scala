@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicInteger
  */
 class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def serverCount: Int = 1
 
   override def propertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)

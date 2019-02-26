@@ -28,10 +28,10 @@ import scala.collection.JavaConverters._
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def serverCount: Int = 1
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+    val props = TestUtils.createBrokerConfigs(serverCount, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)

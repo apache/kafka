@@ -32,7 +32,7 @@ import org.junit.Test
 
 class FetchRequestDownConversionConfigTest extends BaseRequestTest {
   private var producer: KafkaProducer[String, String] = null
-  override def numBrokers: Int = 1
+  override def serverCount: Int = 1
 
   override def setUp(): Unit = {
     super.setUp()

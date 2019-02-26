@@ -32,22 +32,19 @@ import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestRespons
 import org.apache.kafka.common.security.auth.SecurityProtocol
 
 abstract class BaseRequestTest extends IntegrationTestHarness {
-  override val serverCount: Int = numBrokers
   private var correlationId = 0
 
   // If required, set number of brokers
-  protected def numBrokers: Int = 3
+  override def serverCount: Int = 3
 
   // If required, override properties by mutating the passed Properties object
   protected def propertyOverrides(properties: Properties) {}
 
-  override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
-      enableControlledShutdown = false,
-      interBrokerSecurityProtocol = Some(securityProtocol),
-      trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
-    props.foreach(propertyOverrides)
-    props.map(KafkaConfig.fromProps)
+  override def modifyConfigs(props: Seq[Properties]): Unit = {
+    props.foreach { p =>
+      p.put(KafkaConfig.ControlledShutdownEnableProp, "false")
+      propertyOverrides(p)
+    }
   }
 
   def anySocketServer = {

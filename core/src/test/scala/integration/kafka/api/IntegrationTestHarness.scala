@@ -50,10 +50,20 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
+  protected def modifyConfigs(props: Seq[Properties]): Unit = {
+    configureListeners(props)
+    props.foreach(_ ++= serverConfig)
+  }
+
   override def generateConfigs: Seq[KafkaConfig] = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
-    cfgs.foreach { config =>
+    modifyConfigs(cfgs)
+    cfgs.map(KafkaConfig.fromProps)
+  }
+
+  protected def configureListeners(props: Seq[Properties]): Unit = {
+    props.foreach { config =>
       config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
       config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
 
@@ -64,8 +74,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
       config.setProperty(KafkaConfig.ListenersProp, listeners)
       config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
     }
-    cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
   }
 
   @Before
