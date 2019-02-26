@@ -201,7 +201,7 @@ class ReplicaAlterLogDirsThread(name: String,
     // Only move one partition at a time to increase its catch-up rate and thus reduce the time spent on
     // moving any given replica. Replicas are selected in ascending order (lexicographically by topic) from the
     // partitions that are ready to fetch. Once selected, we will continue fetching the same partition until it
-    // becomes unavailable.
+    // becomes unavailable or is removed.
 
     inProgressPartition.foreach { tp =>
       val fetchStateOpt = partitionMap.get(tp)
