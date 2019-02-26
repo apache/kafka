@@ -117,10 +117,6 @@ public class DescribeGroupsResponse extends AbstractResponse {
                 DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptySet());
     }
 
-    public static DescribeGroupsResponse fromError(Errors error, List<String> groupIds) {
-        return fromError(DEFAULT_THROTTLE_TIME, error, groupIds);
-    }
-
     public static DescribeGroupsResponse fromError(int throttleTimeMs, Errors error, List<String> groupIds) {
         DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
         describeGroupsResponseData.setThrottleTimeMs(throttleTimeMs);

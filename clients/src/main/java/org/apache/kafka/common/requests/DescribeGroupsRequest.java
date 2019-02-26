@@ -23,6 +23,8 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
+import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
+
 public class DescribeGroupsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
         private final DescribeGroupsRequestData data;
@@ -69,18 +71,10 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        switch (version) {
-            case 0:
-                return DescribeGroupsResponse.fromError(Errors.forException(e), data.groups());
-            case 1:
-            case 2:
-            case 3:
-                return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
-
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_GROUPS.latestVersion()));
+        if (version >= 1) {
+            return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
+        } else {
+            return DescribeGroupsResponse.fromError(DEFAULT_THROTTLE_TIME, Errors.forException(e), data.groups());
         }
     }
 
