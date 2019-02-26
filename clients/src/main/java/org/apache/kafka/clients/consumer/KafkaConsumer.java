@@ -69,7 +69,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -1511,7 +1510,28 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
-            this.subscriptions.seek(partition, new SubscriptionState.FetchPosition(offset, Optional.empty()));
+            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
+
+            SubscriptionState.FetchPosition newPosition =
+                    new SubscriptionState.FetchPosition(offset, leaderAndEpoch.epoch, leaderAndEpoch);
+            this.subscriptions.seek(partition, newPosition);
+        } finally {
+            release();
+        }
+    }
+
+    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        if (offsetAndMetadata.offset() < 0)
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+
+        acquireAndEnsureOpen();
+        try {
+            log.debug("Seeking to offset {} for partition {} with leader epoch {}", offsetAndMetadata.offset(),
+                    partition, offsetAndMetadata.leaderEpoch());
+            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
+            this.subscriptions.seek(partition, newPosition);
         } finally {
             release();
         }

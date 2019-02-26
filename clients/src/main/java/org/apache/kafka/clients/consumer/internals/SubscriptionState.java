@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -265,7 +266,7 @@ public class SubscriptionState {
     }
 
     public void seek(TopicPartition tp, long offset) {
-        seek(tp, new FetchPosition(offset, Optional.empty()));
+        seek(tp, new FetchPosition(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty())));
     }
 
     /**
@@ -298,8 +299,12 @@ public class SubscriptionState {
         assignedState(tp).position(position);
     }
 
-    public void validate(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
-        assignedState(tp).validate(leaderAndEpoch);
+    public boolean validate(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+        return assignedState(tp).validate(leaderAndEpoch);
+    }
+
+    public void validate(TopicPartition tp) {
+        assignedState(tp).validate();
     }
 
     public FetchPosition position(TopicPartition tp) {
@@ -337,7 +342,7 @@ public class SubscriptionState {
             TopicPartitionState partitionState = state.value();
             if (partitionState.hasValidPosition())
                 allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.lastEpoch, ""));
+                        partitionState.position.lastFetchEpoch, ""));
         });
         return allConsumed;
     }
@@ -464,13 +469,14 @@ public class SubscriptionState {
         private enum FetchState {
             INITIALIZING,
             FETCHING,
-            RESETTING,
-            VALIDATING
+            AWAIT_RESET,
+            AWAIT_VALIDATION
         }
 
         private FetchState state;
         private FetchPosition position; // last consumed position
-        private Metadata.LeaderAndEpoch leaderAndEpoch;
+        private Optional<Integer> currentLeaderEpoch; //
+
         private Long highWatermark; // the high watermark from last fetch
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
@@ -481,6 +487,7 @@ public class SubscriptionState {
         TopicPartitionState() {
             this.paused = false;
             this.state = FetchState.INITIALIZING;
+            this.currentLeaderEpoch = Optional.empty();
             this.position = null;
             this.highWatermark = null;
             this.logStartOffset = null;
@@ -490,19 +497,32 @@ public class SubscriptionState {
         }
 
         private void reset(OffsetResetStrategy strategy) {
-            this.state = FetchState.RESETTING;
+            this.state = FetchState.AWAIT_RESET;
             this.resetStrategy = strategy;
             this.position = null;
             this.nextRetryTimeMs = null;
         }
 
-        private void validate(Metadata.LeaderAndEpoch currentLeader) {
+        private boolean validate(Metadata.LeaderAndEpoch currentLeader) {
             if (!hasPosition())
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
 
+            this.currentLeaderEpoch = currentLeader.epoch;
+            this.position = new FetchPosition(position.offset, position.lastFetchEpoch, currentLeader);
             // If we have no epoch information for the current position, then we can skip validation.
-            this.position = new FetchPosition(position.offset, position.lastEpoch, currentLeader);
-            this.state = position.lastEpoch.isPresent() ? FetchState.VALIDATING : FetchState.FETCHING;
+            if (position.lastFetchEpoch.isPresent()) {
+                this.state = FetchState.AWAIT_VALIDATION;
+                return false;
+            } else {
+                this.state = FetchState.FETCHING;
+                return true;
+            }
+        }
+
+        private void validate() {
+            if (hasPosition() && state == FetchState.AWAIT_VALIDATION) {
+                state = FetchState.FETCHING;
+            }
         }
 
         private boolean awaitingRetryBackoff(long nowMs) {
@@ -510,11 +530,11 @@ public class SubscriptionState {
         }
 
         private boolean awaitingReset() {
-            return state == FetchState.RESETTING;
+            return state == FetchState.AWAIT_RESET;
         }
 
         private boolean awaitingValidation() {
-            return state == FetchState.VALIDATING;
+            return state == FetchState.AWAIT_VALIDATION;
         }
 
         private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
@@ -530,7 +550,7 @@ public class SubscriptionState {
         }
 
         private boolean hasPosition() {
-            return state == FetchState.FETCHING || state == FetchState.VALIDATING;
+            return state == FetchState.FETCHING || state == FetchState.AWAIT_VALIDATION || state == FetchState.AWAIT_RESET;
         }
 
         private boolean isPaused() {
@@ -576,12 +596,12 @@ public class SubscriptionState {
 
     public static class FetchPosition {
         public final long offset;
-        public final Optional<Integer> lastEpoch;
+        public final Optional<Integer> lastFetchEpoch;
         public final Metadata.LeaderAndEpoch currentLeader;
 
-        public FetchPosition(long offset, Optional<Integer> lastEpoch, Metadata.LeaderAndEpoch currentLeader) {
+        public FetchPosition(long offset, Optional<Integer> lastFetchEpoch, Metadata.LeaderAndEpoch currentLeader) {
             this.offset = offset;
-            this.lastEpoch = Objects.requireNonNull(lastEpoch);
+            this.lastFetchEpoch = Objects.requireNonNull(lastFetchEpoch);
             this.currentLeader = Objects.requireNonNull(currentLeader);
         }
 
@@ -603,13 +623,13 @@ public class SubscriptionState {
             FetchPosition that = (FetchPosition) o;
 
             if (offset != that.offset) return false;
-            return lastEpoch.equals(that.lastEpoch);
+            return lastFetchEpoch.equals(that.lastFetchEpoch);
         }
 
         @Override
         public int hashCode() {
             int result = (int) (offset ^ (offset >>> 32));
-            result = 31 * result + lastEpoch.hashCode();
+            result = 31 * result + lastFetchEpoch.hashCode();
             return result;
         }
 
@@ -617,7 +637,7 @@ public class SubscriptionState {
         public String toString() {
             return "FetchPosition(" +
                     "offset=" + offset +
-                    ", lastEpoch=" + lastEpoch +
+                    ", lastFetchEpoch=" + lastFetchEpoch +
                     ')';
         }
     }

@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -45,6 +47,7 @@ public class SubscriptionStateTest {
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
     private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+    private final Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty());
 
     @Test
     public void partitionAssignment() {
@@ -214,7 +217,7 @@ public class SubscriptionStateTest {
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         state.assignFromSubscribed(singleton(tp0));
-        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty()));
+        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -232,7 +235,7 @@ public class SubscriptionStateTest {
 
     @Test(expected = IllegalStateException.class)
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty()));
+        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch));
     }
 
     @Test(expected = IllegalStateException.class)
