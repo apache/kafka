@@ -81,6 +81,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   @After
   override def tearDown(): Unit = {
     adminClients.foreach(_.close())
+    GroupedUserQuotaCallback.tearDown()
     super.tearDown()
   }
 
@@ -321,6 +322,12 @@ object GroupedUserQuotaCallback {
     ClientQuotaType.REQUEST -> new AtomicInteger
   )
   val callbackInstances = new AtomicInteger
+
+  def tearDown(): Unit = {
+    callbackInstances.set(0)
+    quotaLimitCalls.values.foreach(_.set(0))
+    UnlimitedQuotaMetricTags.clear()
+  }
 }
 
 /**
