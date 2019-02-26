@@ -134,7 +134,7 @@ public class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                return new MemoryNavigableLRUCache<>(name, maxCacheSize, Serdes.Bytes(), Serdes.ByteArray());
+                return new MemoryNavigableLRUCache(name, maxCacheSize);
             }
 
             @Override
