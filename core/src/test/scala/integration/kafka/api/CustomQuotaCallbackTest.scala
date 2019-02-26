@@ -97,6 +97,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)
     user.configureAndWaitForQuota(1000000, 2000000)
+    Thread.sleep(1000) // ensure brokers fully process dynamic config changes
     quotaLimitCalls.values.foreach(_.set(0))
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
 
