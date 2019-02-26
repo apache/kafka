@@ -165,7 +165,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Deprecated
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                           final Bytes to,
+                                                           final long timeFrom,
+                                                           final long timeTo) {
         removeExpiredSegments();
         final List<KeyValue<Windowed<Bytes>, byte[]>> returnSet = new LinkedList<>();
 
@@ -272,7 +275,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.segmentMap.headMap(minLiveTime, true).clear();
     }
 
-    private KeyValue<Windowed<Bytes>, byte[]> getWindowedKeyValue(final Bytes key, final long startTimestamp, final byte[] value) {
+    private KeyValue<Windowed<Bytes>, byte[]> getWindowedKeyValue(final Bytes key,
+                                                                  final long startTimestamp,
+                                                                  final byte[] value) {
         final Windowed<Bytes> windowedK = new Windowed<>(key, new TimeWindow(startTimestamp, startTimestamp + windowSize));
         return new KeyValue<>(windowedK, value);
     }
