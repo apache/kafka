@@ -54,6 +54,7 @@ public class MeteredWindowStoreTest {
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
+        10L, // any size
         "scope",
         new MockTime(),
         Serdes.String(),
