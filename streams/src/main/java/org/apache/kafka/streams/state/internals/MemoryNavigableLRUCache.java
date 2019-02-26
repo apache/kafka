@@ -33,7 +33,9 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
-        return new DelegatingPeekingKeyValueIterator<>(name(), new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().subSet(from, true, to, true).iterator(), treeMap));
+        return new DelegatingPeekingKeyValueIterator<>(name(),
+            new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
+                .subSet(from, true, to, true).iterator(), treeMap));
     }
 
     @Override

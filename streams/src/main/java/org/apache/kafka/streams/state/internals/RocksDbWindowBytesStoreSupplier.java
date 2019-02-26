@@ -53,10 +53,10 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                 segmentInterval,
                 new WindowKeySchema()
         );
-        return new RocksDBWindowStore(segmentedBytesStore,
-                                      retainDuplicates,
-                                      windowSize);
-
+        return new RocksDBWindowStore(
+            segmentedBytesStore,
+            retainDuplicates,
+            windowSize);
     }
 
     @Override

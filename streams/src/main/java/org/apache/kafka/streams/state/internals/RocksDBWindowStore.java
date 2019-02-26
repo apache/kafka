@@ -76,7 +76,10 @@ public class RocksDBWindowStore extends WrappedStateStore<SegmentedBytesStore> i
 
     @SuppressWarnings("deprecation")
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                           final Bytes to,
+                                                           final long timeFrom,
+                                                           final long timeTo) {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().fetch(from, to, timeFrom, timeTo);
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
     }
