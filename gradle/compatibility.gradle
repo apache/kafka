@@ -44,7 +44,7 @@ import org.ajoberstar.grgit.Grgit
 import org.apache.tools.ant.DirectoryScanner
 
 def rootRepo = Grgit.open(dir: rootProject.rootDir)
-def source = project.hasProperty('source') ? project.source : lastRelease
+def source = project.hasProperty('source') ? project.source : latestRelease
 def target = project.hasProperty('target') ? project.target : rootRepo.branch.current.name
 def useRootAsSource = rootRepo.branch.current.name == source
 def useRootAsTarget = rootRepo.branch.current.name == target
@@ -311,8 +311,8 @@ def getArguments(Project project, List<String> sourceArtifacts, List<String> tar
   // hence the workaround.
   if (failOnSemanticIncompatibility) {
     def targetVersion = Version.getSemanticVersion(version).get()
-    def lastReleaseVersion = Version.getSemanticVersion(lastRelease).get()
-    def changeType = lastReleaseVersion.computeChangeType(targetVersion).get()
+    def latestReleaseVersion = Version.getSemanticVersion(latestRelease).get()
+    def changeType = latestReleaseVersion.computeChangeType(targetVersion).get()
     if (changeType == SemanticVersion.ChangeType.MINOR || changeType == SemanticVersion.ChangeType.PATCH) {
       args = args + ["--error-on-binary-incompatibility"]
     }
