@@ -227,6 +227,7 @@ task collectArtifacts {
     def archiveNames = allprojects
             .findAll{ it != rootProject \
                       && it.name != 'connect' \
+                      && it.name != 'generator' \
                       && it.name != 'jmh-benchmarks' \
                       && !it.name.contains('system-tests') \
                       && !it.name.contains('examples') }
