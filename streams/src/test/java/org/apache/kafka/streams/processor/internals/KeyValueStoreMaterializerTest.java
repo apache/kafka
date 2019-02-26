@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
@@ -107,7 +106,7 @@ public class KeyValueStoreMaterializerTest {
     @Test
     public void shouldCreateKeyValueStoreWithTheProvidedInnerStore() {
         final KeyValueBytesStoreSupplier supplier = EasyMock.createNiceMock(KeyValueBytesStoreSupplier.class);
-        final InMemoryKeyValueStore<Bytes, byte[]> store = new InMemoryKeyValueStore<>("name", Serdes.Bytes(), Serdes.ByteArray());
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name");
         EasyMock.expect(supplier.name()).andReturn("name").anyTimes();
         EasyMock.expect(supplier.get()).andReturn(store);
         EasyMock.replay(supplier);

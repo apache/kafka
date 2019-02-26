@@ -19,7 +19,8 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.AbstractProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
-import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.junit.Test;
 
@@ -44,9 +45,7 @@ public class KTableReduceTest {
                 this::differenceNotNullArgs
             ).get();
 
-
-        final InMemoryKeyValueStore<String, Set<String>> myStore =
-            new InMemoryKeyValueStore<>("myStore", null, null);
+        final KeyValueStore<String, Set<String>> myStore = new GenericInMemoryKeyValueStore<>("myStore");
 
         context.register(myStore, null);
         reduceProcessor.init(context);
