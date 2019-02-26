@@ -108,8 +108,20 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
 
   protected val lock = new ReentrantLock
 
+  /**
+   * The maximum number of entries this index can hold
+   */
   @volatile
-  protected var mmap: MappedByteBuffer = {
+  private[this] var _maxEntries: Int = _
+
+  /** The number of entries in this index */
+  @volatile
+  protected var _entries: Int = _
+
+  @volatile
+  protected var mmap: MappedByteBuffer = _
+
+  protected def map() = {
     val newlyCreated = file.createNewFile()
     val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
@@ -134,21 +146,17 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       else
         // if this is a pre-existing index, assume it is valid and set position to last entry
         idx.position(roundDownToExactMultiple(idx.limit(), entrySize))
-      idx
+
+      // Set resulting mmap to instance variables
+      mmap = idx
+      _maxEntries = mmap.limit() / entrySize
+      _entries = mmap.position() / entrySize
     } finally {
       CoreUtils.swallow(raf.close(), AbstractIndex)
     }
   }
 
-  /**
-   * The maximum number of entries this index can hold
-   */
-  @volatile
-  private[this] var _maxEntries = mmap.limit() / entrySize
-
-  /** The number of entries in this index */
-  @volatile
-  protected var _entries = mmap.position() / entrySize
+  map()
 
   /**
    * True iff there are no more slots available in this index
@@ -203,8 +211,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    * @throws IOException if rename fails
    */
   def renameTo(f: File) {
-    try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
-    finally file = f
+    maybeUnmapMap(lock) {
+      try Utils.atomicMoveWithFallback(file.toPath, f.toPath)
+      finally file = f
+    }
   }
 
   /**
@@ -332,6 +342,23 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
     finally {
       if (OperatingSystem.IS_WINDOWS)
         lock.unlock()
+    }
+  }
+
+  /**
+   * Execute the given function in lock and with unmap/map for Windows. This
+   * is necessary because windows locks files, so for any structural operation on
+   * a file (rename, delete, move), it has to be unmapped first, then remapped.
+   */
+  protected def maybeUnmapMap[T](lock: Lock)(fun: => T): T = {
+    if (OperatingSystem.IS_WINDOWS) {
+      inLock(lock) {
+        safeForceUnmap();
+        try fun
+        finally map();
+      }
+    } else {
+      fun;
     }
   }
 
