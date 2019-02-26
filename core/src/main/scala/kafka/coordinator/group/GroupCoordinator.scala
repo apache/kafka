@@ -656,6 +656,8 @@ class GroupCoordinator(val brokerId: Int,
       group.removeOffsets(topicPartitions)
     })
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
+    if (topicPartitions.exists(_.topic == Topic.GROUP_METADATA_TOPIC_NAME))
+      groupManager.resetGroupMetadataTopicPartitionCount()
   }
 
   private def isValidGroupId(groupId: String, api: ApiKeys): Boolean = {

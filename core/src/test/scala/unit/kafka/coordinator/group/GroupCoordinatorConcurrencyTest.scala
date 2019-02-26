@@ -85,6 +85,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
     groupCoordinator = GroupCoordinator(config, zkClient, replicaManager, heartbeatPurgatory, joinPurgatory, timer.time)
     groupCoordinator.startup(false)
+    // manually trigger the partition count update
+    groupCoordinator.groupManager.updateGroupMetadataTopicPartitionCount()
   }
 
   @After
