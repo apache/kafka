@@ -75,7 +75,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
     private static final Logger log = LoggerFactory.getLogger(EmbeddedKafkaCluster.class);
 
-    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.MILLISECONDS.convert(120, TimeUnit.SECONDS);
+    private static final long DEFAULT_PRODUCE_SEND_DURATION_MS = TimeUnit.SECONDS.toMillis(120); 
 
     // Kafka Config
     private final KafkaServer[] brokers;
