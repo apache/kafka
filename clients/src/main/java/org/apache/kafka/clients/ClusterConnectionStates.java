@@ -112,6 +112,8 @@ final class ClusterConnectionStates {
      * Enter the connecting state for the given connection, moving to a new resolved address if necessary.
      * @param id the id of the connection
      * @param now the current time in ms
+     * @param host the host of the connection, to be resolved internally if needed
+     * @param clientDnsLookup the mode of DNS lookup to use when resolving the {@code host}
      */
     public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) {
         NodeConnectionState connectionState = nodeState.get(id);
