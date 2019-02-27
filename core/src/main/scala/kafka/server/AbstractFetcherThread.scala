@@ -209,18 +209,21 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     for (tp <- partitions) {
-      try {
-        val highWatermark = partitionStates.stateValue(tp).fetchOffset
-        val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
+      val partitionState = partitionStates.stateValue(tp)
+      if (partitionState != null) {
+        try {
+          val highWatermark = partitionState.fetchOffset
+          val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-        info(s"Truncating partition $tp to local high watermark $highWatermark")
-        truncate(tp, truncationState)
+          info(s"Truncating partition $tp to local high watermark $highWatermark")
+          truncate(tp, truncationState)
 
-        fetchOffsets.put(tp, truncationState)
-      } catch {
-        case e: KafkaStorageException =>
-          info(s"Failed to truncate $tp", e)
-          partitionsWithError += tp
+          fetchOffsets.put(tp, truncationState)
+        } catch {
+          case e: KafkaStorageException =>
+            info(s"Failed to truncate $tp", e)
+            partitionsWithError += tp
+        }
       }
     }
 
