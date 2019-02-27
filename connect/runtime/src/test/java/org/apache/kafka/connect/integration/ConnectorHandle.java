@@ -54,6 +54,20 @@ public class ConnectorHandle {
         return taskHandles.computeIfAbsent(taskId, k -> new TaskHandle(this, taskId));
     }
 
+    /**
+     * Get the connector's name corresponding to this handle.
+     *
+     * @return the connector's name
+     */
+    public String name() {
+        return connectorName;
+    }
+
+    /**
+     * Get the list of tasks handles monitored by this connector handle.
+     *
+     * @return the task handle list
+     */
     public Collection<TaskHandle> tasks() {
         return taskHandles.values();
     }

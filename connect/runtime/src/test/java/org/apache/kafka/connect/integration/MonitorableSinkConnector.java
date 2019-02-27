@@ -32,7 +32,9 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * A connector to be used in integration tests. This class provides methods to find task instances
+ * A sink connector that is used in Apache Kafka integration tests to verify the behavior of the
+ * Connect framework, but that can be used in other integration tests as a simple connector that
+ * generates records of a fixed structure. This class provides methods to find task instances
  * which are initiated by the embedded connector, and wait for them to consume a desired number of
  * messages.
  */

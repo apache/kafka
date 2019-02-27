@@ -381,6 +381,7 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.tools" />
     </subpackage>
 
     <subpackage name="json">

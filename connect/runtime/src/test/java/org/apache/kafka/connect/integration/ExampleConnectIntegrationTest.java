@@ -56,7 +56,9 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
     private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
+    private static final int WORKER_SETUP_DURATION_MS = 20_000;
     private static final int NUM_TASKS = 3;
+    private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
 
     private EmbeddedConnectCluster connect;
@@ -72,10 +74,10 @@ public class ExampleConnectIntegrationTest {
         Properties exampleBrokerProps = new Properties();
         exampleBrokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kakfa and Zk
+        // build a Connect cluster backed by Kafka and Zk
         connect = new EmbeddedConnectCluster.Builder()
-                .name("example-cluster")
-                .numWorkers(3)
+                .name("connect-cluster")
+                .numWorkers(NUM_WORKERS)
                 .numBrokers(1)
                 .workerProps(exampleWorkerProps)
                 .brokerProps(exampleBrokerProps)
@@ -93,7 +95,7 @@ public class ExampleConnectIntegrationTest {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
-        // stop all Connect, Kakfa and Zk threads.
+        // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }
 
@@ -108,7 +110,7 @@ public class ExampleConnectIntegrationTest {
 
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
