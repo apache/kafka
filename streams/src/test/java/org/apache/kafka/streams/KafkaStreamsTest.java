@@ -358,6 +358,9 @@ public class KafkaStreamsTest {
         } finally {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);
+            if (streams != null) {
+                streams.close();
+            }
         }
     }
 
