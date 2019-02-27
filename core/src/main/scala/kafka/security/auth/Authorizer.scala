@@ -147,7 +147,7 @@ trait Authorizer extends Configurable {
     * @return collection of authorized operations associated with a resource
     */
   def authorizedOperations(session: Session, resource: Resource): Set[Operation] = {
-    val validOps = ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
+    val validOps = resource.resourceType.supportedOperations
     validOps.filter(operation => (operation != All) && authorize(session, operation, resource))
   }
 

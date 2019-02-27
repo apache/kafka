@@ -1014,9 +1014,9 @@ public final class Utils {
 
     private static byte checkRange(final byte i) {
         if (i > 31)
-            throw new IllegalArgumentException("out of range: i>31");
+            throw new IllegalArgumentException("out of range: i>31, i = " + i);
         if (i < 0)
-            throw new IllegalArgumentException("out of range: i<0");
+            throw new IllegalArgumentException("out of range: i<0, i = " + i);
         return i;
     }
 

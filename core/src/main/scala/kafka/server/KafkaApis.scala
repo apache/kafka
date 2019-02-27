@@ -18,8 +18,9 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
+import java.lang.{Byte => JByte}
 import java.nio.ByteBuffer
-import java.{lang, util}
+import java.util
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
@@ -44,7 +45,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.{CreateTopicsResponseData, DescribeGroupsResponseData, ElectPreferredLeadersResponseData, LeaveGroupResponseData}
+import org.apache.kafka.common.message.{CreateTopicsResponseData, DescribeGroupsResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
@@ -1239,11 +1240,11 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
     val authorizedOps = authorizer match {
-      case None => ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
+      case None => resource.resourceType.supportedOperations.filter(operation => operation != All)
       case Some(auth) => auth.authorizedOperations(session, resource)
     }
 
-    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[lang.Byte]).asJava)
+    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[JByte]).asJava)
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {

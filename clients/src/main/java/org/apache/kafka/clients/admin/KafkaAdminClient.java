@@ -2437,9 +2437,9 @@ public class KafkaAdminClient extends AdminClient {
                         @Override
                         AbstractRequest.Builder createRequest(int timeoutMs) {
                             return new DescribeGroupsRequest.Builder(
-                                new DescribeGroupsRequestData().
-                                    setGroups(Collections.singletonList(groupId)).
-                                    setIncludeAuthorizedOperations(options.includeAuthorizedOperations()));
+                                new DescribeGroupsRequestData()
+                                    .setGroups(Collections.singletonList(groupId))
+                                    .setIncludeAuthorizedOperations(options.includeAuthorizedOperations()));
                         }
 
                         @Override

@@ -446,7 +446,7 @@ object AclCommand extends Logging {
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[Acl]]): Unit = {
     for ((resource, acls) <- resourceToAcls) {
-      val validOps = ResourceType.ResourceTypeToValidOperations(resource.resourceType)
+      val validOps = ResourceType.fromJava(resource.resourceType).supportedOperations
       if ((acls.map(_.operation) -- validOps).nonEmpty)
         CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
     }

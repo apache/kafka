@@ -42,6 +42,7 @@ import static org.apache.kafka.common.utils.Utils.formatAddress;
 import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
+import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -471,7 +472,7 @@ public class UtilsTest {
 
     @Test
     public void testConvertTo32BitField() {
-        Set<Byte> bytes = new HashSet<>(asList(new Byte[]{0, 1, 5, 10, 31}));
+        Set<Byte> bytes = mkSet((byte) 0, (byte) 1, (byte) 5, (byte) 10, (byte) 31);
         int bitField = Utils.to32BitField(bytes);
         assertEquals(bytes, Utils.from32BitField(bitField));
 
@@ -479,7 +480,7 @@ public class UtilsTest {
         bitField = Utils.to32BitField(bytes);
         assertEquals(bytes, Utils.from32BitField(bitField));
 
-        bytes = new HashSet<>(asList(new Byte[]{0, 11, 32}));
+        bytes = mkSet((byte) 0, (byte) 11, (byte) 32);
         try {
             Utils.to32BitField(bytes);
             fail("Expected exception not thrown");

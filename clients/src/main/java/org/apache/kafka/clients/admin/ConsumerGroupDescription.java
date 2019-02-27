@@ -127,14 +127,13 @@ public class ConsumerGroupDescription {
 
     @Override
     public String toString() {
-        return "ConsumerGroupDescription{" +
-            "groupId='" + groupId + '\'' +
+        return "(groupId=" + groupId +
             ", isSimpleConsumerGroup=" + isSimpleConsumerGroup +
             ", members=" + Utils.join(members, ",") +
-            ", partitionAssignor='" + partitionAssignor + '\'' +
+            ", partitionAssignor=" + partitionAssignor +
             ", state=" + state +
             ", coordinator=" + coordinator +
             ", authorizedOperations=" + authorizedOperations +
-            '}';
+            ")";
     }
 }

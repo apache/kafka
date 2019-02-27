@@ -57,16 +57,16 @@ public class DescribeGroupsResponse extends AbstractResponse {
         final String clientId,
         final String clientHost,
         final byte[] assignment,
-        final byte[] metaData) {
+        final byte[] metadata) {
         return new DescribedGroupMember()
             .setMemberId(memberId)
             .setClientId(clientId)
             .setClientHost(clientHost)
             .setMemberAssignment(assignment)
-            .setMemberMetadata(metaData);
+            .setMemberMetadata(metadata);
     }
 
-    public static DescribedGroup groupMetada(
+    public static DescribedGroup groupMetadata(
         final String groupId,
         final Errors error,
         final String state,
@@ -106,14 +106,14 @@ public class DescribeGroupsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> errorCounts = new HashMap<>();
-        data.groups().stream().forEach(describedGroup -> {
+        data.groups().forEach(describedGroup -> {
             updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode()));
         });
         return errorCounts;
     }
 
     public static DescribedGroup forError(String groupId, Errors error) {
-        return groupMetada(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
+        return groupMetadata(groupId, error, DescribeGroupsResponse.UNKNOWN_STATE, DescribeGroupsResponse.UNKNOWN_PROTOCOL_TYPE,
                 DescribeGroupsResponse.UNKNOWN_PROTOCOL, Collections.emptyList(), Collections.emptySet());
     }
 

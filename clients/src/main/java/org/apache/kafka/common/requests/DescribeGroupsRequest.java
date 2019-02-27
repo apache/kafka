@@ -71,10 +71,10 @@ public class DescribeGroupsRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        if (version >= 1) {
-            return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
-        } else {
+        if (version == 0) {
             return DescribeGroupsResponse.fromError(DEFAULT_THROTTLE_TIME, Errors.forException(e), data.groups());
+        } else {
+            return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
         }
     }
 

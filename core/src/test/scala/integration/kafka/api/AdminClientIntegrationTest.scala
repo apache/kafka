@@ -53,6 +53,8 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import java.lang.{Long => JLong}
 
+import kafka.security.auth.{All, Group}
+
 /**
  * An integration test of the KafkaAdminClient.
  *
@@ -1157,7 +1159,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.
             count(tp => tp.topic().equals(testTopicName)))
-          val expectedOperations = kafka.security.auth.ResourceType.possibleAuthorizedOperations(ResourceType.GROUP)
+          val expectedOperations = Group.supportedOperations
+            .filter(operation => operation != All)
             .map(operation => operation.toJava).asJava
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 

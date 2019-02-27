@@ -117,7 +117,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     } else false
   }
 
-  private def sessionPrincipal(session: Session): KafkaPrincipal = {
+  private def userPrincipal(session: Session): KafkaPrincipal = {
     // ensure we compare identical classes
     val sessionPrincipal = session.principal
     if (classOf[KafkaPrincipal] != sessionPrincipal.getClass)
@@ -131,7 +131,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    val principal = sessionPrincipal(session)
+    val principal = userPrincipal(session)
     val host = session.clientAddress.getHostAddress
 
     def denyAclExists(acls: Set[Acl]): Boolean = {
@@ -140,7 +140,8 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     }
 
     def allowAclExists(acls: Set[Acl]): Boolean = {
-      val allowOps = allowedOps(operation)
+      // Check if there are any Allow ACLs which would allow this operation.
+      val allowOps = impliedBy(operation)
       allowOps.exists(operation => aclMatch(operation, resource, principal, host, Allow, acls))
     }
 
@@ -158,10 +159,10 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
     authorized
   }
 
-  // Check if there are any Allow ACLs which would allow this operation.
+  // Return all operations which implies this operation
   // Allowing read, write, delete, or alter implies allowing describe.
   // See #{org.apache.kafka.common.acl.AclOperation} for more details about ACL inheritance.
-  private def allowedOps(operation: Operation) = {
+  private def impliedBy(operation: Operation) : Set[Operation] = {
     operation match {
       case Describe => Set[Operation](Describe, Read, Write, Delete, Alter)
       case DescribeConfigs => Set[Operation](DescribeConfigs, AlterConfigs)
@@ -174,9 +175,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
       throw new IllegalArgumentException("Only literal resources are supported. Got: " + resource.patternType)
     }
 
-    val validOps = ResourceType.possibleAuthorizedOperations(resource.resourceType.toJava)
+    val validOps = resource.resourceType.supportedOperations.filter(operation => operation != All)
 
-    val principal = sessionPrincipal(session)
+    val principal = userPrincipal(session)
     val host = session.clientAddress.getHostAddress
 
     if (isSuperUser(validOps.head, resource, principal, host)) {
@@ -196,7 +197,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
           })
 
           validOps.diff(unauthorizedOperation).foreach(operation => {
-            val allowOps = allowedOps(operation)
+            val allowOps = impliedBy(operation)
             if (allowOps.exists(operation => aclMatch(operation, principal, host, Allow, acl)))
               authorizedOperation += operation
           })

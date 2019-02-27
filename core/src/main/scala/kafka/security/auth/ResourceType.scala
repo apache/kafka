@@ -23,6 +23,7 @@ import org.apache.kafka.common.resource.{ResourceType => JResourceType}
 sealed trait ResourceType extends BaseEnum with Ordered[ ResourceType ] {
   def error: Errors
   def toJava: JResourceType
+  def supportedOperations: Set[Operation]
 
   override def compare(that: ResourceType): Int = this.name compare that.name
 }
@@ -31,46 +32,38 @@ case object Topic extends ResourceType {
   val name = "Topic"
   val error = Errors.TOPIC_AUTHORIZATION_FAILED
   val toJava = JResourceType.TOPIC
+  val supportedOperations = Set(Read, Write, Create, Describe, Delete, Alter, DescribeConfigs, AlterConfigs, All)
 }
 
 case object Group extends ResourceType {
   val name = "Group"
   val error = Errors.GROUP_AUTHORIZATION_FAILED
   val toJava = JResourceType.GROUP
+  val supportedOperations = Set(Read, Describe, Delete, All)
 }
 
 case object Cluster extends ResourceType {
   val name = "Cluster"
   val error = Errors.CLUSTER_AUTHORIZATION_FAILED
   val toJava = JResourceType.CLUSTER
+  val supportedOperations = Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All)
 }
 
 case object TransactionalId extends ResourceType {
   val name = "TransactionalId"
   val error = Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED
   val toJava = JResourceType.TRANSACTIONAL_ID
+  val supportedOperations = Set(Describe, Write, All)
 }
 
 case object DelegationToken extends ResourceType {
   val name = "DelegationToken"
   val error = Errors.DELEGATION_TOKEN_AUTHORIZATION_FAILED
   val toJava = JResourceType.DELEGATION_TOKEN
+  val supportedOperations = Set(Describe, All)
 }
 
 object ResourceType {
-
-  val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
-    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, Alter, DescribeConfigs, AlterConfigs, All),
-    JResourceType.GROUP -> Set(Read, Describe, Delete, All),
-    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
-    JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
-    JResourceType.DELEGATION_TOKEN -> Set(Describe, All)
-  )
-
-  def possibleAuthorizedOperations(resourceType: JResourceType): Set[Operation] = {
-    ResourceType.ResourceTypeToValidOperations(resourceType).filter(_ != All)
-  }
-
   def fromString(resourceType: String): ResourceType = {
     val rType = values.find(rType => rType.name.equalsIgnoreCase(resourceType))
     rType.getOrElse(throw new KafkaException(resourceType + " not a valid resourceType name. The valid names are " + values.mkString(",")))

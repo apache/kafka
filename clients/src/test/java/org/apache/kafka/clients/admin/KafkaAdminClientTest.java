@@ -1070,7 +1070,7 @@ public class KafkaAdminClientTest {
             byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
             memberAssignment.get(memberAssignmentBytes);
 
-            data.groups().add(DescribeGroupsResponse.groupMetada(
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
                     "group-0",
                     Errors.NONE,
                     "",
@@ -1082,7 +1082,7 @@ public class KafkaAdminClientTest {
                     ),
                     Collections.emptySet()));
 
-            data.groups().add(DescribeGroupsResponse.groupMetada(
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
                     "group-connect-0",
                     Errors.NONE,
                     "",
