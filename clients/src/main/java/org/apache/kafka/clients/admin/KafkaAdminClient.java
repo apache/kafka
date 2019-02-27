@@ -2462,12 +2462,7 @@ public class KafkaAdminClient extends AdminClient {
                                 if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
                                     final List<DescribedGroupMember> members = describedGroup.members();
                                     final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
-                                    final Set<AclOperation> authorizedOperations =
-                                        Utils.from32BitField(describedGroup.authorizedOperations())
-                                            .stream()
-                                            .map(AclOperation::fromCode)
-                                            .filter(operation -> operation != AclOperation.UNKNOWN)
-                                            .collect(Collectors.toSet());
+                                    final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
                                     for (DescribedGroupMember groupMember : members) {
                                         Set<TopicPartition> partitions = Collections.emptySet();
                                         if (groupMember.memberAssignment().length > 0) {
@@ -2511,6 +2506,16 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         return new DescribeConsumerGroupsResult(new HashMap<>(futures));
+    }
+
+    private Set<AclOperation> validAclOperations(final int authorizedOperations) {
+        return Utils.from32BitField(authorizedOperations)
+            .stream()
+            .map(AclOperation::fromCode)
+            .filter(operation -> operation != AclOperation.UNKNOWN
+                && operation != AclOperation.ALL
+                && operation != AclOperation.ANY)
+            .collect(Collectors.toSet());
     }
 
     private boolean handleFindCoordinatorError(FindCoordinatorResponse response, KafkaFutureImpl<?> future) {
