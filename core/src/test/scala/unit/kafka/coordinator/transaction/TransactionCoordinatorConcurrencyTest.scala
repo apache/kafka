@@ -72,9 +72,6 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     for (i <- 0 until numPartitions)
       txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
 
-    // manually trigger the partition count update
-    txnStateManager.updateTransactionTopicPartitionCount()
-
     val producerId = 11
     val pidManager: ProducerIdManager = EasyMock.createNiceMock(classOf[ProducerIdManager])
     EasyMock.expect(pidManager.generateProducerId())

@@ -92,9 +92,6 @@ class GroupMetadataManagerTest {
     replicaManager = EasyMock.createNiceMock(classOf[ReplicaManager])
     groupMetadataManager = new GroupMetadataManager(0, ApiVersion.latestVersion, offsetConfig, replicaManager, zkClient, time)
     partition = EasyMock.niceMock(classOf[Partition])
-
-    // manually trigger the partition count update
-    groupMetadataManager.updateGroupMetadataTopicPartitionCount()
   }
 
   @Test
