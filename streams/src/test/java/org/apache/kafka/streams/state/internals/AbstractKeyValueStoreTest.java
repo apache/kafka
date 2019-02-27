@@ -378,4 +378,15 @@ public abstract class AbstractKeyValueStoreTest {
         store.delete(2);
         assertNull(store.get(2));
     }
+
+    @Test
+    public void shouldNotThrowConcurrentModificationException() {
+        store.put(0, "zero");
+
+        final KeyValueIterator<Integer, String> results = store.range(0, 2);
+
+        store.put(1, "one");
+
+        assertEquals(new KeyValue<>(0, "zero"), results.next());
+    }
 }
