@@ -48,6 +48,7 @@ class SaslPlainPlaintextConsumerTest extends BaseConsumerTest with SaslSetup {
   }
 
   override def modifyConfigs(props: Seq[Properties]): Unit = {
+    super.modifyConfigs(props)
     configureListeners(props)
   }
 
