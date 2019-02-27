@@ -1318,7 +1318,16 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value);
+        return new Validator {
+            void ensureValid(String name, Object value) {
+                return base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+
+            @Override
+            String toString() {
+                return base.toString();
+            }
+        }
     }
 
     /**
