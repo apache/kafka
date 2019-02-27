@@ -347,6 +347,34 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
+  def testTruncateToHighWatermarkDuringRemovePartitions(): Unit = {
+    val highWatermark = 2L
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new MockFetcherThread {
+      override def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = {
+        removePartitions(Set(partition))
+        super.truncateToHighWatermark(partitions)
+      }
+
+      override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+    }
+
+    val replicaLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(highWatermark, leaderEpoch = 5)))
+
+    fetcher.doWork()
+
+    assertEquals(replicaLog.last.nextOffset(), replicaState.logEndOffset)
+    assertTrue(fetcher.fetchState(partition).isEmpty)
+  }
+
+  @Test
   def testTruncationSkippedIfNoEpochChange(): Unit = {
     val partition = new TopicPartition("topic", 0)
 
