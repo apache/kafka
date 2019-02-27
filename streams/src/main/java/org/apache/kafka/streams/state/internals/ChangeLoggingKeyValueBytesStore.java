@@ -44,7 +44,7 @@ public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueS
 
         // if the inner store is an LRU cache, add the eviction listener to log removed record
         if (wrapped() instanceof MemoryLRUCache) {
-            ((MemoryLRUCache<Bytes, byte[]>) wrapped()).setWhenEldestRemoved((key, value) -> {
+            ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
                 changeLogger.logChange(key, null);
             });
