@@ -1241,7 +1241,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
     val authorizedOps = authorizer match {
       case None => resource.resourceType.supportedOperations
-      case Some(auth) => auth.authorizedOperations(session, resource)
+      case Some(auth) => resource.resourceType.supportedOperations
+        .filter(operation => authorize(session, operation, resource))
     }
 
     Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[JByte]).asJava)
