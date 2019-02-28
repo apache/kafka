@@ -17,10 +17,10 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.concurrent.ConcurrentSkipListSet;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -62,8 +62,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final boolean retainDuplicates;
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
-    private final ConcurrentSkipListSet<InMemoryWindowStoreIteratorWrapper> openIterators;
-
+    private final HashSet<InMemoryWindowStoreIteratorWrapper> openIterators;
 
     private volatile boolean open = false;
 
@@ -78,7 +77,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
 
-        this.openIterators = new ConcurrentSkipListSet<>();
+        this.openIterators = new HashSet<>();
         this.segmentMap = new ConcurrentSkipListMap<>();
     }
 
@@ -232,8 +231,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private void removeExpiredSegments() {
         long minLiveTime = Math.max(0L, this.observedStreamTime - this.retentionPeriod + 1);
-        if (!openIterators.isEmpty()) {
-            minLiveTime = Math.min(minLiveTime, openIterators.iterator().next().minTime());
+        for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
+            minLiveTime = Math.min(minLiveTime, it.minTime());
         }
         this.segmentMap.headMap(minLiveTime, false).clear();
     }
@@ -297,7 +296,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             }
 
             next = getNext();
-            return true;
+            return next != null;
         }
 
         public void remove() {
