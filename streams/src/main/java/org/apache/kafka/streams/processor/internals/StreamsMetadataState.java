@@ -215,8 +215,8 @@ public class StreamsMetadataState {
     }
 
     private boolean hasPartitionsForAnyTopicPartition(final List<String> topicNames, final Set<String> partitionForHost) {
-        for (final String topicPartition : partitionForHost) {
-            if (topicNames.contains(topicPartition)) {
+        for (final String topicName : topicNames) {
+            if (partitionForHost.contains(topicName)) {
                 return true;
             }
         }

@@ -751,8 +751,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = this.taskManager.builder().topicGroups();
         final Map<String, Integer> topicToTaskMap = new HashMap<>();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            final Set<String> topicGroupsForHost = new HashSet<>(entry.getValue().sourceTopics);
-            for (final String sourceTopic : topicGroupsForHost) {
+            for (final String sourceTopic : entry.getValue().sourceTopics) {
                 topicToTaskMap.put(sourceTopic, entry.getKey());
             }
         }
