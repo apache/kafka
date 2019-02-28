@@ -69,9 +69,10 @@ public class Schema extends Type {
     @Override
     public Struct read(ByteBuffer buffer) {
         Object[] objects = new Object[fields.length];
-        for (int i = 0; i < fields.length; i++) {
+        // Remaining fields stay 'null' if the buffer has some of the fields at the start but not all.
+        for (int i = 0; i < fields.length && buffer.hasRemaining(); i++) {
             try {
-                objects[i] = buffer.position() < buffer.limit() ? fields[i].def.type.read(buffer) : null;
+                objects[i] = fields[i].def.type.read(buffer);
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
                                           (e.getMessage() == null ? e.getClass().getName() : e.getMessage()));
