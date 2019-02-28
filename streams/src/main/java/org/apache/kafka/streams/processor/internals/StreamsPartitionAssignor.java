@@ -642,7 +642,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<HostInfo, Set<TaskId>> tasksByHostState = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
         if (minReceivedMetadataVersion >= 4) {
-            for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+            for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
                 if (hostInfo != null) {
@@ -657,7 +657,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
             }
         } else {
-            for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+            for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
                 if (hostInfo != null) {
@@ -682,9 +682,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, Assignment> assignment;
         if (versionProbing) {
-            assignment = versionProbingAssignment(clientsMetadata, partitionsForTask, tasksByHostState, futureConsumers, minReceivedMetadataVersion);
+            assignment = versionProbingAssignment(clientMetadataMap, partitionsForTask, tasksByHostState, futureConsumers, minReceivedMetadataVersion);
         } else {
-            assignment = computeNewAssignment(clientsMetadata, partitionsForTask, tasksByHostState, minReceivedMetadataVersion);
+            assignment = computeNewAssignment(clientMetadataMap, partitionsForTask, tasksByHostState, minReceivedMetadataVersion);
         }
 
         return assignment;
