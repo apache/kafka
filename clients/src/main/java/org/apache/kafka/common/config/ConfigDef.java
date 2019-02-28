@@ -1080,6 +1080,91 @@ public class ConfigDef {
         }
     }
 
+    public static class ConfigKeyBuilder {
+
+        private final String name;
+        private final Type type;
+        private final Importance importance;
+        private final String documentation;
+        private Object defaultValue;
+        private Validator validator;
+        private String group;
+        private int orderInGroup;
+        private Width width;
+        private String displayName;
+        private List<String> dependents;
+        private Recommender recommender;
+        private boolean internalConfig;
+
+        private static final int DEFAULT_ORDER_IN_GROUP = -1;
+
+        public ConfigKeyBuilder(String name, Type type, String documentation, Importance importance) {
+            this.name = name;
+            this.type = type;
+            this.documentation = documentation;
+            this.importance = importance;
+            this.defaultValue = NO_DEFAULT_VALUE;
+            this.group = "";
+            this.orderInGroup = DEFAULT_ORDER_IN_GROUP;
+            this.width = Width.NONE;
+            this.displayName = name;
+        }
+
+        public ConfigKeyBuilder defaultValue(Object defaultValue) {
+            this.defaultValue = defaultValue;
+            return this;
+        }
+
+        public ConfigKeyBuilder validator(Validator validator) {
+            this.validator = validator;
+            return this;
+        }
+
+        public ConfigKeyBuilder group(String group) {
+            this.group = group;
+            return this;
+        }
+
+        public ConfigKeyBuilder orderInGroup(int orderInGroup) {
+            this.orderInGroup = orderInGroup;
+            return this;
+        }
+
+        public ConfigKeyBuilder width(Width width) {
+            this.width = width;
+            return this;
+        }
+
+        public ConfigKeyBuilder displayName(String displayName) {
+            this.displayName = displayName;
+            return this;
+        }
+
+        public ConfigKeyBuilder dependents(List<String> dependents) {
+            this.dependents = dependents;
+            return this;
+        }
+
+        public ConfigKeyBuilder recommender(Recommender recommender) {
+            this.recommender = recommender;
+            return this;
+        }
+
+        public ConfigKeyBuilder internalConfig(boolean internalConfig) {
+            this.internalConfig = internalConfig;
+            return this;
+        }
+
+        public ConfigKey build() {
+            if(dependents == null) {
+                this.dependents = Collections.emptyList();
+            }
+
+            return new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup,
+                    width, displayName, dependents, recommender, internalConfig);
+        }
+    }
+
     protected List<String> headers() {
         return Arrays.asList("Name", "Description", "Type", "Default", "Valid Values", "Importance");
     }
