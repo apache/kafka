@@ -93,8 +93,8 @@ public class PoisonPill {
         //(overwriting any previous such file). this attempts to guarantee there are
         //at most 2 (potentially large) dump files at any point in time.
 
-        File inProgress = new File(heapDumpFolder, "dump.inprogress");
-        File complete = new File(heapDumpFolder, "dump.complete");
+        File inProgress = new File(heapDumpFolder, "dump.inprogress.hprof");
+        File complete = new File(heapDumpFolder, "dump.complete.hprof");
         if (inProgress.exists() && !inProgress.delete()) {
             System.err.println("unable to delete existing dump file. will not proceed with dump");
             System.err.flush();
