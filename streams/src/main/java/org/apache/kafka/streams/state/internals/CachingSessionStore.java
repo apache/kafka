@@ -79,6 +79,12 @@ class CachingSessionStore
                 // we need to get the old values if needed, and then put to store, and then flush
                 wrapped().put(bytesKey, entry.newValue());
 
+//                final FlushEntry<K, AGG> flushEntry = flushEntry(
+//                    serdes,
+//                    rawNewValue,
+//                    sendOldValues ? rawOldValue : null,
+//                    entry.entry().context().timestamp());
+
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
                 try {
@@ -87,6 +93,10 @@ class CachingSessionStore
                         newValueBytes,
                         sendOldValues ? oldValueBytes : null,
                         entry.entry().context().timestamp());
+                        /*windowedKey,
+                        flushEntry.value,
+                        flushEntry.oldValue,
+                        flushEntry.timestamp*/
                 } finally {
                     context.setRecordContext(current);
                 }
@@ -105,16 +115,16 @@ class CachingSessionStore
         return true;
     }
 
-    @Override
-    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
-                                                  final byte[] rawValue,
-                                                  final byte[] oldRawValue,
-                                                  final long timestamp) {
-        return new FlushEntry<>(
-            rawValue != null ? serdes.valueFrom(rawValue) : null,
-            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
-            timestamp);
-    }
+//    @Override
+//    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
+//                                                  final byte[] rawValue,
+//                                                  final byte[] oldRawValue,
+//                                                  final long timestamp) {
+//        return new FlushEntry<>(
+//            rawValue != null ? serdes.valueFrom(rawValue) : null,
+//            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
+//            timestamp);
+//    }
 
     @Override
     public void put(final Windowed<Bytes> key, final byte[] value) {

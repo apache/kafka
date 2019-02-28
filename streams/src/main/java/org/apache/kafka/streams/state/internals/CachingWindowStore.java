@@ -91,26 +91,22 @@ class CachingWindowStore
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
-                final Windowed<K> windowedKey = WindowKeySchema.fromStoreKey(
-                    windowedKeyBytes,
-                    serdes.keyDeserializer(),
-                    serdes.topic());
                 // we need to get the old values if needed, and then put to store, and then flush
                 wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
 
-                final FlushEntry<K, V> flushEntry = flushEntry(
-                    serdes,
-                    rawNewValue,
-                    sendOldValues ? rawOldValue : null,
-                    entry.entry().context().timestamp());
+//                final FlushEntry<K, V> flushEntry = flushEntry(
+//                    serdes,
+//                    rawNewValue,
+//                    sendOldValues ? rawOldValue : null,
+//                    entry.entry().context().timestamp());
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
                         binaryWindowKey,
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
+                        rawNewValue,
+                        sendOldValues ? rawOldValue : null,
                         entry.entry().context().timestamp());
                         /*windowedKey,
                         flushEntry.value,
@@ -134,15 +130,15 @@ class CachingWindowStore
         return true;
     }
 
-    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
-                                                      final byte[] rawValue,
-                                                      final byte[] oldRawValue,
-                                                      final long timestamp) {
-        return new FlushEntry<>(
-            rawValue != null ? serdes.valueFrom(rawValue) : null,
-            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
-            timestamp);
-    }
+//    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
+//                                                      final byte[] rawValue,
+//                                                      final byte[] oldRawValue,
+//                                                      final long timestamp) {
+//        return new FlushEntry<>(
+//            rawValue != null ? serdes.valueFrom(rawValue) : null,
+//            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
+//            timestamp);
+//    }
 
     @Override
     public synchronized void put(final Bytes key, final byte[] value) {

@@ -86,7 +86,7 @@ public class TimestampedKeyValueStoreBuilderTest {
         final TimestampedKeyValueStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(wrapped, instanceOf(CachingTimestampedKeyValueStore.class));
+        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
     }
 
     @Test
@@ -109,7 +109,7 @@ public class TimestampedKeyValueStoreBuilderTest {
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
         assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(caching, instanceOf(CachingTimestampedKeyValueStore.class));
+        assertThat(caching, instanceOf(CachingKeyValueStore.class));
         assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }

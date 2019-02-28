@@ -62,9 +62,7 @@ class CachingKeyValueStore
         this.context = (InternalProcessorContext) context;
 
         this.cache = this.context.getCache();
-        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(
-            context.taskId().toString(),
-            name());
+        this.cacheName = ThreadCache.nameSpaceFromTaskIdAndStore(context.taskId().toString(), name());
         cache.addDirtyEntryFlushListener(cacheName, entries -> {
             for (final ThreadCache.DirtyEntry entry : entries) {
                 putAndMaybeForward(entry, (InternalProcessorContext) context);
@@ -81,12 +79,6 @@ class CachingKeyValueStore
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
             if (rawNewValue != null || rawOldValue != null) {
-                final FlushEntry<K, V> flushEntry = flushEntry(
-                    serdes,
-                    rawNewValue,
-                    sendOldValues ? rawOldValue : null,
-                    entry.entry().context().timestamp());
-
                 // we need to get the old values if needed, and then put to store, and then flush
                 wrapped().put(entry.key(), entry.newValue());
 
@@ -95,13 +87,9 @@ class CachingKeyValueStore
                 try {
                     flushListener.apply(
                         entry.key().get(),
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
+                        rawNewValue,
+                        sendOldValues ? rawOldValue : null,
                         entry.entry().context().timestamp());
-                        /*serdes.keyFrom(entry.key().get()),
-                        flushEntry.value,
-                        flushEntry.oldValue,
-                        flushEntry.timestamp);*/
                 } finally {
                     context.setRecordContext(current);
                 }
@@ -114,20 +102,10 @@ class CachingKeyValueStore
     @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
                                     final boolean sendOldValues) {
-         this.flushListener = flushListener;
+        this.flushListener = flushListener;
         this.sendOldValues = sendOldValues;
 
         return true;
-    }
-
-    public <FK, FV> FlushEntry<FK, FV> flushEntry(final StateSerdes<FK, FV> serdes,
-                                                  final byte[] rawValue,
-                                                  final byte[] oldRawValue,
-                                                  final long timestamp) {
-        return new FlushEntry<>(
-            rawValue != null ? serdes.valueFrom(rawValue) : null,
-            oldRawValue != null ? serdes.valueFrom(oldRawValue) : null,
-            timestamp);
     }
 
     @Override

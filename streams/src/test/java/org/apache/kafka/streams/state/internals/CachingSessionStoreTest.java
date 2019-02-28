@@ -76,8 +76,8 @@ public class CachingSessionStoreTest {
         final SessionKeySchema schema = new SessionKeySchema();
         final RocksDBSegmentedBytesStore root =
             new RocksDBSegmentedBytesStore("test", "metrics-scope", 0L, SEGMENT_INTERVAL, schema);
-        final RocksDBSessionStore sessionStore = new RocksDBSessionStore(underlying);
-        cachingStore = new CachingSessionStore<>(sessionStore, Serdes.String(), Serdes.String(), SEGMENT_INTERVAL);
+        final RocksDBSessionStore sessionStore = new RocksDBSessionStore(root);
+        cachingStore = new CachingSessionStore(sessionStore, SEGMENT_INTERVAL);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         final InternalMockProcessorContext context = new InternalMockProcessorContext(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, "topic", null));

@@ -43,9 +43,8 @@ import static org.hamcrest.MatcherAssert.assertThat;
 
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
-    private final InMemoryKeyValueStore<Bytes, byte[]> inner =
-        new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
-    private final ChangeLoggingTimestampedKeyValueBytesStore store = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
+    private final InMemoryKeyValueStore root = new InMemoryKeyValueStore("kv");
+    private final ChangeLoggingTimestampedKeyValueBytesStore store = new ChangeLoggingTimestampedKeyValueBytesStore(root);
     private final Map<Object, ValueAndTimestamp<byte[]>> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
@@ -89,7 +88,7 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     @Test
     public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         store.put(hi, rawThere);
-        assertThat(inner.get(hi), equalTo(rawThere));
+        assertThat(root.get(hi), equalTo(rawThere));
     }
 
     @Test
@@ -104,8 +103,8 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         store.putAll(Arrays.asList(KeyValue.pair(hi, rawThere),
                                    KeyValue.pair(hello, rawWorld)));
-        assertThat(inner.get(hi), equalTo(rawThere));
-        assertThat(inner.get(hello), equalTo(rawWorld));
+        assertThat(root.get(hi), equalTo(rawThere));
+        assertThat(root.get(hello), equalTo(rawWorld));
     }
 
     @Test
@@ -124,8 +123,8 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     public void shouldPropagateDelete() {
         store.put(hi, rawThere);
         store.delete(hi);
-        assertThat(inner.approximateNumEntries(), equalTo(0L));
-        assertThat(inner.get(hi), nullValue());
+        assertThat(root.approximateNumEntries(), equalTo(0L));
+        assertThat(root.get(hi), nullValue());
     }
 
     @Test
@@ -145,14 +144,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
     @Test
     public void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
         store.putIfAbsent(hi, rawThere);
-        assertThat(inner.get(hi), equalTo(rawThere));
+        assertThat(root.get(hi), equalTo(rawThere));
     }
 
     @Test
     public void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
         store.put(hi, rawThere);
         store.putIfAbsent(hi, rawWorld);
-        assertThat(inner.get(hi), equalTo(rawThere));
+        assertThat(root.get(hi), equalTo(rawThere));
     }
 
     @Test

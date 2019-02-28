@@ -121,16 +121,17 @@ public class MeteredKeyValueStore<K, V>
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public boolean setFlushListener(final CacheFlushListener<K, V> listener,
                                     final boolean sendOldValues) {
         final KeyValueStore<Bytes, byte[]> wrapped = wrapped();
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
-                (key, newValue, oldValue, timestamp) -> listener.apply(
-                    serdes.keyFrom(key),
-                    newValue != null ? serdes.valueFrom(newValue) : null,
-                    oldValue != null ? serdes.valueFrom(oldValue) : null,
+                (rawKey, rawNewValue, rawOldValue, timestamp) -> listener.apply(
+                    serdes.keyFrom(rawKey),
+                    rawNewValue != null ? serdes.valueFrom(rawNewValue) : null,
+                    rawOldValue != null ? serdes.valueFrom(rawOldValue) : null,
                     timestamp
                 ),
                 sendOldValues);
