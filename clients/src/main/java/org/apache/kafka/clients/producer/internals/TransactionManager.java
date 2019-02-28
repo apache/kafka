@@ -54,6 +54,8 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -114,6 +116,22 @@ public class TransactionManager {
 
         public void reset() {
             topicPartitionBookkeeping.clear();
+        }
+
+        OptionalLong getLastAckedOffset(TopicPartition partition) {
+            TopicPartitionEntry entry = topicPartitionBookkeeping.get(partition);
+            if (entry != null && entry.lastAckedOffset != ProduceResponse.INVALID_OFFSET)
+                return OptionalLong.of(entry.lastAckedOffset);
+            else
+                return OptionalLong.empty();
+        }
+
+        OptionalInt getLastAckedSequenceNumber(TopicPartition partition) {
+            TopicPartitionEntry entry = topicPartitionBookkeeping.get(partition);
+            if (entry != null && entry.lastAckedSequenceNumber != NO_LAST_ACKED_SEQUENCE_NUMBER)
+                return OptionalInt.of(entry.lastAckedSequenceNumber);
+            else
+                return OptionalInt.empty();
         }
     }
 
@@ -505,12 +523,12 @@ public class TransactionManager {
     }
 
     synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
-        if (sequence > lastAckedSequence(topicPartition))
+        if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER))
             topicPartitionBookkeeper.get(topicPartition).lastAckedSequenceNumber = sequence;
     }
 
-    synchronized int lastAckedSequence(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.get(topicPartition).lastAckedSequenceNumber;
+    synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
+        return topicPartitionBookkeeper.getLastAckedSequenceNumber(topicPartition);
     }
 
     synchronized long lastAckedOffset(TopicPartition topicPartition) {
@@ -613,7 +631,8 @@ public class TransactionManager {
                 } else {
                     // We would enter this branch if all in flight batches were ultimately expired in the producer.
                     log.info("No inflight batches remaining for {}, last ack'd sequence for partition is {}, next sequence is {}. " +
-                            "Going to reset producer state.", topicPartition, lastAckedSequence(topicPartition), sequenceNumber(topicPartition));
+                            "Going to reset producer state.", topicPartition,
+                            lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER), sequenceNumber(topicPartition));
                     return true;
                 }
             }
@@ -622,7 +641,7 @@ public class TransactionManager {
     }
 
     private synchronized boolean isNextSequence(TopicPartition topicPartition, int sequence) {
-        return sequence - lastAckedSequence(topicPartition) == 1;
+        return sequence - lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) == 1;
     }
 
     private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
