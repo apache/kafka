@@ -1116,7 +1116,7 @@ public class ConfigDef {
             this.group = "";
             this.orderInGroup = DEFAULT_ORDER_IN_GROUP;
             this.width = Width.NONE;
-            this.displayName = name;
+            this.displayName = "";
         }
 
         public ConfigKeyBuilder defaultValue(Object defaultValue) {
@@ -1159,8 +1159,8 @@ public class ConfigDef {
             return this;
         }
 
-        public ConfigKeyBuilder internalConfig(boolean internalConfig) {
-            this.internalConfig = internalConfig;
+        public ConfigKeyBuilder internalConfig() {
+            this.internalConfig = true;
             return this;
         }
 
