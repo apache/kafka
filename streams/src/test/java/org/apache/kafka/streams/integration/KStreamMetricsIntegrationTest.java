@@ -179,6 +179,22 @@ public class KStreamMetricsIntegrationTest {
         CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
 
+
+    private void startApplication() throws Exception {
+
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
+        kafkaStreams.start();
+
+        Thread.sleep(10000);
+    }
+
+    private void closeApplication() throws Exception {
+        Thread.sleep(10000);
+        kafkaStreams.close();
+        kafkaStreams.cleanUp();
+        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
+    }
+
     @Test
     public void testStreamMetric() throws Exception {
 
@@ -460,21 +476,6 @@ public class KStreamMetricsIntegrationTest {
         for (final Metric m : metrics) {
             Assert.assertNotNull(m.metricValue());
         }
-    }
-
-    private void startApplication() throws Exception {
-
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
-        kafkaStreams.start();
-
-        Thread.sleep(10000);
-    }
-
-    private void closeApplication() throws Exception {
-        Thread.sleep(10000);
-        kafkaStreams.close();
-        kafkaStreams.cleanUp();
-        IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
 }
