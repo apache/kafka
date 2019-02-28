@@ -145,7 +145,16 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width, displayName, dependents, recommender, false));
+        return define(new ConfigKeyBuilder(name, type, documentation, importance)
+                .defaultValue(defaultValue)
+                .validator(validator)
+                .group(group)
+                .orderInGroup(orderInGroup)
+                .width(width)
+                .displayName(displayName)
+                .dependents(dependents)
+                .recommender(recommender)
+                .build());
     }
 
     /**
