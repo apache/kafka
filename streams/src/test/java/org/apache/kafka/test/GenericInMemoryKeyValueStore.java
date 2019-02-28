@@ -22,8 +22,8 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.util.Iterator;
 import java.util.List;
@@ -37,13 +37,17 @@ import java.util.TreeMap;
  *  need a basic KeyValueStore for arbitrary types and don't have/want to write a serde
  */
 public class GenericInMemoryKeyValueStore<K extends Comparable, V>
-    implements KeyValueStore<K, V>, CachedStateStore<K, V> {
+    extends WrappedStateStore<StateStore, K, V>
+    implements KeyValueStore<K, V> {
 
     private final String name;
     private final NavigableMap<K, V> map;
     private volatile boolean open = false;
 
     public GenericInMemoryKeyValueStore(final String name) {
+        // it's not really a `WrappedStateStore` so we pass `null`
+        // however, we need to implement `WrappedStateStore` to make the store usable
+        super(null);
         this.name = name;
 
         this.map = new TreeMap<>();

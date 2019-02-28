@@ -37,8 +37,8 @@ import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredWindowStore<K, V>
-    extends WrappedStateStore<WindowStore<Bytes, byte[]>>
-    implements WindowStore<K, V>, CachedStateStore<Windowed<K>, V> {
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
+    implements WindowStore<K, V> {
 
     private final long windowSizeMs;
     private final String metricScope;
@@ -109,7 +109,7 @@ public class MeteredWindowStore<K, V>
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 (key, newValue, oldValue, timestamp) -> listener.apply(
-                    WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), null),
+                    WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
                     newValue != null ? serdes.valueFrom(newValue) : null,
                     oldValue != null ? serdes.valueFrom(oldValue) : null,
                     timestamp

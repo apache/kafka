@@ -46,8 +46,8 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
  * @param <V>
  */
 public class MeteredKeyValueStore<K, V>
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>>
-    implements KeyValueStore<K, V>, CachedStateStore<K, V> {
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
+    implements KeyValueStore<K, V> {
 
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;

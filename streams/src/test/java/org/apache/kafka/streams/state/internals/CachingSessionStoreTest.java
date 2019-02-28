@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -57,6 +56,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("PointlessArithmeticExpression")
 public class CachingSessionStoreTest {
@@ -230,6 +230,12 @@ public class CachingSessionStoreTest {
         }
         rangeResults.close();
         assertEquals(mkSet(a1, a2, a3, aa1, aa3), keys);
+    }
+
+    @Test
+    public void shouldSetFlushListener() {
+        assertTrue(cachingStore.setFlushListener(null, true));
+        assertTrue(cachingStore.setFlushListener(null, false));
     }
 
     @Test

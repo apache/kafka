@@ -28,7 +28,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import java.util.Objects;
 
 class CachingSessionStore
-    extends WrappedStateStore<SessionStore<Bytes, byte[]>>
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
     private final SessionKeySchema keySchema;

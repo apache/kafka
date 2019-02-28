@@ -51,6 +51,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
@@ -73,8 +74,7 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), maxCacheSizeBytes, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext(null, null, null, null, cache);
         topic = "topic";
-        context.setRecordContext(
-            new ProcessorRecordContext(10, 0, 0, topic, null));
+        context.setRecordContext(new ProcessorRecordContext(10, 0, 0, topic, null));
         store.init(context, null);
     }
 
@@ -93,11 +93,14 @@ public class CachingKeyValueStoreTest extends AbstractKeyValueStoreTest {
                 .withCachingEnabled();
 
         final KeyValueStore<K, V> store = (KeyValueStore<K, V>) storeBuilder.build();
-
-        final CachedStateStore inner = (CachedStateStore) ((WrappedStateStore) store).wrapped();
-        inner.setFlushListener(cacheFlushListener, false);
         store.init(context, store);
         return store;
+    }
+
+    @Test
+    public void shouldSetFlushListener() {
+        assertTrue(store.setFlushListener(null, true));
+        assertTrue(store.setFlushListener(null, false));
     }
 
     @Test

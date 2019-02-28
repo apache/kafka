@@ -32,7 +32,7 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 class CachingKeyValueStore
-    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>>
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
     implements KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
     private CacheFlushListener<byte[], byte[]> flushListener;
@@ -99,6 +99,7 @@ class CachingKeyValueStore
         }
     }
 
+    @Override
     public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
                                     final boolean sendOldValues) {
         this.flushListener = flushListener;

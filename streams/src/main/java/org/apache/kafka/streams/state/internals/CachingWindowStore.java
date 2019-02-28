@@ -30,7 +30,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 class CachingWindowStore
-    extends WrappedStateStore<WindowStore<Bytes, byte[]>>
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
     private final long windowSize;

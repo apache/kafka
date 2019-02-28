@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -30,7 +29,7 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V>
  */
 class TupleForwarder<K, V> {
-    private final boolean cachingEnable;
+    private final boolean cachingEnabled;
     private final ProcessorContext context;
 
     @SuppressWarnings("unchecked")
@@ -38,22 +37,14 @@ class TupleForwarder<K, V> {
                    final ProcessorContext context,
                    final ForwardingCacheFlushListener<K, V> flushListener,
                    final boolean sendOldValues) {
-        // all `metered` stores implement `CachedStateStore`
-        final CachedStateStore cachedStateStore;
-        if (store instanceof CachedStateStore) {
-            cachedStateStore = (CachedStateStore) store;
-        } else {
-            // metered stores might be wrapped with `decorator` (cf. ProcessorContextImpl)
-            cachedStateStore = (CachedStateStore) ((WrappedStateStore) store).wrapped();
-        }
-        cachingEnable = cachedStateStore.setFlushListener(flushListener, sendOldValues);
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
         this.context = context;
     }
 
     public void maybeForward(final K key,
                              final V newValue,
                              final V oldValue) {
-        if (cachingEnable) {
+        if (cachingEnabled) {
             return;
         }
         context.forward(key, new Change<>(newValue, oldValue));

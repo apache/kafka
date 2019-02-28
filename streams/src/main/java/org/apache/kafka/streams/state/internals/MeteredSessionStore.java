@@ -37,8 +37,8 @@ import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
 public class MeteredSessionStore<K, V>
-    extends WrappedStateStore<SessionStore<Bytes, byte[]>>
-    implements SessionStore<K, V>, CachedStateStore<Windowed<K>, V> {
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
+    implements SessionStore<K, V> {
 
     private final String metricScope;
     private final Serde<K> keySerde;
@@ -107,7 +107,7 @@ public class MeteredSessionStore<K, V>
         if (wrapped instanceof CachedStateStore) {
             return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
                 (key, newValue, oldValue, timestamp) -> listener.apply(
-                    SessionKeySchema.from(key, serdes.keyDeserializer(), null),
+                    SessionKeySchema.from(key, serdes.keyDeserializer(), serdes.topic()),
                     newValue != null ? serdes.valueFrom(newValue) : null,
                     oldValue != null ? serdes.valueFrom(oldValue) : null,
                     timestamp
