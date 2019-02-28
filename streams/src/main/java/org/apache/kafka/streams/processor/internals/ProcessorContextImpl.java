@@ -204,7 +204,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }
 
-    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends WrappedStateStore<T> {
+    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore, K, V>
+        extends WrappedStateStore<T, K, V> {
+
         static final String ERROR_MESSAGE = "Global store is read only";
 
         private StateStoreReadOnlyDecorator(final T inner) {
@@ -229,7 +231,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class KeyValueStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<KeyValueStore<K, V>>
+        extends StateStoreReadOnlyDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
         private KeyValueStoreReadOnlyDecorator(final KeyValueStore<K, V> inner) {
@@ -281,7 +283,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class WindowStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<WindowStore<K, V>>
+        extends StateStoreReadOnlyDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
         private WindowStoreReadOnlyDecorator(final WindowStore<K, V> inner) {
@@ -338,7 +340,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class SessionStoreReadOnlyDecorator<K, AGG>
-        extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>>
+        extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
         private SessionStoreReadOnlyDecorator(final SessionStore<K, AGG> inner) {
@@ -388,7 +390,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends WrappedStateStore<T> {
+    private abstract static class StateStoreReadWriteDecorator<T extends StateStore, K, V>
+        extends WrappedStateStore<T, K, V> {
+
         static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
         private StateStoreReadWriteDecorator(final T inner) {
@@ -408,7 +412,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class KeyValueStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<KeyValueStore<K, V>>
+        extends StateStoreReadWriteDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
         private KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
@@ -460,7 +464,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class WindowStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<WindowStore<K, V>>
+        extends StateStoreReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
         private WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
@@ -517,7 +521,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class SessionStoreReadWriteDecorator<K, AGG>
-        extends StateStoreReadWriteDecorator<SessionStore<K, AGG>>
+        extends StateStoreReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
         private SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {

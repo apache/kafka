@@ -311,12 +311,12 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutAllNullKey() {
-        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(null, "anyValue")));
+        store.putAll(Collections.singletonList(new KeyValue<>(null, "anyValue")));
     }
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() {
-        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(1, null)));
+        store.putAll(Collections.singletonList(new KeyValue<>(1, null)));
     }
 
     @Test(expected = NullPointerException.class)
