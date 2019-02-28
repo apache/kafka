@@ -1165,7 +1165,7 @@ public class ConfigDef {
         }
 
         public ConfigKey build() {
-            if(dependents == null) {
+            if (dependents == null) {
                 this.dependents = Collections.emptyList();
             }
 
