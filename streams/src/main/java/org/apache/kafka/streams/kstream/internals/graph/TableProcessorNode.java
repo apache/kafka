@@ -37,7 +37,7 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
                               final MaterializedInternal<K, V, S> materializedInternal,
                               final String[] storeNames) {
 
-        super(nodeName, false);
+        super(nodeName);
         this.processorParameters = processorParameters;
         this.materializedInternal = materializedInternal;
         this.storeNames = storeNames != null ? storeNames : new String[]{};

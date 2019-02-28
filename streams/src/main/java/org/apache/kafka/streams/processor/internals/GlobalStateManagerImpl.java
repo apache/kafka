@@ -318,7 +318,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
+    public void close(final boolean clean) throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;
@@ -341,7 +341,6 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
             }
-            checkpoint(offsets);
         } finally {
             stateDirectory.unlockGlobalState();
         }

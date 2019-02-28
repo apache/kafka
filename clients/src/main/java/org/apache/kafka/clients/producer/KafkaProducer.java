@@ -254,7 +254,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
-    private TransactionalRequestResult initTransactionsResult;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -609,20 +608,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
-        if (initTransactionsResult == null) {
-            initTransactionsResult = transactionManager.initializeTransactions();
-            sender.wakeup();
-        }
-
-        try {
-            if (initTransactionsResult.await(maxBlockTimeMs, TimeUnit.MILLISECONDS)) {
-                initTransactionsResult = null;
-            } else {
-                throw new TimeoutException("Timeout expired while initializing transactional state in " + maxBlockTimeMs + "ms.");
-            }
-        } catch (InterruptedException e) {
-            throw new InterruptException("Initialize transactions interrupted.", e);
-        }
+        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        sender.wakeup();
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**
@@ -682,6 +670,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * errors, this method will throw the last received exception immediately and the transaction will not be committed.
      * So all {@link #send(ProducerRecord)} calls in a transaction must succeed in order for this method to succeed.
      *
+     * Note that this method will raise {@link TimeoutException} if the transaction cannot be committed before expiration
+     * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
+     * It is safe to retry in either case, but it is not possible to attempt a different operation (such as abortTransaction)
+     * since the commit may already be in the progress of completing. If not retrying, the only option is to close the producer.
+     *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
      * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
@@ -690,18 +683,25 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal or abortable error, or for any
      *         other unexpected error
+     * @throws TimeoutException if the time taken for committing the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
-        result.await();
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**
      * Aborts the ongoing transaction. Any unflushed produce messages will be aborted when this call is made.
      * This call will throw an exception immediately if any prior {@link #send(ProducerRecord)} calls failed with a
      * {@link ProducerFencedException} or an instance of {@link org.apache.kafka.common.errors.AuthorizationException}.
+     *
+     * Note that this method will raise {@link TimeoutException} if the transaction cannot be aborted before expiration
+     * of {@code max.block.ms}. Additionally, it will raise {@link InterruptException} if interrupted.
+     * It is safe to retry in either case, but it is not possible to attempt a different operation (such as commitTransaction)
+     * since the abort may already be in the progress of completing. If not retrying, the only option is to close the producer.
      *
      * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
      * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
@@ -710,12 +710,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
      *         transactional.id is not authorized. See the exception for more details
      * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for aborting the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
-        result.await();
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
     }
 
     /**

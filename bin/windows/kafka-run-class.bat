@@ -111,7 +111,7 @@ IF ["%JMX_PORT%"] NEQ [""] (
 
 rem Log directory to use
 IF ["%LOG_DIR%"] EQU [""] (
-    set LOG_DIR="%BASE_DIR%/logs"
+    set LOG_DIR=%BASE_DIR%/logs
 )
 
 rem Log4j settings

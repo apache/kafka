@@ -29,6 +29,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
+import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -273,7 +274,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new ListGroupsRequest.Builder()
 
         case ApiKeys.SASL_HANDSHAKE =>
-          new SaslHandshakeRequest.Builder("PLAIN")
+          new SaslHandshakeRequest.Builder(new SaslHandshakeRequestData().setMechanism("PLAIN"))
 
         case ApiKeys.SASL_AUTHENTICATE =>
           new SaslAuthenticateRequest.Builder(ByteBuffer.wrap(new Array[Byte](0)))

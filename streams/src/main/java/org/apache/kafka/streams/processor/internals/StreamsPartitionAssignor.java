@@ -393,7 +393,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     public Map<String, Assignment> assign(final Cluster metadata,
                                           final Map<String, Subscription> subscriptions) {
         // construct the client metadata from the decoded subscription info
-        final Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
+        final Map<UUID, ClientMetadata> clientMetadataMap = new HashMap<>();
         final Set<String> futureConsumers = new HashSet<>();
 
         int minReceivedMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION;
@@ -417,11 +417,11 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
 
             // create the new client metadata if necessary
-            ClientMetadata clientMetadata = clientsMetadata.get(info.processId());
+            ClientMetadata clientMetadata = clientMetadataMap.get(info.processId());
 
             if (clientMetadata == null) {
                 clientMetadata = new ClientMetadata(info.userEndPoint());
-                clientsMetadata.put(info.processId(), clientMetadata);
+                clientMetadataMap.put(info.processId(), clientMetadata);
             }
 
             // add the consumer to the client
@@ -449,7 +449,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 SubscriptionInfo.LATEST_SUPPORTED_VERSION);
         }
 
-        log.debug("Constructed client metadata {} from the member subscriptions.", clientsMetadata);
+        log.debug("Constructed client metadata {} from the member subscriptions.", clientMetadataMap);
 
         // ---------------- Step Zero ---------------- //
 
@@ -465,7 +465,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     !metadata.topics().contains(topic)) {
                     log.error("Missing source topic {} durign assignment. Returning error {}.",
                               topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.name());
-                    return errorAssignment(clientsMetadata, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
+                    return errorAssignment(clientMetadataMap, topic, Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code);
                 }
             }
             for (final InternalTopicConfig topic: topicsInfo.repartitionSourceTopics.values()) {
@@ -623,7 +623,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         // assign tasks to clients
         final Map<UUID, ClientState> states = new HashMap<>();
-        for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+        for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
             states.put(entry.getKey(), entry.getValue().state);
         }
 
@@ -640,7 +640,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
         if (minReceivedMetadataVersion >= 2) {
-            for (final Map.Entry<UUID, ClientMetadata> entry : clientsMetadata.entrySet()) {
+            for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
                 if (hostInfo != null) {
@@ -659,9 +659,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, Assignment> assignment;
         if (versionProbing) {
-            assignment = versionProbingAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, futureConsumers, minReceivedMetadataVersion);
+            assignment = versionProbingAssignment(clientMetadataMap, partitionsForTask, partitionsByHostState, futureConsumers, minReceivedMetadataVersion);
         } else {
-            assignment = computeNewAssignment(clientsMetadata, partitionsForTask, partitionsByHostState, minReceivedMetadataVersion);
+            assignment = computeNewAssignment(clientMetadataMap, partitionsForTask, partitionsByHostState, minReceivedMetadataVersion);
         }
 
         return assignment;

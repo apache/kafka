@@ -325,7 +325,7 @@ class LogTest {
         topicPartition, producerStateManager, new LogDirFailureChannel(10)) {
 
         override def addSegment(segment: LogSegment): LogSegment = {
-          val wrapper = new LogSegment(segment.log, segment.offsetIndex, segment.timeIndex, segment.txnIndex, segment.baseOffset,
+          val wrapper = new LogSegment(segment.log, segment.lazyOffsetIndex, segment.lazyTimeIndex, segment.txnIndex, segment.baseOffset,
             segment.indexIntervalBytes, segment.rollJitterMs, mockTime) {
 
             override def read(startOffset: Long, maxOffset: Option[Long], maxSize: Int, maxPosition: Long,
@@ -1680,8 +1680,8 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
-    val indexFiles = log.logSegments.map(_.offsetIndex.file)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val indexFiles = log.logSegments.map(_.lazyOffsetIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // delete all the index files
@@ -1754,7 +1754,7 @@ class LogTest {
     for (i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10),
         timestamp = mockTime.milliseconds + i * 10, magicValue = RecordBatch.MAGIC_VALUE_V1), leaderEpoch = 0)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // Delete the time index.
@@ -1764,7 +1764,7 @@ class LogTest {
     log = createLog(logDir, logConfig, recoveryPoint = numMessages + 1)
     for (segment <- log.logSegments.init) {
       assertEquals("The time index should be empty", 0, segment.timeIndex.entries)
-      assertEquals("The time index file size should be 0", 0, segment.timeIndex.file.length)
+      assertEquals("The time index file size should be 0", 0, segment.lazyTimeIndex.file.length)
     }
   }
 
@@ -1779,8 +1779,8 @@ class LogTest {
     var log = createLog(logDir, logConfig)
     for(i <- 0 until numMessages)
       log.appendAsLeader(TestUtils.singletonRecords(value = TestUtils.randomBytes(10), timestamp = mockTime.milliseconds + i * 10), leaderEpoch = 0)
-    val indexFiles = log.logSegments.map(_.offsetIndex.file)
-    val timeIndexFiles = log.logSegments.map(_.timeIndex.file)
+    val indexFiles = log.logSegments.map(_.lazyOffsetIndex.file)
+    val timeIndexFiles = log.logSegments.map(_.lazyTimeIndex.file)
     log.close()
 
     // corrupt all the index files
@@ -1797,8 +1797,8 @@ class LogTest {
       bw.close()
     }
 
-    // reopen the log
-    log = createLog(logDir, logConfig, recoveryPoint = 200L)
+    // reopen the log with recovery point=0 so that the segment recovery can be triggered
+    log = createLog(logDir, logConfig)
     assertEquals("Should have %d messages when log is reopened".format(numMessages), numMessages, log.logEndOffset)
     for(i <- 0 until numMessages) {
       assertEquals(i, readLog(log, i, 100).records.batches.iterator.next().lastOffset)
@@ -1911,9 +1911,18 @@ class LogTest {
     val bogusIndex2 = Log.offsetIndexFile(logDir, 5)
     val bogusTimeIndex2 = Log.timeIndexFile(logDir, 5)
 
+    // The files remain absent until we first access it because we are doing lazy loading for time index and offset index
+    // files but in this test case we need to create these files in order to test we will remove them.
+    bogusIndex2.createNewFile()
+    bogusTimeIndex2.createNewFile()
+
     def createRecords = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds)
     val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, segmentIndexBytes = 1000, indexIntervalBytes = 1)
     val log = createLog(logDir, logConfig)
+
+    // Force the segment to access the index files because we are doing index lazy loading.
+    log.logSegments.toSeq.head.offsetIndex
+    log.logSegments.toSeq.head.timeIndex
 
     assertTrue("The first index file should have been replaced with a larger file", bogusIndex1.length > 0)
     assertTrue("The first time index file should have been replaced with a larger file", bogusTimeIndex1.length > 0)
@@ -1964,20 +1973,20 @@ class LogTest {
 
     // files should be renamed
     val segments = log.logSegments.toArray
-    val oldFiles = segments.map(_.log.file) ++ segments.map(_.offsetIndex.file)
+    val oldFiles = segments.map(_.log.file) ++ segments.map(_.lazyOffsetIndex.file)
 
     log.onHighWatermarkIncremented(log.logEndOffset)
     log.deleteOldSegments()
 
     assertEquals("Only one segment should remain.", 1, log.numberOfSegments)
     assertTrue("All log and index files should end in .deleted", segments.forall(_.log.file.getName.endsWith(Log.DeletedFileSuffix)) &&
-                                                                 segments.forall(_.offsetIndex.file.getName.endsWith(Log.DeletedFileSuffix)))
+                                                                 segments.forall(_.lazyOffsetIndex.file.getName.endsWith(Log.DeletedFileSuffix)))
     assertTrue("The .deleted files should still be there.", segments.forall(_.log.file.exists) &&
-                                                            segments.forall(_.offsetIndex.file.exists))
+                                                            segments.forall(_.lazyOffsetIndex.file.exists))
     assertTrue("The original file should be gone.", oldFiles.forall(!_.exists))
 
     // when enough time passes the files should be deleted
-    val deletedFiles = segments.map(_.log.file) ++ segments.map(_.offsetIndex.file)
+    val deletedFiles = segments.map(_.log.file) ++ segments.map(_.lazyOffsetIndex.file)
     mockTime.sleep(asyncDeleteMs + 1)
     assertTrue("Files should all be gone.", deletedFiles.forall(!_.exists))
   }
@@ -2104,7 +2113,7 @@ class LogTest {
       log.close()
 
       // corrupt index and log by appending random bytes
-      TestUtils.appendNonsenseToFile(log.activeSegment.offsetIndex.file, TestUtils.random.nextInt(1024) + 1)
+      TestUtils.appendNonsenseToFile(log.activeSegment.lazyOffsetIndex.file, TestUtils.random.nextInt(1024) + 1)
       TestUtils.appendNonsenseToFile(log.activeSegment.log.file, TestUtils.random.nextInt(1024) + 1)
 
       // attempt recovery
@@ -2363,6 +2372,9 @@ class LogTest {
 
   private def testDegenerateSplitSegmentWithOverflow(segmentBaseOffset: Long, records: List[MemoryRecords]): Unit = {
     val segment = LogTest.rawSegment(logDir, segmentBaseOffset)
+    // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+    Log.offsetIndexFile(logDir, segmentBaseOffset).createNewFile()
+    Log.timeIndexFile(logDir, segmentBaseOffset).createNewFile()
     records.foreach(segment.append _)
     segment.close()
 
@@ -3797,6 +3809,9 @@ object LogTest {
         record(baseOffset + 2)))
       segment.append(MemoryRecords.withRecords(baseOffset + Int.MaxValue - 1, CompressionType.NONE, 0,
         record(baseOffset + Int.MaxValue - 1)))
+      // Need to create the offset files explicitly to avoid triggering segment recovery to truncate segment.
+      Log.offsetIndexFile(logDir, baseOffset).createNewFile()
+      Log.timeIndexFile(logDir, baseOffset).createNewFile()
       baseOffset + Int.MaxValue
     }
 

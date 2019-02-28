@@ -33,6 +33,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -45,6 +46,9 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -296,6 +300,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             producer = producerSupplier.get();
             producer.initTransactions();
             recordCollector.init(producer);
+
+            if (stateMgr.checkpoint != null) {
+                try {
+                    stateMgr.checkpoint.delete();
+                    stateMgr.checkpoint = null;
+                } catch (final IOException e) {
+                    throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
+                }
+            }
         }
     }
 
@@ -363,18 +376,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         } catch (final KafkaException e) {
-            throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
+            final String stackTrace = getStacktraceString(e);
+            throw new StreamsException(format("Exception caught in process. taskId=%s, " +
+                    "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
                 id(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),
-                record.offset()
+                record.offset(),
+                stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
 
         return true;
+    }
+
+    private String getStacktraceString(final KafkaException e) {
+        String stacktrace = null;
+        try (final StringWriter stringWriter = new StringWriter();
+             final PrintWriter printWriter = new PrintWriter(stringWriter)) {
+            e.printStackTrace(printWriter);
+            stacktrace = stringWriter.toString();
+        } catch (final IOException ioe) {
+            log.error("Encountered error extracting stacktrace from this exception", ioe);
+        }
+        return stacktrace;
     }
 
     /**
@@ -567,6 +595,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
+
+                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+
                     try {
                         recordCollector.close();
                     } catch (final ProducerFencedException e) {

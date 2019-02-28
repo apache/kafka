@@ -143,7 +143,7 @@ class StreamsUpgradeTest(Test):
         self.kafka.start()
 
         # allow some time for topics to be created
-        wait_until(lambda: self.get_topics_count() >= (len(self.topics) * self.num_kafka_nodes),
+        wait_until(lambda: self.confirm_topics_on_all_brokers(set(self.topics.keys())),
                    timeout_sec=60,
                    err_msg="Broker did not create all topics in 60 seconds ")
 
@@ -635,10 +635,19 @@ class StreamsUpgradeTest(Test):
             if len(found) > 0:
                 raise Exception("Kafka Streams failed with 'group member upgraded to metadata 4 too early'")
 
-    def get_topics_count(self):
-        count = 0
+    def confirm_topics_on_all_brokers(self, expected_topic_set):
         for node in self.kafka.nodes:
-            topic_list = self.kafka.list_topics("placeholder", node)
-            for topic in topic_list:
-                count += 1
-        return count
+            match_count = 0
+            # need to iterate over topic_list_generator as kafka.list_topics()
+            # returns a python generator so values are fetched lazily
+            # so we can't just compare directly we must iterate over what's returned
+            topic_list_generator = self.kafka.list_topics("placeholder", node)
+            for topic in topic_list_generator:
+                if topic in expected_topic_set:
+                    match_count += 1
+
+            if len(expected_topic_set) != match_count:
+                return False
+
+        return True
+

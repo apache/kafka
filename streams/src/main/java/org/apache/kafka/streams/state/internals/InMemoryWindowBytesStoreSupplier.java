@@ -16,25 +16,23 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
+public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplier {
     private final String name;
     private final long retentionPeriod;
-    private final long segmentInterval;
     private final long windowSize;
     private final boolean retainDuplicates;
 
-    public RocksDbWindowBytesStoreSupplier(final String name,
-                                           final long retentionPeriod,
-                                           final long segmentInterval,
-                                           final long windowSize,
-                                           final boolean retainDuplicates) {
+    public InMemoryWindowBytesStoreSupplier(final String name,
+                                            final long retentionPeriod,
+                                            final long windowSize,
+                                            final boolean retainDuplicates) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
-        this.segmentInterval = segmentInterval;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
     }
@@ -46,47 +44,45 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public WindowStore<Bytes, byte[]> get() {
-        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
-                name,
-                metricsScope(),
-                retentionPeriod,
-                segmentInterval,
-                new WindowKeySchema()
-        );
-        return new RocksDBWindowStore(
-            segmentedBytesStore,
-            retainDuplicates,
-            windowSize);
+        return new InMemoryWindowStore<>(name,
+                                         Serdes.Bytes(),
+                                         Serdes.ByteArray(),
+                                         retentionPeriod,
+                                         windowSize,
+                                         retainDuplicates,
+                                         metricsScope());
     }
 
     @Override
     public String metricsScope() {
-        return "rocksdb-window-state";
+        return "in-memory-window-state";
     }
 
     @Deprecated
     @Override
     public int segments() {
-        return (int) (retentionPeriod / segmentInterval) + 1;
+        throw new IllegalStateException("Segments is deprecated and should not be called");
     }
 
     @Override
-    public long segmentIntervalMs() {
-        return segmentInterval;
+    public long retentionPeriod() {
+        return retentionPeriod;
     }
+
 
     @Override
     public long windowSize() {
         return windowSize;
     }
 
+    // In-memory window store is not *really* segmented, so just say size is 1 ms
     @Override
-    public boolean retainDuplicates() {
-        return retainDuplicates;
+    public long segmentIntervalMs() {
+        return 1;
     }
 
     @Override
-    public long retentionPeriod() {
-        return retentionPeriod;
+    public boolean retainDuplicates() {
+        return retainDuplicates;
     }
 }

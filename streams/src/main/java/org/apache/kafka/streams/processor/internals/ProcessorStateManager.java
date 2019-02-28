@@ -89,6 +89,9 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
+
+        log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
+
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -140,7 +143,7 @@ public class ProcessorStateManager extends AbstractStateManager {
             restoreCallbacks.put(topic, stateRestoreCallback);
             recordConverters.put(topic, recordConverter);
         } else {
-            log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
+            log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
 
             final StateRestorer restorer = new StateRestorer(
                 storePartition,
@@ -254,7 +257,7 @@ public class ProcessorStateManager extends AbstractStateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
+    public void close(final boolean clean) throws ProcessorStateException {
         ProcessorStateException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
@@ -271,11 +274,17 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.error("Failed to close state store {}: ", store.name(), e);
                 }
             }
-
-            if (ackedOffsets != null) {
-                checkpoint(ackedOffsets);
-            }
             stores.clear();
+        }
+
+        if (!clean && eosEnabled && checkpoint != null) {
+            // delete the checkpoint file if this is an unclean close
+            try {
+                checkpoint.delete();
+                checkpoint = null;
+            } catch (final IOException e) {
+                throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
+            }
         }
 
         if (firstException != null) {
@@ -287,6 +296,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     @Override
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
         this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
+        log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
         for (final StateStore store : stores.values()) {
             final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
@@ -302,6 +312,9 @@ public class ProcessorStateManager extends AbstractStateManager {
                 }
             }
         }
+
+        log.trace("Checkpointable offsets updated with active acked offsets: {}", this.checkpointableOffsets);
+
         // write the checkpoint file before closing
         if (checkpoint == null) {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));

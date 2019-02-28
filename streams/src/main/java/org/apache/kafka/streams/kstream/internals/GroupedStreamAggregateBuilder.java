@@ -102,8 +102,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                storeBuilder,
-                repartitionRequired
+                storeBuilder
             );
 
         builder.addGraphNode(parentNode, statefulProcessorNode);

@@ -83,10 +83,8 @@ public class CachingWindowStoreTest {
     public void setUp() {
         keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
-        final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(
+        final RocksDBWindowStore windowStore = new RocksDBWindowStore(
             underlying,
-            Serdes.Bytes(),
-            Serdes.ByteArray(),
             false,
             WINDOW_SIZE);
         cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();

@@ -102,6 +102,7 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.errors" />
       <subpackage name="authenticator">
+        <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.protocol.types" />
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.clients" />

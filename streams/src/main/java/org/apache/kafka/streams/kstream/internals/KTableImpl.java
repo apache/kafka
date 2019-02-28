@@ -328,8 +328,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
             name,
-            processorParameters,
-            false
+            processorParameters
         );
 
         builder.addGraphNode(this.streamsGraphNode, toStreamNode);
@@ -370,8 +369,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName),
-            false
+            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
         );
 
         builder.addGraphNode(streamsGraphNode, node);
@@ -579,7 +577,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters, false);
+        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
