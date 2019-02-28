@@ -531,15 +531,15 @@ public class TransactionManager {
         return topicPartitionBookkeeper.getLastAckedSequenceNumber(topicPartition);
     }
 
-    synchronized long lastAckedOffset(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.get(topicPartition).lastAckedOffset;
+    synchronized OptionalLong lastAckedOffset(TopicPartition topicPartition) {
+        return topicPartitionBookkeeper.getLastAckedOffset(topicPartition);
     }
 
     synchronized void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
         if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
             return;
         long lastOffset = response.baseOffset + batch.recordCount - 1;
-        if (lastOffset > lastAckedOffset(batch.topicPartition)) {
+        if (lastOffset > lastAckedOffset(batch.topicPartition).orElse(ProduceResponse.INVALID_OFFSET)) {
             topicPartitionBookkeeper.get(batch.topicPartition).lastAckedOffset = lastOffset;
         } else {
             log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
@@ -779,7 +779,7 @@ public class TransactionManager {
                 // come back from the broker, they would also come with an UNKNOWN_PRODUCER_ID error. In this case, we should not
                 // reset the sequence numbers to the beginning.
                 return true;
-            } else if (lastAckedOffset(batch.topicPartition) < response.logStartOffset) {
+            } else if (lastAckedOffset(batch.topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER) < response.logStartOffset) {
                 // The head of the log has been removed, probably due to the retention time elapsing. In this case,
                 // we expect to lose the producer state. Reset the sequences of all inflight batches to be from the beginning
                 // and retry them.

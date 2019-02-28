@@ -27,6 +27,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -1283,7 +1284,7 @@ public class SenderTest {
 
         sender.run(time.milliseconds()); // receive response 1
 
-        assertEquals(1000, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000), transactionManager.lastAckedOffset(tp0));
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
 
         client.respondToRequest(firstClientRequest, produceResponse(tp0, ProduceResponse.INVALID_OFFSET, Errors.DUPLICATE_SEQUENCE_NUMBER, 0));
@@ -1292,7 +1293,7 @@ public class SenderTest {
 
         // Make sure that the last ack'd sequence doesn't change.
         assertEquals(OptionalInt.of(1), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1000, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000), transactionManager.lastAckedOffset(tp0));
         assertFalse(client.hasInFlightRequests());
 
         RecordMetadata unknownMetadata = request1.get();
@@ -1325,7 +1326,7 @@ public class SenderTest {
         assertTrue(request1.isDone());
         assertEquals(1000L, request1.get().offset());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1000L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest, a single batch with 2 records.
         accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT);
@@ -1355,7 +1356,7 @@ public class SenderTest {
         assertFalse(client.hasInFlightRequests());
         assertTrue(request2.isDone());
         assertEquals(1012L, request2.get().offset());
-        assertEquals(1012L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
     }
 
     @Test
@@ -1383,7 +1384,7 @@ public class SenderTest {
         assertTrue(request1.isDone());
         assertEquals(1000L, request1.get().offset());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1000L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
@@ -1413,7 +1414,7 @@ public class SenderTest {
         assertFalse(client.hasInFlightRequests());
         assertTrue(request2.isDone());
         assertEquals(1011L, request2.get().offset());
-        assertEquals(1011L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1011L), transactionManager.lastAckedOffset(tp0));
     }
 
     @Test
@@ -1441,7 +1442,7 @@ public class SenderTest {
         assertTrue(request1.isDone());
         assertEquals(1000L, request1.get().offset());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1000L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest
         Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
@@ -1491,7 +1492,7 @@ public class SenderTest {
         assertFalse(client.hasInFlightRequests());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
         assertEquals(1011L, request2.get().offset());
-        assertEquals(1011L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1011L), transactionManager.lastAckedOffset(tp0));
 
         sender.run(time.milliseconds());  // resend request 3.
         assertEquals(1, client.inFlightRequestCount());
@@ -1502,7 +1503,7 @@ public class SenderTest {
         assertFalse(client.hasInFlightRequests());
         assertTrue(request3.isDone());
         assertEquals(1012L, request3.get().offset());
-        assertEquals(1012L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1012L), transactionManager.lastAckedOffset(tp0));
     }
 
     @Test
@@ -1530,7 +1531,7 @@ public class SenderTest {
         assertTrue(request1.isDone());
         assertEquals(1000L, request1.get().offset());
         assertEquals(OptionalInt.of(0), transactionManager.lastAckedSequence(tp0));
-        assertEquals(1000L, transactionManager.lastAckedOffset(tp0));
+        assertEquals(OptionalLong.of(1000L), transactionManager.lastAckedOffset(tp0));
 
         // Send second ProduceRequest,
         Future<RecordMetadata> request2 = accumulator.append(tp0, time.milliseconds(), "key".getBytes(), "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
