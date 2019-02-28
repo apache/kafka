@@ -65,7 +65,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
 
-    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
+    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT) {
         @Override
         public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node

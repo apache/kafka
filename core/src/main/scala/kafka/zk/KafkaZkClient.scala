@@ -1751,7 +1751,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
     private def reCreate(): Stat = {
       val codeAfterDelete = delete()
-      var codeAfterReCreate = codeAfterDelete
+      val codeAfterReCreate = codeAfterDelete
       debug(s"Result of znode ephemeral deletion at $path is: $codeAfterDelete")
       if (codeAfterDelete == Code.OK || codeAfterDelete == Code.NONODE) {
         create()
@@ -1880,6 +1880,7 @@ object KafkaZkClient {
                   case _ => null
                 }
                 SetDataResponse(resultCode, setDataOp.path, ctx, stat, responseMetadata)
+              case zkOp => throw new IllegalStateException(s"Unexpected zkOp: $zkOp")
             }
           case null => throw KeeperException.create(resultCode)
           case _ => throw new IllegalStateException(s"Cannot unwrap $response because the first zookeeper op is not check op in original MultiRequest")

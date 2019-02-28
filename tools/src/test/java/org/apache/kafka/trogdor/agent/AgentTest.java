@@ -28,30 +28,36 @@ import org.apache.kafka.trogdor.basic.BasicPlatform;
 import org.apache.kafka.trogdor.basic.BasicTopology;
 import org.apache.kafka.trogdor.common.ExpectedTasks;
 import org.apache.kafka.trogdor.common.ExpectedTasks.ExpectedTaskBuilder;
+import org.apache.kafka.trogdor.common.JsonUtil;
 import org.apache.kafka.trogdor.common.Node;
+import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.fault.FilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.fault.Kibosh;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshControlFile;
 import org.apache.kafka.trogdor.fault.Kibosh.KiboshFilesUnreadableFaultSpec;
 import org.apache.kafka.trogdor.rest.AgentStatusResponse;
-
 import org.apache.kafka.trogdor.rest.CreateWorkerRequest;
 import org.apache.kafka.trogdor.rest.DestroyWorkerRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.RequestConflictException;
 import org.apache.kafka.trogdor.rest.StopWorkerRequest;
 import org.apache.kafka.trogdor.rest.TaskDone;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.apache.kafka.trogdor.rest.WorkerDone;
 import org.apache.kafka.trogdor.rest.WorkerRunning;
 import org.apache.kafka.trogdor.task.NoOpTaskSpec;
 import org.apache.kafka.trogdor.task.SampleTaskSpec;
+import org.apache.kafka.trogdor.task.TaskSpec;
 import org.junit.Assert;
 import org.junit.Rule;
-import org.junit.rules.Timeout;
 import org.junit.Test;
+import org.junit.rules.Timeout;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
+import java.io.PrintStream;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -60,6 +66,7 @@ import java.util.HashMap;
 import java.util.TreeMap;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class AgentTest {
     @Rule
@@ -68,6 +75,7 @@ public class AgentTest {
     private static BasicPlatform createBasicPlatform(Scheduler scheduler) {
         TreeMap<String, Node> nodes = new TreeMap<>();
         HashMap<String, String> config = new HashMap<>();
+        config.put(Platform.Config.TROGDOR_AGENT_PORT, Integer.toString(Agent.DEFAULT_PORT));
         nodes.put("node01", new BasicNode("node01", "localhost",
             config, Collections.<String>emptySet()));
         BasicTopology topology = new BasicTopology(nodes);
@@ -132,6 +140,7 @@ public class AgentTest {
         AgentClient client = new AgentClient.Builder().
             maxTries(10).target("localhost", agent.port()).build();
         AgentStatusResponse status = client.status();
+
         assertEquals(Collections.emptyMap(), status.workers());
         new ExpectedTasks().waitFor(client);
 
@@ -145,6 +154,23 @@ public class AgentTest {
             taskState(new TaskDone(fooSpec, actualStartTimeMs, doneMs, "worker expired", false, null)).
             build()).
             waitFor(client);
+    }
+
+    @Test
+    public void testAgentGetUptime() throws Exception {
+        MockTime time = new MockTime(0, 111, 0);
+        MockScheduler scheduler = new MockScheduler(time);
+        Agent agent = createAgent(scheduler);
+        AgentClient client = new AgentClient.Builder().
+            maxTries(10).target("localhost", agent.port()).build();
+
+        UptimeResponse uptime = client.uptime();
+        assertEquals(agent.uptime(), uptime);
+
+        time.setCurrentTimeMs(150);
+        assertNotEquals(agent.uptime(), uptime);
+        agent.beginShutdown();
+        agent.waitForShutdown();
     }
 
     @Test
@@ -428,4 +454,42 @@ public class AgentTest {
         agent.beginShutdown();
         agent.waitForShutdown();
     }
+
+    static void testExec(Agent agent, String expected, boolean expectedReturn, TaskSpec spec) throws Exception {
+        ByteArrayOutputStream b = new ByteArrayOutputStream();
+        PrintStream p = new PrintStream(b, true, StandardCharsets.UTF_8.toString());
+        boolean actualReturn = agent.exec(spec, p);
+        assertEquals(expected, b.toString());
+        assertEquals(expectedReturn, actualReturn);
+    }
+
+    @Test
+    public void testAgentExecWithTimeout() throws Exception {
+        Agent agent = createAgent(Scheduler.SYSTEM);
+        NoOpTaskSpec spec = new NoOpTaskSpec(0, 1);
+        TaskSpec rebasedSpec = agent.rebaseTaskSpecTime(spec);
+        testExec(agent,
+            String.format("Waiting for completion of task:%s%n",
+                JsonUtil.toPrettyJsonString(rebasedSpec)) +
+            String.format("Task failed with status null and error worker expired%n"),
+            false, rebasedSpec);
+        agent.beginShutdown();
+        agent.waitForShutdown();
+    }
+
+    @Test
+    public void testAgentExecWithNormalExit() throws Exception {
+        Agent agent = createAgent(Scheduler.SYSTEM);
+        SampleTaskSpec spec = new SampleTaskSpec(0, 120000,
+            Collections.singletonMap("node01", 1L), "");
+        TaskSpec rebasedSpec = agent.rebaseTaskSpecTime(spec);
+        testExec(agent,
+            String.format("Waiting for completion of task:%s%n",
+                JsonUtil.toPrettyJsonString(rebasedSpec)) +
+                String.format("Task succeeded with status \"halted\"%n"),
+            true, rebasedSpec);
+        agent.beginShutdown();
+        agent.waitForShutdown();
+    }
+
 };

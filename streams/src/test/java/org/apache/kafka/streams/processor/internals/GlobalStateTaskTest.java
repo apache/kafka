@@ -204,15 +204,14 @@ public class GlobalStateTaskTest {
 
 
     @Test
-    public void shouldCloseStateManagerWithOffsets() throws IOException {
+    public void shouldFlushStateManagerWithOffsets() throws IOException {
         final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
         expectedOffsets.put(t1, 52L);
         expectedOffsets.put(t2, 100L);
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>(topic1, 1, 51, "foo".getBytes(), "foo".getBytes()));
-        globalStateTask.close();
+        globalStateTask.flushState();
         assertEquals(expectedOffsets, stateMgr.checkpointed());
-        assertTrue(stateMgr.closed);
     }
 
     @Test

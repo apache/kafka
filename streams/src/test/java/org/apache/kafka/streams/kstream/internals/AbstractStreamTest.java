@@ -107,8 +107,7 @@ public class AbstractStreamTest {
             final String name = builder.newProcessorName("RANDOM-FILTER-");
             final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
                 name,
-                new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
-                false);
+                new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
             builder.addGraphNode(this.streamsGraphNode, processorNode);
             return new KStreamImpl<>(name, null, null, sourceNodes, false, processorNode, builder);
         }

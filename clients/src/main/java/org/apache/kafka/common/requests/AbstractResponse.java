@@ -68,7 +68,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);
@@ -89,7 +89,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case HEARTBEAT:
                 return new HeartbeatResponse(struct);
             case LEAVE_GROUP:
-                return new LeaveGroupResponse(struct);
+                return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
                 return new SyncGroupResponse(struct);
             case STOP_REPLICA:
@@ -105,11 +105,11 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LIST_GROUPS:
                 return new ListGroupsResponse(struct);
             case SASL_HANDSHAKE:
-                return new SaslHandshakeResponse(struct);
+                return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:
-                return new CreateTopicsResponse(struct);
+                return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
                 return new DeleteTopicsResponse(struct);
             case DELETE_RECORDS:
@@ -156,6 +156,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct);
+            case ELECT_PREFERRED_LEADERS:
+                return new ElectPreferredLeadersResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

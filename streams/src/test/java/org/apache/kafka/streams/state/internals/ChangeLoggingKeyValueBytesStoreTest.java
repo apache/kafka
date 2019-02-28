@@ -43,7 +43,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private InternalMockProcessorContext context;
-    private final InMemoryKeyValueStore<Bytes, byte[]> inner = new InMemoryKeyValueStore<>("kv", Serdes.Bytes(), Serdes.ByteArray());
+    private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
     private final Map<Object, Object> sent = new HashMap<>();
     private final Bytes hi = Bytes.wrap("hi".getBytes());

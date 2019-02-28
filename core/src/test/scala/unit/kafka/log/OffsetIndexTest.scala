@@ -85,6 +85,19 @@ class OffsetIndexTest extends JUnitSuite {
     assertEquals(OffsetPosition(idx.baseOffset, 0), idx.lookup(idx.baseOffset))
     assertEquals(OffsetPosition(idx.baseOffset + idx.maxEntries, idx.maxEntries - 1), idx.lookup(idx.baseOffset + idx.maxEntries))
   }
+
+  @Test
+  def testEntry(): Unit = {
+    for (i <- 0 until idx.maxEntries)
+      idx.append(idx.baseOffset + i + 1, i)
+    for (i <- 0 until idx.maxEntries)
+      assertEquals(OffsetPosition(idx.baseOffset + i + 1, i), idx.entry(i))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntryOverflow(): Unit = {
+    idx.entry(0)
+  }
   
   @Test
   def appendTooMany() {

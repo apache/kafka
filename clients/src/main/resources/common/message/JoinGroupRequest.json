@@ -19,7 +19,9 @@
   "name": "JoinGroupRequest",
   // Version 1 adds RebalanceTimeoutMs.
   // Version 2 and 3 are the same as version 1.
-  "validVersions": "0-3",
+  // Starting from version 4, the client needs to issue a second request to join group
+  // with assigned id.
+  "validVersions": "0-4",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+",
       "about": "The group identifier." },

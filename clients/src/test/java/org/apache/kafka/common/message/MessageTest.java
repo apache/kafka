@@ -18,6 +18,7 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
@@ -75,7 +76,7 @@ public final class MessageTest {
                     setName("Topic").
                     setPartitions(Collections.singletonList(1))).iterator())));
         testMessageRoundTrips(new CreateTopicsRequestData().
-            setTimeoutMs(1000).setTopics(Collections.emptyList()));
+            setTimeoutMs(1000).setTopics(new CreatableTopicSet()));
         testMessageRoundTrips(new DescribeAclsRequestData().
             setResourceType((byte) 42).
             setResourceNameFilter(null).

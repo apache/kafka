@@ -51,8 +51,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   def startBrokers(brokerIds: Seq[Int]) {
-    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3))
-      .map(c => createServer(KafkaConfig.fromProps(c)))
+    servers = brokerIds.map { i =>
+      val props = createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3)
+      // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
+      props.put(KafkaConfig.ReplicaFetchBackoffMsProp, "100")
+      props
+    }.map(c => createServer(KafkaConfig.fromProps(c)))
   }
 
   def createAdminClient(servers: Seq[KafkaServer]): JAdminClient = {
