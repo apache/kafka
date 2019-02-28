@@ -31,7 +31,7 @@ buildscript {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar.grgit:grgit-gradle:3.0.0"
     classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
-    classpath 'org.scoverage:gradle-scoverage:3.0.0'
+    classpath 'org.scoverage:gradle-scoverage:2.5.0'
     classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.4'
     classpath 'org.owasp:dependency-check-gradle:4.0.2'
     classpath "com.diffplug.spotless:spotless-plugin-gradle:3.18.0"
