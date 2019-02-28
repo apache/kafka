@@ -413,7 +413,13 @@ public class ConfigDef {
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKey(name, type, defaultValue, null, importance, "", "", -1, Width.NONE, name, Collections.<String>emptyList(), null, true));
+        return define(new ConfigKeyBuilder(name, type, "", importance)
+                .defaultValue(defaultValue)
+                .group("")
+                .width(Width.NONE)
+                .displayName(name)
+                .internalConfig()
+                .build());
     }
 
     /**
