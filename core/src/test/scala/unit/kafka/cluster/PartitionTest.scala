@@ -202,7 +202,7 @@ class PartitionTest {
   @Test
   // Verify that replacement works when the replicas have the same log end offset but different base offsets in the
   // active segment
-  def testMaybeReplaceCurrentWithFutureReplicaDifferentBaseOffsets: Unit = {
+  def testMaybeReplaceCurrentWithFutureReplicaDifferentBaseOffsets(): Unit = {
     // Write records with duplicate keys to current replica and roll at offset 6
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
     val log1 = logManager.getOrCreateLog(topicPartition, logConfig)
@@ -212,12 +212,12 @@ class PartitionTest {
       new SimpleRecord("k1".getBytes, "v3".getBytes),
       new SimpleRecord("k2".getBytes, "v4".getBytes),
       new SimpleRecord("k2".getBytes, "v5".getBytes),
-      new SimpleRecord("k2".getBytes, "v6".getBytes),
+      new SimpleRecord("k2".getBytes, "v6".getBytes)
     ), leaderEpoch = 0)
     log1.roll()
     log1.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
       new SimpleRecord("k3".getBytes, "v7".getBytes),
-      new SimpleRecord("k4".getBytes, "v8".getBytes),
+      new SimpleRecord("k4".getBytes, "v8".getBytes)
     ), leaderEpoch = 0)
 
     // Write to the future replica as if the log had been compacted, and do not roll the segment
