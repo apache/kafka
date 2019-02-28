@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -25,7 +26,6 @@ import org.apache.kafka.streams.processor.AbstractNotifyingBatchingRestoreCallba
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.rocksdb.RocksDBException;
@@ -42,16 +42,17 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
-class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
+public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
     private final String name;
-    private final Segments segments;
+    private final KeyValueSegments segments;
     private final String metricScope;
     private final KeySchema keySchema;
     private InternalProcessorContext context;
     private volatile boolean open;
-    private Set<Segment> bulkLoadSegments;
+    private Set<KeyValueSegment> bulkLoadSegments;
     private Sensor expiredRecordSensor;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     RocksDBSegmentedBytesStore(final String name,
                                final String metricScope,
@@ -61,55 +62,56 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         this.name = name;
         this.metricScope = metricScope;
         this.keySchema = keySchema;
-        this.segments = new Segments(name, retention, segmentInterval);
+        this.segments = new KeyValueSegments(name, retention, segmentInterval);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes key, final long from, final long to) {
-        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final List<KeyValueSegment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
         final Bytes binaryFrom = keySchema.lowerRangeFixedSize(key, from);
         final Bytes binaryTo = keySchema.upperRangeFixedSize(key, to);
 
-        return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(key, key, from, to),
-                                   binaryFrom, binaryTo);
+        return new SegmentIterator<>(searchSpace.iterator(),
+                                     keySchema.hasNextCondition(key, key, from, to),
+                                     binaryFrom, binaryTo);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
-        final List<Segment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
+        final List<KeyValueSegment> searchSpace = keySchema.segmentsToSearch(segments, from, to);
 
         final Bytes binaryFrom = keySchema.lowerRange(keyFrom, from);
         final Bytes binaryTo = keySchema.upperRange(keyTo, to);
 
-        return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(keyFrom, keyTo, from, to),
-                                   binaryFrom, binaryTo);
+        return new SegmentIterator<>(searchSpace.iterator(),
+                                     keySchema.hasNextCondition(keyFrom, keyTo, from, to),
+                                     binaryFrom, binaryTo);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
+        final List<KeyValueSegment> searchSpace = segments.allSegments();
 
-        final List<Segment> searchSpace = segments.allSegments();
-
-        return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
-                                   null, null);
+        return new SegmentIterator<>(searchSpace.iterator(),
+                                     keySchema.hasNextCondition(null, null, 0, Long.MAX_VALUE),
+                                     null, null);
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> fetchAll(final long timeFrom, final long timeTo) {
-        final List<Segment> searchSpace = segments.segments(timeFrom, timeTo);
+        final List<KeyValueSegment> searchSpace = segments.segments(timeFrom, timeTo);
 
-        return new SegmentIterator(searchSpace.iterator(),
-                                   keySchema.hasNextCondition(null, null, timeFrom, timeTo),
-                                   null, null);
+        return new SegmentIterator<>(searchSpace.iterator(),
+                                     keySchema.hasNextCondition(null, null, timeFrom, timeTo),
+                                     null, null);
     }
 
     @Override
     public void remove(final Bytes key) {
-        final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
+        final long timestamp = keySchema.segmentTimestamp(key);
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+        final KeyValueSegment segment = segments.getSegmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
@@ -119,8 +121,9 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void put(final Bytes key, final byte[] value) {
         final long timestamp = keySchema.segmentTimestamp(key);
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
-        final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+        final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
         if (segment == null) {
             expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
@@ -131,7 +134,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public byte[] get(final Bytes key) {
-        final Segment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
+        final KeyValueSegment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
         if (segment == null) {
             return null;
         }
@@ -164,9 +167,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
             "expired-window-record-drop"
         );
 
-        keySchema.init(ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name()));
-
-        segments.openExisting(this.context);
+        segments.openExisting(this.context, observedStreamTime);
 
         bulkLoadSegments = new HashSet<>(segments.allSegments());
 
@@ -198,16 +199,16 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     // Visible for testing
-    List<Segment> getSegments() {
+    List<KeyValueSegment> getSegments() {
         return segments.allSegments();
     }
 
     // Visible for testing
     void restoreAllInternal(final Collection<KeyValue<byte[], byte[]>> records) {
         try {
-            final Map<Segment, WriteBatch> writeBatchMap = getWriteBatches(records);
-            for (final Map.Entry<Segment, WriteBatch> entry : writeBatchMap.entrySet()) {
-                final Segment segment = entry.getKey();
+            final Map<KeyValueSegment, WriteBatch> writeBatchMap = getWriteBatches(records);
+            for (final Map.Entry<KeyValueSegment, WriteBatch> entry : writeBatchMap.entrySet()) {
+                final KeyValueSegment segment = entry.getKey();
                 final WriteBatch batch = entry.getValue();
                 segment.write(batch);
             }
@@ -217,11 +218,18 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     // Visible for testing
-    Map<Segment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
-        final Map<Segment, WriteBatch> writeBatchMap = new HashMap<>();
+    Map<KeyValueSegment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
+        // advance stream time to the max timestamp in the batch
         for (final KeyValue<byte[], byte[]> record : records) {
-            final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
-            final Segment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+        }
+
+        final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
+        for (final KeyValue<byte[], byte[]> record : records) {
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+            final long segmentId = segments.segmentId(timestamp);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
                 // This handles the case that state store is moved to a new client and does not
                 // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
@@ -250,7 +258,7 @@ class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     private void toggleForBulkLoading(final boolean prepareForBulkload) {
-        for (final Segment segment: segments.allSegments()) {
+        for (final KeyValueSegment segment : segments.allSegments()) {
             segment.toggleDbForBulkLoading(prepareForBulkload);
         }
     }

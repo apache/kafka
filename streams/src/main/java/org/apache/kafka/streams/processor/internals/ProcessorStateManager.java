@@ -24,6 +24,7 @@ import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -48,6 +49,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final Map<TopicPartition, Long> offsetLimits;
     private final Map<TopicPartition, Long> standbyRestoredOffsets;
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
+    private final Map<String, RecordConverter> recordConverters; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
@@ -82,10 +84,14 @@ public class ProcessorStateManager extends AbstractStateManager {
         standbyRestoredOffsets = new HashMap<>();
         this.isStandby = isStandby;
         restoreCallbacks = isStandby ? new HashMap<>() : null;
+        recordConverters = isStandby ? new HashMap<>() : null;
         this.storeToChangelogTopic = storeToChangelogTopic;
 
         // load the checkpoint information
         checkpointableOffsets.putAll(checkpoint.read());
+
+        log.trace("Checkpointable offsets read from checkpoint: {}", checkpointableOffsets);
+
         if (eosEnabled) {
             // delete the checkpoint file after finish loading its stored offsets
             checkpoint.delete();
@@ -129,18 +135,25 @@ public class ProcessorStateManager extends AbstractStateManager {
 
         final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
+        final RecordConverter recordConverter = converterForStore(store);
+
         if (isStandby) {
             log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
+
             restoreCallbacks.put(topic, stateRestoreCallback);
+            recordConverters.put(topic, recordConverter);
         } else {
-            log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
+            log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
+
             final StateRestorer restorer = new StateRestorer(
                 storePartition,
                 new CompositeRestoreListener(stateRestoreCallback),
                 checkpointableOffsets.get(storePartition),
                 offsetLimit(storePartition),
                 store.persistent(),
-                storeName);
+                storeName,
+                recordConverter
+            );
 
             changelogReader.register(restorer);
         }
@@ -181,8 +194,14 @@ public class ProcessorStateManager extends AbstractStateManager {
         final RecordBatchingStateRestoreCallback restoreCallback = adapt(restoreCallbacks.get(storePartition.topic()));
 
         if (!restoreRecords.isEmpty()) {
+            final RecordConverter converter = recordConverters.get(storePartition.topic());
+            final List<ConsumerRecord<byte[], byte[]>> convertedRecords = new ArrayList<>(restoreRecords.size());
+            for (final ConsumerRecord<byte[], byte[]> record : restoreRecords) {
+                convertedRecords.add(converter.convert(record));
+            }
+
             try {
-                restoreCallback.restoreBatch(restoreRecords);
+                restoreCallback.restoreBatch(convertedRecords);
             } catch (final Exception e) {
                 throw new ProcessorStateException(String.format("%sException caught while trying to restore state from %s", logPrefix, storePartition), e);
             }
@@ -238,7 +257,7 @@ public class ProcessorStateManager extends AbstractStateManager {
      * @throws ProcessorStateException if any error happens when closing the state stores
      */
     @Override
-    public void close(final Map<TopicPartition, Long> ackedOffsets) throws ProcessorStateException {
+    public void close(final boolean clean) throws ProcessorStateException {
         ProcessorStateException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
@@ -255,11 +274,17 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.error("Failed to close state store {}: ", store.name(), e);
                 }
             }
-
-            if (ackedOffsets != null) {
-                checkpoint(ackedOffsets);
-            }
             stores.clear();
+        }
+
+        if (!clean && eosEnabled && checkpoint != null) {
+            // delete the checkpoint file if this is an unclean close
+            try {
+                checkpoint.delete();
+                checkpoint = null;
+            } catch (final IOException e) {
+                throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
+            }
         }
 
         if (firstException != null) {
@@ -271,6 +296,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     @Override
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
         this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
+        log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
         for (final StateStore store : stores.values()) {
             final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
@@ -286,6 +312,9 @@ public class ProcessorStateManager extends AbstractStateManager {
                 }
             }
         }
+
+        log.trace("Checkpointable offsets updated with active acked offsets: {}", this.checkpointableOffsets);
+
         // write the checkpoint file before closing
         if (checkpoint == null) {
             checkpoint = new OffsetCheckpoint(new File(baseDir, CHECKPOINT_FILE_NAME));

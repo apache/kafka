@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.test.IntegrationTest;
@@ -23,6 +24,8 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -47,10 +50,13 @@ import static org.junit.Assert.assertEquals;
 @Category(IntegrationTest.class)
 public class ExampleConnectIntegrationTest {
 
+    private static final Logger log = LoggerFactory.getLogger(ExampleConnectIntegrationTest.class);
+
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
     private static final int CONSUME_MAX_DURATION_MS = 5000;
     private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
+    private static final int NUM_TASKS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
 
     private EmbeddedConnectCluster connect;
@@ -103,7 +109,7 @@ public class ExampleConnectIntegrationTest {
         // setup up props for the sink connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, "MonitorableSink");
-        props.put(TASKS_MAX_CONFIG, "3");
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -114,8 +120,7 @@ public class ExampleConnectIntegrationTest {
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
 
-        waitForCondition(() -> connect.connectorStatus(CONNECTOR_NAME).tasks().size() == 3
-                        && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1),
+        waitForCondition(this::checkForPartitionAssignment,
                 CONNECTOR_SETUP_DURATION_MS,
                 "Connector tasks were not assigned a partition each.");
 
@@ -133,5 +138,25 @@ public class ExampleConnectIntegrationTest {
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
+    }
+
+    /**
+     * Check if a partition was assigned to each task. This method swallows exceptions since it is invoked from a
+     * {@link org.apache.kafka.test.TestUtils#waitForCondition} that will throw an error if this method continued
+     * to return false after the specified duration has elapsed.
+     *
+     * @return true if each task was assigned a partition each, false if this was not true or an error occurred when
+     * executing this operation.
+     */
+    private boolean checkForPartitionAssignment() {
+        try {
+            ConnectorStateInfo info = connect.connectorStatus(CONNECTOR_NAME);
+            return info != null && info.tasks().size() == NUM_TASKS
+                    && connectorHandle.tasks().stream().allMatch(th -> th.partitionsAssigned() == 1);
+        } catch (Exception e) {
+            // Log the exception and return that the partitions were not assigned
+            log.error("Could not check connector state info.", e);
+            return false;
+        }
     }
 }

@@ -192,7 +192,7 @@ public class ProducerConfig extends AbstractConfig {
             + " Note that this retry is no different than if the client resent the record upon receiving the error."
             + " Allowing retries without setting <code>" + MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION + "</code> to 1 will potentially change the"
             + " ordering of records because if two batches are sent to a single partition, and the first fails and is retried but the second"
-            + " succeeds, then the records in the second batch may appear first. Note additionall that produce requests will be"
+            + " succeeds, then the records in the second batch may appear first. Note additionally that produce requests will be"
             + " failed before the number of retries has been exhausted if the timeout configured by"
             + " <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> expires first before successful acknowledgement. Users should generally"
             + " prefer to leave this config unset and instead use <code>" + DELIVERY_TIMEOUT_MS_CONFIG + "</code> to control"

@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -57,6 +59,8 @@ public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
             "Subscription to topics, partitions and pattern are mutually exclusive";
 
+    private final Logger log;
+
     private enum SubscriptionType {
         NONE, AUTO_TOPICS, AUTO_PATTERN, USER_ASSIGNED
     }
@@ -85,7 +89,8 @@ public class SubscriptionState {
     /* User-provided listener to be invoked when assignment changes */
     private ConsumerRebalanceListener rebalanceListener;
 
-    public SubscriptionState(OffsetResetStrategy defaultResetStrategy) {
+    public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
+        this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
@@ -174,28 +179,44 @@ public class SubscriptionState {
     }
 
     /**
-     * Change the assignment to the specified partitions returned from the coordinator,
-     * note this is different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs
+     * Change the assignment to the specified partitions returned from the coordinator, note this is
+     * different from {@link #assignFromUser(Set)} which directly set the assignment from user inputs.
+     *
+     * @return true if assignments matches subscription, otherwise false
      */
-    public void assignFromSubscribed(Collection<TopicPartition> assignments) {
+    public boolean assignFromSubscribed(Collection<TopicPartition> assignments) {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
-        Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(assignments);
-        fireOnAssignment(assignedPartitionStates.keySet());
-
-        if (this.subscribedPattern != null) {
-            for (TopicPartition tp : assignments) {
-                if (!this.subscribedPattern.matcher(tp.topic()).matches())
-                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic regex pattern; subscription pattern is " + this.subscribedPattern);
+        Predicate<TopicPartition> predicate = topicPartition -> {
+            if (this.subscribedPattern != null) {
+                boolean match = this.subscribedPattern.matcher(topicPartition.topic()).matches();
+                if (!match) {
+                    log.info("Assigned partition {} for non-subscribed topic regex pattern; subscription pattern is {}",
+                            topicPartition,
+                            this.subscribedPattern);
+                }
+                return match;
+            } else {
+                boolean match = this.subscription.contains(topicPartition.topic());
+                if (!match) {
+                    log.info("Assigned partition {} for non-subscribed topic; subscription is {}", topicPartition, this.subscription);
+                }
+                return match;
             }
-        } else {
-            for (TopicPartition tp : assignments)
-                if (!this.subscription.contains(tp.topic()))
-                    throw new IllegalArgumentException("Assigned partition " + tp + " for non-subscribed topic; subscription is " + this.subscription);
+        };
+
+        boolean assignmentMatchedSubscription = assignments.stream().allMatch(predicate);
+
+        if (assignmentMatchedSubscription) {
+            Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(
+                    assignments);
+            fireOnAssignment(assignedPartitionStates.keySet());
+
+            this.assignment.set(assignedPartitionStates);
         }
 
-        this.assignment.set(assignedPartitionStates);
+        return assignmentMatchedSubscription;
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {

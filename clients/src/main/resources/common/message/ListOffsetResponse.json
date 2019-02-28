@@ -39,9 +39,10 @@
           "about": "The partition error code, or 0 if there was no error." },
         { "name": "OldStyleOffsets", "type": "[]int64", "versions": "0", "ignorable": false,
           "about": "The result offsets." },
-        { "name": "Timestamp", "type": "int64", "versions": "1+" },
-        { "name": "Offset", "type": "int64", "versions": "1+",
+        { "name": "Timestamp", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
           "about": "The timestamp associated with the returned offset." },
+        { "name": "Offset", "type": "int64", "versions": "1+", "default": "-1", "ignorable": false,
+          "about": "The returned offset." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "4+" }
       ]}
     ]}

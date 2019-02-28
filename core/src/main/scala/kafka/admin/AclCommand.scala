@@ -42,7 +42,7 @@ object AclCommand extends Logging {
   private val Newline = scala.util.Properties.lineSeparator
 
   val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
-    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, All),
+    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, Alter, DescribeConfigs, AlterConfigs, All),
     JResourceType.GROUP -> Set(Read, Describe, Delete, All),
     JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
     JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),

@@ -34,14 +34,19 @@ public interface Serde<T> extends Closeable {
      * @param configs configs in key/value pairs
      * @param isKey whether is for key or value
      */
-    void configure(Map<String, ?> configs, boolean isKey);
+    default void configure(Map<String, ?> configs, boolean isKey) {
+        // intentionally left blank
+    }
 
     /**
      * Close this serde class, which will close the underlying serializer and deserializer.
+     * <p>
      * This method has to be idempotent because it might be called multiple times.
      */
     @Override
-    void close();
+    default void close() {
+        // intentionally left blank
+    }
 
     Serializer<T> serializer();
 

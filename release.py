@@ -141,6 +141,16 @@ def replace(path, pattern, replacement):
         for line in updated:
             f.write(line)
 
+def regexReplace(path, pattern, replacement):
+    updated = []
+    with open(path, 'r') as f:
+        for line in f:
+            updated.append(re.sub(pattern, replacement, line))
+
+    with open(path, 'w') as f:
+        for line in updated:
+            f.write(line)
+
 def user_ok(msg):
     ok = raw_input(msg)
     return ok.lower() == 'y'
@@ -522,12 +532,17 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
-cmd("update streams quickstart pom", ["sed", "-i", ".orig"," s/-SNAPSHOT//", "streams/quickstart/pom.xml"])
-cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/pom.xml"])
-cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml"])
-cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
-cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
-cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
+print("updating streams quickstart pom")
+regexReplace("streams/quickstart/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart java pom")
+regexReplace("streams/quickstart/java/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart archetype pom")
+regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "")
+print("updating ducktape version.py")
+regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
+    "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
+print("updating ducktape __init__.py")
+regexReplace("./tests/kafkatest/__init__.py", ".dev.*", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -555,7 +570,7 @@ cmd("Verifying the correct year in NOTICE", "grep %s NOTICE" % current_year, cwd
 with open(os.path.join(artifacts_dir, "RELEASE_NOTES.html"), 'w') as f:
     print("Generating release notes")
     try:
-        subprocess.check_call(["./release_notes.py", release_version], stdout=f)
+        subprocess.check_call([sys.executable, "./release_notes.py", release_version], stdout=f)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
 

@@ -48,6 +48,7 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -151,7 +152,7 @@ class WorkerSourceTask extends WorkerTask {
         }
         if (producer != null) {
             try {
-                producer.close(30, TimeUnit.SECONDS);
+                producer.close(Duration.ofSeconds(30));
             } catch (Throwable t) {
                 log.warn("Could not close producer", t);
             }

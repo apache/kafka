@@ -27,6 +27,7 @@ import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TaskStateType;
 import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 
 import javax.servlet.ServletContext;
 import javax.ws.rs.Consumes;
@@ -75,6 +76,12 @@ public class CoordinatorRestResource {
     @Path("/status")
     public CoordinatorStatusResponse status() throws Throwable {
         return coordinator().status();
+    }
+
+    @GET
+    @Path("/uptime")
+    public UptimeResponse uptime() {
+        return coordinator().uptime();
     }
 
     @POST

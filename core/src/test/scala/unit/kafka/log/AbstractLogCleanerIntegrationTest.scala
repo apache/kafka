@@ -26,12 +26,15 @@ import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.test.IntegrationTest
 import org.junit.After
+import org.junit.experimental.categories.Category
 
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
+@Category(Array(classOf[IntegrationTest]))
 abstract class AbstractLogCleanerIntegrationTest {
 
   var cleaner: LogCleaner = _
