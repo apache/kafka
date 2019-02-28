@@ -17,8 +17,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
-import java.util.HashSet;
 import java.util.Iterator;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -62,7 +63,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     private final boolean retainDuplicates;
 
     private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
-    private final HashSet<InMemoryWindowStoreIteratorWrapper> openIterators;
+    private final Set<InMemoryWindowStoreIteratorWrapper> openIterators;
 
     private volatile boolean open = false;
 
@@ -77,7 +78,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         this.retainDuplicates = retainDuplicates;
         this.metricScope = metricScope;
 
-        this.openIterators = new HashSet<>();
+        this.openIterators = ConcurrentHashMap.newKeySet();
         this.segmentMap = new ConcurrentSkipListMap<>();
     }
 

@@ -569,7 +569,7 @@ public class InMemoryWindowStoreTest {
     }
 
     @Test
-    public void shouldNotThroughExceptionWhenFetchRangeIsExpired() {
+    public void shouldNotThrowExceptionWhenFetchRangeIsExpired() {
         windowStore = createInMemoryWindowStore(context, false);
 
         windowStore.put(1, "one", 0L);
