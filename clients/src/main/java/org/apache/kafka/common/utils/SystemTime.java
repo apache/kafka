@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.util.concurrent.TimeUnit;
+
 /**
  * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
  * of this class.
  */
 public class SystemTime implements Time {
+    private static final long ORIGIN_TIME = System.currentTimeMillis();
+    private static final long ORIGIN_NANO = System.nanoTime();
 
     @Override
     public long milliseconds() {
@@ -29,7 +33,12 @@ public class SystemTime implements Time {
 
     @Override
     public long nanoseconds() {
-        return System.nanoTime();
+        long elapsedTime = System.nanoTime() - ORIGIN_NANO;
+        if (elapsedTime > 0) {
+            return TimeUnit.MILLISECONDS.toNanos(ORIGIN_TIME) + elapsedTime;
+        } else {
+            return TimeUnit.MILLISECONDS.toNanos(ORIGIN_TIME) - elapsedTime;
+        }
     }
 
     @Override
