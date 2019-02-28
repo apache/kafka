@@ -19,16 +19,22 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Assert;
 import org.junit.Before;
@@ -36,6 +42,7 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -58,7 +65,9 @@ public class KStreamMetricsIntegrationTest {
     private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
     private static final String STREAM_STORE_IN_MEMORY_STATE_METRICS = "stream-in-memory-state-metrics";
     private static final String STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS = "stream-in-memory-lru-state-metrics";
-    private static final String STREAM_STORE_IN_MEMORY_ROCKSDB_STATE_METRICS = "stream-rocksdb-state-metrics";
+    private static final String STREAM_STORE_ROCKSDB_STATE_METRICS = "stream-rocksdb-state-metrics";
+    private static final String STREAM_STORE_WINDOW_ROCKSDB_STATE_METRICS = "stream-rocksdb-window-state-metrics";
+    private static final String STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS = "stream-rocksdb-session-state-metrics";
 
     // Metrics name
     private static final String PUT_LATENCY_AVG = "put-latency-avg";
@@ -134,7 +143,8 @@ public class KStreamMetricsIntegrationTest {
     private static final String HIT_RATIO_AVG = "hitRatio-avg";
     private static final String HIT_RATIO_MIN = "hitRatio-min";
     private static final String HIT_RATIO_MAX = "hitRatio-max";
-
+    private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
+    private static final String SESSIONIZED_AGGREGATED_STREAM_STORE = "sessionized-aggregated-stream-store";
 
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
@@ -147,12 +157,14 @@ public class KStreamMetricsIntegrationTest {
 
     private KStream<Integer, String> stream;
 
+    private KStream<Integer, String> stream2;
+
     private final String appId = "stream-metrics-test";
 
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
-        createTopics();
+        CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
         streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -162,20 +174,90 @@ public class KStreamMetricsIntegrationTest {
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
     }
 
+    @Before
+    public void after() throws InterruptedException {
+        CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
+    }
+
     @Test
     public void testStreamMetric() throws Exception {
+
+        stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
+        builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore("myStoreInMemory")).withCachingEnabled())
+                .toStream()
+                .to(STREAM_OUTPUT_2);
+        builder.table(STREAM_OUTPUT_2, Materialized.as(Stores.persistentKeyValueStore("myStorePersistentKeyValue")).withCachingEnabled())
+                .toStream()
+                .to(STREAM_OUTPUT_3);
+        builder.table(STREAM_OUTPUT_3, Materialized.as(Stores.lruMap("myStoreLruMap", 10000)).withCachingEnabled())
+                .toStream()
+                .to(STREAM_OUTPUT_4);
+
         startApplication();
 
         // metric level : Thread
         testThreadMetric();
+
         // metric level : Task
         testTaskMetric();
+
         // metric level : Processor
         testProcessorMetric();
-        // metric level : Store
-        testAllStoreMetric();
+
+        // metric level : Store (in-memory-state, in-memory-lru-state, rocksdb-state)
+        testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS);
+        testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
+        testStoreMetricByType(STREAM_STORE_ROCKSDB_STATE_METRICS);
+
         //metric level : Cache
         testCacheMetric();
+
+        closeApplication();
+
+        // check all metrics de-registered
+        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
+        Assert.assertEquals(0, listMetricAfterClosingApp.size());
+
+    }
+
+    @Test
+    public void testStreamMetricOfWindowStore() throws Exception {
+
+        stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
+        groupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(50)))
+                .aggregate(() -> 0L, (aggKey, newValue, aggValue) -> aggValue,
+                        Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
+                                .withValueSerde(Serdes.Long()));
+
+        startApplication();
+
+        // metric level : Store (session, window)
+        testStoreMetricWindow();
+
+        closeApplication();
+
+        // check all metrics de-registered
+        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
+        Assert.assertEquals(0, listMetricAfterClosingApp.size());
+
+    }
+
+    @Test
+    public void testStreamMetricOfSessionStore() throws Exception {
+
+        stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
+        final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
+        groupedStream.windowedBy(SessionWindows.with(Duration.ofMillis(50)))
+                .aggregate(() -> 0L, (aggKey, newValue, aggValue) -> aggValue, (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
+                        Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSIONIZED_AGGREGATED_STREAM_STORE)
+                                .withValueSerde(Serdes.Long()));
+
+        startApplication();
+
+        // metric level : Store (session, window)
+        testStoreMetricSession();
 
         closeApplication();
 
@@ -242,10 +324,86 @@ public class KStreamMetricsIntegrationTest {
         testMetricByName(listMetricProcessor, FORWARD_TOTAL, 18);
     }
 
-    private void testAllStoreMetric() {
-        testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS);
-        testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
-        testStoreMetricByType(STREAM_STORE_IN_MEMORY_ROCKSDB_STATE_METRICS);
+    private void testStoreMetricWindow() {
+        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+                .filter(m -> m.metricName().group().equals(STREAM_STORE_WINDOW_ROCKSDB_STATE_METRICS))
+                .collect(Collectors.toList());
+        testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, PUT_RATE, 2);
+        testMetricByName(listMetricStore, PUT_TOTAL, 2);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
+        testMetricByName(listMetricStore, GET_RATE, 0);
+        testMetricByName(listMetricStore, DELETE_RATE, 0);
+        testMetricByName(listMetricStore, DELETE_TOTAL, 0);
+        testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
+        testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
+        testMetricByName(listMetricStore, ALL_RATE, 0);
+        testMetricByName(listMetricStore, ALL_TOTAL, 0);
+        testMetricByName(listMetricStore, RANGE_RATE, 0);
+        testMetricByName(listMetricStore, RANGE_TOTAL, 0);
+        testMetricByName(listMetricStore, FLUSH_RATE, 2);
+        testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
+        testMetricByName(listMetricStore, RESTORE_RATE, 2);
+        testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+    }
+
+    private void testStoreMetricSession() {
+        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+                .filter(m -> m.metricName().group().equals(STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS))
+                .collect(Collectors.toList());
+        testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
+        testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
+        testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
+        testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
+        testMetricByName(listMetricStore, PUT_RATE, 2);
+        testMetricByName(listMetricStore, PUT_TOTAL, 2);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
+        testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
+        testMetricByName(listMetricStore, GET_RATE, 0);
+        testMetricByName(listMetricStore, DELETE_RATE, 0);
+        testMetricByName(listMetricStore, DELETE_TOTAL, 0);
+        testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
+        testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
+        testMetricByName(listMetricStore, ALL_RATE, 0);
+        testMetricByName(listMetricStore, ALL_TOTAL, 0);
+        testMetricByName(listMetricStore, RANGE_RATE, 0);
+        testMetricByName(listMetricStore, RANGE_TOTAL, 0);
+        testMetricByName(listMetricStore, FLUSH_RATE, 2);
+        testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
+        testMetricByName(listMetricStore, RESTORE_RATE, 2);
+        testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
     }
 
     private void testStoreMetricByType(final String storeType) {
@@ -275,7 +433,6 @@ public class KStreamMetricsIntegrationTest {
         testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 2);
         testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 2);
         testMetricByName(listMetricStore, GET_RATE, 2);
-        testMetricByName(listMetricStore, GET_RATE1, 2);
         testMetricByName(listMetricStore, DELETE_RATE, 2);
         testMetricByName(listMetricStore, DELETE_TOTAL, 2);
         testMetricByName(listMetricStore, PUT_ALL_RATE, 2);
@@ -305,22 +462,8 @@ public class KStreamMetricsIntegrationTest {
         }
     }
 
-    private void createTopics() throws InterruptedException {
-        CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
-    }
-
     private void startApplication() throws Exception {
-        stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
-        builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore("myStoreInMemory")).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_2);
-        builder.table(STREAM_OUTPUT_2, Materialized.as(Stores.persistentKeyValueStore("myStorePersistentKeyValue")).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_3);
-        builder.table(STREAM_OUTPUT_3, Materialized.as(Stores.lruMap("myStoreLruMap", 10000)).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_4);
+
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
 
