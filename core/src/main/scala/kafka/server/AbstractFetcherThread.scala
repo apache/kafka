@@ -118,7 +118,7 @@ abstract class AbstractFetcherThread(name: String,
       val fetchStates = partitionStates.partitionStateMap.asScala
       val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = buildFetch(fetchStates)
 
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "maybeFetch")
 
       if (fetchRequestOpt.isEmpty) {
         trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
@@ -134,8 +134,9 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // deal with partitions with errors, potentially due to leadership changes
-  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String) {
     if (partitions.nonEmpty)
+      debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
   }
 
@@ -199,7 +200,7 @@ abstract class AbstractFetcherThread(name: String,
       }
 
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets)
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
   }
@@ -224,7 +225,7 @@ abstract class AbstractFetcherThread(name: String,
       }
     }
 
-    handlePartitionsWithErrors(partitionsWithError)
+    handlePartitionsWithErrors(partitionsWithError, "truncateToHighWatermark")
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
@@ -366,8 +367,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     if (partitionsWithError.nonEmpty) {
-      debug(s"Handling errors for partitions $partitionsWithError")
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "processFetchRequest")
     }
   }
 

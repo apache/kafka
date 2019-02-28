@@ -230,7 +230,8 @@ class ReplicaAlterLogDirsThread(name: String,
       requestMap.put(tp, new FetchRequest.PartitionData(fetchState.fetchOffset, logStartOffset,
         fetchSize, Optional.of(fetchState.currentLeaderEpoch)))
     } catch {
-      case _: KafkaStorageException =>
+      case e: KafkaStorageException =>
+        debug(s"Failed to build fetch for $tp", e)
         partitionsWithError += tp
     }
 
