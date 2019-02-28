@@ -271,11 +271,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     changeAclAndVerify(Set.empty[Acl], Set[Acl](denyAllAcl), Set.empty[Acl])
 
     val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "superuser1"), InetAddress.getByName("192.0.4.4"))
-    assertEquals(possibleAuthorizedOperations(Topic), simpleAclAuthorizer.authorizedOperations(session, resource))
-  }
-
-  def possibleAuthorizedOperations(resourceType: ResourceType) :Set[Operation] =  {
-    resourceType.supportedOperations.filter(operation => operation != All)
+    assertEquals(Topic.supportedOperations, simpleAclAuthorizer.authorizedOperations(session, resource))
   }
 
   @Test
@@ -285,7 +281,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     changeAclAndVerify(Set.empty[Acl], Set[Acl](allowAllAcl), Set.empty[Acl])
 
     val session = Session(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "random"), InetAddress.getByName("192.0.4.4"))
-    assertEquals(possibleAuthorizedOperations(Topic), simpleAclAuthorizer.authorizedOperations(session, resource))
+    assertEquals(Topic.supportedOperations, simpleAclAuthorizer.authorizedOperations(session, resource))
   }
 
   @Test
@@ -311,7 +307,7 @@ class SimpleAclAuthorizerTest extends ZooKeeperTestHarness {
     val testAuthorizer = new SimpleAclAuthorizer
     try {
       testAuthorizer.configure(cfg.originals)
-      assertEquals(possibleAuthorizedOperations(Topic), testAuthorizer.authorizedOperations(session, resource))
+      assertEquals(Topic.supportedOperations, testAuthorizer.authorizedOperations(session, resource))
     } finally {
       testAuthorizer.close()
     }

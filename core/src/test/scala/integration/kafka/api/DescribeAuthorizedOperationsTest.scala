@@ -16,7 +16,7 @@ import java.io.File
 import java.util
 import java.util.Properties
 
-import kafka.security.auth.{All, Allow, Alter, Authorizer, ClusterAction, Group, Operation, PermissionType, SimpleAclAuthorizer, Acl => AuthAcl, Resource => AuthResource}
+import kafka.security.auth.{Allow, Alter, Authorizer, ClusterAction, Group, Operation, PermissionType, SimpleAclAuthorizer, Acl => AuthAcl, Resource => AuthResource}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, DescribeConsumerGroupsOptions}
@@ -106,7 +106,6 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
       new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
     assertEquals(3, describeConsumerGroupsResult.describedGroups().size())
     val expectedOperations =  Group.supportedOperations
-      .filter(operation => operation != All)
       .map(operation => operation.toJava).asJava
 
     val group1Description = describeConsumerGroupsResult.describedGroups().get(group1).get
