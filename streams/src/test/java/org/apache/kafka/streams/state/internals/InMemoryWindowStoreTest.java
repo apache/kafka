@@ -552,8 +552,8 @@ public class InMemoryWindowStoreTest {
         windowStore.put(2, "one", 5L);
         windowStore.put(2, "two", 15L);
 
-        final WindowStoreIterator<String> iterator1 = windowStore.fetch(1, 0, 50L);
-        final WindowStoreIterator<String> iterator2 = windowStore.fetch(2, 0, 50L);
+        final WindowStoreIterator<String> iterator1 = windowStore.fetch(1, 0L, 50L);
+        final WindowStoreIterator<String> iterator2 = windowStore.fetch(2, 0L, 50L);
 
         // This put expires all four previous records, but they should still be returned from already open iterators
         windowStore.put(1, "four", retentionPeriod + 50L);
@@ -566,5 +566,17 @@ public class InMemoryWindowStoreTest {
 
         assertFalse(iterator1.hasNext());
         assertFalse(iterator2.hasNext());
+    }
+
+    @Test
+    public void shouldNotThroughExceptionWhenFetchRangeIsExpired() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        windowStore.put(1, "one", 0L);
+        windowStore.put(1, "two", retentionPeriod);
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L);
+
+        assertFalse(iterator.hasNext());
     }
 }
