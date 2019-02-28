@@ -74,8 +74,9 @@ public class StreamTask extends AbstractTask implements Punctuator {
             log.trace("{} Start flushing its producer's sent records upon committing its state", logPrefix);
             // 2) flush produced records in the downstream and change logs of local states
             recordCollector.flush();
-
-            // 3) commit consumed offsets if it is dirty already
+            // 3) write checkpoints for any local state
+            stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+            // 4) commit consumed offsets if it is dirty already
             commitOffsets();
         }
     };
@@ -378,9 +379,18 @@ public class StreamTask extends AbstractTask implements Punctuator {
     }
 
     @Override
-    protected Map<TopicPartition, Long> recordCollectorOffsets() {
-        return recordCollector.offsets();
+    protected Map<TopicPartition, Long> activeTaskCheckpointableOffsets() {
+        // put both producer acked offsets and consumer committed offsets as checkpointable offsets
+        final Map<TopicPartition, Long> checkpointableOffsets = recordCollector.offsets();
+        for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
+            if (!checkpointableOffsets.containsKey(entry.getKey())) {
+                checkpointableOffsets.put(entry.getKey(), entry.getValue());
+            }
+        }
+
+        return checkpointableOffsets;
     }
+
 
     @SuppressWarnings("unchecked")
     private RecordQueue createRecordQueue(TopicPartition partition, SourceNode source, final TimestampExtractor timestampExtractor) {

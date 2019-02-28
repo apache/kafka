@@ -43,13 +43,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
 
     private final Iterable<FileChannelLogEntry> shallowEntries;
 
-    private final Iterable<LogEntry> deepEntries = new Iterable<LogEntry>() {
-        @Override
-        public Iterator<LogEntry> iterator() {
-            return deepIterator();
-        }
-    };
-
     // mutable state
     private final AtomicInteger size;
     private final FileChannel channel;
@@ -362,18 +355,28 @@ public class FileRecords extends AbstractRecords implements Closeable {
     }
 
     @Override
-    public Iterable<LogEntry> deepEntries() {
-        return deepEntries;
+    public Iterable<LogEntry> deepEntries(final BufferSupplier bufferSupplier) {
+        return new Iterable<LogEntry>() {
+            @Override
+            public Iterator<LogEntry> iterator() {
+                return deepIterator(bufferSupplier);
+            }
+        };
     }
 
-    private Iterator<LogEntry> deepIterator() {
+    @Override
+    public Iterable<LogEntry> deepEntries() {
+        return deepEntries(BufferSupplier.NO_CACHING);
+    }
+
+    private Iterator<LogEntry> deepIterator(BufferSupplier bufferSupplier) {
         final int end;
         if (isSlice)
             end = this.end;
         else
             end = this.sizeInBytes();
         FileLogInputStream inputStream = new FileLogInputStream(channel, Integer.MAX_VALUE, start, end);
-        return new RecordsIterator(inputStream, false, false, Integer.MAX_VALUE);
+        return new RecordsIterator(inputStream, false, false, Integer.MAX_VALUE, bufferSupplier);
     }
 
     public static FileRecords open(File file,

@@ -22,17 +22,19 @@ from kafkatest.services.streams import StreamsTestBaseService
 class StreamsSimpleBenchmarkService(StreamsTestBaseService):
     """Base class for simple Kafka Streams benchmark"""
 
-    def __init__(self, test_context, kafka, numrecs):
+    def __init__(self, test_context, kafka, numrecs, load_phase, test_name):
         super(StreamsSimpleBenchmarkService, self).__init__(test_context,
                                                             kafka,
                                                             "org.apache.kafka.streams.perf.SimpleBenchmark",
-                                                            numrecs)
+                                                            numrecs,
+                                                            load_phase,
+                                                            test_name)
 
-    def collect_data(self, node):
+    def collect_data(self, node, tag = None):
         # Collect the data and return it to the framework
         output = node.account.ssh_capture("grep Performance %s" % self.STDOUT_FILE)
         data = {}
         for line in output:
             parts = line.split(':')
-            data[parts[0]] = float(parts[1])
+            data[tag + parts[0]] = parts[1]
         return data

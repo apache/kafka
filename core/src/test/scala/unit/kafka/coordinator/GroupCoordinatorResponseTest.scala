@@ -305,8 +305,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
 
     EasyMock.reset(replicaManager)
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andReturn(None)
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME)).anyTimes()
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(Record.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     timer.advanceClock(DefaultSessionTimeout + 100)
@@ -1055,8 +1054,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
           new PartitionResponse(Errors.NONE, 0L, Record.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME)).anyTimes()
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(Record.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleSyncGroup(groupId, generation, leaderId, assignment, responseCallback)
@@ -1137,8 +1135,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
           new PartitionResponse(Errors.NONE, 0L, Record.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME)).anyTimes()
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(Record.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleCommitOffsets(groupId, consumerId, generationId, offsets, responseCallback)
@@ -1149,8 +1146,7 @@ class GroupCoordinatorResponseTest extends JUnitSuite {
     val (responseFuture, responseCallback) = setupHeartbeatCallback
 
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andReturn(None)
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME)).anyTimes()
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(Record.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
     groupCoordinator.handleLeaveGroup(groupId, consumerId, responseCallback)

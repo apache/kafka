@@ -10,6 +10,7 @@
  */
 package org.apache.kafka.streams.integration;
 
+import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -43,8 +44,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
-
-import kafka.utils.MockTime;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
@@ -86,6 +85,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 2000);
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10 * 1024 * 1024L);
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         KeyValueMapper<Integer, String, String> mapper = MockKeyValueMapper.<Integer, String>SelectValueMapper();
         stream = builder.stream(Serdes.Integer(), Serdes.String(), streamOneInput);
@@ -126,7 +126,7 @@ public class KStreamAggregationDedupIntegrationTest {
         List<KeyValue<String, String>> results = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
-                5);
+            5);
 
         Collections.sort(results, new Comparator<KeyValue<String, String>>() {
             @Override
@@ -176,7 +176,7 @@ public class KStreamAggregationDedupIntegrationTest {
         List<KeyValue<String, String>> windowedOutput = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
-                10);
+            10);
 
         Comparator<KeyValue<String, String>>
             comparator =
@@ -229,6 +229,7 @@ public class KStreamAggregationDedupIntegrationTest {
             new StringDeserializer(),
             new LongDeserializer(),
                 5);
+
         Collections.sort(results, new Comparator<KeyValue<String, Long>>() {
             @Override
             public int compare(final KeyValue<String, Long> o1, final KeyValue<String, Long> o2) {
@@ -301,7 +302,5 @@ public class KStreamAggregationDedupIntegrationTest {
             numMessages, 60 * 1000);
 
     }
-
-
 
 }

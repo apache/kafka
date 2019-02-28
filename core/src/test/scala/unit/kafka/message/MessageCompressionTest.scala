@@ -18,9 +18,10 @@
 package kafka.message
 
 import org.apache.kafka.common.record._
-
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import java.nio.ByteBuffer
+
 import scala.collection._
 import org.scalatest.junit.JUnitSuite
 import org.junit._
@@ -33,7 +34,7 @@ class MessageCompressionTest extends JUnitSuite {
     val output = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V0, new ByteArrayOutputStream())
     assertTrue(output.asInstanceOf[KafkaLZ4BlockOutputStream].useBrokenFlagDescriptorChecksum())
 
-    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V0, new ByteArrayInputStream(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, 0x1A)))
+    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V0, ByteBuffer.wrap(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, 0x1A)))
     assertTrue(input.asInstanceOf[KafkaLZ4BlockInputStream].ignoreFlagDescriptorChecksum())
   }
 
@@ -42,7 +43,7 @@ class MessageCompressionTest extends JUnitSuite {
     val output = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V1, new ByteArrayOutputStream())
     assertFalse(output.asInstanceOf[KafkaLZ4BlockOutputStream].useBrokenFlagDescriptorChecksum())
 
-    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V1, new ByteArrayInputStream(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, -126)))
+    val input = CompressionFactory(LZ4CompressionCodec, Message.MagicValue_V1, ByteBuffer.wrap(Array[Byte](0x04, 0x22, 0x4D, 0x18, 0x60, 0x40, -126)))
     assertFalse(input.asInstanceOf[KafkaLZ4BlockInputStream].ignoreFlagDescriptorChecksum())
   }
 

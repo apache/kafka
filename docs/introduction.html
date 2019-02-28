@@ -43,7 +43,7 @@
       <ul style="float: left; width: 40%;">
       <li>The <a href="/documentation.html#producerapi">Producer API</a> allows an application to publish a stream of records to one or more Kafka topics.
       <li>The <a href="/documentation.html#consumerapi">Consumer API</a> allows an application to subscribe to one or more topics and process the stream of records produced to them.
-    <li>The <a href="/documentation.html#streams">Streams API</a> allows an application to act as a <i>stream processor</i>, consuming an input stream from one or more topics and producing an output stream to one or more output topics, effectively transforming the input streams to output streams.
+    <li>The <a href="/documentation/streams">Streams API</a> allows an application to act as a <i>stream processor</i>, consuming an input stream from one or more topics and producing an output stream to one or more output topics, effectively transforming the input streams to output streams.
     <li>The <a href="/documentation.html#connect">Connector API</a> allows building and running reusable producers or consumers that connect Kafka topics to existing applications or data systems. For example, a connector to a relational database might capture every change to a table.
   </ul>
       <img src="/{{version}}/images/kafka-apis.png" style="float: right; width: 50%;">
@@ -171,7 +171,7 @@
   For example, a retail application might take in input streams of sales and shipments, and output a stream of reorders and price adjustments computed off this data.
   </p>
   <p>
-  It is possible to do simple processing directly using the producer and consumer APIs. However for more complex transformations Kafka provides a fully integrated <a href="/documentation.html#streams">Streams API</a>. This allows building applications that do non-trivial processing that compute aggregations off of streams or join streams together.
+  It is possible to do simple processing directly using the producer and consumer APIs. However for more complex transformations Kafka provides a fully integrated <a href="/documentation/streams">Streams API</a>. This allows building applications that do non-trivial processing that compute aggregations off of streams or join streams together.
   </p>
   <p>
   This facility helps solve the hard problems this type of application faces: handling out-of-order data, reprocessing input as code changes, performing stateful computations, etc.

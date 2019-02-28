@@ -23,6 +23,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
@@ -51,6 +52,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -966,6 +969,119 @@ public class RocksDBWindowStoreTest {
             fail("should have thrown InvalidStateStoreException on closed store");
         } catch (InvalidStateStoreException e) {
             // ok
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldFetchAndIterateOverExactKeys() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        final RocksDBWindowStoreSupplier<String, String> supplier =
+                new RocksDBWindowStoreSupplier<>(
+                        "window",
+                        0x7a00000000000000L, 2,
+                        true,
+                        Serdes.String(),
+                        Serdes.String(),
+                        0x7a00000000000000L,
+                        true,
+                        Collections.<String, String>emptyMap(),
+                        false);
+
+        final Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            }
+        };
+
+        final MockProcessorContext context = new MockProcessorContext(
+                baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, cache);
+
+        final WindowStore<String, String> windowStore = supplier.get();
+        try {
+            windowStore.init(context, windowStore);
+
+            windowStore.put("a", "0001", 0);
+            windowStore.put("aa", "0002", 0);
+            windowStore.put("a", "0003", 1);
+            windowStore.put("aa", "0004", 1);
+            windowStore.put("a", "0005",  0x7a00000000000000L - 1);
+
+            final List expected = Utils.mkList("0001", "0003", "0005");
+            assertThat(toList(windowStore.fetch("a", 0, Long.MAX_VALUE)), equalTo(expected));
+        } finally {
+            windowStore.close();
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldFetchAndIterateOverExactBinaryKeys() throws Exception {
+        final File baseDir = TestUtils.tempDirectory();
+        final RocksDBWindowStoreSupplier<Bytes, String> supplier =
+                new RocksDBWindowStoreSupplier<>(
+                        "window",
+                        60000, 2,
+                        true,
+                        Serdes.Bytes(),
+                        Serdes.String(),
+                        60000,
+                        true,
+                        Collections.<String, String>emptyMap(),
+                        false);
+
+        final Producer<byte[], byte[]> producer = new MockProducer<>(true, byteArraySerde.serializer(), byteArraySerde.serializer());
+        final RecordCollector recordCollector = new RecordCollectorImpl(producer, "RocksDBWindowStoreTest-ShouldOnlyIterateOpenSegments") {
+            @Override
+            public <K1, V1> void send(final String topic,
+                                      K1 key,
+                                      V1 value,
+                                      Integer partition,
+                                      Long timestamp,
+                                      Serializer<K1> keySerializer,
+                                      Serializer<V1> valueSerializer) {
+            }
+        };
+
+        final MockProcessorContext context = new MockProcessorContext(
+                baseDir,
+                byteArraySerde, byteArraySerde,
+                recordCollector, cache);
+
+        final WindowStore<Bytes, String> windowStore = supplier.get();
+        try {
+            windowStore.init(context, windowStore);
+
+            final Bytes key1 = Bytes.wrap(new byte[]{0});
+            final Bytes key2 = Bytes.wrap(new byte[]{0, 0});
+            final Bytes key3 = Bytes.wrap(new byte[]{0, 0, 0});
+            windowStore.put(key1, "1", 0);
+            windowStore.put(key2, "2", 0);
+            windowStore.put(key3, "3", 0);
+            windowStore.put(key1, "4", 1);
+            windowStore.put(key2, "5", 1);
+            windowStore.put(key3, "6", 59999);
+            windowStore.put(key1, "7", 59999);
+            windowStore.put(key2, "8", 59999);
+            windowStore.put(key3, "9", 59999);
+
+            final List expectedKey1 = Utils.mkList("1", "4", "7");
+            assertThat(toList(windowStore.fetch(key1, 0, Long.MAX_VALUE)), equalTo(expectedKey1));
+            final List expectedKey2 = Utils.mkList("2", "5", "8");
+            assertThat(toList(windowStore.fetch(key2, 0, Long.MAX_VALUE)), equalTo(expectedKey2));
+            final List expectedKey3 = Utils.mkList("3", "6", "9");
+            assertThat(toList(windowStore.fetch(key3, 0, Long.MAX_VALUE)), equalTo(expectedKey3));
+        } finally {
+            windowStore.close();
         }
     }
 

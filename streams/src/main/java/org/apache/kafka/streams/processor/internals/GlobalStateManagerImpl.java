@@ -58,16 +58,25 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final File baseDir;
     private final OffsetCheckpoint checkpoint;
     private final Set<String> globalStoreNames = new HashSet<>();
-    private HashMap<TopicPartition, Long> checkpointableOffsets;
+    private final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
+    private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
 
     public GlobalStateManagerImpl(final ProcessorTopology topology,
-                           final Consumer<byte[], byte[]> consumer,
-                           final StateDirectory stateDirectory) {
+                                  final Consumer<byte[], byte[]> consumer,
+                                  final StateDirectory stateDirectory) {
         this.topology = topology;
         this.consumer = consumer;
         this.stateDirectory = stateDirectory;
         this.baseDir = stateDirectory.globalStateDir();
         this.checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
+
+        // Find non persistent store's topics
+        final Map<String, String> storeToChangelogTopic = topology.storeToChangelogTopic();
+        for (final StateStore store : topology.globalStateStores()) {
+            if (!store.persistent()) {
+                globalNonPersistentStoresTopics.add(storeToChangelogTopic.get(store.name()));
+            }
+        }
     }
 
     @Override
@@ -81,8 +90,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         }
 
         try {
-            this.checkpointableOffsets = new HashMap<>(checkpoint.read());
-            checkpoint.delete();
+            this.checkpointableOffsets.putAll(checkpoint.read());
         } catch (IOException e) {
             try {
                 stateDirectory.unlockGlobalState();
@@ -220,17 +228,29 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state stores\n" + closeFailed);
             }
-            writeCheckpoints(offsets);
+            checkpoint(offsets);
         } finally {
             stateDirectory.unlockGlobalState();
         }
     }
 
-    private void writeCheckpoints(final Map<TopicPartition, Long> offsets) {
-        if (!offsets.isEmpty()) {
-            checkpointableOffsets.putAll(offsets);
+    @Override
+    public void checkpoint(final Map<TopicPartition, Long> offsets) {
+        checkpointableOffsets.putAll(offsets);
+
+        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+
+        // Skip non persistent store
+        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointableOffsets.entrySet()) {
+            final String topic = topicPartitionOffset.getKey().topic();
+            if (!globalNonPersistentStoresTopics.contains(topic)) {
+                filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
+            }
+        }
+
+        if (!filteredOffsets.isEmpty()) {
             try {
-                checkpoint.write(checkpointableOffsets);
+                checkpoint.write(filteredOffsets);
             } catch (IOException e) {
                 log.warn("failed to write offsets checkpoint for global stores", e);
             }
@@ -238,7 +258,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public Map<TopicPartition, Long> checkpointedOffsets() {
+    public Map<TopicPartition, Long> checkpointed() {
         return Collections.unmodifiableMap(checkpointableOffsets);
     }
 

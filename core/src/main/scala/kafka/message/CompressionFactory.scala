@@ -17,12 +17,11 @@
 
 package kafka.message
 
-import java.io.OutputStream
-import java.util.zip.GZIPOutputStream
-import java.util.zip.GZIPInputStream
-import java.io.InputStream
+import java.io.{InputStream, OutputStream}
+import java.nio.ByteBuffer
+import java.util.zip.{GZIPInputStream, GZIPOutputStream}
 
-import org.apache.kafka.common.record.{KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
+import org.apache.kafka.common.record.{BufferSupplier, KafkaLZ4BlockInputStream, KafkaLZ4BlockOutputStream}
 
 object CompressionFactory {
   
@@ -40,15 +39,15 @@ object CompressionFactory {
     }
   }
   
-  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, stream: InputStream): InputStream = {
+  def apply(compressionCodec: CompressionCodec, messageVersion: Byte, buffer: ByteBuffer): InputStream = {
     compressionCodec match {
-      case DefaultCompressionCodec => new GZIPInputStream(stream)
-      case GZIPCompressionCodec => new GZIPInputStream(stream)
+      case DefaultCompressionCodec => new GZIPInputStream(new ByteBufferBackedInputStream(buffer))
+      case GZIPCompressionCodec => new GZIPInputStream(new ByteBufferBackedInputStream(buffer))
       case SnappyCompressionCodec => 
         import org.xerial.snappy.SnappyInputStream
-        new SnappyInputStream(stream)
+        new SnappyInputStream(new ByteBufferBackedInputStream(buffer))
       case LZ4CompressionCodec =>
-        new KafkaLZ4BlockInputStream(stream, messageVersion == Message.MagicValue_V0)
+        new KafkaLZ4BlockInputStream(buffer, BufferSupplier.NO_CACHING, messageVersion == Message.MagicValue_V0)
       case _ =>
         throw new kafka.common.UnknownCodecException("Unknown Codec: " + compressionCodec)
     }

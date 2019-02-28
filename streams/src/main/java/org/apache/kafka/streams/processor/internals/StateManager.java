@@ -24,7 +24,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 
-interface StateManager {
+interface StateManager extends Checkpointable {
     File baseDir();
 
     void register(final StateStore store, final boolean loggingEnabled, final StateRestoreCallback stateRestoreCallback);
@@ -36,6 +36,4 @@ interface StateManager {
     StateStore getGlobalStore(final String name);
 
     StateStore getStore(final String name);
-
-    Map<TopicPartition, Long> checkpointedOffsets();
 }

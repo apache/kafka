@@ -52,7 +52,7 @@ public class MetadataTest {
     @Test
     public void testMetadata() throws Exception {
         long time = 0;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         metadata.requestUpdate();
         assertFalse("Still no updated needed due to backoff", metadata.timeToNextUpdate(time) == 0);
@@ -67,7 +67,7 @@ public class MetadataTest {
         // This simulates the metadata update sequence in KafkaProducer
         while (t1.isAlive() || t2.isAlive()) {
             if (metadata.timeToNextUpdate(time) == 0) {
-                metadata.update(TestUtils.singletonCluster(topic, 1), time);
+                metadata.update(TestUtils.singletonCluster(topic, 1), Collections.<String>emptySet(), time);
                 time += refreshBackoffMs;
             }
             Thread.sleep(1);
@@ -97,7 +97,7 @@ public class MetadataTest {
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // lastSuccessfulRefreshMs updated to now.
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
 
         // The last update was successful so the remaining time to expire the current metadata should be returned.
         assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
@@ -108,7 +108,7 @@ public class MetadataTest {
         assertEquals(refreshBackoffMs, metadata.timeToNextUpdate(now));
 
         // Reset needUpdate to false.
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
         assertEquals(largerOfBackoffAndExpire, metadata.timeToNextUpdate(now));
 
         // Both metadataExpireMs and refreshBackoffMs elapsed.
@@ -152,13 +152,13 @@ public class MetadataTest {
         long now = 10000;
 
         // New topic added to fetch set and update requested. It should allow immediate update.
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
         metadata.add("new-topic");
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // Even though setTopics called, immediate update isn't necessary if the new topic set isn't
         // containing a new topic,
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
         metadata.setTopics(metadata.topics());
         assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
 
@@ -167,12 +167,12 @@ public class MetadataTest {
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // If metadata requested for all topics it should allow immediate update.
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
         metadata.needMetadataForAllTopics(true);
         assertEquals(0, metadata.timeToNextUpdate(now));
 
         // However if metadata is already capable to serve all topics it shouldn't override backoff.
-        metadata.update(Cluster.empty(), now);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), now);
         metadata.needMetadataForAllTopics(true);
         assertEquals(metadataExpireMs, metadata.timeToNextUpdate(now));
     }
@@ -187,7 +187,7 @@ public class MetadataTest {
     @Test
     public void testMetadataUpdateWaitTime() throws Exception {
         long time = 0;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertFalse("No update needed.", metadata.timeToNextUpdate(time) == 0);
         // first try with a max wait time of 0 and ensure that this returns back without waiting forever
         try {
@@ -209,7 +209,7 @@ public class MetadataTest {
     @Test
     public void testFailedUpdate() {
         long time = 100;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
 
         assertEquals(100, metadata.timeToNextUpdate(1000));
         metadata.failedUpdate(1100);
@@ -218,14 +218,14 @@ public class MetadataTest {
         assertEquals(100, metadata.lastSuccessfulUpdate());
 
         metadata.needMetadataForAllTopics(true);
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertEquals(100, metadata.timeToNextUpdate(1000));
     }
 
     @Test
     public void testUpdateWithNeedMetadataForAllTopics() {
         long time = 0;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         metadata.needMetadataForAllTopics(true);
 
         final List<String> expectedTopics = Collections.singletonList("topic");
@@ -237,7 +237,7 @@ public class MetadataTest {
                     new PartitionInfo("topic1", 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
-            100);
+            Collections.<String>emptySet(), 100);
 
         assertArrayEquals("Metadata got updated with wrong set of topics.",
             expectedTopics.toArray(), metadata.topics().toArray());
@@ -255,7 +255,7 @@ public class MetadataTest {
 
         String hostName = "www.example.com";
         Cluster cluster = Cluster.bootstrap(Arrays.asList(new InetSocketAddress(hostName, 9002)));
-        metadata.update(cluster, time);
+        metadata.update(cluster, Collections.<String>emptySet(), time);
         assertFalse("ClusterResourceListener should not called when metadata is updated with bootstrap Cluster",
                 MockClusterResourceListener.IS_ON_UPDATE_CALLED.get());
 
@@ -267,7 +267,7 @@ public class MetadataTest {
                                 new PartitionInfo("topic1", 0, null, null, null)),
                         Collections.<String>emptySet(),
                         Collections.<String>emptySet()),
-                100);
+                Collections.<String>emptySet(), 100);
 
         assertEquals("MockClusterResourceListener did not get cluster metadata correctly",
                 "dummy", mockClusterListener.clusterResource().clusterId());
@@ -279,10 +279,10 @@ public class MetadataTest {
     public void testListenerGetsNotifiedOfUpdate() {
         long time = 0;
         final Set<String> topics = new HashSet<>();
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         metadata.addListener(new Metadata.Listener() {
             @Override
-            public void onMetadataUpdate(Cluster cluster) {
+            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
                 topics.clear();
                 topics.addAll(cluster.topics());
             }
@@ -296,7 +296,7 @@ public class MetadataTest {
                     new PartitionInfo("topic1", 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
-            100);
+            Collections.<String>emptySet(), 100);
 
         assertEquals("Listener did not update topics list correctly",
             new HashSet<>(Arrays.asList("topic", "topic1")), topics);
@@ -306,10 +306,10 @@ public class MetadataTest {
     public void testListenerCanUnregister() {
         long time = 0;
         final Set<String> topics = new HashSet<>();
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         final Metadata.Listener listener = new Metadata.Listener() {
             @Override
-            public void onMetadataUpdate(Cluster cluster) {
+            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
                 topics.clear();
                 topics.addAll(cluster.topics());
             }
@@ -324,7 +324,7 @@ public class MetadataTest {
                     new PartitionInfo("topic1", 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
-            100);
+            Collections.<String>emptySet(), 100);
 
         metadata.removeListener(listener);
 
@@ -336,7 +336,7 @@ public class MetadataTest {
                     new PartitionInfo("topic3", 0, null, null, null)),
                 Collections.<String>emptySet(),
                 Collections.<String>emptySet()),
-            100);
+            Collections.<String>emptySet(), 100);
 
         assertEquals("Listener did not update topics list correctly",
             new HashSet<>(Arrays.asList("topic", "topic1")), topics);
@@ -349,17 +349,17 @@ public class MetadataTest {
         // Test that topic is expired if not used within the expiry interval
         long time = 0;
         metadata.add("topic1");
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         time += Metadata.TOPIC_EXPIRY_MS;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertFalse("Unused topic not expired", metadata.containsTopic("topic1"));
 
         // Test that topic is not expired if used within the expiry interval
         metadata.add("topic2");
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         for (int i = 0; i < 3; i++) {
             time += Metadata.TOPIC_EXPIRY_MS / 2;
-            metadata.update(Cluster.empty(), time);
+            metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
             metadata.add("topic2");
         }
@@ -368,9 +368,9 @@ public class MetadataTest {
         HashSet<String> topics = new HashSet<>();
         topics.add("topic4");
         metadata.setTopics(topics);
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         time += Metadata.TOPIC_EXPIRY_MS;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertFalse("Unused topic not expired", metadata.containsTopic("topic4"));
     }
 
@@ -381,17 +381,17 @@ public class MetadataTest {
         // Test that topic is not expired if not used within the expiry interval
         long time = 0;
         metadata.add("topic1");
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         time += Metadata.TOPIC_EXPIRY_MS;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic1"));
 
         // Test that topic is not expired if used within the expiry interval
         metadata.add("topic2");
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         for (int i = 0; i < 3; i++) {
             time += Metadata.TOPIC_EXPIRY_MS / 2;
-            metadata.update(Cluster.empty(), time);
+            metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
             assertTrue("Topic expired even though in use", metadata.containsTopic("topic2"));
             metadata.add("topic2");
         }
@@ -401,7 +401,7 @@ public class MetadataTest {
         topics.add("topic4");
         metadata.setTopics(topics);
         time += metadataExpireMs * 2;
-        metadata.update(Cluster.empty(), time);
+        metadata.update(Cluster.empty(), Collections.<String>emptySet(), time);
         assertTrue("Unused topic expired when expiry disabled", metadata.containsTopic("topic4"));
     }
 

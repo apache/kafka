@@ -15,6 +15,10 @@
  limitations under the License.
 -->
 
+<script><!--#include virtual="js/templateData.js" --></script>
+
+<script id="upgrade-template" type="text/x-handlebars-template">
+    
 <h4><a id="upgrade_10_2_0" href="#upgrade_10_2_0">Upgrading from 0.8.x, 0.9.x, 0.10.0.x or 0.10.1.x to 0.10.2.0</a></h4>
 <p>0.10.2.0 has wire protocol changes. By following the recommended rolling upgrade plan below, you guarantee no downtime during the upgrade.
 However, please review the <a href="#upgrade_1020_notable">notable changes in 0.10.2.0</a> before upgrading.
@@ -47,16 +51,28 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
 
 <p><b>Note:</b> Bumping the protocol version and restarting can be done any time after the brokers were upgraded. It does not have to be immediately after.
 
-<h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Upgrading a Kafka Streams Application</a></h5>
+<h5><a id="upgrade_1020_streams" href="#upgrade_1020_streams">Upgrading a 0.10.1 Kafka Streams Application</a></h5>
 <ul>
     <li> Upgrading your Streams application from 0.10.1 to 0.10.2 does not require a broker upgrade.
          A Kafka Streams 0.10.2 application can connect to 0.10.2 and 0.10.1 brokers (it is not possible to connect to 0.10.0 brokers though). </li>
     <li> You need to recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
-    <li> <code>KStreamBuilder#table()</code> always requires a store name. </li>
-    <li> <code>KTable#through()</code> always requires a store name. </li>
     <li> If you use a custom (i.e., user implemented) timestamp extractor, you will need to update this code, because the <code>TimestampExtractor</code> interface was changed. </li>
     <li> If you register custom metrics, you will need to update this code, because the <code>StreamsMetric</code> interface was changed. </li>
+    <li> See <a href="/{{version}}/documentation/streams#streams_api_changes_0102">Streams API changes in 0.10.2</a> for more details. </li>
 </ul>
+
+<h5><a id="upgrade_10202_notable" href="#upgrade_10202_notable">Notable changes in 0.10.2.2</a></h5>
+<ul>
+    <li> New configuration parameter <code>upgrade.from</code> added that allows rolling bounce upgrade from version 0.10.0.x </li>
+</ul>
+
+<h5><a id="upgrade_10201_notable" href="#upgrade_10201_notable">Notable changes in 0.10.2.1</a></h5>
+<ul>
+  <li> The default values for two configurations of the StreamsConfig class were changed to improve the resiliency of Kafka Streams applications. The internal Kafka Streams producer <code>retries</code> default value was changed from 0 to 10. The internal Kafka Streams consumer <code>max.poll.interval.ms</code>  default value was changed from 300000 to <code>Integer.MAX_VALUE</code>.
+  </li>
+</ul>
+
+
 
 <h5><a id="upgrade_1020_notable" href="#upgrade_1020_notable">Notable changes in 0.10.2.0</a></h5>
 <ul>
@@ -75,7 +91,7 @@ Kafka cluster before upgrading your clients. Version 0.10.2 brokers support 0.8.
         modifying Zookeeper directly. This eliminates the need for privileges to access Zookeeper directly and "StreamsConfig.ZOOKEEPER_CONFIG"
         should not be set in the Streams app any more. If the Kafka cluster is secured, Streams apps must have the required security privileges to create new topics.</li>
     <li>Several new fields including "security.protocol", "connections.max.idle.ms", "retry.backoff.ms", "reconnect.backoff.ms" and "request.timeout.ms" were added to
-        StreamsConfig class. User should pay attenntion to the default values and set these if needed. For more details please refer to <a href="#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
+        StreamsConfig class. User should pay attention to the default values and set these if needed. For more details please refer to <a href="/{{version}}/documentation/#streamsconfigs">3.5 Kafka Streams Configs</a>.</li>
 </ul>
 
 <h5><a id="upgrade_1020_new_protocols" href="#upgrade_1020_new_protocols">New Protocol Versions</a></h5>
@@ -125,39 +141,28 @@ only support 0.10.1.x or later brokers while 0.10.1.x brokers also support older
     <li> Due to the increased number of index files, on some brokers with large amount the log segments (e.g. >15K), the log loading process during the broker startup could be longer. Based on our experiment, setting the num.recovery.threads.per.data.dir to one may reduce the log loading time. </li>
 </ul>
 
-<h5><a id="upgrade_1010_streams" href="#upgrade_1010_streams">Streams API changes in 0.10.1.0</a></h5>
+<h5><a id="upgrade_1010_streams" href="#upgrade_1010_streams">Upgrading a 0.10.0 Kafka Streams Application</a></h5>
 <ul>
-    <li> Stream grouping and aggregation split into two methods:
+    <li> Upgrading your Streams application from 0.10.0 to 0.10.1 does require a <a href="#upgrade_10_1">broker upgrade</a> because a Kafka Streams 0.10.1 application can only connect to 0.10.1 brokers. </li>
+    <li> There are couple of API changes, that are not backward compatible (cf. <a href="/{{version}}/documentation/streams#streams_api_changes_0101">Streams API changes in 0.10.1</a> for more details).
+         Thus, you need to update and recompile your code. Just swapping the Kafka Streams library jar file will not work and will break your application. </li>
+<!-- TODO add when 0.10.1.2 is released
+    <li> Upgrading from 0.10.0.x to 0.10.1.2 requires two rolling bounces with config <code>upgrade.from="0.10.0"</code> set for first upgrade phase
+         (cf. <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-268%3A+Simplify+Kafka+Streams+Rebalance+Metadata+Upgrade">KIP-268</a>).
+         As an alternative, an offline upgrade is also possible.
         <ul>
-            <li> old: KStream #aggregateByKey(), #reduceByKey(), and #countByKey() </li>
-            <li> new: KStream#groupByKey() plus KGroupedStream #aggregate(), #reduce(), and #count() </li>
-            <li> Example: stream.countByKey() changes to stream.groupByKey().count() </li>
+            <li> prepare your application instances for a rolling bounce and make sure that config <code>upgrade.from</code> is set to <code>"0.10.0"</code> for new version 0.10.1.2 </li>
+            <li> bounce each instance of your application once </li>
+            <li> prepare your newly deployed 0.10.1.2 application instances for a second round of rolling bounces; make sure to remove the value for config <code>upgrade.mode</code> </li>
+            <li> bounce each instance of your application once more to complete the upgrade </li>
         </ul>
     </li>
-    <li> Auto Repartitioning:
+-->
+    <li> Upgrading from 0.10.0.x to 0.10.1.0 or 0.10.1.1 requires an offline upgrade (rolling bounce upgrade is not supported)
         <ul>
-            <li> a call to through() after a key-changing operator and before an aggregation/join is no longer required </li>
-            <li> Example: stream.selectKey(...).through(...).countByKey() changes to stream.selectKey().groupByKey().count() </li>
-        </ul>
-    </li>
-    <li> TopologyBuilder:
-        <ul>
-            <li> methods #sourceTopics(String applicationId) and #topicGroups(String applicationId) got simplified to #sourceTopics() and #topicGroups() </li>
-        </ul>
-    </li>
-    <li> DSL: new parameter to specify state store names:
-        <ul>
-            <li> The new Interactive Queries feature requires to specify a store name for all source KTables and window aggregation result KTables (previous parameter "operator/window name" is now the storeName) </li>
-            <li> KStreamBuilder#table(String topic) changes to #topic(String topic, String storeName) </li>
-            <li> KTable#through(String topic) changes to #through(String topic, String storeName) </li>
-            <li> KGroupedStream #aggregate(), #reduce(), and #count() require additional parameter "String storeName"</li>
-            <li> Example: stream.countByKey(TimeWindows.of("windowName", 1000)) changes to stream.groupByKey().count(TimeWindows.of(1000), "countStoreName") </li>
-        </ul>
-    </li>
-    <li> Windowing:
-        <ul>
-            <li> Windows are not named anymore: TimeWindows.of("name", 1000) changes to TimeWindows.of(1000) (cf. DSL: new parameter to specify state store names) </li>
-            <li> JoinWindows has no default size anymore: JoinWindows.of("name").within(1000) changes to JoinWindows.of(1000) </li>
+            <li> stop all old (0.10.0.x) application instances </li>
+            <li> update your code and swap old code and jar file with new code and new jar file </li>
+            <li> restart all new (0.10.1.0 or 0.10.1.1) application instances </li>
         </ul>
     </li>
 </ul>
@@ -299,7 +304,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 <h5><a id="upgrade_10_notable" href="#upgrade_10_notable">Notable changes in 0.10.0.0</a></h5>
 
 <ul>
-    <li> Starting from Kafka 0.10.0.0, a new client library named <b>Kafka Streams</b> is available for stream processing on data stored in Kafka topics. This new client library only works with 0.10.x and upward versioned brokers due to message format changes mentioned above. For more information please read <a href="#streams_overview">this section</a>.</li>
+    <li> Starting from Kafka 0.10.0.0, a new client library named <b>Kafka Streams</b> is available for stream processing on data stored in Kafka topics. This new client library only works with 0.10.x and upward versioned brokers due to message format changes mentioned above. For more information please read <a href="/{{version}}/documentation/streams">Streams documentation</a>.</li>
     <li> The default value of the configuration parameter <code>receive.buffer.bytes</code> is now 64K for the new consumer.</li>
     <li> The new consumer now exposes the configuration parameter <code>exclude.internal.topics</code> to restrict internal topics (such as the consumer offsets topic) from accidentally being included in regular expression subscriptions. By default, it is enabled.</li>
     <li> The old Scala producer has been deprecated. Users should migrate their code to the Java producer included in the kafka-clients JAR as soon as possible. </li>
@@ -369,3 +374,7 @@ work with 0.10.0.x brokers. Therefore, 0.9.0.0 clients should be upgraded to 0.9
 <h4><a id="upgrade_7" href="#upgrade_7">Upgrading from 0.7</a></h4>
 
 Release 0.7 is incompatible with newer releases. Major changes were made to the API, ZooKeeper data structures, and protocol, and configuration in order to add replication (Which was missing in 0.7). The upgrade from 0.7 to later versions requires a <a href="https://cwiki.apache.org/confluence/display/KAFKA/Migrating+from+0.7+to+0.8">special tool</a> for migration. This migration can be done without downtime.
+
+</script>
+
+<div class="p-upgrade"></div>

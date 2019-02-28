@@ -67,7 +67,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         }
         initTopology();
         processorContext.initialized();
-        return stateMgr.checkpointedOffsets();
+        return stateMgr.checkpointed();
     }
 
 
@@ -89,6 +89,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     public void flushState() {
         stateMgr.flush(processorContext);
+        stateMgr.checkpoint(offsets);
     }
 
     public void close() throws IOException {

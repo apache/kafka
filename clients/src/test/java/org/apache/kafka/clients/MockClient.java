@@ -26,6 +26,7 @@ import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -63,6 +64,7 @@ public class MockClient implements KafkaClient {
 
     private final Time time;
     private final Metadata metadata;
+    private Set<String> unavailableTopics;
     private int correlation = 0;
     private Node node = null;
     private final Set<String> ready = new HashSet<>();
@@ -72,17 +74,17 @@ public class MockClient implements KafkaClient {
     // Use concurrent queue for responses so that responses may be updated during poll() from a different thread.
     private final Queue<ClientResponse> responses = new ConcurrentLinkedDeque<>();
     private final Queue<FutureResponse> futureResponses = new ArrayDeque<>();
-    private final Queue<Cluster> metadataUpdates = new ArrayDeque<>();
+    private final Queue<MetadataUpdate> metadataUpdates = new ArrayDeque<>();
     private volatile NodeApiVersions nodeApiVersions = NodeApiVersions.create();
 
     public MockClient(Time time) {
-        this.time = time;
-        this.metadata = null;
+        this(time, null);
     }
 
     public MockClient(Time time, Metadata metadata) {
         this.time = time;
         this.metadata = metadata;
+        this.unavailableTopics = Collections.emptySet();
     }
 
     @Override
@@ -167,11 +169,13 @@ public class MockClient implements KafkaClient {
         List<ClientResponse> copy = new ArrayList<>(this.responses);
 
         if (metadata != null && metadata.updateRequested()) {
-            Cluster cluster = metadataUpdates.poll();
-            if (cluster == null)
-                metadata.update(metadata.fetch(), time.milliseconds());
-            else
-                metadata.update(cluster, time.milliseconds());
+            MetadataUpdate metadataUpdate = metadataUpdates.poll();
+            if (metadataUpdate == null)
+                metadata.update(metadata.fetch(), this.unavailableTopics, time.milliseconds());
+            else {
+                this.unavailableTopics = metadataUpdate.unavailableTopics;
+                metadata.update(metadataUpdate.cluster, metadataUpdate.unavailableTopics, time.milliseconds());
+            }
         }
 
         while (!this.responses.isEmpty()) {
@@ -277,8 +281,8 @@ public class MockClient implements KafkaClient {
         metadataUpdates.clear();
     }
 
-    public void prepareMetadataUpdate(Cluster cluster) {
-        metadataUpdates.add(cluster);
+    public void prepareMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+        metadataUpdates.add(new MetadataUpdate(cluster, unavailableTopics));
     }
 
     public void setNode(Node node) {
@@ -338,5 +342,14 @@ public class MockClient implements KafkaClient {
 
     public void setNodeApiVersions(NodeApiVersions nodeApiVersions) {
         this.nodeApiVersions = nodeApiVersions;
+    }
+
+    private static class MetadataUpdate {
+        final Cluster cluster;
+        final Set<String> unavailableTopics;
+        MetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
+            this.cluster = cluster;
+            this.unavailableTopics = unavailableTopics;
+        }
     }
 }

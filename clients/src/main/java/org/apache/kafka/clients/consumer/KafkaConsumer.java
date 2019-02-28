@@ -630,7 +630,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             // load interceptors and make sure they get clientId
             Map<String, Object> userProvidedConfigs = config.originals();
             userProvidedConfigs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
-            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
+            List<ConsumerInterceptor<K, V>> interceptorList = (List) (new ConsumerConfig(userProvidedConfigs, false)).getConfiguredInstances(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ConsumerInterceptor.class);
             this.interceptors = interceptorList.isEmpty() ? null : new ConsumerInterceptors<>(interceptorList);
             if (keyDeserializer == null) {
@@ -652,7 +652,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer, valueDeserializer, reporters, interceptorList);
             this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG), false, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG));
-            this.metadata.update(Cluster.bootstrap(addresses), 0);
+            this.metadata.update(Cluster.bootstrap(addresses), Collections.<String>emptySet(), 0);
             String metricGrpPrefix = "consumer";
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config.values());
             NetworkClient netClient = new NetworkClient(
@@ -674,21 +674,22 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
             this.coordinator = new ConsumerCoordinator(this.client,
-                    config.getString(ConsumerConfig.GROUP_ID_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
-                    config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
-                    assignors,
-                    this.metadata,
-                    this.subscriptions,
-                    metrics,
-                    metricGrpPrefix,
-                    this.time,
-                    retryBackoffMs,
-                    config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
-                    config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
-                    this.interceptors,
-                    config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG));
+                                                       config.getString(ConsumerConfig.GROUP_ID_CONFIG),
+                                                       config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG),
+                                                       config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG),
+                                                       config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG),
+                                                       assignors,
+                                                       this.metadata,
+                                                       this.subscriptions,
+                                                       metrics,
+                                                       metricGrpPrefix,
+                                                       this.time,
+                                                       retryBackoffMs,
+                                                       config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG),
+                                                       config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
+                                                       this.interceptors,
+                                                       config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+                                                       config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
             this.fetcher = new Fetcher<>(this.client,
                     config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
@@ -1000,9 +1001,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     //
                     // NOTE: since the consumed position has already been updated, we must not allow
                     // wakeups or any other errors to be triggered prior to returning the fetched records.
-                    if (fetcher.sendFetches() > 0) {
+                    if (fetcher.sendFetches() > 0 || client.pendingRequestCount() > 0)
                         client.pollNoWakeup();
-                    }
 
                     if (this.interceptors == null)
                         return new ConsumerRecords<>(records);
@@ -1495,7 +1495,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(long, TimeUnit)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
-     * 
+     *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
      * before or while this function is called
      */

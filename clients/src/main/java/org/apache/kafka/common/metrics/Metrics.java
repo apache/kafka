@@ -367,6 +367,12 @@ public class Metrics implements Closeable {
                             removeMetric(metric.metricName());
                         log.debug("Removed sensor with name {}", name);
                         childSensors = childrenSensors.remove(sensor);
+                        for (final Sensor parent : sensor.parents()) {
+                            final List<Sensor> peers = childrenSensors.get(parent);
+                            if (peers != null) {
+                                peers.remove(sensor);
+                            }
+                        }
                     }
                 }
             }

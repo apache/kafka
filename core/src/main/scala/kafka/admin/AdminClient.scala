@@ -231,7 +231,7 @@ object AdminClient {
     val brokerUrls = config.getList(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG)
     val brokerAddresses = ClientUtils.parseAndValidateAddresses(brokerUrls)
     val bootstrapCluster = Cluster.bootstrap(brokerAddresses)
-    metadata.update(bootstrapCluster, 0)
+    metadata.update(bootstrapCluster, Collections.emptySet(), 0)
 
     val selector = new Selector(
       DefaultConnectionMaxIdleMs,

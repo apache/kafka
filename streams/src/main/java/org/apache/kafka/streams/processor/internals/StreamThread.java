@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
+import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -76,36 +76,48 @@ public class StreamThread extends Thread {
      * A thread must only be in one state at a time
      * The expected state transitions with the following defined states is:
      *
-     *                +-----------+
-     *                |Not Running|<---------------+
-     *                +-----+-----+                |
-     *                      |                      |
-     *                      v                      |
-     *                +-----+-----+                |
-     *          +-----| Running   |<------------+  |
-     *          |     +-----+-----+             |  |
-     *          |           |                   |  |
-     *          |           v                   |  |
-     *          |     +-----+------------+      |  |
-     *          <---- |Partitions        |      |  |
-     *          |     |Revoked           |      |  |
-     *          |     +-----+------------+      |  |
-     *          |           |                   |  |
-     *          |           v                   |  |
-     *          |     +-----+------------+      |  |
-     *          |     |Assigning         |      |  |
-     *          |     |Partitions        |------+  |
-     *          |     +-----+------------+         |
-     *          |           |                      |
-     *          |           |                      |
-     *          |    +------v---------+            |
-     *          +--->|Pending         |------------+
-     *               |Shutdown        |
-     *               +-----+----------+
+     * <pre>
+     *                +-------------+
+     *          +<--- | Created     |
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +<--- | Running     | <----+
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          +<--- | Partitions  | <-+  |
+     *          |     | Revoked     | --+  |
+     *          |     +-----+-------+      |
+     *          |           |              |
+     *          |           v              |
+     *          |     +-----+-------+      |
+     *          +<--- | Assigning   |      |
+     *          |     | Partitions  | ---->+
+     *          |     +-----+-------+
+     *          |           |
+     *          |           v
+     *          |     +-----+-------+
+     *          +---> | Pending     |
+     *                | Shutdown    |
+     *                +-----+-------+
+     *                      |
+     *                      v
+     *                +-----+-------+
+     *                | Dead        |
+     *                +-------------+
+     * </pre>
+     *
+     * Note the following:
+     * - Any state can go to PENDING_SHUTDOWN followed by a subsequent transition to DEAD.
+     * - A streams thread can stay in PARTITIONS_REVOKED indefinitely, in the corner case when
+     *   the coordinator repeatedly fails in-between revoking partitions and assigning new partitions.
      *
      */
-    public enum State {
-        NOT_RUNNING(1), RUNNING(1, 2, 4), PARTITIONS_REVOKED(3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(0);
+    public enum State implements ThreadStateTransitionValidator {
+        CREATED(1, 4), RUNNING(2, 4), PARTITIONS_REVOKED(2, 3, 4), ASSIGNING_PARTITIONS(1, 4), PENDING_SHUTDOWN(5), DEAD;
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -114,15 +126,18 @@ public class StreamThread extends Thread {
         }
 
         public boolean isRunning() {
-            return !this.equals(PENDING_SHUTDOWN) && !this.equals(NOT_RUNNING);
+            return !equals(PENDING_SHUTDOWN) && !equals(CREATED) && !equals(DEAD);
         }
 
-        public boolean isValidTransition(final State newState) {
-            return validTransitions.contains(newState.ordinal());
+        @Override
+        public boolean isValidTransition(final ThreadStateTransitionValidator newState) {
+            State tmpState = (State) newState;
+            return validTransitions.contains(tmpState.ordinal());
         }
     }
 
-    private volatile State state = State.NOT_RUNNING;
+    private volatile State state = State.CREATED;
+    private final Object stateLock = new Object();
     private StateListener stateListener = null;
 
     /**
@@ -136,7 +151,7 @@ public class StreamThread extends Thread {
          * @param newState     current state
          * @param oldState     previous state
          */
-        void onChange(final StreamThread thread, final State newState, final State oldState);
+        void onChange(final Thread thread, final ThreadStateTransitionValidator newState, final ThreadStateTransitionValidator oldState);
     }
 
     /**
@@ -150,26 +165,48 @@ public class StreamThread extends Thread {
     /**
      * @return The state this instance is in
      */
-    public synchronized State state() {
-        return state;
+    public State state() {
+        synchronized (stateLock) {
+            return state;
+        }
     }
 
-    private synchronized void setState(State newState) {
-        State oldState = state;
-        if (!state.isValidTransition(newState)) {
-            log.warn("Unexpected state transition from " + state + " to " + newState);
+
+    /**
+     * Sets the state
+     * @param newState New state
+     */
+    void setState(final State newState) {
+        State oldState;
+        synchronized (stateLock) {
+            oldState = state;
+
+            // there are cases when we shouldn't check if a transition is valid, e.g.,
+            // when, for testing, a thread is closed multiple times. We could either
+            // check here and immediately return for those cases, or add them to the transition
+            // diagram (but then the diagram would be confusing and have transitions like
+            // PENDING_SHUTDOWN->PENDING_SHUTDOWN). These cases include:
+            // - normal close() sequence. State is set to PENDING_SHUTDOWN in close() as well as in shutdown().
+            // - calling close() on the thread after an exception within the thread has already called shutdown().
+
+            // note we could be going from PENDING_SHUTDOWN to DEAD, and we obviously want to allow that
+            // transition, hence the check newState != DEAD.
+            if (newState != State.DEAD &&
+                    (state == State.PENDING_SHUTDOWN || state == State.DEAD)) {
+                return;
+            }
+            if (!state.isValidTransition(newState)) {
+                log.warn("{} Unexpected state transition from {} to {}.", logPrefix, oldState, newState);
+                throw new StreamsException(logPrefix + " Unexpected state transition from " + oldState + " to " + newState);
+            } else {
+                log.info("{} State transition from {} to {}.", logPrefix, oldState, newState);
+            }
+
+            state = newState;
         }
-        state = newState;
         if (stateListener != null) {
             stateListener.onChange(this, state, oldState);
         }
-    }
-
-    private synchronized void setStateWhenNotInPendingShutdown(final State newState) {
-        if (state == State.PENDING_SHUTDOWN) {
-            return;
-        }
-        setState(newState);
     }
 
     public final PartitionGrouper partitionGrouper;
@@ -221,14 +258,8 @@ public class StreamThread extends Thread {
         public void onPartitionsAssigned(Collection<TopicPartition> assignment) {
 
             try {
-                if (state == State.PENDING_SHUTDOWN) {
-                    log.info("stream-thread [{}] New partitions [{}] assigned while shutting down.",
-                        StreamThread.this.getName(), assignment);
-                }
-                log.info("stream-thread [{}] New partitions [{}] assigned at the end of consumer rebalance.",
-                    StreamThread.this.getName(), assignment);
-
-                setStateWhenNotInPendingShutdown(State.ASSIGNING_PARTITIONS);
+                log.info("{} at state {}: new partitions {} assigned at the end of consumer rebalance.", logPrefix, state, assignment);
+                setState(State.ASSIGNING_PARTITIONS);
                 // do this first as we may have suspended standby tasks that
                 // will become active or vice versa
                 closeNonAssignedSuspendedStandbyTasks();
@@ -237,7 +268,7 @@ public class StreamThread extends Thread {
                 addStandbyTasks();
                 lastCleanMs = time.milliseconds(); // start the cleaning cycle
                 streamsMetadataState.onChange(partitionAssignor.getPartitionsByHostState(), partitionAssignor.clusterMetadata());
-                setStateWhenNotInPendingShutdown(State.RUNNING);
+                setState(State.RUNNING);
             } catch (Throwable t) {
                 rebalanceException = t;
                 throw t;
@@ -247,13 +278,8 @@ public class StreamThread extends Thread {
         @Override
         public void onPartitionsRevoked(Collection<TopicPartition> assignment) {
             try {
-                if (state == State.PENDING_SHUTDOWN) {
-                    log.info("stream-thread [{}] New partitions [{}] revoked while shutting down.",
-                             StreamThread.this.getName(), assignment);
-                }
-                log.info("stream-thread [{}] partitions [{}] revoked at the beginning of consumer rebalance.",
-                         StreamThread.this.getName(), assignment);
-                setStateWhenNotInPendingShutdown(State.PARTITIONS_REVOKED);
+                log.info("{} at state {}: partitions {} revoked at the beginning of consumer rebalance.", logPrefix, state, assignment);
+                setState(State.PARTITIONS_REVOKED);
                 lastCleanMs = Long.MAX_VALUE; // stop the cleaning cycle until partitions are assigned
                 // suspend active tasks
                 suspendTasksAndState();
@@ -268,8 +294,10 @@ public class StreamThread extends Thread {
         }
     };
 
-    public synchronized boolean isInitialized() {
-        return state == State.RUNNING;
+    public boolean isInitialized() {
+        synchronized (stateLock) {
+            return state == State.RUNNING;
+        }
     }
 
     public String threadClientId() {
@@ -347,7 +375,6 @@ public class StreamThread extends Thread {
         this.timerStartedMs = time.milliseconds();
         this.lastCleanMs = Long.MAX_VALUE; // the cleaning cycle won't start until partition assignment
         this.lastCommitMs = timerStartedMs;
-        setState(state.RUNNING);
     }
 
     public void partitionAssignor(StreamPartitionAssignor partitionAssignor) {
@@ -363,7 +390,7 @@ public class StreamThread extends Thread {
     @Override
     public void run() {
         log.info("{} Starting", logPrefix);
-
+        setState(State.RUNNING);
         try {
             runLoop();
             cleanRun = true;
@@ -382,6 +409,8 @@ public class StreamThread extends Thread {
 
     /**
      * Shutdown this stream thread.
+     * Note that there is nothing to prevent this function from being called multiple times
+     * (e.g., in testing), hence the state is set only the first time
      */
     public synchronized void close() {
         log.info("{} Informed thread to shut down", logPrefix);
@@ -395,6 +424,7 @@ public class StreamThread extends Thread {
 
     private void shutdown() {
         log.info("{} Shutting down", logPrefix);
+        setState(State.PENDING_SHUTDOWN);
         shutdownTasksAndState();
 
         // close all embedded clients
@@ -416,7 +446,7 @@ public class StreamThread extends Thread {
         try {
             partitionAssignor.close();
         } catch (Throwable e) {
-            log.error("stream-thread [{}] Failed to close KafkaStreamClient: ", this.getName(), e);
+            log.error("{} Failed to close KafkaStreamClient: ", logPrefix, e);
         }
 
         removeStreamTasks();
@@ -425,7 +455,7 @@ public class StreamThread extends Thread {
         // clean up global tasks
 
         log.info("{} Stream thread shutdown complete", logPrefix);
-        setState(State.NOT_RUNNING);
+        setState(State.DEAD);
         streamsMetrics.removeAllSensors();
     }
 
@@ -443,17 +473,21 @@ public class StreamThread extends Thread {
 
     @SuppressWarnings("ThrowableNotThrown")
     private void shutdownTasksAndState() {
-        log.debug("{} shutdownTasksAndState: shutting down all active tasks [{}] and standby tasks [{}]", logPrefix,
-            activeTasks.keySet(), standbyTasks.keySet());
+        log.debug("{} shutdownTasksAndState: shutting down" +
+                "active tasks {}, standby tasks {}, suspended tasks {}, and suspended standby tasks {}",
+            logPrefix, activeTasks.keySet(), standbyTasks.keySet(),
+            suspendedTasks.keySet(), suspendedStandbyTasks.keySet());
 
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         // Close all processors in topology order
-        firstException.compareAndSet(null, closeAllTasks());
+        firstException.compareAndSet(null, closeTasks(activeAndStandbytasks()));
+        firstException.compareAndSet(null, closeTasks(suspendedAndSuspendedStandbytasks()));
         // flush state
         firstException.compareAndSet(null, flushAllState());
         // Close all task state managers. Don't need to set exception as all
         // state would have been flushed above
-        closeAllStateManagers(firstException.get() == null);
+        closeStateManagers(activeAndStandbytasks(), firstException.get() == null);
+        closeStateManagers(suspendedAndSuspendedStandbytasks(), firstException.get() == null);
         // only commit under clean exit
         if (cleanRun && firstException.get() == null) {
             firstException.set(commitOffsets());
@@ -468,16 +502,18 @@ public class StreamThread extends Thread {
      * soon the tasks will be assigned again
      */
     private void suspendTasksAndState()  {
-        log.debug("{} suspendTasksAndState: suspending all active tasks [{}] and standby tasks [{}]", logPrefix,
+        log.debug("{} suspendTasksAndState: suspending all active tasks {} and standby tasks {}", logPrefix,
             activeTasks.keySet(), standbyTasks.keySet());
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
         // Close all topology nodes
-        firstException.compareAndSet(null, closeAllTasksTopologies());
+        firstException.compareAndSet(null, closeActiveAndStandbyTasksTopologies());
         // flush state
         firstException.compareAndSet(null, flushAllState());
         // only commit after all state has been flushed and there hasn't been an exception
         if (firstException.get() == null) {
-            firstException.set(commitOffsets());
+            // TODO: currently commit failures will not be thrown to users
+            // while suspending tasks; this need to be re-visit after KIP-98
+            commitOffsets();
         }
         // remove the changelog partitions from restore consumer
         firstException.compareAndSet(null, unAssignChangeLogPartitions());
@@ -493,21 +529,20 @@ public class StreamThread extends Thread {
         void apply(final AbstractTask task);
     }
 
-    private RuntimeException performOnAllTasks(final AbstractTaskAction action,
-                                   final String exceptionMessage) {
+    private RuntimeException performOnTasks(final List<AbstractTask> tasks,
+                                            final AbstractTaskAction action,
+                                            final String exceptionMessage) {
         RuntimeException firstException = null;
-        final List<AbstractTask> allTasks = new ArrayList<AbstractTask>(activeTasks.values());
-        allTasks.addAll(standbyTasks.values());
-        for (final AbstractTask task : allTasks) {
+        for (final AbstractTask task : tasks) {
             try {
                 action.apply(task);
             } catch (RuntimeException t) {
                 log.error("{} Failed while executing {} {} due to {}: ",
-                        StreamThread.this.logPrefix,
-                        task.getClass().getSimpleName(),
-                        task.id(),
-                        exceptionMessage,
-                        t);
+                    StreamThread.this.logPrefix,
+                    task.getClass().getSimpleName(),
+                    task.id(),
+                    exceptionMessage,
+                    t);
                 if (firstException == null) {
                     firstException = t;
                 }
@@ -516,8 +551,20 @@ public class StreamThread extends Thread {
         return firstException;
     }
 
-    private Throwable closeAllStateManagers(final boolean writeCheckpoint) {
-        return performOnAllTasks(new AbstractTaskAction() {
+    private List<AbstractTask> activeAndStandbytasks() {
+        final List<AbstractTask> tasks = new ArrayList<AbstractTask>(activeTasks.values());
+        tasks.addAll(standbyTasks.values());
+        return tasks;
+    }
+
+    private List<AbstractTask> suspendedAndSuspendedStandbytasks() {
+        final List<AbstractTask> tasks = new ArrayList<AbstractTask>(suspendedTasks.values());
+        tasks.addAll(suspendedStandbyTasks.values());
+        return tasks;
+    }
+
+    private Throwable closeStateManagers(final List<AbstractTask> tasks, final boolean writeCheckpoint) {
+        return performOnTasks(tasks, new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
                 log.info("{} Closing the state manager of task {}", StreamThread.this.logPrefix, task.id());
@@ -528,7 +575,7 @@ public class StreamThread extends Thread {
 
     private RuntimeException commitOffsets() {
         // Exceptions should not prevent this call from going through all shutdown steps
-        return performOnAllTasks(new AbstractTaskAction() {
+        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
                 log.info("{} Committing consumer offsets of task {}", StreamThread.this.logPrefix, task.id());
@@ -538,7 +585,7 @@ public class StreamThread extends Thread {
     }
 
     private RuntimeException flushAllState() {
-        return performOnAllTasks(new AbstractTaskAction() {
+        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
                 log.info("{} Flushing state stores of task {}", StreamThread.this.logPrefix, task.id());
@@ -580,32 +627,8 @@ public class StreamThread extends Thread {
 
                 try {
                     records = consumer.poll(longPoll ? this.pollTimeMs : 0);
-                } catch (NoOffsetForPartitionException ex) {
-                    TopicPartition partition = ex.partition();
-                    if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        log.info(String.format("stream-thread [%s] setting topic to consume from earliest offset %s", this.getName(), partition.topic()));
-                        consumer.seekToBeginning(ex.partitions());
-                    } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
-                        consumer.seekToEnd(ex.partitions());
-                        log.info(String.format("stream-thread [%s] setting topic to consume from latest offset %s", this.getName(), partition.topic()));
-                    } else {
-
-                        if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
-                            setState(State.PENDING_SHUTDOWN);
-                            String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
-                                    " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
-                                    "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
-                            throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), ex);
-                        }
-
-                        if (originalReset.equals("earliest")) {
-                            consumer.seekToBeginning(ex.partitions());
-                        } else if (originalReset.equals("latest")) {
-                            consumer.seekToEnd(ex.partitions());
-                        }
-                        log.info(String.format("stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", this.getName(), partition.topic(), originalReset));
-                    }
-
+                } catch (final InvalidOffsetException e) {
+                    resetInvalidOffsets(e);
                 }
 
                 if (rebalanceException != null)
@@ -666,6 +689,50 @@ public class StreamThread extends Thread {
         log.info("{} Shutting down at user request", logPrefix);
     }
 
+    private void resetInvalidOffsets(final InvalidOffsetException e) {
+        final Set<TopicPartition> partitions = e.partitions();
+        final Set<String> loggedTopics = new HashSet<>();
+        final Set<TopicPartition> seekToBeginning = new HashSet<>();
+        final Set<TopicPartition> seekToEnd = new HashSet<>();
+
+        for (final TopicPartition partition : partitions) {
+            if (builder.earliestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                addToResetList(partition, seekToBeginning, "stream-thread [%s] setting topic %s to consume from %s offset", "earliest", loggedTopics);
+            } else if (builder.latestResetTopicsPattern().matcher(partition.topic()).matches()) {
+                addToResetList(partition, seekToEnd, "stream-thread [%s] setting topic %s to consume from %s offset", "latest", loggedTopics);
+            } else {
+                if (originalReset == null || (!originalReset.equals("earliest") && !originalReset.equals("latest"))) {
+                    setState(State.PENDING_SHUTDOWN);
+                    final String errorMessage = "No valid committed offset found for input topic %s (partition %s) and no valid reset policy configured." +
+                        " You need to set configuration parameter \"auto.offset.reset\" or specify a topic specific reset " +
+                        "policy via KStreamBuilder#stream(StreamsConfig.AutoOffsetReset offsetReset, ...) or KStreamBuilder#table(StreamsConfig.AutoOffsetReset offsetReset, ...)";
+                    throw new StreamsException(String.format(errorMessage, partition.topic(), partition.partition()), e);
+                }
+
+                if (originalReset.equals("earliest")) {
+                    addToResetList(partition, seekToBeginning, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "earliest", loggedTopics);
+                } else if (originalReset.equals("latest")) {
+                    addToResetList(partition, seekToEnd, "stream-thread [%s] no custom setting defined for topic %s using original config %s for offset reset", "latest", loggedTopics);
+                }
+            }
+        }
+
+        if (!seekToBeginning.isEmpty()) {
+            consumer.seekToBeginning(seekToBeginning);
+        }
+        if (!seekToEnd.isEmpty()) {
+            consumer.seekToEnd(seekToEnd);
+        }
+    }
+
+    private void addToResetList(final TopicPartition partition, final Set<TopicPartition> partitions, final String logMessage, final String resetPolicy, final Set<String> loggedTopics) {
+        final String topic = partition.topic();
+        if (loggedTopics.add(topic)) {
+            log.info(String.format(logMessage, getName(), topic, resetPolicy));
+        }
+        partitions.add(partition);
+    }
+
     private void maybeUpdateStandbyTasks() {
         if (!standbyTasks.isEmpty()) {
             if (processStandbyRecords) {
@@ -710,8 +777,10 @@ public class StreamThread extends Thread {
         }
     }
 
-    public synchronized boolean stillRunning() {
-        return state.isRunning();
+    public boolean stillRunning() {
+        synchronized (stateLock) {
+            return state.isRunning();
+        }
     }
 
     private void maybePunctuate(StreamTask task) {
@@ -759,7 +828,7 @@ public class StreamThread extends Thread {
      * Commit the states of all its tasks
      */
     private void commitAll() {
-        log.trace("stream-thread [{}] Committing all its owned tasks", this.getName());
+        log.trace("{} Committing all its owned tasks", logPrefix);
         for (StreamTask task : activeTasks.values()) {
             commitOne(task);
         }
@@ -825,7 +894,7 @@ public class StreamThread extends Thread {
     }
 
     protected StreamTask createStreamTask(TaskId id, Collection<TopicPartition> partitions) {
-        log.info("{} Creating active task {} with assigned partitions [{}]", logPrefix, id, partitions);
+        log.info("{} Creating active task {} with assigned partitions {}", logPrefix, id, partitions);
 
         streamsMetrics.taskCreatedSensor.record();
 
@@ -869,6 +938,7 @@ public class StreamThread extends Thread {
                 } catch (Exception e) {
                     log.error("{} Failed to remove suspended task {}", logPrefix, next.getKey(), e);
                 } finally {
+                    task.closeStateManager(false);
                     suspendedTaskIterator.remove();
                 }
             }
@@ -877,11 +947,11 @@ public class StreamThread extends Thread {
     }
 
     private void closeNonAssignedSuspendedStandbyTasks() {
-        final Set<TaskId> currentSuspendedTaskIds = partitionAssignor.standbyTasks().keySet();
+        final Set<TaskId> currentStandbyTaskIds = partitionAssignor.standbyTasks().keySet();
         final Iterator<Map.Entry<TaskId, StandbyTask>> standByTaskIterator = suspendedStandbyTasks.entrySet().iterator();
         while (standByTaskIterator.hasNext()) {
             final Map.Entry<TaskId, StandbyTask> suspendedTask = standByTaskIterator.next();
-            if (!currentSuspendedTaskIds.contains(suspendedTask.getKey())) {
+            if (!currentStandbyTaskIds.contains(suspendedTask.getKey())) {
                 log.debug("{} Closing suspended non-assigned standby task {}", logPrefix, suspendedTask.getKey());
                 final StandbyTask task = suspendedTask.getValue();
                 try {
@@ -890,6 +960,7 @@ public class StreamThread extends Thread {
                 } catch (Exception e) {
                     log.error("{} Failed to remove suspended task standby {}", logPrefix, suspendedTask.getKey(), e);
                 } finally {
+                    task.closeStateManager(false);
                     standByTaskIterator.remove();
                 }
             }
@@ -938,7 +1009,7 @@ public class StreamThread extends Thread {
     }
 
     StandbyTask createStandbyTask(TaskId id, Collection<TopicPartition> partitions) {
-        log.info("{} Creating new standby task {} with assigned partitions [{}]", logPrefix, id, partitions);
+        log.info("{} Creating new standby task {} with assigned partitions {}", logPrefix, id, partitions);
 
         streamsMetrics.taskCreatedSensor.record();
 
@@ -1009,14 +1080,14 @@ public class StreamThread extends Thread {
     }
 
     private void updateSuspendedTasks() {
-        log.info("{} Updating suspended tasks to contain active tasks [{}]", logPrefix, activeTasks.keySet());
+        log.info("{} Updating suspended tasks to contain active tasks {}", logPrefix, activeTasks.keySet());
         suspendedTasks.clear();
         suspendedTasks.putAll(activeTasks);
         suspendedStandbyTasks.putAll(standbyTasks);
     }
 
     private void removeStreamTasks() {
-        log.info("{} Removing all active tasks [{}]", logPrefix, activeTasks.keySet());
+        log.info("{} Removing all active tasks {}", logPrefix, activeTasks.keySet());
 
         try {
             prevTasks.clear();
@@ -1031,29 +1102,29 @@ public class StreamThread extends Thread {
     }
 
     private void removeStandbyTasks() {
-        log.info("{} Removing all standby tasks [{}]", logPrefix, standbyTasks.keySet());
+        log.info("{} Removing all standby tasks {}", logPrefix, standbyTasks.keySet());
 
         standbyTasks.clear();
         standbyTasksByPartition.clear();
         standbyRecords.clear();
     }
 
-    private RuntimeException closeAllTasks() {
-        return performOnAllTasks(new AbstractTaskAction() {
+    private RuntimeException closeTasks(final List<AbstractTask> tasks) {
+        return performOnTasks(tasks, new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
-                log.info("{} Closing a task {}", StreamThread.this.logPrefix, task.id());
+                log.info("{} Closing task {}", StreamThread.this.logPrefix, task.id());
                 task.close();
                 streamsMetrics.tasksClosedSensor.record();
             }
         }, "close");
     }
 
-    private RuntimeException closeAllTasksTopologies() {
-        return performOnAllTasks(new AbstractTaskAction() {
+    private RuntimeException closeActiveAndStandbyTasksTopologies() {
+        return performOnTasks(activeAndStandbytasks(), new AbstractTaskAction() {
             @Override
             public void apply(final AbstractTask task) {
-                log.info("{} Closing a task's topology {}", StreamThread.this.logPrefix, task.id());
+                log.info("{} Closing task's topology {}", StreamThread.this.logPrefix, task.id());
                 task.closeTopology();
                 streamsMetrics.tasksClosedSensor.record();
             }
@@ -1167,6 +1238,7 @@ public class StreamThread extends Thread {
     }
 
     abstract class AbstractTaskCreator {
+        final long maxBackoffTimeMs = 1000L;
         void retryWithBackoff(final Map<TaskId, Set<TopicPartition>> tasksToBeCreated) {
             long backoffTimeMs = 50L;
             while (true) {
@@ -1181,7 +1253,7 @@ public class StreamThread extends Thread {
                         it.remove();
                     } catch (final LockException e) {
                         // ignore and retry
-                        log.warn("Could not create task {}. Will retry.", taskId, e);
+                        log.warn("Could not create task {} due to {}. Will retry.", taskId, e.getMessage());
                     }
                 }
 
@@ -1192,7 +1264,8 @@ public class StreamThread extends Thread {
                 try {
                     Thread.sleep(backoffTimeMs);
                     backoffTimeMs <<= 1;
-                } catch (InterruptedException e) {
+                    backoffTimeMs = Math.min(backoffTimeMs, maxBackoffTimeMs);
+                } catch (final InterruptedException e) {
                     // ignore
                 }
             }

@@ -20,6 +20,8 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.test.MockTimestampExtractor;
@@ -41,7 +43,7 @@ public class InternalTopicManagerTest {
     private final String topic = "test_topic";
     private final String userEndPoint = "localhost:2171";
     private MockStreamKafkaClient streamsKafkaClient;
-
+    private final Time time = new MockTime();
     @Before
     public void init() {
         final StreamsConfig config = new StreamsConfig(configProps());
@@ -55,19 +57,22 @@ public class InternalTopicManagerTest {
 
     @Test
     public void shouldReturnCorrectPartitionCounts() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         Assert.assertEquals(Collections.singletonMap(topic, 1), internalTopicManager.getNumPartitions(Collections.singleton(topic)));
     }
 
     @Test
     public void shouldCreateRequiredTopics() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
     }
 
     @Test
     public void shouldNotCreateTopicIfExistsWithDifferentPartitions() throws Exception {
-        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1, WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
         boolean exceptionWasThrown = false;
         try {
             internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 2));
@@ -75,6 +80,31 @@ public class InternalTopicManagerTest {
             exceptionWasThrown = true;
         }
         Assert.assertTrue(exceptionWasThrown);
+    }
+
+    @Test
+    public void shouldNotThrowExceptionIfExistsWithDifferentReplication() throws Exception {
+
+        // create topic the first time with replication 2
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 2,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+
+        // attempt to create it again with replication 1
+        InternalTopicManager internalTopicManager2 = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        try {
+            internalTopicManager2.makeReady(Collections.singletonMap(new InternalTopicConfig(topic, Collections.singleton(InternalTopicConfig.CleanupPolicy.compact), null), 1));
+        } catch (StreamsException e) {
+            Assert.fail("did not expect an exception since topic is already there.");
+        }
+    }
+
+    @Test
+    public void shouldNotThrowExceptionForEmptyTopicMap() throws Exception {
+        InternalTopicManager internalTopicManager = new InternalTopicManager(streamsKafkaClient, 1,
+            WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
+        internalTopicManager.makeReady(Collections.EMPTY_MAP);
     }
 
     private Properties configProps() {
@@ -105,8 +135,8 @@ public class InternalTopicManagerTest {
             Node node = new Node(1, "host1", 1001);
             MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node, new ArrayList<Node>(), new ArrayList<Node>());
             MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE, topic, true, Collections.singletonList(partitionMetadata));
-            MetadataResponse response = new MetadataResponse(Collections.<Node>emptyList(), null, MetadataResponse.NO_CONTROLLER_ID,
-                Collections.singletonList(topicMetadata), 0);
+            MetadataResponse response = new MetadataResponse(Collections.<Node>singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID,
+                Collections.singletonList(topicMetadata));
             return response;
         }
     }

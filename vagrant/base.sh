@@ -23,16 +23,20 @@ if [ -z `which javac` ]; then
     apt-get -y update
 
     # Try to share cache. See Vagrantfile for details
-    mkdir -p /var/cache/oracle-jdk7-installer
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        find /tmp/oracle-jdk7-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk7-installer/ \;
+    mkdir -p /var/cache/oracle-jdk8-installer
+    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
+        find /tmp/oracle-jdk8-installer-cache/ -not -empty -exec cp '{}' /var/cache/oracle-jdk8-installer/ \;
+    fi
+    if [ ! -e "/var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz" ]; then
+      # Grab a copy of the JDK since it has moved and original downloader won't work
+      curl -s -L "https://s3-us-west-2.amazonaws.com/kafka-packages/jdk-8u171-linux-x64.tar.gz" -o /var/cache/oracle-jdk8-installer/jdk-8u171-linux-x64.tar.gz
     fi
 
     /bin/echo debconf shared/accepted-oracle-license-v1-1 select true | /usr/bin/debconf-set-selections
-    apt-get -y install oracle-java7-installer oracle-java7-set-default
+    apt-get -y install oracle-java8-installer oracle-java8-set-default
 
-    if [ -e "/tmp/oracle-jdk7-installer-cache/" ]; then
-        cp -R /var/cache/oracle-jdk7-installer/* /tmp/oracle-jdk7-installer-cache
+    if [ -e "/tmp/oracle-jdk8-installer-cache/" ]; then
+        cp -R /var/cache/oracle-jdk8-installer/* /tmp/oracle-jdk8-installer-cache
     fi
 fi
 
@@ -48,6 +52,8 @@ get_kafka() {
 
     kafka_dir=/opt/kafka-$version
     url=https://s3-us-west-2.amazonaws.com/kafka-packages-$version/kafka_2.10-$version.tgz
+    # the .tgz above does not include the streams test jar hence we need to get it separately
+    url_streams_test=https://s3-us-west-2.amazonaws.com/kafka-packages/kafka-streams-$version-test.jar
     if [ ! -d /opt/kafka-$version ]; then
         pushd /tmp
         curl -O $url

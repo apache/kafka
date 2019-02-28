@@ -385,7 +385,7 @@ public class FileRecordsTest {
     }
 
     private static List<LogEntry> deepEntries(Records buffer) {
-        return TestUtils.toList(buffer.deepEntries());
+        return TestUtils.toList(buffer.deepEntries(BufferSupplier.NO_CACHING));
     }
 
     private FileRecords createFileRecords(Record ... records) throws IOException {

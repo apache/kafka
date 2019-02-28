@@ -49,7 +49,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     assertTrue("Properties after creation have incorrect value", props.getProperty(cleanupKey).equals(cleanupVal))
 
     // pre-create the topic config changes path to avoid a NoNodeException
-    zkUtils.createPersistentPath(EntityConfigChangesPath)
+    zkUtils.createPersistentPath(ConfigChangesPath)
 
     // modify the topic to add new partitions
     val numPartitionsModified = 3

@@ -51,6 +51,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.SelectionKey;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -63,6 +64,7 @@ import java.util.Random;
 import javax.security.auth.login.Configuration;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -169,8 +171,11 @@ public class SaslAuthenticatorTest {
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without username");
-        } catch (KafkaException e) {
+        } catch (IOException e) {
             // Expected exception
+            assertTrue("Channels not closed", selector.channels().isEmpty());
+            for (SelectionKey key : selector.keys())
+                assertFalse("Key not cancelled", key.isValid());
         }
     }
 
@@ -190,7 +195,7 @@ public class SaslAuthenticatorTest {
         try {
             selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
             fail("SASL/PLAIN channel created without password");
-        } catch (KafkaException e) {
+        } catch (IOException e) {
             // Expected exception
         }
     }

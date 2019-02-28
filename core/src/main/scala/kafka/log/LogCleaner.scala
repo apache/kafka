@@ -359,7 +359,7 @@ private[log] class Cleaner(val id: Int,
 
     // group the segments and clean the groups
     info("Cleaning log %s (cleaning prior to %s, discarding tombstones prior to %s)...".format(log.name, new Date(cleanableHorizonMs), new Date(deleteHorizonMs)))
-    for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize))
+    for (group <- groupSegmentsBySize(log.logSegments(0, endOffset), log.config.segmentSize, log.config.maxIndexSize, cleanable.firstUncleanableOffset))
       cleanSegments(log, group, offsetMap, deleteHorizonMs, stats)
 
     // record buffer utilization
@@ -465,22 +465,23 @@ private[log] class Cleaner(val id: Int,
       source.log.readInto(readBuffer, position)
       val records = MemoryRecords.readableRecords(readBuffer)
       throttler.maybeThrottle(records.sizeInBytes)
-      val result = records.filterTo(logCleanerFilter, writeBuffer)
+      val result = records.filterTo(topicPartition, logCleanerFilter, writeBuffer, maxLogMessageSize)
       stats.readMessages(result.messagesRead, result.bytesRead)
       stats.recopyMessages(result.messagesRetained, result.bytesRetained)
 
       position += result.bytesRead
 
       // if any messages are to be retained, write them out
-      if (writeBuffer.position > 0) {
-        writeBuffer.flip()
-        val retained = MemoryRecords.readableRecords(writeBuffer)
+      val outputBuffer = result.output
+      if (outputBuffer.position > 0) {
+        outputBuffer.flip()
+        val retained = MemoryRecords.readableRecords(outputBuffer)
         dest.append(firstOffset = retained.deepEntries.iterator.next().offset,
           largestOffset = result.maxOffset,
           largestTimestamp = result.maxTimestamp,
           shallowOffsetOfMaxTimestamp = result.shallowOffsetOfMaxTimestamp,
           records = retained)
-        throttler.maybeThrottle(writeBuffer.limit)
+        throttler.maybeThrottle(outputBuffer.limit)
       }
       
       // if we read bytes but didn't get even one complete message, our I/O buffer is too small, grow it and try again
@@ -550,7 +551,7 @@ private[log] class Cleaner(val id: Int,
    *
    * @return A list of grouped segments
    */
-  private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int): List[Seq[LogSegment]] = {
+  private[log] def groupSegmentsBySize(segments: Iterable[LogSegment], maxSize: Int, maxIndexSize: Int, firstUncleanableOffset: Long): List[Seq[LogSegment]] = {
     var grouped = List[List[LogSegment]]()
     var segs = segments.toList
     while(segs.nonEmpty) {
@@ -563,7 +564,7 @@ private[log] class Cleaner(val id: Int,
             logSize + segs.head.size <= maxSize &&
             indexSize + segs.head.index.sizeInBytes <= maxIndexSize &&
             timeIndexSize + segs.head.timeIndex.sizeInBytes <= maxIndexSize &&
-            segs.head.index.lastOffset - group.last.index.baseOffset <= Int.MaxValue) {
+            lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.last.baseOffset <= Int.MaxValue) {
         group = segs.head :: group
         logSize += segs.head.size
         indexSize += segs.head.index.sizeInBytes
@@ -573,6 +574,28 @@ private[log] class Cleaner(val id: Int,
       grouped ::= group.reverse
     }
     grouped.reverse
+  }
+
+  /**
+    * We want to get the last offset in the first log segment in segs.
+    * LogSegment.nextOffset() gives the exact last offset in a segment, but can be expensive since it requires
+    * scanning the segment from the last index entry.
+    * Therefore, we estimate the last offset of the first log segment by using
+    * the base offset of the next segment in the list.
+    * If the next segment doesn't exist, first Uncleanable Offset will be used.
+    *
+    * @param segs - remaining segments to group.
+    * @return The estimated last offset for the first segment in segs
+    */
+  private def lastOffsetForFirstSegment(segs: List[LogSegment], firstUncleanableOffset: Long): Long = {
+    if (segs.size > 1) {
+      /* if there is a next segment, use its base offset as the bounding offset to guarantee we know
+       * the worst case offset */
+      segs(1).baseOffset - 1
+    } else {
+      //for the last segment in the list, use the first uncleanable offset.
+      firstUncleanableOffset - 1
+    }
   }
 
   /**

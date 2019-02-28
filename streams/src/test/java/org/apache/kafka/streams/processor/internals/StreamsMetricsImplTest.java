@@ -19,13 +19,17 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.junit.Test;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
+import static java.util.Collections.emptyMap;
+import static java.util.Collections.unmodifiableMap;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsMetricsImplTest {
@@ -53,19 +57,27 @@ public class StreamsMetricsImplTest {
         String entity = "entity";
         String operation = "put";
         Map<String, String> tags = new HashMap<>();
-        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), groupName, tags);
+        final Metrics metrics = new Metrics();
+        final Map<MetricName, KafkaMetric> initialMetrics = unmodifiableMap(new LinkedHashMap<>(metrics.metrics()));
+        StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, groupName, tags);
 
         Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor1a = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG, sensor1);
         streamsMetrics.removeSensor(sensor1a);
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor2 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor2);
+        assertEquals(initialMetrics, metrics.metrics());
 
         Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
+        assertEquals(initialMetrics, metrics.metrics());
+
+        assertEquals(emptyMap(), streamsMetrics.parentSensors);
     }
 
     @Test

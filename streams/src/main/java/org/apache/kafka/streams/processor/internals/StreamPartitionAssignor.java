@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -25,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.TaskAssignmentException;
@@ -58,6 +58,7 @@ import static org.apache.kafka.streams.processor.internals.InternalTopicManager.
 public class StreamPartitionAssignor implements PartitionAssignor, Configurable {
 
     private static final Logger log = LoggerFactory.getLogger(StreamPartitionAssignor.class);
+    private Time time = Time.SYSTEM;
 
     private final static int UNKNOWN = -1;
     public final static int NOT_AVAILABLE = -2;
@@ -153,6 +154,8 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private String userEndPoint;
     private int numStandbyReplicas;
 
+    private int userMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
+
     private Cluster metadataWithInternalTopics;
     private Map<HostInfo, Set<TopicPartition>> partitionsByHostState;
 
@@ -163,6 +166,14 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     private CopartitionedTopicsValidator copartitionedTopicsValidator;
 
     /**
+     * Package-private method to set the time. Used for tests.
+     * @param time Time to be used.
+     */
+    void time(final Time time) {
+        this.time = time;
+    }
+
+    /**
      * We need to have the PartitionAssignor and its StreamThread to be mutually accessible
      * since the former needs later's cached metadata while sending subscriptions,
      * and the latter needs former's returned assignment when adding tasks.
@@ -171,6 +182,12 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
     @Override
     public void configure(Map<String, ?> configs) {
         numStandbyReplicas = (Integer) configs.get(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
+
+        final String upgradeMode = (String) configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+        if (StreamsConfig.UPGRADE_FROM_0100.equals(upgradeMode)) {
+            log.info("Downgrading metadata version from 2 to 1 for upgrade from 0.10.0.x.");
+            userMetadataVersion = 1;
+        }
 
         Object o = configs.get(StreamsConfig.InternalConfig.STREAM_THREAD_INSTANCE);
         if (o == null) {
@@ -211,7 +228,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 configs.containsKey(StreamsConfig.REPLICATION_FACTOR_CONFIG) ? (Integer) configs.get(StreamsConfig.REPLICATION_FACTOR_CONFIG) : 1,
                 configs.containsKey(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG) ?
                         (Long) configs.get(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG)
-                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT);
+                        : WINDOW_CHANGE_LOG_ADDITIONAL_RETENTION_DEFAULT, time);
 
         this.copartitionedTopicsValidator = new CopartitionedTopicsValidator(streamThread.getName());
     }
@@ -231,7 +248,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         Set<TaskId> prevTasks = streamThread.prevTasks();
         Set<TaskId> standbyTasks = streamThread.cachedTasks();
         standbyTasks.removeAll(prevTasks);
-        SubscriptionInfo data = new SubscriptionInfo(streamThread.processId, prevTasks, standbyTasks, this.userEndPoint);
+        SubscriptionInfo data = new SubscriptionInfo(userMetadataVersion, streamThread.processId, prevTasks, standbyTasks, this.userEndPoint);
 
         if (streamThread.builder.sourceTopicPattern() != null) {
             SubscriptionUpdates subscriptionUpdates = new SubscriptionUpdates();
@@ -269,11 +286,16 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
         // construct the client metadata from the decoded subscription info
         Map<UUID, ClientMetadata> clientsMetadata = new HashMap<>();
 
+        int minUserMetadataVersion = SubscriptionInfo.CURRENT_VERSION;
         for (Map.Entry<String, Subscription> entry : subscriptions.entrySet()) {
             String consumerId = entry.getKey();
             Subscription subscription = entry.getValue();
 
             SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
+            final int usedVersion = info.version;
+            if (usedVersion < minUserMetadataVersion) {
+                minUserMetadataVersion = usedVersion;
+            }
 
             // create the new client metadata if necessary
             ClientMetadata clientMetadata = clientsMetadata.get(info.processId);
@@ -529,7 +551,7 @@ public class StreamPartitionAssignor implements PartitionAssignor, Configurable 
                 }
 
                 // finally, encode the assignment before sending back to coordinator
-                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(active, standby, partitionsByHostState).encode()));
+                assignment.put(consumer, new Assignment(activePartitions, new AssignmentInfo(minUserMetadataVersion, active, standby, partitionsByHostState).encode()));
                 i++;
             }
         }

@@ -565,7 +565,7 @@ object AdminUtils extends Logging with AdminUtilities {
     writeEntityConfig(zkUtils, entityConfigPath, configs)
 
     // create the change notification
-    val seqNode = ZkUtils.EntityConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
+    val seqNode = ZkUtils.ConfigChangesPath + "/" + EntityConfigChangeZnodePrefix
     val content = Json.encode(getConfigChangeZnodeData(sanitizedEntityPath))
     zkUtils.zkClient.createPersistentSequential(seqNode, content)
   }

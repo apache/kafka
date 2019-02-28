@@ -170,10 +170,10 @@ public class KeyValueStoreTestDriver<K, V> {
      * @param valueDeserializer the value deserializer for the {@link ProcessorContext}; may not be null
      * @return the test driver; never null
      */
-    public static <K, V> KeyValueStoreTestDriver<K, V> create(Serializer<K> keySerializer,
-                                                              Deserializer<K> keyDeserializer,
-                                                              Serializer<V> valueSerializer,
-                                                              Deserializer<V> valueDeserializer) {
+    public static <K, V> KeyValueStoreTestDriver<K, V> create(final Serializer<K> keySerializer,
+                                                              final Deserializer<K> keyDeserializer,
+                                                              final Serializer<V> valueSerializer,
+                                                              final Deserializer<V> valueDeserializer) {
         StateSerdes<K, V> serdes = new StateSerdes<K, V>("unexpected",
             Serdes.serdeFrom(keySerializer, keyDeserializer),
             Serdes.serdeFrom(valueSerializer, valueDeserializer));

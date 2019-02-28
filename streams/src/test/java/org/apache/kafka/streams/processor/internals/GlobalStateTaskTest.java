@@ -38,6 +38,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
@@ -137,7 +139,19 @@ public class GlobalStateTaskTest {
         globalStateTask.initialize();
         globalStateTask.update(new ConsumerRecord<>("t1", 1, 51, "foo".getBytes(), "foo".getBytes()));
         globalStateTask.close();
-        assertEquals(expectedOffsets, stateMgr.checkpointedOffsets());
+        assertEquals(expectedOffsets, stateMgr.checkpointed());
         assertTrue(stateMgr.closed);
     }
+
+    @Test
+    public void shouldCheckpointOffsetsWhenStateIsFlushed() throws Exception {
+        final Map<TopicPartition, Long> expectedOffsets = new HashMap<>();
+        expectedOffsets.put(t1, 102L);
+        expectedOffsets.put(t2, 100L);
+        globalStateTask.initialize();
+        globalStateTask.update(new ConsumerRecord<>("t1", 1, 101, "foo".getBytes(), "foo".getBytes()));
+        globalStateTask.flushState();
+        assertThat(stateMgr.checkpointed(), equalTo(expectedOffsets));
+    }
+
 }

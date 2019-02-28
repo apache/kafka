@@ -28,6 +28,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -41,13 +42,9 @@ import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.StreamsMetadata;
 import org.apache.kafka.streams.state.WindowStoreIterator;
-import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.test.MockKeyValueMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import static org.junit.Assert.fail;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.assertEquals;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -74,6 +71,9 @@ import java.util.concurrent.TimeUnit;
 
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
 public class QueryableStateIntegrationTest {
@@ -129,29 +129,29 @@ public class QueryableStateIntegrationTest {
     }
 
     @Before
-    public void before() throws IOException, InterruptedException {
+    public void before() throws Exception {
         testNo++;
         createTopics();
         streamsConfiguration = new Properties();
         final String applicationId = "queryable-state-" + testNo;
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory("qs-test").getPath());
         streamsConfiguration.put(StreamsConfig.KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass());
-        streamsConfiguration
-            .put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, cacheSizeBytes);
-        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000);
+        streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         stringComparator = new Comparator<KeyValue<String, String>>() {
 
             @Override
             public int compare(final KeyValue<String, String> o1,
                                final KeyValue<String, String> o2) {
-                return o1.key.compareTo(o2.key);
+                final int keyComparison = o1.key.compareTo(o2.key);
+                return keyComparison != 0 ? keyComparison : o1.value.compareTo(o2.value);
             }
         };
         stringLongComparator = new Comparator<KeyValue<String, Long>>() {
@@ -159,7 +159,8 @@ public class QueryableStateIntegrationTest {
             @Override
             public int compare(final KeyValue<String, Long> o1,
                                final KeyValue<String, Long> o2) {
-                return o1.key.compareTo(o2.key);
+                final int keyComparison =  o1.key.compareTo(o2.key);
+                return keyComparison != 0 ? keyComparison : o1.value.compareTo(o2.value);
             }
         };
         inputValues = Arrays.asList(
@@ -610,15 +611,13 @@ public class QueryableStateIntegrationTest {
      * @param failIfKeyNotFound     if true, tests fails if an expected key is not found in store. If false,
      *                              the method merely inserts the new found key into the list of
      *                              expected keys.
-     * @throws InterruptedException
      */
     private void verifyGreaterOrEqual(final String[] keys,
                                       final Map<String, Long> expectedWindowedCount,
                                       final Map<String, Long> expectedCount,
                                       final ReadOnlyWindowStore<String, Long> windowStore,
                                       final ReadOnlyKeyValueStore<String, Long> keyValueStore,
-                                      final boolean failIfKeyNotFound)
-        throws InterruptedException {
+                                      final boolean failIfKeyNotFound) {
         final Map<String, Long> windowState = new HashMap<>();
         final Map<String, Long> countState = new HashMap<>();
 
@@ -744,6 +743,5 @@ public class QueryableStateIntegrationTest {
             }
         }
     }
-
 
 }

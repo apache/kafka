@@ -31,7 +31,6 @@ import java.util.TreeMap;
  * An internal class which represents the API versions supported by a particular node.
  */
 public class NodeApiVersions {
-    private static final Short API_NOT_ON_NODE = null;
     private static final short NODE_TOO_OLD = (short) -1;
     private static final short NODE_TOO_NEW = (short) -2;
     private final Collection<ApiVersion> nodeApiVersions;
@@ -47,7 +46,7 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create() {
-        return create(Collections.EMPTY_LIST);
+        return create(Collections.<ApiVersion>emptyList());
     }
 
     /**
@@ -98,7 +97,7 @@ public class NodeApiVersions {
      */
     public short usableVersion(ApiKeys apiKey) {
         Short usableVersion = usableVersions.get(apiKey);
-        if (usableVersion == API_NOT_ON_NODE)
+        if (usableVersion == null)
             throw new UnsupportedVersionException("The broker does not support " + apiKey);
         else if (usableVersion == NODE_TOO_OLD)
             throw new UnsupportedVersionException("The broker is too old to support " + apiKey +
@@ -160,17 +159,17 @@ public class NodeApiVersions {
         ApiKeys apiKey = null;
         if (ApiKeys.hasId(apiVersion.apiKey)) {
             apiKey = ApiKeys.forId(apiVersion.apiKey);
-        }
-        if (apiKey != null) {
             bld.append(apiKey.name).append("(").append(apiKey.id).append("): ");
         } else {
-            bld.append("UNKNOWN(").append(apiKey.id).append("): ");
+            bld.append("UNKNOWN(").append(apiVersion.apiKey).append("): ");
         }
+
         if (apiVersion.minVersion == apiVersion.maxVersion) {
             bld.append(apiVersion.minVersion);
         } else {
             bld.append(apiVersion.minVersion).append(" to ").append(apiVersion.maxVersion);
         }
+
         if (apiKey != null) {
             Short usableVersion = usableVersions.get(apiKey);
             if (usableVersion == NODE_TOO_OLD)

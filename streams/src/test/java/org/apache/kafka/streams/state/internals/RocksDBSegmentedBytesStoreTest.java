@@ -52,6 +52,7 @@ public class RocksDBSegmentedBytesStoreTest {
     private final String storeName = "bytes-store";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
+    private MockProcessorContext context;
 
     @Before
     public void before() {
@@ -62,11 +63,12 @@ public class RocksDBSegmentedBytesStoreTest {
                                                     new SessionKeySchema());
 
         stateDir = TestUtils.tempDirectory();
-        final MockProcessorContext context = new MockProcessorContext(stateDir,
-                                                                      Serdes.String(),
-                                                                      Serdes.Long(),
-                                                                      new NoOpRecordCollector(),
-                                                                      new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
+        context = new MockProcessorContext(
+            stateDir,
+            Serdes.String(),
+            Serdes.Long(),
+            new NoOpRecordCollector(),
+            new ThreadCache("testCache", 0, new MockStreamsMetrics(new Metrics())));
         bytesStore.init(context, bytesStore);
     }
 
@@ -144,6 +146,16 @@ public class RocksDBSegmentedBytesStoreTest {
 
     }
 
+    @Test
+    public void shouldBeAbleToWriteToReInitializedStore() {
+        final String key = "a";
+        // need to create a segment so we can attempt to write to it again.
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+        bytesStore.close();
+        bytesStore.init(context, bytesStore);
+        bytesStore.put(serializeKey(new Windowed<>(key, new SessionWindow(0L, 0L))), serializeValue(50L));
+    }
+
     private Set<String> segmentDirs() {
         File windowDir = new File(stateDir, storeName);
 
@@ -155,7 +167,7 @@ public class RocksDBSegmentedBytesStoreTest {
     }
 
     private Bytes serializeKey(final Windowed<String> key) {
-        return SessionKeySerde.toBinary(key, Serdes.String().serializer());
+        return SessionKeySerde.toBinary(key, Serdes.String().serializer(), "topic");
     }
 
     private List<KeyValue<Windowed<String>, Long>> toList(final KeyValueIterator<Bytes, byte[]> iterator) {
@@ -163,7 +175,7 @@ public class RocksDBSegmentedBytesStoreTest {
         while (iterator.hasNext()) {
             final KeyValue<Bytes, byte[]> next = iterator.next();
             final KeyValue<Windowed<String>, Long> deserialized
-                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer()), Serdes.Long().deserializer().deserialize("", next.value));
+                    = KeyValue.pair(SessionKeySerde.from(next.key.get(), Serdes.String().deserializer(), "topic"), Serdes.Long().deserializer().deserialize("", next.value));
             results.add(deserialized);
         }
         return results;

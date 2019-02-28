@@ -74,14 +74,15 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener) {
         super(client,
-                groupId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeatIntervalMs,
-                metrics,
-                metricGrpPrefix,
-                time,
-                retryBackoffMs);
+              groupId,
+              rebalanceTimeoutMs,
+              sessionTimeoutMs,
+              heartbeatIntervalMs,
+              metrics,
+              metricGrpPrefix,
+              time,
+              retryBackoffMs,
+              true);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
         this.assignmentSnapshot = null;
@@ -287,11 +288,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         if (generation != null)
             return generation.memberId;
         return JoinGroupRequest.UNKNOWN_MEMBER_ID;
-    }
-
-    @Override
-    public void close() {
-        super.close();
     }
 
     private boolean isLeader() {

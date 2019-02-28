@@ -41,6 +41,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.LogEntry;
 import org.apache.kafka.common.record.Record;
@@ -93,8 +94,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
+    private final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
 
     private PartitionRecords<K, V> nextInLineRecords = null;
+    private ExceptionMetadata nextInLineExceptionMetadata = null;
 
     public Fetcher(ConsumerNetworkClient client,
                    int minBytes,
@@ -461,16 +464,27 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
      *         the defaultResetPolicy is NONE
      */
     public Map<TopicPartition, List<ConsumerRecord<K, V>>> fetchedRecords() {
+        if (nextInLineExceptionMetadata != null) {
+            ExceptionMetadata exceptionMetadata = nextInLineExceptionMetadata;
+            nextInLineExceptionMetadata = null;
+            TopicPartition tp = exceptionMetadata.partition;
+            if (subscriptions.isFetchable(tp) && subscriptions.position(tp) == exceptionMetadata.fetchedOffset)
+                throw exceptionMetadata.exception;
+        }
+
         Map<TopicPartition, List<ConsumerRecord<K, V>>> drained = new HashMap<>();
         int recordsRemaining = maxPollRecords;
-
         while (recordsRemaining > 0) {
             if (nextInLineRecords == null || nextInLineRecords.isDrained()) {
                 CompletedFetch completedFetch = completedFetches.poll();
-                if (completedFetch == null)
-                    break;
-
-                nextInLineRecords = parseCompletedFetch(completedFetch);
+                if (completedFetch == null) break;
+                try {
+                    nextInLineRecords = parseCompletedFetch(completedFetch);
+                } catch (KafkaException e) {
+                    if (drained.isEmpty())
+                        throw e;
+                    nextInLineExceptionMetadata = new ExceptionMetadata(completedFetch.partition, completedFetch.fetchedOffset, e);
+                }
             } else {
                 TopicPartition partition = nextInLineRecords.partition;
                 List<ConsumerRecord<K, V>> records = drainRecords(nextInLineRecords, recordsRemaining);
@@ -491,6 +505,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
                 }
             }
         }
+
 
         return drained;
     }
@@ -769,7 +784,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
                 List<ConsumerRecord<K, V>> parsed = new ArrayList<>();
                 boolean skippedRecords = false;
-                for (LogEntry logEntry : partition.records.deepEntries()) {
+                for (LogEntry logEntry : partition.records.deepEntries(decompressionBufferSupplier)) {
                     // Skip the messages earlier than current position.
                     if (logEntry.offset() >= position) {
                         parsed.add(parseRecord(tp, logEntry));
@@ -1136,6 +1151,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener {
 
         private static String partitionLagMetricName(TopicPartition tp) {
             return tp + ".records-lag";
+        }
+    }
+
+    private static class ExceptionMetadata {
+        private final TopicPartition partition;
+        private final long fetchedOffset;
+        private final KafkaException exception;
+
+        private ExceptionMetadata(TopicPartition partition, long fetchedOffset, KafkaException exception) {
+            this.partition = partition;
+            this.fetchedOffset = fetchedOffset;
+            this.exception = exception;
         }
     }
 

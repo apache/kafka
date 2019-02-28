@@ -321,7 +321,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testStoreNonEmptyGroupWhenCoordinatorHasMoved() {
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject())).andReturn(None)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
     val memberId = "memberId"
     val clientId = "clientId"
     val clientHost = "localhost"
@@ -390,7 +390,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testCommitOffsetWhenCoordinatorHasMoved() {
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject())).andReturn(None)
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(None)
     val memberId = ""
     val generationId = -1
     val topicPartition = new TopicPartition("foo", 0)
@@ -538,8 +538,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andStubReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -584,8 +583,7 @@ class GroupMetadataManagerTest {
     EasyMock.reset(partition)
     val recordsCapture: Capture[MemoryRecords] = EasyMock.newCapture()
 
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andStubReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.LOG_APPEND_TIME))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
     EasyMock.expect(replicaManager.getPartition(new TopicPartition(Topic.GroupMetadataTopicName, groupPartitionId))).andStubReturn(Some(partition))
     EasyMock.expect(partition.appendRecordsToLeader(EasyMock.capture(recordsCapture), EasyMock.anyInt()))
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
@@ -602,7 +600,8 @@ class GroupMetadataManagerTest {
     assertTrue(metadataTombstone.hasKey)
     assertTrue(metadataTombstone.hasNullValue)
     assertEquals(Record.MAGIC_VALUE_V1, metadataTombstone.magic)
-    assertEquals(TimestampType.LOG_APPEND_TIME, metadataTombstone.timestampType)
+    // Use CREATE_TIME, like the producer. The conversion to LOG_APPEND_TIME (if necessary) happens automatically.
+    assertEquals(TimestampType.CREATE_TIME, metadataTombstone.timestampType)
     assertTrue(metadataTombstone.timestamp > 0)
 
     val groupKey = GroupMetadataManager.readMessageKey(metadataTombstone.key).asInstanceOf[GroupMetadataKey]
@@ -762,8 +761,7 @@ class GroupMetadataManagerTest {
           new PartitionResponse(error, 0L, Record.NO_TIMESTAMP)
         )
       )})
-    EasyMock.expect(replicaManager.getMagicAndTimestampType(EasyMock.anyObject()))
-      .andStubReturn(Some(Record.MAGIC_VALUE_V1, TimestampType.CREATE_TIME))
+    EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andStubReturn(Some(Record.MAGIC_VALUE_V1))
   }
 
   private def buildStableGroupRecordWithMember(memberId: String): Record = {

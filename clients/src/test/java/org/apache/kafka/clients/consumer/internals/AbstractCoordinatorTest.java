@@ -79,7 +79,7 @@ public class AbstractCoordinatorTest {
         Metrics metrics = new Metrics();
 
         Cluster cluster = TestUtils.singletonCluster("topic", 1);
-        metadata.update(cluster, mockTime.milliseconds());
+        metadata.update(cluster, Collections.<String>emptySet(), mockTime.milliseconds());
         this.node = cluster.nodes().get(0);
         mockClient.setNode(node);
 
@@ -492,7 +492,7 @@ public class AbstractCoordinatorTest {
                                 Metrics metrics,
                                 Time time) {
             super(client, GROUP_ID, REBALANCE_TIMEOUT_MS, SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics,
-                    METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS);
+                  METRIC_GROUP_PREFIX, time, RETRY_BACKOFF_MS, false);
         }
 
         @Override

@@ -30,6 +30,9 @@ import org.junit.Test;
 import java.io.File;
 import java.util.List;
 
+import static org.hamcrest.CoreMatchers.is;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -184,6 +187,12 @@ public class SegmentsTest {
         verifyCorrectSegments(2, 5);
     }
 
+    @Test
+    public void shouldClearSegmentsOnClose() {
+        segments.getOrCreateSegment(0, context);
+        segments.close();
+        assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
+    }
     private void verifyCorrectSegments(final long first, final int numSegments) {
         final List<Segment> result = this.segments.segments(0, Long.MAX_VALUE);
         assertEquals(numSegments, result.size());

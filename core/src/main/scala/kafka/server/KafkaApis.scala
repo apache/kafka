@@ -349,12 +349,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body.asInstanceOf[ProduceRequest]
     val numBytesAppended = request.header.sizeOf + produceRequest.sizeOf
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = produceRequest.partitionRecords.asScala.partition {
-      case (topicPartition, _) => authorize(request.session, Describe, new Resource(auth.Topic, topicPartition.topic)) && metadataCache.contains(topicPartition.topic)
-    }
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) =
+      produceRequest.partitionRecordsOrFail.asScala.partition { case (tp, _) =>
+        authorize(request.session, Describe, new Resource(auth.Topic, tp.topic)) && metadataCache.contains(tp.topic)
+      }
 
     val (authorizedRequestInfo, unauthorizedForWriteRequestInfo) = existingAndAuthorizedForDescribeTopics.partition {
-      case (topicPartition, _) => authorize(request.session, Write, new Resource(auth.Topic, topicPartition.topic))
+      case (tp, _) => authorize(request.session, Write, new Resource(auth.Topic, tp.topic))
     }
 
     // the callback for sending a produce response
@@ -431,9 +432,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         authorizedRequestInfo,
         sendResponseCallback)
 
-      // if the request is put into the purgatory, it will have a held reference
-      // and hence cannot be garbage collected; hence we clear its data here in
-      // order to let GC re-claim its memory since it is already appended to log
+      // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
+      // hence we clear its data here inorder to let GC re-claim its memory since it is already appended to log
       produceRequest.clearPartitionRecords()
     }
   }
@@ -446,7 +446,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
 
-    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = fetchRequest.fetchData.asScala.toSeq.partition {
+    val (clusterAuthorizedTopics, clusterUnauthorizedTopics) =
+      if (fetchRequest.isFromFollower() && !authorize(request.session, ClusterAction, Resource.ClusterResource)) {
+        (Seq.empty, fetchRequest.fetchData.asScala.toSeq)
+      } else {
+        (fetchRequest.fetchData.asScala.toSeq, Seq.empty)
+      }
+
+    val (existingAndAuthorizedForDescribeTopics, nonExistingOrUnauthorizedForDescribeTopics) = clusterAuthorizedTopics.partition {
       case (tp, _) => authorize(request.session, Describe, new Resource(auth.Topic, tp.topic)) && metadataCache.contains(tp.topic)
     }
 
@@ -454,12 +461,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       case (tp, _) => authorize(request.session, Read, new Resource(auth.Topic, tp.topic))
     }
 
+    val clusterUnauthorizedPartitionData = clusterUnauthorizedTopics.map {
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.CLUSTER_AUTHORIZATION_FAILED.code, FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY))
+    }
+
     val nonExistingOrUnauthorizedForDescribePartitionData = nonExistingOrUnauthorizedForDescribeTopics.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION.code, FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY))
     }
 
     val unauthorizedForReadPartitionData = unauthorizedForReadRequestInfo.map {
-      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, -1, MemoryRecords.EMPTY))
+      case (tp, _) => (tp, new FetchResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED.code, FetchResponse.INVALID_HIGHWATERMARK, MemoryRecords.EMPTY))
     }
 
     // the callback for sending a fetch response
@@ -475,7 +486,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // Please note that if the message format is changed from a higher version back to lower version this
           // test might break because some messages in new message format can be delivered to consumers before 0.10.0.0
           // without format down conversion.
-          val convertedData = if (versionId <= 1 && replicaManager.getMagicAndTimestampType(tp).exists(_._1 > Record.MAGIC_VALUE_V0) &&
+          val convertedData = if (versionId <= 1 && replicaManager.getMagic(tp).exists(_ > Record.MAGIC_VALUE_V0) &&
             !data.records.hasMatchingShallowMagic(Record.MAGIC_VALUE_V0)) {
             trace(s"Down converting message to V0 for fetch request from $clientId")
             FetchPartitionData(data.error, data.hw, data.records.toMessageFormat(Record.MAGIC_VALUE_V0))
@@ -485,7 +496,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      val mergedPartitionData = convertedPartitionData ++ unauthorizedForReadPartitionData ++ nonExistingOrUnauthorizedForDescribePartitionData
+      val mergedPartitionData = convertedPartitionData ++ unauthorizedForReadPartitionData ++ nonExistingOrUnauthorizedForDescribePartitionData ++ clusterUnauthorizedPartitionData
 
       val fetchedPartitionData = new util.LinkedHashMap[TopicPartition, FetchResponse.PartitionData]()
 

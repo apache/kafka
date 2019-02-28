@@ -49,6 +49,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -59,12 +61,14 @@ public class GlobalStateManagerImplTest {
 
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
+    private final TopicPartition t3 = new TopicPartition("t3", 1);
     private GlobalStateManagerImpl stateManager;
     private NoOpProcessorContext context;
     private StateDirectory stateDirectory;
     private String stateDirPath;
     private NoOpReadOnlyStore<Object, Object> store1;
     private NoOpReadOnlyStore store2;
+    private NoOpReadOnlyStore store3;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
@@ -74,18 +78,21 @@ public class GlobalStateManagerImplTest {
         final Map<String, String> storeToTopic = new HashMap<>();
         storeToTopic.put("t1-store", "t1");
         storeToTopic.put("t2-store", "t2");
+        storeToTopic.put("t3-store", "t3");
 
         final Map<StateStore, ProcessorNode> storeToProcessorNode = new HashMap<>();
         store1 = new NoOpReadOnlyStore<>("t1-store");
         storeToProcessorNode.put(store1, new MockProcessorNode(-1));
         store2 = new NoOpReadOnlyStore("t2-store");
         storeToProcessorNode.put(store2, new MockProcessorNode(-1));
+        store3 = new NoOpReadOnlyStore("t3-store", false);
+        storeToProcessorNode.put(store2, new MockProcessorNode(-1));
         final ProcessorTopology topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
                                                                  Collections.<String, SourceNode>emptyMap(),
                                                                  Collections.<String, SinkNode>emptyMap(),
                                                                  Collections.<StateStore>emptyList(),
                                                                  storeToTopic,
-                                                                 Arrays.<StateStore>asList(store1, store2));
+                                                                 Arrays.<StateStore>asList(store1, store2, store3));
 
         context = new NoOpProcessorContext();
         stateDirPath = TestUtils.tempDirectory().getPath();
@@ -122,15 +129,15 @@ public class GlobalStateManagerImplTest {
         final Map<TopicPartition, Long> expected = writeCheckpoint();
 
         stateManager.initialize(context);
-        final Map<TopicPartition, Long> offsets = stateManager.checkpointedOffsets();
+        final Map<TopicPartition, Long> offsets = stateManager.checkpointed();
         assertEquals(expected, offsets);
     }
 
     @Test
-    public void shouldDeleteCheckpointFileAfteLoaded() throws Exception {
+    public void shouldNotDeleteCheckpointFileAfterLoaded() throws Exception {
         writeCheckpoint();
         stateManager.initialize(context);
-        assertFalse(checkpointFile.exists());
+        assertTrue(checkpointFile.exists());
     }
 
     @Test(expected = StreamsException.class)
@@ -152,7 +159,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() throws Exception {
         final Set<String> storeNames = stateManager.initialize(context);
-        assertEquals(Utils.mkSet(store1.name(), store2.name()), storeNames);
+        assertEquals(Utils.mkSet(store1.name(), store2.name(), store3.name()), storeNames);
     }
 
     @Test
@@ -168,7 +175,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldThrowIllegalArgumenExceptionIfAttemptingToRegisterStoreTwice() throws Exception {
+    public void shouldThrowIllegalArgumentExceptionIfAttemptingToRegisterStoreTwice() throws Exception {
         stateManager.initialize(context);
         initializeConsumer(2, 1, t1);
         stateManager.register(store1, false, new TheStateRestoreCallback());
@@ -271,9 +278,7 @@ public class GlobalStateManagerImplTest {
         stateManager.register(store1, false, stateRestoreCallback);
         final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 25L);
         stateManager.close(expected);
-        final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                                                                                ProcessorStateManager.CHECKPOINT_FILE_NAME));
-        final Map<TopicPartition, Long> result = offsetCheckpoint.read();
+        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
         assertEquals(expected, result);
     }
 
@@ -377,6 +382,64 @@ public class GlobalStateManagerImplTest {
         } finally {
             stateDir.unlockGlobalState();
         }
+    }
+
+    @Test
+    public void shouldCheckpointOffsets() throws Exception {
+        final Map<TopicPartition, Long> offsets = Collections.singletonMap(t1, 25L);
+        stateManager.initialize(context);
+
+        stateManager.checkpoint(offsets);
+
+        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
+        assertThat(result, equalTo(offsets));
+        assertThat(stateManager.checkpointed(), equalTo(offsets));
+    }
+
+    @Test
+    public void shouldNotRemoveOffsetsOfUnUpdatedTablesDuringCheckpoint() throws Exception {
+        stateManager.initialize(context);
+        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+        initializeConsumer(10, 1, t1);
+        stateManager.register(store1, false, stateRestoreCallback);
+        initializeConsumer(20, 1, t2);
+        stateManager.register(store2, false, stateRestoreCallback);
+
+        final Map<TopicPartition, Long> initialCheckpoint = stateManager.checkpointed();
+        stateManager.checkpoint(Collections.singletonMap(t1, 101L));
+
+        final Map<TopicPartition, Long> updatedCheckpoint = stateManager.checkpointed();
+        assertThat(updatedCheckpoint.get(t2), equalTo(initialCheckpoint.get(t2)));
+        assertThat(updatedCheckpoint.get(t1), equalTo(101L));
+    }
+
+    @Test
+    public void shouldCheckpointRestoredOffsetsToFile() throws IOException {
+        stateManager.initialize(context);
+        final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+        initializeConsumer(10, 1, t1);
+        stateManager.register(store1, false, stateRestoreCallback);
+        stateManager.close(Collections.<TopicPartition, Long>emptyMap());
+
+        final Map<TopicPartition, Long> checkpointMap = stateManager.checkpointed();
+        assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 11L)));
+        assertThat(readOffsetsCheckpoint(), equalTo(checkpointMap));
+    }
+
+    @Test
+    public void shouldSkipGlobalInMemoryStoreOffsetsToFile() throws IOException {
+        stateManager.initialize(context);
+        initializeConsumer(10, 1, t3);
+        stateManager.register(store3, false, stateRestoreCallback);
+        stateManager.close(Collections.<TopicPartition, Long>emptyMap());
+
+        assertThat(readOffsetsCheckpoint(), equalTo(Collections.<TopicPartition, Long>emptyMap()));
+    }
+
+    private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
+        final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
+                                                                                ProcessorStateManager.CHECKPOINT_FILE_NAME));
+        return offsetCheckpoint.read();
     }
 
     private void initializeConsumer(final long numRecords, final long startOffset, final TopicPartition topicPartition) {

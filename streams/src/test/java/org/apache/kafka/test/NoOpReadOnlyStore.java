@@ -25,17 +25,24 @@ public class NoOpReadOnlyStore<K, V>
         implements ReadOnlyKeyValueStore<K, V>, StateStore {
 
     private final String name;
+    private final boolean persistent;
     private boolean open = true;
     public boolean initialized;
     public boolean flushed;
 
 
     public NoOpReadOnlyStore() {
-        this("");
+        this("", true);
     }
 
     public NoOpReadOnlyStore(final String name) {
+        this(name, true);
+    }
+
+    public NoOpReadOnlyStore(final String name,
+                             final boolean persistent) {
         this.name = name;
+        this.persistent = persistent;
     }
 
     @Override
@@ -80,7 +87,7 @@ public class NoOpReadOnlyStore<K, V>
 
     @Override
     public boolean persistent() {
-        return false;
+        return persistent;
     }
 
     @Override
