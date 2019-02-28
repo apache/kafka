@@ -57,6 +57,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -144,7 +145,7 @@ public class RegexSourceIntegrationTest {
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-        final List<String> assignedTopics = new ArrayList<>();
+        final List<String> assignedTopics = new CopyOnWriteArrayList<>();
         streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
@@ -195,7 +196,7 @@ public class RegexSourceIntegrationTest {
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final List<String> assignedTopics = new ArrayList<>();
+        final List<String> assignedTopics = new CopyOnWriteArrayList<>();
         streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
