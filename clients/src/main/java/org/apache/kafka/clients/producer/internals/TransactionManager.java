@@ -77,15 +77,6 @@ public class TransactionManager {
 
         private final Map<TopicPartition, TopicPartitionEntry> topicPartitionBookkeeping = new HashMap<>();
 
-        void initSequenceNumber(TopicPartition topicPartition) {
-            get(topicPartition).nextSequenceNumber = 0;
-        }
-
-        boolean hasSequenceNumber(TopicPartition topicPartition) {
-            TopicPartitionEntry entry = topicPartitionBookkeeping.get(topicPartition);
-            return entry != null && entry.nextSequenceNumber != null;
-        }
-
         boolean hasPendingOffsetCommits() {
             return topicPartitionBookkeeping.values().stream().anyMatch(tpe -> tpe.pendingTxnOffsetCommit != null);
         }
@@ -117,6 +108,10 @@ public class TransactionManager {
             return ent;
         }
 
+        boolean contains(TopicPartition partition) {
+            return topicPartitionBookkeeping.containsKey(partition);
+        }
+
         public void reset() {
             topicPartitionBookkeeping.clear();
         }
@@ -125,11 +120,11 @@ public class TransactionManager {
     private static class TopicPartitionEntry {
 
         // The base sequence of the next batch bound for a given partition.
-        private Integer nextSequenceNumber;
+        private int nextSequenceNumber;
 
         // The sequence number of the last record of the last ack'd batch from the given partition. When there are no
         // in flight requests for a partition, the lastAckedSequence(topicPartition) == nextSequence(topicPartition) - 1.
-        private Integer lastAckedSequenceNumber;
+        private int lastAckedSequenceNumber;
 
         // Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
         // we continue to order batches by the sequence numbers even when the responses come back out of order during
@@ -139,12 +134,12 @@ public class TransactionManager {
 
         // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
-        private Long lastAckedOffset;
+        private long lastAckedOffset;
 
         private CommittedOffset pendingTxnOffsetCommit;
 
         TopicPartitionEntry() {
-            this.nextSequenceNumber = null;
+            this.nextSequenceNumber = 0;
             this.lastAckedSequenceNumber = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
             this.inflightBatchesBySequenceNumber = new PriorityQueue<>(5, Comparator.comparingInt(ProducerBatch::baseSequence));
@@ -463,9 +458,6 @@ public class TransactionManager {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
-        if (!topicPartitionBookkeeper.hasSequenceNumber(topicPartition))
-            topicPartitionBookkeeper.initSequenceNumber(topicPartition);
-
         return topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber;
     }
 
@@ -542,7 +534,7 @@ public class TransactionManager {
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
     synchronized void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
-        if (!topicPartitionBookkeeper.hasSequenceNumber(batch.topicPartition))
+        if (!topicPartitionBookkeeper.contains(batch.topicPartition))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
@@ -569,6 +561,9 @@ public class TransactionManager {
     }
 
     private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
+        if (!topicPartitionBookkeeper.contains(topicPartition))
+            throw new IllegalStateException("Trying to set the sequence number for " + topicPartition +
+                    ", but the sequence number was never set for this partition.");
         int sequence = 0;
         for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber) {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
@@ -583,7 +578,7 @@ public class TransactionManager {
     }
 
     private synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.hasSequenceNumber(topicPartition)
+        return topicPartitionBookkeeper.contains(topicPartition)
                 && !topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber.isEmpty();
     }
 
@@ -631,9 +626,6 @@ public class TransactionManager {
     }
 
     private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
-        if (!topicPartitionBookkeeper.hasSequenceNumber(topicPartition) && sequence != 0)
-            throw new IllegalStateException("Trying to set the sequence number for " + topicPartition + " to " + sequence +
-            ", but the sequence number was never set for this partition.");
         topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber = sequence;
     }
 
