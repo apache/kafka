@@ -15,7 +15,7 @@
 
 import random
 import time
-from ducktape.mark import matrix, parametrize
+from ducktape.mark import matrix, parametrize, ignore
 from ducktape.mark.resource import cluster
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
