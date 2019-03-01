@@ -78,12 +78,7 @@ class ValueAndTimestampDeserializer<V> implements Deserializer<ValueAndTimestamp
     }
 
     static long timestamp(final byte[] rawValueAndTimestamp) {
-        return LONG_DESERIALIZER.deserialize(
-            null,
-            ByteBuffer
-                .allocate(8)
-                .put(rawValueAndTimestamp, 0, 8)
-                .array());
+        return LONG_DESERIALIZER.deserialize(null, rawTimestamp(rawValueAndTimestamp));
     }
 
 }
