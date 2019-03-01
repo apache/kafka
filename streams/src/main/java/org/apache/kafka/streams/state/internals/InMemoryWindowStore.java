@@ -291,7 +291,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         InMemoryWindowStoreIteratorWrapper(final Bytes keyFrom,
                                            final Bytes keyTo,
                                            final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator) {
-            this.allKeys = keyFrom == null;
+            this.allKeys = (keyFrom == null) && (keyTo == null);
             if (retainDuplicates && !allKeys) {
                 this.keyFrom = wrapForDups(keyFrom, 0);
                 this.keyTo = wrapForDups(keyTo, Integer.MAX_VALUE);
