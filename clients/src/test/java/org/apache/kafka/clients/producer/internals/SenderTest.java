@@ -1171,8 +1171,7 @@ public class SenderTest {
                 "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
         Future<RecordMetadata> successfulResponse = accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), null, null, MAX_BLOCK_TIMEOUT).future;
-        sender.run(time.milliseconds());  // connect.
-        sender.run(time.milliseconds());  // send.
+        sender.run(time.milliseconds());  // connect and send.
 
         assertEquals(1, client.inFlightRequestCount());
 
@@ -1183,9 +1182,8 @@ public class SenderTest {
         sender.run(time.milliseconds());
         assertTrue(failedResponse.isDone());
         assertFalse("Expected transaction state to be reset upon receiving an OutOfOrderSequenceException", transactionManager.hasProducerId());
-        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE);
+        prepareAndReceiveInitProducerId(producerId + 1, Errors.NONE); // also send request to tp1
         assertEquals(producerId + 1, transactionManager.producerIdAndEpoch().producerId);
-        sender.run(time.milliseconds());  // send request to tp1
 
         assertFalse(successfulResponse.isDone());
         client.respond(produceResponse(tp1, 10, Errors.NONE, -1));

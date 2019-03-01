@@ -81,10 +81,16 @@ public class TransactionManager {
         public TopicPartitionEntry get(TopicPartition topic) {
             TopicPartitionEntry ent = topicPartitionBookkeeping.get(topic);
             if (ent == null) {
-                ent = new TopicPartitionEntry();
-                topicPartitionBookkeeping.put(topic, ent);
+                throw new IllegalStateException("An illegal operation has been performed");
             }
             return ent;
+        }
+
+        public void add(TopicPartition topic) {
+            if (topicPartitionBookkeeping.containsKey(topic))
+                throw new IllegalStateException("An illegal operation has been performed");
+
+            topicPartitionBookkeeping.put(topic, new TopicPartitionEntry());
         }
 
         boolean contains(TopicPartition partition) {
@@ -316,6 +322,7 @@ public class TransactionManager {
             return;
 
         log.debug("Begin adding new partition {} to transaction", topicPartition);
+        ensureHasBookkeeperEntry(topicPartition);
         newPartitionsInTransaction.add(topicPartition);
     }
 
@@ -452,6 +459,9 @@ public class TransactionManager {
      * Returns the next sequence number to be written to the given TopicPartition.
      */
     synchronized Integer sequenceNumber(TopicPartition topicPartition) {
+        if (!isTransactional())
+            ensureHasBookkeeperEntry(topicPartition);
+
         return topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber;
     }
 
@@ -515,11 +525,23 @@ public class TransactionManager {
         if (response.baseOffset == ProduceResponse.INVALID_OFFSET)
             return;
         long lastOffset = response.baseOffset + batch.recordCount - 1;
-        if (lastOffset > lastAckedOffset(batch.topicPartition).orElse(ProduceResponse.INVALID_OFFSET)) {
+        OptionalLong lastAckedOffset = lastAckedOffset(batch.topicPartition);
+        // It might happen that the TransactionManager has been reset while a request was reenqueued and got a valid
+        // response for this. This can happen only if the producer is only idempotent (not transactional) and in
+        // this case there will be no tracked bookkeeper entry about it, so we have to insert one.
+        if (!lastAckedOffset.isPresent() && !isTransactional()) {
+            ensureHasBookkeeperEntry(batch.topicPartition);
+        }
+        if (lastOffset > lastAckedOffset.orElse(ProduceResponse.INVALID_OFFSET)) {
             topicPartitionBookkeeper.get(batch.topicPartition).lastAckedOffset = lastOffset;
         } else {
             log.trace("Partition {} keeps lastOffset at {}", batch.topicPartition, lastOffset);
         }
+    }
+
+    private void ensureHasBookkeeperEntry(TopicPartition topicPartition) {
+        if (!topicPartitionBookkeeper.contains(topicPartition))
+            topicPartitionBookkeeper.add(topicPartition);
     }
 
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
