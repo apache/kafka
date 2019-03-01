@@ -39,11 +39,32 @@ class CachingSessionStore
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
 
+    private static class IdentityCacheFunction extends SegmentedCacheFunction {
+        private IdentityCacheFunction() {
+            super(null, -1L);
+        }
+
+        @Override
+        public Bytes key(final Bytes cacheKey) {
+            return cacheKey;
+        }
+
+        @Override
+        public Bytes cacheKey(final Bytes key) {
+            return key;
+        }
+
+        @Override
+        int compareSegmentedKeys(final Bytes cacheKey, final Bytes storeKey) {
+            return cacheKey.compareTo(storeKey);
+        }
+    }
+
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
                         final long segmentInterval) {
         super(bytesStore);
         this.keySchema = new SessionKeySchema();
-        this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
+        this.cacheFunction = new IdentityCacheFunction();
     }
 
     @Override
