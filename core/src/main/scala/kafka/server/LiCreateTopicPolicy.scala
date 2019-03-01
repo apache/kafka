@@ -26,17 +26,18 @@ class LiCreateTopicPolicy extends CreateTopicPolicy {
   override def validate(requestMetadata: CreateTopicPolicy.RequestMetadata): Unit = {
     val requestTopic = requestMetadata.topic
     val requestRF = requestMetadata.replicationFactor()
-    import collection.JavaConverters._
-    val requestAssignment = requestMetadata.replicasAssignments().asScala
 
-    if (requestAssignment == null && requestRF == null)
+    // For scala 2.11.x, a scala object converted from a null java object via asScala is NOT null. This could lead to
+    // NPE, thus we check the java object directly. AdminClientIntegrationTest verifies the behavior.
+    if (requestMetadata.replicasAssignments() == null && requestRF == null)
       throw new PolicyViolationException(s"Topic [$requestTopic] is missing both replica assignment and " +
         s"replication factor.")
 
     // In createTopics() in AdminManager, replicationFactor and replicasAssignments are not both set at same time. We
     // follow the same rationale here and prioritize replicasAssignments over replicationFactor
-    if (requestAssignment != null) {
-      requestAssignment.foreach { case (p, assignment) =>
+    if (requestMetadata.replicasAssignments() != null) {
+      import collection.JavaConverters._
+      requestMetadata.replicasAssignments().asScala.foreach { case (p, assignment) =>
           if (assignment.size() < minRf)
             throw new PolicyViolationException(s"Topic [$requestTopic] fails RF requirement. Received RF for " +
               s"[partition-$p]: ${assignment.size()}, min required RF: $minRf.")
