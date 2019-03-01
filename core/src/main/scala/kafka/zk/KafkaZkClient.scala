@@ -870,8 +870,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
     * Deletes the partitio reassignment canel znode.
     */
-  def deleteReassignCancel(): Unit = {
-    deletePath(ReassignCancelZNode.path)
+  def deleteReassignCancel(expectedControllerEpochZkVersion: Int): Unit = {
+    deletePath(ReassignCancelZNode.path, expectedControllerEpochZkVersion)
   }
 
   /**

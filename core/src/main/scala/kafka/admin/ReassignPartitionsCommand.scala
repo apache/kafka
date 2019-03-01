@@ -237,8 +237,11 @@ object ReassignPartitionsCommand extends Logging {
     val adminZkClient = new AdminZkClient(zkClient)
     val reassignPartitionsCommand = new ReassignPartitionsCommand(zkClient, adminClientOpt, Map.empty, Map.empty, adminZkClient)
 
-    // if ReassignCancelZNode.path exists, skip executing cancel again.
-    if (zkClient.reassignCancelInPlace) {
+    // if No Pending Reassignments or ReassignCancelZNode.path already exists, skip executing cancel again.
+    if (!zkClient.reassignPartitionsInProgress) {
+      println("No Pending Reassignments to cancel.")
+    }
+    else if (zkClient.reassignCancelInPlace) {
       println("Cancel Reassignment is currently in place. Please check %s".format(ReassignCancelZNode.path))
     } else {
       val pendingReassignments = zkClient.getPartitionReassignment
@@ -252,8 +255,8 @@ object ReassignPartitionsCommand extends Logging {
         Thread.sleep(100)
         remainingTimeMs = startTimeMs + timeoutMs - System.currentTimeMillis()
       }
-      if (!zkClient.reassignCancelInPlace) {
-        //Cancel Reassignments completed.
+      if (!zkClient.reassignCancelInPlace && !zkClient.reassignPartitionsInProgress) {
+        //Cancel Reassignments completed, and no pending reassignments
         //The pending reassignments throttle can be removed after they are cancelled.
         removeReassignCancelThrottle(zkClient, pendingReassignments, adminZkClient)
       }

@@ -958,7 +958,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.reassignCancelInPlace)
     zkClient.createReassignCancel()
     assertTrue(zkClient.reassignCancelInPlace)
-    zkClient.deleteReassignCancel()
+    zkClient.deleteReassignCancel(controllerEpochZkVersion)
     assertFalse(zkClient.reassignCancelInPlace)
   }
 
