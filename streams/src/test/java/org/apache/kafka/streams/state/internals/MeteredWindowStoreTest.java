@@ -186,12 +186,12 @@ public class MeteredWindowStoreTest {
         assertNull(store.fetch("a", 0));
     }
 
-    private interface CachedWindowStore<K, V> extends WindowStore<K, V>, CachedStateStore<K, V> { }
+    private interface CachedWindowStore extends WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetFlushListenerOnWrappedCachingStore() {
-        final CachedWindowStore<Bytes, byte[]> cachedWindowStore = mock(CachedWindowStore.class);
+        final CachedWindowStore cachedWindowStore = mock(CachedWindowStore.class);
 
         expect(cachedWindowStore.setFlushListener(anyObject(CacheFlushListener.class), eq(false))).andReturn(true);
         replay(cachedWindowStore);

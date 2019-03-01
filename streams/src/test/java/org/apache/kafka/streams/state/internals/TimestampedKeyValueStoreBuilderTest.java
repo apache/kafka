@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -38,20 +39,20 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 @RunWith(EasyMockRunner.class)
-public class KeyValueStoreBuilderTest {
+public class TimestampedKeyValueStoreBuilderTest {
 
     @Mock(type = MockType.NICE)
     private KeyValueBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
     private KeyValueStore<Bytes, byte[]> inner;
-    private KeyValueStoreBuilder<String, String> builder;
+    private TimestampedKeyValueStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
         EasyMock.expect(supplier.get()).andReturn(inner);
         EasyMock.expect(supplier.name()).andReturn("name");
         EasyMock.replay(supplier);
-        builder = new KeyValueStoreBuilder<>(
+        builder = new TimestampedKeyValueStoreBuilder<>(
             supplier,
             Serdes.String(),
             Serdes.String(),
@@ -61,82 +62,82 @@ public class KeyValueStoreBuilderTest {
 
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
-        final KeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredKeyValueStore.class));
+        final TimestampedKeyValueStore<String, String> store = builder.build();
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
-        final KeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredKeyValueStore.class));
+        final TimestampedKeyValueStore<String, String> store = builder.build();
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingKeyValueBytesStore.class));
+        assertThat(next, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
     }
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
-        final KeyValueStore<String, String> store = builder.withLoggingDisabled().build();
+        final TimestampedKeyValueStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
-        final KeyValueStore<String, String> store = builder.withCachingEnabled().build();
+        final TimestampedKeyValueStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredKeyValueStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
-        final KeyValueStore<String, String> store = builder
+        final TimestampedKeyValueStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredKeyValueStore.class));
-        assertThat(wrapped, instanceOf(ChangeLoggingKeyValueBytesStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
         assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
-        final KeyValueStore<String, String> store = builder
+        final TimestampedKeyValueStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
                 .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
-        assertThat(store, instanceOf(MeteredKeyValueStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(changeLogging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
+        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @SuppressWarnings("all")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new KeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new KeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
+        new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new KeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
+        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
+        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new KeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
     }
 
 }
