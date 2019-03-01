@@ -58,7 +58,7 @@ class ReplicaAlterLogDirsThread(name: String,
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
-    replicaMgr.futureLocalReplicaOrException(topicPartition).logEndOffset.messageOffset
+    replicaMgr.futureLocalReplicaOrException(topicPartition).logEndOffset
   }
 
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
@@ -103,12 +103,12 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = toMemoryRecords(partitionData.records)
 
-    if (fetchOffset != futureReplica.logEndOffset.messageOffset)
+    if (fetchOffset != futureReplica.logEndOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
+        topicPartition, fetchOffset, futureReplica.logEndOffset))
 
     val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
-    val futureReplicaHighWatermark = futureReplica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+    val futureReplicaHighWatermark = futureReplica.logEndOffset.min(partitionData.highWatermark)
     futureReplica.highWatermark = new LogOffsetMetadata(futureReplicaHighWatermark)
     futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
 

@@ -121,7 +121,7 @@ class PartitionTest {
     assertEquals(4, log.logEndOffset)
 
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
-    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset))
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
@@ -149,7 +149,7 @@ class PartitionTest {
     assertEquals(4, log.logEndOffset)
 
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
-    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset))
     assertEquals(None, log.latestEpoch)
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
@@ -508,7 +508,7 @@ class PartitionTest {
       LogReadResult(info = fetchInfo,
         highWatermark = leaderReplica.highWatermark.messageOffset,
         leaderLogStartOffset = leaderReplica.logStartOffset,
-        leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset,
+        leaderLogEndOffset = leaderReplica.logEndOffset,
         followerLogStartOffset = 0,
         fetchTimeMs = time.milliseconds,
         readSize = 10240,
@@ -680,7 +680,7 @@ class PartitionTest {
     val initialLogStartOffset = 5L
     partition.truncateFullyAndStartAt(initialLogStartOffset, isFuture = false)
     assertEquals(s"Log end offset after truncate fully and start at $initialLogStartOffset:",
-                 initialLogStartOffset, replica.logEndOffset.messageOffset)
+                 initialLogStartOffset, replica.logEndOffset)
     assertEquals(s"Log start offset after truncate fully and start at $initialLogStartOffset:",
                  initialLogStartOffset, replica.logStartOffset)
 
@@ -689,7 +689,7 @@ class PartitionTest {
       // append one record with offset = 3
       partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 3L), isFuture = false)
     }
-    assertEquals(s"Log end offset should not change after failure to append", initialLogStartOffset, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset should not change after failure to append", initialLogStartOffset, replica.logEndOffset)
 
     // verify that we can append records that contain log start offset, even when first
     // offset < log start offset if the log is empty
@@ -699,12 +699,12 @@ class PartitionTest {
                                      new SimpleRecord("k3".getBytes, "v3".getBytes)),
                                 baseOffset = newLogStartOffset)
     partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
-    assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:", 7L, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset after append of 3 records with base offset $newLogStartOffset:", 7L, replica.logEndOffset)
     assertEquals(s"Log start offset after append of 3 records with base offset $newLogStartOffset:", newLogStartOffset, replica.logStartOffset)
 
     // and we can append more records after that
     partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 7L), isFuture = false)
-    assertEquals(s"Log end offset after append of 1 record at offset 7:", 8L, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset after append of 1 record at offset 7:", 8L, replica.logEndOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
 
     // but we cannot append to offset < log start if the log is not empty
@@ -714,11 +714,11 @@ class PartitionTest {
                                    baseOffset = 3L)
       partition.appendRecordsToFollowerOrFutureReplica(records2, isFuture = false)
     }
-    assertEquals(s"Log end offset should not change after failure to append", 8L, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset should not change after failure to append", 8L, replica.logEndOffset)
 
     // we still can append to next offset
     partition.appendRecordsToFollowerOrFutureReplica(createRecords(List(new SimpleRecord("k1".getBytes, "v1".getBytes)), baseOffset = 8L), isFuture = false)
-    assertEquals(s"Log end offset after append of 1 record at offset 8:", 9L, replica.logEndOffset.messageOffset)
+    assertEquals(s"Log end offset after append of 1 record at offset 8:", 9L, replica.logEndOffset)
     assertEquals(s"Log start offset not expected to change:", newLogStartOffset, replica.logStartOffset)
   }
 
@@ -882,7 +882,7 @@ class PartitionTest {
       LogReadResult(info = fetchInfo,
                     highWatermark = leaderReplica.highWatermark.messageOffset,
                     leaderLogStartOffset = leaderReplica.logStartOffset,
-                    leaderLogEndOffset = leaderReplica.logEndOffset.messageOffset,
+                    leaderLogEndOffset = leaderReplica.logEndOffset,
                     followerLogStartOffset = 0,
                     fetchTimeMs = time.milliseconds,
                     readSize = 10240,
@@ -900,7 +900,7 @@ class PartitionTest {
     assertTrue("Expected makeLeader() to return 'leader changed' after makeFollower()",
                partition.makeLeader(controllerEpoch, new LeaderAndIsrRequest.PartitionState(
                  controllerEpoch, leader, leaderEpoch + 2, isr, 1, replicas, false), 2))
-    val currentLeaderEpochStartOffset = leaderReplica.logEndOffset.messageOffset
+    val currentLeaderEpochStartOffset = leaderReplica.logEndOffset
 
     // append records with the latest leader epoch
     partition.appendRecordsToLeader(batch3, isFromClient = true)
