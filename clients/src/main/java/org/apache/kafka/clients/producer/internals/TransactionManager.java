@@ -101,7 +101,7 @@ public class TransactionManager {
             topicPartitionBookkeeping.clear();
         }
 
-        OptionalLong getLastAckedOffset(TopicPartition partition) {
+        OptionalLong lastAckedOffset(TopicPartition partition) {
             TopicPartitionEntry entry = topicPartitionBookkeeping.get(partition);
             if (entry != null && entry.lastAckedOffset != ProduceResponse.INVALID_OFFSET)
                 return OptionalLong.of(entry.lastAckedOffset);
@@ -109,10 +109,10 @@ public class TransactionManager {
                 return OptionalLong.empty();
         }
 
-        OptionalInt getLastAckedSequenceNumber(TopicPartition partition) {
+        OptionalInt lastAckedSequence(TopicPartition partition) {
             TopicPartitionEntry entry = topicPartitionBookkeeping.get(partition);
-            if (entry != null && entry.lastAckedSequenceNumber != NO_LAST_ACKED_SEQUENCE_NUMBER)
-                return OptionalInt.of(entry.lastAckedSequenceNumber);
+            if (entry != null && entry.lastAckedSequence != NO_LAST_ACKED_SEQUENCE_NUMBER)
+                return OptionalInt.of(entry.lastAckedSequence);
             else
                 return OptionalInt.empty();
         }
@@ -121,27 +121,27 @@ public class TransactionManager {
     private static class TopicPartitionEntry {
 
         // The base sequence of the next batch bound for a given partition.
-        private int nextSequenceNumber;
+        private int nextSequence;
 
         // The sequence number of the last record of the last ack'd batch from the given partition. When there are no
         // in flight requests for a partition, the lastAckedSequence(topicPartition) == nextSequence(topicPartition) - 1.
-        private int lastAckedSequenceNumber;
+        private int lastAckedSequence;
 
         // Keep track of the in flight batches bound for a partition, ordered by sequence. This helps us to ensure that
         // we continue to order batches by the sequence numbers even when the responses come back out of order during
         // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
         // (either successfully or through a fatal failure).
-        private PriorityQueue<ProducerBatch> inflightBatchesBySequenceNumber;
+        private PriorityQueue<ProducerBatch> inflightBatchesBySequence;
 
         // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
         private long lastAckedOffset;
 
         TopicPartitionEntry() {
-            this.nextSequenceNumber = 0;
-            this.lastAckedSequenceNumber = NO_LAST_ACKED_SEQUENCE_NUMBER;
+            this.nextSequence = 0;
+            this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequenceNumber = new PriorityQueue<>(5, Comparator.comparingInt(ProducerBatch::baseSequence));
+            this.inflightBatchesBySequence = new PriorityQueue<>(5, Comparator.comparingInt(ProducerBatch::baseSequence));
         }
     }
 
@@ -462,20 +462,20 @@ public class TransactionManager {
         if (!isTransactional())
             ensureHasBookkeeperEntry(topicPartition);
 
-        return topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber;
+        return topicPartitionBookkeeper.get(topicPartition).nextSequence;
     }
 
     synchronized void incrementSequenceNumber(TopicPartition topicPartition, int increment) {
-        Integer currentSequenceNumber = sequenceNumber(topicPartition);
+        Integer currentSequence = sequenceNumber(topicPartition);
 
-        currentSequenceNumber = DefaultRecordBatch.incrementSequence(currentSequenceNumber, increment);
-        topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber = currentSequenceNumber;
+        currentSequence = DefaultRecordBatch.incrementSequence(currentSequence, increment);
+        topicPartitionBookkeeper.get(topicPartition).nextSequence = currentSequence;
     }
 
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequenceNumber.offer(batch);
+        topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequence.offer(batch);
     }
 
     /**
@@ -489,7 +489,7 @@ public class TransactionManager {
         if (!hasInflightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        ProducerBatch first = topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber.peek();
+        ProducerBatch first = topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequence.peek();
         if (first == null)
             return RecordBatch.NO_SEQUENCE;
 
@@ -497,28 +497,28 @@ public class TransactionManager {
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber;
+        PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequence;
         return queue.peek();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (hasInflightBatches(batch.topicPartition)) {
-            PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequenceNumber;
+            PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequence;
             queue.remove(batch);
         }
     }
 
     synchronized void maybeUpdateLastAckedSequence(TopicPartition topicPartition, int sequence) {
         if (sequence > lastAckedSequence(topicPartition).orElse(NO_LAST_ACKED_SEQUENCE_NUMBER))
-            topicPartitionBookkeeper.get(topicPartition).lastAckedSequenceNumber = sequence;
+            topicPartitionBookkeeper.get(topicPartition).lastAckedSequence = sequence;
     }
 
     synchronized OptionalInt lastAckedSequence(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.getLastAckedSequenceNumber(topicPartition);
+        return topicPartitionBookkeeper.lastAckedSequence(topicPartition);
     }
 
     synchronized OptionalLong lastAckedOffset(TopicPartition topicPartition) {
-        return topicPartitionBookkeeper.getLastAckedOffset(topicPartition);
+        return topicPartitionBookkeeper.lastAckedOffset(topicPartition);
     }
 
     synchronized void updateLastAckedOffset(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
@@ -563,7 +563,7 @@ public class TransactionManager {
 
         setNextSequence(batch.topicPartition, currentSequence);
 
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequenceNumber) {
+        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.get(batch.topicPartition).inflightBatchesBySequence) {
             if (inFlightBatch.baseSequence() < batch.baseSequence())
                 continue;
             int newSequence = inFlightBatch.baseSequence() - batch.recordCount;
@@ -581,7 +581,7 @@ public class TransactionManager {
             throw new IllegalStateException("Trying to set the sequence number for " + topicPartition +
                     ", but the sequence number was never set for this partition.");
         int sequence = 0;
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber) {
+        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequence) {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
                     inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
@@ -590,12 +590,12 @@ public class TransactionManager {
             sequence += inFlightBatch.recordCount;
         }
         setNextSequence(topicPartition, sequence);
-        topicPartitionBookkeeper.get(topicPartition).lastAckedSequenceNumber = NO_LAST_ACKED_SEQUENCE_NUMBER;
+        topicPartitionBookkeeper.get(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 
     private synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
         return topicPartitionBookkeeper.contains(topicPartition)
-                && !topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequenceNumber.isEmpty();
+                && !topicPartitionBookkeeper.get(topicPartition).inflightBatchesBySequence.isEmpty();
     }
 
     synchronized boolean hasUnresolvedSequences() {
@@ -643,7 +643,7 @@ public class TransactionManager {
     }
 
     private synchronized void setNextSequence(TopicPartition topicPartition, int sequence) {
-        topicPartitionBookkeeper.get(topicPartition).nextSequenceNumber = sequence;
+        topicPartitionBookkeeper.get(topicPartition).nextSequence = sequence;
     }
 
     synchronized TxnRequestHandler nextRequestHandler(boolean hasIncompleteBatches) {
@@ -710,7 +710,7 @@ public class TransactionManager {
         inFlightRequestCorrelationId = correlationId;
     }
 
-    private void clearInFlightTransactionalRequestCorrelationId() {
+    private void clearInFlightCorrelationId() {
         inFlightRequestCorrelationId = NO_INFLIGHT_REQUEST_CORRELATION_ID;
     }
 
@@ -955,7 +955,7 @@ public class TransactionManager {
             if (response.requestHeader().correlationId() != inFlightRequestCorrelationId) {
                 fatalError(new RuntimeException("Detected more than one in-flight transactional request."));
             } else {
-                clearInFlightTransactionalRequestCorrelationId();
+                clearInFlightCorrelationId();
                 if (response.wasDisconnected()) {
                     log.debug("Disconnected from {}. Will retry.", response.destination());
                     if (this.needsCoordinator())
