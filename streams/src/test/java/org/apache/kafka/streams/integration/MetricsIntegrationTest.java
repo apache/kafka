@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
-public class KStreamMetricsIntegrationTest {
+public class MetricsIntegrationTest {
 
     private static final int NUM_BROKERS = 1;
 
