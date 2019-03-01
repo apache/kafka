@@ -129,4 +129,14 @@ public class GlobalProcessorContextImplTest {
     public void shouldNotAllowToSchedulePunctuations() {
         globalContext.schedule(null, null, null);
     }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldNotAllowInit() {
+        globalContext.getStateStore(GLOBAL_STORE_NAME).init(null, null);
+    }
+
+    @Test(expected = UnsupportedOperationException.class)
+    public void shouldNotAllowClose() {
+        globalContext.getStateStore(GLOBAL_STORE_NAME).close();
+    }
 }

@@ -411,11 +411,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class KeyValueStoreReadWriteDecorator<K, V>
+    static class KeyValueStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
-        private KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
+        KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
             super(inner);
         }
 
@@ -463,11 +463,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class WindowStoreReadWriteDecorator<K, V>
+    static class WindowStoreReadWriteDecorator<K, V>
         extends StateStoreReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
-        private WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
+        WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
             super(inner);
         }
 
@@ -520,11 +520,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class SessionStoreReadWriteDecorator<K, AGG>
+    static class SessionStoreReadWriteDecorator<K, AGG>
         extends StateStoreReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
-        private SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
+        SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
             super(inner);
         }
 
