@@ -145,7 +145,7 @@ public class ConfigDef {
      */
     public ConfigDef define(String name, Type type, Object defaultValue, Validator validator, Importance importance, String documentation,
                             String group, int orderInGroup, Width width, String displayName, List<String> dependents, Recommender recommender) {
-        return define(new ConfigKeyBuilder(name, type, documentation, importance)
+        return define(new ConfigKeyBuilder(name, type, importance, documentation)
                 .defaultValue(defaultValue)
                 .validator(validator)
                 .group(group)
@@ -409,14 +409,12 @@ public class ConfigDef {
      * @param name              The name of the config parameter
      * @param type              The type of the config
      * @param defaultValue      The default value to use if this config isn't present
-     * @param importance
+     * @param importance        the importance of this config
      * @return This ConfigDef so you can chain calls
      */
     public ConfigDef defineInternal(final String name, final Type type, final Object defaultValue, final Importance importance) {
-        return define(new ConfigKeyBuilder(name, type, "", importance)
+        return define(new ConfigKeyBuilder(name, type, importance)
                 .defaultValue(defaultValue)
-                .group("")
-                .width(Width.NONE)
                 .displayName(name)
                 .internalConfig()
                 .build());
@@ -1113,7 +1111,7 @@ public class ConfigDef {
 
         private static final int DEFAULT_ORDER_IN_GROUP = -1;
 
-        public ConfigKeyBuilder(String name, Type type, String documentation, Importance importance) {
+        public ConfigKeyBuilder(String name, Type type, Importance importance, String documentation) {
             this.name = name;
             this.type = type;
             this.documentation = documentation;
@@ -1123,6 +1121,10 @@ public class ConfigDef {
             this.orderInGroup = DEFAULT_ORDER_IN_GROUP;
             this.width = Width.NONE;
             this.displayName = "";
+        }
+
+        public ConfigKeyBuilder(String name, Type type, Importance importance) {
+            this(name, type, importance, "");
         }
 
         public ConfigKeyBuilder defaultValue(Object defaultValue) {
