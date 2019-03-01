@@ -144,7 +144,7 @@ public class KStreamMetricsIntegrationTest {
     private static final String HIT_RATIO_MIN = "hitRatio-min";
     private static final String HIT_RATIO_MAX = "hitRatio-max";
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
-    private static final String SESSIONIZED_AGGREGATED_STREAM_STORE = "sessionized-aggregated-stream-store";
+    private static final String SESSION_AGGREGATED_STREAM_STORE = "session-aggregated-stream-store";
 
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
@@ -156,7 +156,6 @@ public class KStreamMetricsIntegrationTest {
     private static final String STREAM_OUTPUT_4 = "STREAM_OUTPUT_4";
 
     private KStream<Integer, String> stream;
-
     private KStream<Integer, String> stream2;
 
     private final String appId = "stream-metrics-test";
@@ -178,7 +177,6 @@ public class KStreamMetricsIntegrationTest {
     public void after() throws InterruptedException {
         CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
-
 
     private void startApplication() throws Exception {
 
@@ -267,7 +265,7 @@ public class KStreamMetricsIntegrationTest {
         final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
         groupedStream.windowedBy(SessionWindows.with(Duration.ofMillis(50)))
                 .aggregate(() -> 0L, (aggKey, newValue, aggValue) -> aggValue, (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
-                        Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSIONIZED_AGGREGATED_STREAM_STORE)
+                        Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)
                                 .withValueSerde(Serdes.Long()));
 
         startApplication();
@@ -477,5 +475,4 @@ public class KStreamMetricsIntegrationTest {
             Assert.assertNotNull(m.metricValue());
         }
     }
-
 }
