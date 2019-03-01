@@ -1117,7 +1117,6 @@ public class ConfigDef {
             this.documentation = documentation;
             this.importance = importance;
             this.defaultValue = NO_DEFAULT_VALUE;
-            this.group = "";
             this.orderInGroup = DEFAULT_ORDER_IN_GROUP;
             this.width = Width.NONE;
             this.displayName = "";

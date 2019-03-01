@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.kafka.common.config.ConfigDef.ConfigKey;
+import org.apache.kafka.common.config.ConfigDef.ConfigKeyBuilder;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Range;
+import org.apache.kafka.common.config.ConfigDef.Recommender;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigDef.ValidString;
 import org.apache.kafka.common.config.ConfigDef.Validator;
@@ -39,6 +42,7 @@ import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -47,15 +51,15 @@ public class ConfigDefTest {
     @Test
     public void testBasicTypes() {
         ConfigDef def = new ConfigDef().define("a", Type.INT, 5, Range.between(0, 14), Importance.HIGH, "docs")
-                                       .define("b", Type.LONG, Importance.HIGH, "docs")
-                                       .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
-                                       .define("d", Type.LIST, Importance.HIGH, "docs")
-                                       .define("e", Type.DOUBLE, Importance.HIGH, "docs")
-                                       .define("f", Type.CLASS, Importance.HIGH, "docs")
-                                       .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("j", Type.PASSWORD, Importance.HIGH, "docs");
+                .define("b", Type.LONG, Importance.HIGH, "docs")
+                .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
+                .define("d", Type.LIST, Importance.HIGH, "docs")
+                .define("e", Type.DOUBLE, Importance.HIGH, "docs")
+                .define("f", Type.CLASS, Importance.HIGH, "docs")
+                .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("j", Type.PASSWORD, Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put("a", "1   ");
@@ -159,8 +163,8 @@ public class ConfigDefTest {
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
                 new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", null});
         testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
-        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
-        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
+        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[]{null});
+        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[]{null, -1, "c"});
         testValidators(Type.STRING, new ConfigDef.NonEmptyStringWithoutControlChars(), "defaultname",
                 new Object[]{"test", "name", "test/test", "test\u1234", "\u1324name\\", "/+%>&):??<&()?-", "+1", "\uD83D\uDE01", "\uF3B1", "     test   \n\r", "\n  hello \t"},
                 new Object[]{"nontrailing\nnotallowed", "as\u0001cii control char", "tes\rt", "test\btest", "1\t2", ""});
@@ -191,7 +195,7 @@ public class ConfigDefTest {
 
         ConfigDef def = new ConfigDef();
         def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                   ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+                ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put(key, "ONE");
@@ -203,17 +207,17 @@ public class ConfigDefTest {
     public void testGroupInference() {
         List<String> expected1 = Arrays.asList("group1", "group2");
         ConfigDef def1 = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
-            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
-            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+                .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
+                .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
+                .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
 
         assertEquals(expected1, def1.groups());
 
         List<String> expected2 = Arrays.asList("group2", "group1");
         ConfigDef def2 = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
-            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
-            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+                .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
+                .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
+                .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
 
         assertEquals(expected2, def2.groups());
     }
@@ -239,10 +243,10 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+                .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -277,10 +281,10 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+                .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", Arrays.asList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -313,15 +317,15 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -340,7 +344,7 @@ public class ConfigDefTest {
         props.put("a", "non_integer");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -430,32 +434,6 @@ public class ConfigDefTest {
                 .define("child", Type.STRING, Importance.HIGH, "docs");
 
         assertEquals(new HashSet<>(Arrays.asList("a", "parent")), configDef.getConfigsWithNoParent());
-    }
-
-
-    private static class IntegerRecommender implements ConfigDef.Recommender {
-
-        private boolean hasParent;
-
-        public IntegerRecommender(boolean hasParent) {
-            this.hasParent = hasParent;
-        }
-
-        @Override
-        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
-            List<Object> values = new LinkedList<>();
-            if (!hasParent) {
-                values.addAll(Arrays.asList(1, 2, 3));
-            } else {
-                values.addAll(Arrays.asList(4, 5));
-            }
-            return values;
-        }
-
-        @Override
-        public boolean visible(String name, Map<String, Object> parsedConfig) {
-            return true;
-        }
     }
 
     private void testValidators(Type type, Validator validator, Object defaultVal, Object[] okValues, Object[] badValues) {
@@ -574,6 +552,112 @@ public class ConfigDefTest {
     }
 
     @Test
+    public void testBasicConfigKeyBuilder() {
+        Recommender recommender = new IntegerRecommender(false);
+
+        configKeyBuilderConstructionAndAssertions("name", Type.INT, 0, Range.between(0, 10),
+                Importance.HIGH, "docs", "group1", 1, Width.SHORT,
+                "display", Collections.emptyList(), recommender, false);
+
+        configKeyBuilderConstructionAndAssertions("name", Type.INT, 0, Range.between(0, 10),
+                Importance.HIGH, "docs", "group1", 1, Width.SHORT,
+                "display", Collections.emptyList(), recommender, true);
+
+        configKeyBuilderConstructionAndAssertions("name", Type.INT, 0, Range.between(0, 10),
+                Importance.HIGH, "docs", "group1", 1, Width.SHORT,
+                "display", Collections.emptyList(), recommender, false);
+
+        configKeyBuilderConstructionAndAssertions("name", Type.INT, 0, Range.between(0, 10),
+                Importance.HIGH, "docs", "group1", 1, Width.SHORT,
+                "display", Arrays.asList("1", "2"), recommender, false);
+
+    }
+
+    @Test
+    public void testDefaultValuesConfigKeyBuilder() {
+        final Object defaultValue = ConfigDef.NO_DEFAULT_VALUE;
+        final Validator validator = null;
+        final String group = null;
+        final int orderInGroup = -1;
+        final Width width = Width.NONE;
+        final String displayName = "";
+        final List<String> dependents = Collections.emptyList();
+        final Recommender recommender = null;
+        final boolean internalConfig = false;
+
+        final String name = "name";
+        final Type type = Type.INT;
+        final Importance importance = Importance.HIGH;
+        final String documentation = "docs";
+
+        ConfigKey configKey = new ConfigKeyBuilder(name, type, importance, documentation).build();
+
+        ConfigKey configKeyExpected = new ConfigKey(name, type, defaultValue, validator, importance, documentation, group,
+                orderInGroup, width, displayName, dependents, recommender, internalConfig);
+
+        configKeyAssertions(configKeyExpected, configKey);
+
+        configKey = new ConfigKeyBuilder(name, type, importance).build();
+
+        configKeyExpected = new ConfigKey(name, type, defaultValue, validator, importance, "", group,
+                orderInGroup, width, displayName, dependents, recommender, internalConfig);
+
+        configKeyAssertions(configKeyExpected, configKey);
+
+    }
+
+    private void configKeyBuilderConstructionAndAssertions(String name, Type type, Object defaultValue, Validator validator,
+                                            Importance importance, String documentation, String group,
+                                            int orderInGroup, Width width, String displayName,
+                                            List<String> dependents, Recommender recommender, boolean internalConfig) {
+
+        ConfigKeyBuilder configKeyBuilder = makeConfigKeyBuilder(name, type, defaultValue, validator, importance,
+                documentation, group, orderInGroup, width, displayName, dependents, recommender);
+
+        if (internalConfig) {
+            configKeyBuilder.internalConfig();
+        }
+
+        ConfigKey configKey = configKeyBuilder.build();
+
+        ConfigKey configKeyExpected = new ConfigKey(name, type, defaultValue, validator, importance, documentation, group, orderInGroup, width,
+                displayName, dependents, recommender, internalConfig);
+
+        configKeyAssertions(configKeyExpected, configKey);
+    }
+
+    private void configKeyAssertions(ConfigKey configKeyExpected, ConfigKey configKeyActual) {
+        assertSame(configKeyExpected.name, configKeyActual.name);
+        assertSame(configKeyExpected.type, configKeyActual.type);
+        assertSame(configKeyExpected.defaultValue, configKeyActual.defaultValue);
+        assertSame(configKeyExpected.validator, configKeyActual.validator);
+        assertSame(configKeyExpected.importance, configKeyActual.importance);
+        assertSame(configKeyExpected.documentation, configKeyActual.documentation);
+        assertSame(configKeyExpected.group, configKeyActual.group);
+        assertEquals(configKeyExpected.orderInGroup, configKeyActual.orderInGroup);
+        assertSame(configKeyExpected.width, configKeyActual.width);
+        assertSame(configKeyExpected.displayName, configKeyActual.displayName);
+        assertEquals(configKeyExpected.dependents, configKeyActual.dependents);
+        assertSame(configKeyExpected.recommender, configKeyActual.recommender);
+        assertEquals(configKeyExpected.internalConfig, configKeyActual.internalConfig);
+    }
+
+    private ConfigKeyBuilder makeConfigKeyBuilder(String name, Type type, Object defaultValue, Validator validator,
+                                                  Importance importance, String documentation, String group,
+                                                  int orderInGroup, Width width, String displayName,
+                                                  List<String> dependents, Recommender recommender) {
+        return new ConfigKeyBuilder(name, type, importance, documentation)
+                .defaultValue(defaultValue)
+                .validator(validator)
+                .group(group)
+                .orderInGroup(orderInGroup)
+                .width(width)
+                .displayName(displayName)
+                .dependents(dependents)
+                .recommender(recommender);
+    }
+
+    @Test
     public void testConvertValueToStringBoolean() {
         assertEquals("true", ConfigDef.convertToString(true, Type.BOOLEAN));
         assertNull(ConfigDef.convertToString(null, Type.BOOLEAN));
@@ -637,6 +721,31 @@ public class ConfigDefTest {
         assertEquals("org.apache.kafka.common.config.ConfigDefTest$NestedClass", actual);
         // Additionally validate that we can look up this class by this name
         assertEquals(NestedClass.class, Class.forName(actual));
+    }
+
+    private static class IntegerRecommender implements Recommender {
+
+        private boolean hasParent;
+
+        public IntegerRecommender(boolean hasParent) {
+            this.hasParent = hasParent;
+        }
+
+        @Override
+        public List<Object> validValues(String name, Map<String, Object> parsedConfig) {
+            List<Object> values = new LinkedList<>();
+            if (!hasParent) {
+                values.addAll(Arrays.asList(1, 2, 3));
+            } else {
+                values.addAll(Arrays.asList(4, 5));
+            }
+            return values;
+        }
+
+        @Override
+        public boolean visible(String name, Map<String, Object> parsedConfig) {
+            return true;
+        }
     }
 
     private class NestedClass {
