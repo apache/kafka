@@ -51,7 +51,7 @@ public class CommonFields {
     public static final Field.Int8 RESOURCE_TYPE = new Field.Int8("resource_type", "The resource type");
     public static final Field.Str RESOURCE_NAME = new Field.Str("resource_name", "The resource name");
     public static final Field.NullableStr RESOURCE_NAME_FILTER = new Field.NullableStr("resource_name", "The resource name filter");
-    public static final Field.Int8 RESOURCE_PATTERN_TYPE = new Field.Int8("resource_pattten_type", "The resource pattern type", PatternType.LITERAL.code());
+    public static final Field.Int8 RESOURCE_PATTERN_TYPE = new Field.Int8("resource_pattern_type", "The resource pattern type", PatternType.LITERAL.code());
     public static final Field.Int8 RESOURCE_PATTERN_TYPE_FILTER = new Field.Int8("resource_pattern_type_filter", "The resource pattern type filter", PatternType.LITERAL.code());
     public static final Field.Str PRINCIPAL = new Field.Str("principal", "The ACL principal");
     public static final Field.NullableStr PRINCIPAL_FILTER = new Field.NullableStr("principal", "The ACL principal filter");
