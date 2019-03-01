@@ -58,7 +58,6 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
-import java.util.stream.Collectors;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
@@ -78,28 +77,6 @@ public class TransactionManager {
     private static class TopicPartitionBookkeeper {
 
         private final Map<TopicPartition, TopicPartitionEntry> topicPartitionBookkeeping = new HashMap<>();
-
-        boolean hasPendingOffsetCommits() {
-            return topicPartitionBookkeeping.values().stream().anyMatch(tpe -> tpe.pendingTxnOffsetCommit != null);
-        }
-
-        void clearPendingOffsetCommits() {
-            topicPartitionBookkeeping.values().forEach(tpe -> tpe.pendingTxnOffsetCommit = null);
-        }
-
-        void clearPendingOffsetCommit(TopicPartition topic) {
-            TopicPartitionEntry tpe = topicPartitionBookkeeping.get(topic);
-            if (tpe != null) {
-                tpe.pendingTxnOffsetCommit = null;
-            }
-        }
-
-        Map<TopicPartition, CommittedOffset> pendingOffsetCommits() {
-            return topicPartitionBookkeeping.entrySet()
-                    .stream()
-                    .filter(e -> e.getValue() != null && e.getValue().pendingTxnOffsetCommit != null)
-                    .collect(Collectors.toMap(Map.Entry::getKey, t -> t.getValue().pendingTxnOffsetCommit));
-        }
 
         public TopicPartitionEntry get(TopicPartition topic) {
             TopicPartitionEntry ent = topicPartitionBookkeeping.get(topic);
@@ -154,8 +131,6 @@ public class TransactionManager {
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
         private long lastAckedOffset;
 
-        private CommittedOffset pendingTxnOffsetCommit;
-
         TopicPartitionEntry() {
             this.nextSequenceNumber = 0;
             this.lastAckedSequenceNumber = NO_LAST_ACKED_SEQUENCE_NUMBER;
@@ -165,6 +140,8 @@ public class TransactionManager {
     }
 
     private final TopicPartitionBookkeeper topicPartitionBookkeeper = new TopicPartitionBookkeeper();
+
+    private final Map<TopicPartition, CommittedOffset> pendingTxnOffsetCommits = new HashMap<>();
 
     // If a batch bound for a partition expired locally after being sent at least once, the partition has is considered
     // to have an unresolved state. We keep track fo such partitions here, and cannot assign any more sequence numbers
@@ -736,7 +713,7 @@ public class TransactionManager {
 
     // visible for testing
     synchronized boolean hasPendingOffsetCommits() {
-        return topicPartitionBookkeeper.hasPendingOffsetCommits();
+        return !pendingTxnOffsetCommits.isEmpty();
     }
 
     // visible for testing
@@ -886,11 +863,12 @@ public class TransactionManager {
                                                           String consumerGroupId) {
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            topicPartitionBookkeeper.get(entry.getKey()).pendingTxnOffsetCommit = new CommittedOffset(offsetAndMetadata.offset(),
+            CommittedOffset committedOffset = new CommittedOffset(offsetAndMetadata.offset(),
                     offsetAndMetadata.metadata(), offsetAndMetadata.leaderEpoch());
+            pendingTxnOffsetCommits.put(entry.getKey(), committedOffset);
         }
         TxnOffsetCommitRequest.Builder builder = new TxnOffsetCommitRequest.Builder(transactionalId, consumerGroupId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, topicPartitionBookkeeper.pendingOffsetCommits());
+                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, pendingTxnOffsetCommits);
         return new TxnOffsetCommitHandler(result, builder);
     }
 
@@ -1349,7 +1327,7 @@ public class TransactionManager {
                 TopicPartition topicPartition = entry.getKey();
                 Errors error = entry.getValue();
                 if (error == Errors.NONE) {
-                    topicPartitionBookkeeper.clearPendingOffsetCommit(topicPartition);
+                    pendingTxnOffsetCommits.remove(topicPartition);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR
                         || error == Errors.REQUEST_TIMED_OUT) {
@@ -1376,8 +1354,8 @@ public class TransactionManager {
             }
 
             if (result.isCompleted()) {
-                topicPartitionBookkeeper.clearPendingOffsetCommits();
-            } else if (!topicPartitionBookkeeper.hasPendingOffsetCommits()) {
+                pendingTxnOffsetCommits.clear();
+            } else if (pendingTxnOffsetCommits.isEmpty()) {
                 result.done();
             } else {
                 // Retry the commits which failed with a retriable error
