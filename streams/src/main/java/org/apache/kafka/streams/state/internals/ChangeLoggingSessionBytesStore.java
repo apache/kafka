@@ -30,7 +30,9 @@ import org.apache.kafka.streams.state.StateSerdes;
  * Simple wrapper around a {@link SessionStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingSessionBytesStore extends WrappedStateStore<SessionStore<Bytes, byte[]>> implements SessionStore<Bytes, byte[]> {
+class ChangeLoggingSessionBytesStore
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+    implements SessionStore<Bytes, byte[]> {
 
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 

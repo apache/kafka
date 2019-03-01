@@ -46,6 +46,12 @@ import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
@@ -105,7 +111,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
-        inner.put(EasyMock.eq(keyBytes), EasyMock.aryEq(valueBytes));
+        inner.put(eq(keyBytes), EasyMock.aryEq(valueBytes));
         EasyMock.expectLastCall();
 
         init();
@@ -133,7 +139,7 @@ public class MeteredKeyValueStoreTest {
 
     @Test
     public void shouldPutIfAbsentAndRecordPutIfAbsentMetric() {
-        EasyMock.expect(inner.putIfAbsent(EasyMock.eq(keyBytes), EasyMock.aryEq(valueBytes)))
+        EasyMock.expect(inner.putIfAbsent(eq(keyBytes), EasyMock.aryEq(valueBytes)))
                 .andReturn(null);
         init();
 
@@ -223,6 +229,32 @@ public class MeteredKeyValueStoreTest {
         EasyMock.verify(inner);
     }
 
+    private interface CachedKeyValueStore<K, V> extends KeyValueStore<K, V>, CachedStateStore<K, V> { }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSetFlushListenerOnWrappedCachingStore() {
+        final CachedKeyValueStore<Bytes, byte[]> cachedKeyValueStore = mock(CachedKeyValueStore.class);
+
+        expect(cachedKeyValueStore.setFlushListener(anyObject(CacheFlushListener.class), eq(false))).andReturn(true);
+        replay(cachedKeyValueStore);
+
+        metered = new MeteredKeyValueStore<>(
+            cachedKeyValueStore,
+            "scope",
+            new MockTime(),
+            Serdes.String(),
+            Serdes.String()
+        );
+        assertTrue(metered.setFlushListener(null, false));
+
+        verify(cachedKeyValueStore);
+    }
+
+    @Test
+    public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
+        assertFalse(metered.setFlushListener(null, false));
+    }
 
     private KafkaMetric metric(final MetricName metricName) {
         return this.metrics.metric(metricName);

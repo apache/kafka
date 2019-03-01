@@ -24,7 +24,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-public class RocksDBWindowStore extends WrappedStateStore<SegmentedBytesStore> implements WindowStore<Bytes, byte[]> {
+public class RocksDBWindowStore
+    extends WrappedStateStore<SegmentedBytesStore, Object, Object>
+    implements WindowStore<Bytes, byte[]> {
 
     private final boolean retainDuplicates;
     private final long windowSize;

@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.internals.CachedStateStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -30,45 +29,24 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V>
  */
 class TupleForwarder<K, V> {
-    private final CachedStateStore cachedStateStore;
+    private final boolean cachingEnabled;
     private final ProcessorContext context;
 
     @SuppressWarnings("unchecked")
     TupleForwarder(final StateStore store,
                    final ProcessorContext context,
-                   final ForwardingCacheFlushListener flushListener,
+                   final ForwardingCacheFlushListener<K, V> flushListener,
                    final boolean sendOldValues) {
-        this.cachedStateStore = cachedStateStore(store);
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
         this.context = context;
-        if (this.cachedStateStore != null) {
-            cachedStateStore.setFlushListener(flushListener, sendOldValues);
-        }
-    }
-
-    private CachedStateStore cachedStateStore(final StateStore store) {
-        if (store instanceof CachedStateStore) {
-            return (CachedStateStore) store;
-        } else if (store instanceof WrappedStateStore) {
-            StateStore wrapped = ((WrappedStateStore) store).wrapped();
-
-            while (wrapped instanceof WrappedStateStore && !(wrapped instanceof CachedStateStore)) {
-                wrapped = ((WrappedStateStore) wrapped).wrapped();
-            }
-
-            if (!(wrapped instanceof CachedStateStore)) {
-                return null;
-            }
-
-            return (CachedStateStore) wrapped;
-        }
-        return null;
     }
 
     public void maybeForward(final K key,
                              final V newValue,
                              final V oldValue) {
-        if (cachedStateStore == null) {
-            context.forward(key, new Change<>(newValue, oldValue));
+        if (cachingEnabled) {
+            return;
         }
+        context.forward(key, new Change<>(newValue, oldValue));
     }
 }

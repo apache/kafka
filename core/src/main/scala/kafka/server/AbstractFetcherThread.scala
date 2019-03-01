@@ -118,7 +118,7 @@ abstract class AbstractFetcherThread(name: String,
       val fetchStates = partitionStates.partitionStateMap.asScala
       val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = buildFetch(fetchStates)
 
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "maybeFetch")
 
       if (fetchRequestOpt.isEmpty) {
         trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
@@ -134,8 +134,9 @@ abstract class AbstractFetcherThread(name: String,
   }
 
   // deal with partitions with errors, potentially due to leadership changes
-  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition]) {
+  private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String) {
     if (partitions.nonEmpty)
+      debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
   }
 
@@ -199,32 +200,36 @@ abstract class AbstractFetcherThread(name: String,
       }
 
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets)
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
   }
 
-  private def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
+  // Visible for testing
+  private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     for (tp <- partitions) {
-      try {
-        val highWatermark = partitionStates.stateValue(tp).fetchOffset
-        val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
+      val partitionState = partitionStates.stateValue(tp)
+      if (partitionState != null) {
+        try {
+          val highWatermark = partitionState.fetchOffset
+          val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-        info(s"Truncating partition $tp to local high watermark $highWatermark")
-        truncate(tp, truncationState)
+          info(s"Truncating partition $tp to local high watermark $highWatermark")
+          truncate(tp, truncationState)
 
-        fetchOffsets.put(tp, truncationState)
-      } catch {
-        case e: KafkaStorageException =>
-          info(s"Failed to truncate $tp", e)
-          partitionsWithError += tp
+          fetchOffsets.put(tp, truncationState)
+        } catch {
+          case e: KafkaStorageException =>
+            info(s"Failed to truncate $tp", e)
+            partitionsWithError += tp
+        }
       }
     }
 
-    handlePartitionsWithErrors(partitionsWithError)
+    handlePartitionsWithErrors(partitionsWithError, "truncateToHighWatermark")
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
@@ -366,8 +371,7 @@ abstract class AbstractFetcherThread(name: String,
     }
 
     if (partitionsWithError.nonEmpty) {
-      debug(s"Handling errors for partitions $partitionsWithError")
-      handlePartitionsWithErrors(partitionsWithError)
+      handlePartitionsWithErrors(partitionsWithError, "processFetchRequest")
     }
   }
 

@@ -45,7 +45,9 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, byte[]>> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V>
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
+    implements KeyValueStore<K, V> {
 
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -115,15 +117,22 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void close() {
-        super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
-    }
-
-    @Override
-    public long approximateNumEntries() {
-        return wrapped().approximateNumEntries();
+    public boolean setFlushListener(final CacheFlushListener<K, V> listener,
+                                    final boolean sendOldValues) {
+        final KeyValueStore<Bytes, byte[]> wrapped = wrapped();
+        if (wrapped instanceof CachedStateStore) {
+            return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
+                (key, newValue, oldValue, timestamp) -> listener.apply(
+                    serdes.keyFrom(key),
+                    newValue != null ? serdes.valueFrom(newValue) : null,
+                    oldValue != null ? serdes.valueFrom(oldValue) : null,
+                    timestamp
+                ),
+                sendOldValues);
+        }
+        return false;
     }
 
     @Override
@@ -223,6 +232,17 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         } else {
             super.flush();
         }
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return wrapped().approximateNumEntries();
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
     }
 
     private interface Action<V> {

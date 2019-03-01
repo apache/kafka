@@ -239,7 +239,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store1) {
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
             },
             stateRestoreCallback
         );
@@ -267,7 +267,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store2) {
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
             },
             stateRestoreCallback
         );

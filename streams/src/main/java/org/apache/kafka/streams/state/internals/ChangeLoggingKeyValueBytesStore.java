@@ -28,7 +28,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.List;
 
-public class ChangeLoggingKeyValueBytesStore extends WrappedStateStore<KeyValueStore<Bytes, byte[]>> implements KeyValueStore<Bytes, byte[]> {
+public class ChangeLoggingKeyValueBytesStore
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
+    implements KeyValueStore<Bytes, byte[]> {
+
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
