@@ -38,6 +38,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
@@ -767,18 +769,21 @@ public class RequestResponseTest {
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
-        return new DescribeGroupsRequest.Builder(singletonList("test-group")).build();
+        return new DescribeGroupsRequest.Builder(
+            new DescribeGroupsRequestData().
+                setGroups(Collections.singletonList("test-group"))).build();
     }
 
     private DescribeGroupsResponse createDescribeGroupResponse() {
         String clientId = "consumer-1";
         String clientHost = "localhost";
-        ByteBuffer empty = ByteBuffer.allocate(0);
-        DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
-                clientId, clientHost, empty, empty);
-        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member));
-        return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
+        DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
+        DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
+                clientId, clientHost, new byte[0], new byte[0]);
+        DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
+                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
+        describeGroupsResponseData.groups().add(metadata);
+        return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     private LeaveGroupRequest createLeaveGroupRequest() {

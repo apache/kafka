@@ -47,13 +47,13 @@ import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
-
 import kafka.zk.KafkaZkClient
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-
 import java.lang.{Long => JLong}
+
+import kafka.security.auth.Group
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -1142,12 +1142,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 
-          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
           assertEquals(2, result.describedGroups().size())
 
           // Test that we can get information about the test consumer group.
           assertTrue(result.describedGroups().containsKey(testGroupId))
           val testGroupDescription = result.describedGroups().get(testGroupId).get()
+
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup())
           assertEquals(1, testGroupDescription.members().size())
@@ -1157,14 +1159,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.
             count(tp => tp.topic().equals(testTopicName)))
+          val expectedOperations = Group.supportedOperations
+            .map(operation => operation.toJava).asJava
+          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
           assertTrue(result.describedGroups().containsKey(fakeGroupId))
           val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+
           assertEquals(fakeGroupId, fakeGroupDescription.groupId())
           assertEquals(0, fakeGroupDescription.members().size())
           assertEquals("", fakeGroupDescription.partitionAssignor())
           assertEquals(ConsumerGroupState.DEAD, fakeGroupDescription.state())
+          assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
 
           // Test that all() returns 2 results
           assertEquals(2, result.all().get().size())

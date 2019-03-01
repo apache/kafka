@@ -53,6 +53,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
@@ -1055,7 +1056,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final Map<String, DescribeGroupsResponse.GroupMetadata> groupMetadataMap = new HashMap<>();
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
             TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
             TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
@@ -1066,29 +1067,34 @@ public class KafkaAdminClientTest {
             topicPartitions.add(2, myTopicPartition2);
 
             final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(topicPartitions));
+            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+            memberAssignment.get(memberAssignmentBytes);
 
-            groupMetadataMap.put(
-                "group-0",
-                new DescribeGroupsResponse.GroupMetadata(
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                    "group-0",
                     Errors.NONE,
                     "",
                     ConsumerProtocol.PROTOCOL_TYPE,
                     "",
                     asList(
-                        new DescribeGroupsResponse.GroupMember("0", "clientId0", "clientHost", null, memberAssignment),
-                        new DescribeGroupsResponse.GroupMember("1", "clientId1", "clientHost", null, memberAssignment))));
-            groupMetadataMap.put(
-                "group-connect-0",
-                new DescribeGroupsResponse.GroupMetadata(
+                        DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
+                        DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                    ),
+                    Collections.emptySet()));
+
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                    "group-connect-0",
                     Errors.NONE,
                     "",
                     "connect",
                     "",
                     asList(
-                        new DescribeGroupsResponse.GroupMember("0", "clientId0", "clientHost", null, memberAssignment),
-                        new DescribeGroupsResponse.GroupMember("1", "clientId1", "clientHost", null, memberAssignment))));
+                        DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
+                        DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                    ),
+                    Collections.emptySet()));
 
-            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupMetadataMap));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
             final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();

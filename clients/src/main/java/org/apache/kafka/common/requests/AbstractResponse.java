@@ -101,7 +101,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
             case DESCRIBE_GROUPS:
-                return new DescribeGroupsResponse(struct);
+                return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
                 return new ListGroupsResponse(struct);
             case SASL_HANDSHAKE:
